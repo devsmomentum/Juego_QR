@@ -5,6 +5,7 @@ import '../providers/game_request_provider.dart';
 import '../theme/app_theme.dart';
 import '../models/game_request.dart';
 import 'home_screen.dart';
+import 'login_screen.dart';
 
 class GameRequestScreen extends StatefulWidget {
   const GameRequestScreen({super.key});
