@@ -358,6 +358,28 @@ class _GameRequestScreenState extends State<GameRequestScreen> with SingleTicker
                         const SizedBox(height: 20),
                       ],
                       
+                      if (request != null && !request.isApproved && !request.isRejected)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              requestProvider.approveRequest(request.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('¡Solicitud aprobada por simulación!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.admin_panel_settings),
+                            label: const Text("Simular Aprobación de Admin"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+
                       // Action Buttons
                       if (request == null)
                         SizedBox(

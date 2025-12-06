@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
-import '../providers/game_provider.dart';
 import '../theme/app_theme.dart';
 import 'clues_screen.dart';
 import 'inventory_screen.dart';
@@ -28,7 +27,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final player = Provider.of<PlayerProvider>(context).currentPlayer;
-    final gameProvider = Provider.of<GameProvider>(context);
     
     return Scaffold(
       body: Stack(

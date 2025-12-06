@@ -22,7 +22,6 @@ class PuzzleScreen extends StatelessWidget {
       case PuzzleType.wordScramble:
         return WordScrambleWidget(clue: clue);
       case PuzzleType.riddle:
-      default:
         return RiddleScreen(clue: clue);
     }
   }
@@ -180,105 +179,6 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
         ),
       );
     }
-  }
-
-  void _skipChallenge() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('¿Rendirse?', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Perderás las recompensas de este desafío.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final gameProvider = Provider.of<GameProvider>(context, listen: false);
-              gameProvider.completeCurrentClue();
-              Navigator.pop(context); // Dialog
-              Navigator.pop(context); // PuzzleScreen
-              Navigator.pop(context); // QRScreen
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
-            child: const Text('Rendirse'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showClueSelector(BuildContext context) {
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    final availableClues = gameProvider.clues.where((c) => !c.isLocked).toList();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Cambiar Pista', style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: availableClues.length,
-            itemBuilder: (context, index) {
-              final clue = availableClues[index];
-              final isCurrentClue = clue.id == widget.clue.id;
-              
-              return ListTile(
-                leading: Icon(
-                  clue.isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                  color: clue.isCompleted ? AppTheme.successGreen : AppTheme.accentGold,
-                ),
-                title: Text(
-                  clue.title,
-                  style: TextStyle(
-                    color: isCurrentClue ? AppTheme.secondaryPink : Colors.white,
-                    fontWeight: isCurrentClue ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-                subtitle: Text(
-                  clue.description,
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: isCurrentClue 
-                  ? const Icon(Icons.arrow_forward, color: AppTheme.secondaryPink) 
-                  : null,
-                onTap: isCurrentClue ? null : () {
-                  final gameProvider = Provider.of<GameProvider>(context, listen: false);
-                  gameProvider.switchToClue(clue.id);
-                  
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Close current PuzzleScreen
-                  
-                  // Navigate to new puzzle screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => PuzzleScreen(clue: clue),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override

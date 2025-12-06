@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/game_provider.dart';
 import '../theme/app_theme.dart';
+import '../models/clue.dart';
 import 'puzzle_screen.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -24,11 +25,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     
     // Simulate successful scan
     Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return;
+
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final clue = gameProvider.clues.firstWhere((c) => c.id == widget.clueId);
       
       // Si la pista tiene acertijo o puzzle, ir a la pantalla de puzzle
-      if (clue.riddleQuestion != null || clue.puzzleType != null) {
+      if (clue.riddleQuestion != null || clue.puzzleType != PuzzleType.riddle) {
         Navigator.push(
           context,
           MaterialPageRoute(

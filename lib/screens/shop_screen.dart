@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
-import '../providers/game_provider.dart';
 import '../models/power_item.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shop_item_card.dart';
