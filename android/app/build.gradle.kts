@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.treasure_hunt_rpg"
-    compileSdk = 34
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
