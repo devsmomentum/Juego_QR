@@ -19,6 +19,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
   String _description = '';
   String? _location; // Ahora es nullable para el Dropdown
   String _clue = ''; 
+  String _pin = ''; // Variable para el PIN
   int _maxParticipants = 0;
   DateTime _selectedDate = DateTime.now();
   
@@ -72,6 +73,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
         imageUrl: _selectedImage!.name, // Simulamos la URL
         clue: _clue,
         maxParticipants: _maxParticipants,
+        pin: _pin,
       );
 
       // Guardar usando el Provider
@@ -194,6 +196,17 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                       ),
                       validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                       onSaved: (v) => _clue = v!,
+                    ),
+                    const SizedBox(height: 15),
+
+                    // 4.1 PIN de Acceso
+                    TextFormField(
+                      decoration: inputDecoration.copyWith(
+                        labelText: 'PIN de Acceso (Código)', 
+                        prefixIcon: const Icon(Icons.lock)
+                      ),
+                      validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
+                      onSaved: (v) => _pin = v!,
                     ),
                     const SizedBox(height: 15),
 

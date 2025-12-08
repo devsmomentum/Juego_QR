@@ -25,14 +25,40 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      playerProvider.login(_emailController.text, _passwordController.text);
-      
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ScenariosScreen()),
-      );
+      try {
+        final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+        
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+
+        await playerProvider.login(
+          _emailController.text.trim(), 
+          _passwordController.text
+        );
+        
+        if (!mounted) return;
+        Navigator.pop(context); // Dismiss loading
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const ScenariosScreen()),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // Dismiss loading
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al iniciar sesión: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

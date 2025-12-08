@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'event_creation_screen.dart';
+import 'requests_management_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -27,6 +28,18 @@ class DashboardScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const EventCreationScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 15),
+            _AdminMenuCard(
+              title: "Gestionar Solicitudes",
+              icon: Icons.assignment_ind,
+              color: Colors.orange,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RequestsManagementScreen()),
                 );
               },
             ),

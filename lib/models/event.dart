@@ -12,6 +12,7 @@ class Event {
   final String imageUrl; // URL donde se guarda la imagen del evento
   final String clue;     // La pista que lleva al evento
   final int maxParticipants; // Capacidad máxima
+  final String pin; // Código de acceso para el usuario
 
   Event({
     required this.id,
@@ -23,6 +24,7 @@ class Event {
     required this.imageUrl, // AÑADIDO
     required this.clue,     // AÑADIDO
     required this.maxParticipants, // AÑADIDO
+    required this.pin, // AÑADIDO
   });
 
   // Método toMap actualizado para incluir las nuevas propiedades
@@ -36,6 +38,7 @@ class Event {
       'imageUrl': imageUrl,
       'clue': clue,
       'maxParticipants': maxParticipants,
+      'pin': pin,
     };
   }
 }

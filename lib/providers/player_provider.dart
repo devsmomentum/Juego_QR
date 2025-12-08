@@ -1,50 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/player.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Player? _currentPlayer;
+  final _supabase = Supabase.instance.client;
   
   Player? get currentPlayer => _currentPlayer;
   
   bool get isLoggedIn => _currentPlayer != null;
   
-  // Mock login
-  void login(String email, String password) {
-    _currentPlayer = Player(
-      id: '1',
-      name: 'Cazador Pro',
-      email: email,
-      avatarUrl: 'https://i.pravatar.cc/150?img=1',
-      level: 5,
-      experience: 250,
-      totalXP: 750,
-      profession: 'Speedrunner',
-      coins: 150,
-      inventory: ['shield', 'hint'],
-      stats: {
-        'speed': 15,
-        'strength': 8,
-        'intelligence': 12,
-      },
-    );
-    notifyListeners();
+  Future<void> login(String email, String password) async {
+    try {
+      final response = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      
+      if (response.user != null) {
+        await _fetchProfile(response.user!.id);
+      }
+    } on AuthException catch (e) {
+      debugPrint('Auth Error logging in: ${e.message}');
+      if (e.message.contains('Invalid login credentials')) {
+        throw Exception('Credenciales inválidas o email no confirmado.');
+      }
+      throw Exception(e.message);
+    } catch (e) {
+      debugPrint('Error logging in: $e');
+      rethrow;
+    }
   }
   
-  void register(String name, String email, String password) {
-    _currentPlayer = Player(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: name,
-      email: email,
-      avatarUrl: 'https://i.pravatar.cc/150?img=${DateTime.now().millisecondsSinceEpoch % 70}',
-    );
-    notifyListeners();
+  Future<void> register(String name, String email, String password) async {
+    try {
+      final response = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'name': name}, // This triggers the handle_new_user trigger
+      );
+      
+      if (response.user != null) {
+        // Wait a bit for the trigger to create the profile
+        await Future.delayed(const Duration(seconds: 1));
+        await _fetchProfile(response.user!.id);
+      }
+    } catch (e) {
+      debugPrint('Error registering: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _fetchProfile(String userId) async {
+    try {
+      final data = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+      
+      _currentPlayer = Player.fromJson(data);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+      // If profile doesn't exist yet (race condition), maybe retry or handle gracefully
+    }
   }
   
-  void logout() {
+  Future<void> logout() async {
+    await _supabase.auth.signOut();
     _currentPlayer = null;
     notifyListeners();
   }
   
+  // Methods below would need to be updated to sync with Supabase DB
+  // For now, we'll keep them updating local state, but in a real app 
+  // they should call RPCs or update tables.
+
   void addExperience(int xp) {
     if (_currentPlayer != null) {
       final oldLevel = _currentPlayer!.level;

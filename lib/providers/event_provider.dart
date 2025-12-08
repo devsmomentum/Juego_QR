@@ -52,6 +52,7 @@ class EventProvider with ChangeNotifier {
         'clue': event.clue,
         'image_url': imageUrl,
         'max_participants': event.maxParticipants,
+        'pin': event.pin,
         'created_by_admin_id': _supabase.auth.currentUser?.id ?? 'admin_1',
       }).select().single();
 
@@ -66,6 +67,7 @@ class EventProvider with ChangeNotifier {
         imageUrl: response['image_url'] ?? '',
         clue: response['clue'],
         maxParticipants: response['max_participants'] ?? 0,
+        pin: response['pin'] ?? '',
       );
       
       _events.add(newEvent);
@@ -92,6 +94,7 @@ class EventProvider with ChangeNotifier {
         imageUrl: data['image_url'] ?? '',
         clue: data['clue'],
         maxParticipants: data['max_participants'] ?? 0,
+        pin: data['pin'] ?? '',
       )).toList();
       
       notifyListeners();

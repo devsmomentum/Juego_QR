@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // Import Provider
 import 'dart:ui';
 import '../models/scenario.dart';
+import '../models/event.dart'; // Import Event
+import '../providers/event_provider.dart'; // Import EventProvider
+import '../providers/player_provider.dart';
+import '../providers/game_request_provider.dart';
 import '../theme/app_theme.dart';
 import 'code_finder_screen.dart';
 import 'game_request_screen.dart';
 import 'login_screen.dart';
+import 'home_screen.dart';
 
 class ScenariosScreen extends StatefulWidget {
   const ScenariosScreen({super.key});
@@ -16,47 +22,25 @@ class ScenariosScreen extends StatefulWidget {
 class _ScenariosScreenState extends State<ScenariosScreen> {
   late PageController _pageController;
   int _currentPage = 0;
-
-  final List<Scenario> _scenarios = [
-    const Scenario(
-      id: 'millenium',
-      name: 'Centro Comercial Millenium',
-      description: 'Una arquitectura moderna con múltiples niveles y escondites secretos.',
-      location: 'Los Dos Caminos, Caracas',
-      state: 'Miranda',
-      imageUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=800', // Reliable modern architecture image
-      maxPlayers: 50,
-      starterClue: 'Busca donde el agua fluye hacia arriba y la gente camina sobre el aire.',
-      secretCode: '1234',
-    ),
-    const Scenario(
-      id: 'lider',
-      name: 'Centro Comercial Líder',
-      description: 'Grandes espacios y laberintos comerciales ideales para una búsqueda.',
-      location: 'La California, Caracas',
-      state: 'Miranda',
-      imageUrl: 'https://images.unsplash.com/photo-1524230507669-5ff97982bb5e?auto=format&fit=crop&q=80&w=800',
-      maxPlayers: 40,
-      starterClue: 'Encuentra el pilar que sostiene el cielo artificial.',
-      secretCode: '5678',
-    ),
-    const Scenario(
-      id: 'guarenas',
-      name: 'Ciudad de Guarenas',
-      description: 'Explora los alrededores y descubre pistas en la ciudad satélite.',
-      location: 'Guarenas, Edo. Miranda',
-      state: 'Miranda',
-      imageUrl: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&q=80&w=800',
-      maxPlayers: 100,
-      starterClue: 'Donde el camino se divide en tres, el centro tiene la respuesta.',
-      secretCode: '9012',
-    ),
-  ];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(viewportFraction: 0.85);
+    // Cargar eventos al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadEvents();
+    });
+  }
+
+  Future<void> _loadEvents() async {
+    await Provider.of<EventProvider>(context, listen: false).fetchEvents();
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -65,14 +49,76 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
     super.dispose();
   }
 
-  void _onScenarioSelected(Scenario scenario) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => CodeFinderScreen(scenario: scenario)),
+  Future<void> _onScenarioSelected(Scenario scenario) async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+    
+    if (playerProvider.currentPlayer == null) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
+
+    final isParticipant = await requestProvider.isPlayerParticipant(
+      playerProvider.currentPlayer!.id, 
+      scenario.id
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading
+
+    if (isParticipant) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } else {
+      // Check if there is already a request
+      final request = await requestProvider.getRequestForPlayer(
+        playerProvider.currentPlayer!.id, 
+        scenario.id
+      );
+
+      if (!mounted) return;
+
+      if (request != null) {
+        // Already requested, go to status screen
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => GameRequestScreen(
+            eventId: scenario.id,
+            eventTitle: scenario.name,
+          )),
+        );
+      } else {
+        // New user, must find code first
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => CodeFinderScreen(scenario: scenario)),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final eventProvider = Provider.of<EventProvider>(context);
+    
+    // Convertir Eventos a Escenarios
+    final List<Scenario> scenarios = eventProvider.events.map((event) {
+      return Scenario(
+        id: event.id,
+        name: event.title,
+        description: event.description,
+        location: event.location, // En Event, location guarda el Estado
+        state: event.location,
+        imageUrl: event.imageUrl,
+        maxPlayers: event.maxParticipants,
+        starterClue: event.clue,
+        secretCode: event.pin,
+      );
+    }).toList();
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -95,7 +141,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
                       child: IconButton(
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                         onPressed: () => Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const LoginScreen()), // Use deferred import if circular dependency, but here it is fine usually or use named routes
+                          MaterialPageRoute(builder: (_) => const LoginScreen()), 
                         ),
                       ),
                     ),
@@ -173,33 +219,37 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
 
               // Scenarios Carousel
               Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentPage = index;
-                    });
-                  },
-                  itemCount: _scenarios.length,
-                  itemBuilder: (context, index) {
-                    final scenario = _scenarios[index];
-                    return AnimatedBuilder(
-                      animation: _pageController,
-                      builder: (context, child) {
-                        double value = 1.0;
-                        if (_pageController.position.haveDimensions) {
-                          value = _pageController.page! - index;
-                          value = (1 - (value.abs() * 0.3)).clamp(0.0, 1.0);
-                        } else {
-                          // Initial state
-                           value = index == _currentPage ? 1.0 : 0.7;
-                        }
-                        
-                        return Center(
-                          child: SizedBox(
-                            height: Curves.easeOut.transform(value) * 450, // Responsive height
-                            width: Curves.easeOut.transform(value) * 400,
-                            child: child,
+                child: _isLoading 
+                  ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGold))
+                  : scenarios.isEmpty 
+                    ? const Center(child: Text("No hay competencias disponibles", style: TextStyle(color: Colors.white)))
+                    : PageView.builder(
+                        controller: _pageController,
+                        onPageChanged: (index) {
+                          setState(() {
+                            _currentPage = index;
+                          });
+                        },
+                        itemCount: scenarios.length,
+                        itemBuilder: (context, index) {
+                          final scenario = scenarios[index];
+                          return AnimatedBuilder(
+                            animation: _pageController,
+                            builder: (context, child) {
+                              double value = 1.0;
+                              if (_pageController.position.haveDimensions) {
+                                value = _pageController.page! - index;
+                                value = (1 - (value.abs() * 0.3)).clamp(0.0, 1.0);
+                              } else {
+                                // Initial state
+                                 value = index == _currentPage ? 1.0 : 0.7;
+                              }
+                              
+                              return Center(
+                                child: SizedBox(
+                                  height: Curves.easeOut.transform(value) * 450, // Responsive height
+                                  width: Curves.easeOut.transform(value) * 400,
+                                  child: child,
                           ),
                         );
                       },

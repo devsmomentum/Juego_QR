@@ -34,6 +34,40 @@ class Player {
          'intelligence': 0,
        };
   
+  factory Player.fromJson(Map<String, dynamic> json) {
+    return Player(
+      id: json['id'],
+      name: json['name'] ?? '',
+      email: json['email'] ?? '',
+      avatarUrl: json['avatar_url'] ?? '',
+      level: json['level'] ?? 1,
+      experience: json['experience'] ?? 0,
+      totalXP: json['total_xp'] ?? 0,
+      profession: json['profession'] ?? 'Novice',
+      coins: json['coins'] ?? 100,
+      status: _parseStatus(json['status']),
+      frozenUntil: json['frozen_until'] != null 
+          ? DateTime.parse(json['frozen_until']) 
+          : null,
+      stats: {
+        'speed': json['stat_speed'] ?? 0,
+        'strength': json['stat_strength'] ?? 0,
+        'intelligence': json['stat_intelligence'] ?? 0,
+      },
+    );
+  }
+
+  static PlayerStatus _parseStatus(String? status) {
+    switch (status) {
+      case 'frozen':
+        return PlayerStatus.frozen;
+      case 'shielded':
+        return PlayerStatus.shielded;
+      default:
+        return PlayerStatus.active;
+    }
+  }
+
   int get experienceToNextLevel => (level * 100);
   
   double get experienceProgress => experience / experienceToNextLevel;

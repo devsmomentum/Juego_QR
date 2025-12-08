@@ -29,18 +29,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _handleRegister() {
+  Future<void> _handleRegister() async {
     if (_formKey.currentState!.validate()) {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      playerProvider.register(
-        _nameController.text,
-        _emailController.text,
-        _passwordController.text,
-      );
-      
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const GameRequestScreen()),
-      );
+      try {
+        final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+        
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+
+        await playerProvider.register(
+          _nameController.text.trim(),
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+        
+        if (!mounted) return;
+        Navigator.pop(context); // Dismiss loading
+
+        // Show success message and navigate to Login
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Registro Exitoso'),
+            content: const Text(
+              'Se ha enviado un correo de verificación. Por favor, verifica tu cuenta antes de iniciar sesión.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Go back to LoginScreen
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // Dismiss loading
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al registrar: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

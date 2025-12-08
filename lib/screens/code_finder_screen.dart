@@ -117,10 +117,13 @@ class _CodeFinderScreenState extends State<CodeFinderScreen> with TickerProvider
             onPressed: () {
               Navigator.pop(context);
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const GameRequestScreen()),
+                MaterialPageRoute(builder: (_) => GameRequestScreen(
+                  eventId: widget.scenario.id,
+                  eventTitle: widget.scenario.name,
+                )),
               );
             },
-            child: const Text("INGRESAR"),
+            child: const Text("SOLICITAR ACCESO"),
           ),
         ],
       ),
