@@ -106,6 +106,17 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteUser(String userId) async {
+    try {
+      await _supabase.rpc('delete_user', params: {'user_id': userId});
+      _allPlayers.removeWhere((p) => p.id == userId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting user: $e');
+      rethrow;
+    }
+  }
+
   // Methods below would need to be updated to sync with Supabase DB
   // For now, we'll keep them updating local state, but in a real app
   // they should call RPCs or update tables.

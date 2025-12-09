@@ -46,9 +46,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final matchesSearch = player.name.toLowerCase().contains(searchTerm) ||
           player.email.toLowerCase().contains(searchTerm);
 
+      // Excluir usuarios pendientes (se gestionan en Solicitudes)
+      if (player.status == PlayerStatus.pending) return false;
+
       bool matchesStatus = true;
       if (_filterStatus == 'active') {
-        matchesStatus = player.status != PlayerStatus.banned;
+        matchesStatus = player.status == PlayerStatus.active;
       } else if (_filterStatus == 'banned') {
         matchesStatus = player.status == PlayerStatus.banned;
       }
@@ -276,13 +279,65 @@ class _UserCard extends StatelessWidget {
             IconButton(
               icon: Icon(
                 isBanned ? Icons.lock_open : Icons.block,
-                color: isBanned ? Colors.green : Colors.red,
+                color: isBanned ? Colors.green : Colors.orange,
               ),
               tooltip: isBanned ? 'Desbanear Usuario' : 'Banear Usuario',
               onPressed: () => _confirmBanAction(context, player),
             ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.red),
+              tooltip: 'Eliminar Usuario',
+              onPressed: () => _confirmDeleteAction(context, player),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmDeleteAction(BuildContext context, Player player) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text('Eliminar Usuario',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          '¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE a ${player.name}?\n\nEsta acción borrará su cuenta, progreso y autenticación. No se puede deshacer.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await Provider.of<PlayerProvider>(context, listen: false)
+                    .deleteUser(player.id);
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Usuario eliminado correctamente')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }

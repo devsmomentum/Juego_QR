@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/game_request_provider.dart';
 import '../../providers/event_provider.dart';
+import '../../providers/player_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../models/game_request.dart';
+import '../../models/player.dart';
 
 class RequestsManagementScreen extends StatefulWidget {
   const RequestsManagementScreen({super.key});
@@ -13,20 +15,24 @@ class RequestsManagementScreen extends StatefulWidget {
       _RequestsManagementScreenState();
 }
 
-class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
+class _RequestsManagementScreenState extends State<RequestsManagementScreen>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
   String? _selectedEventId;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadData();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -36,6 +42,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
       Provider.of<GameRequestProvider>(context, listen: false)
           .fetchAllRequests(),
       Provider.of<EventProvider>(context, listen: false).fetchEvents(),
+      Provider.of<PlayerProvider>(context, listen: false).fetchAllPlayers(),
     ]);
     if (mounted) {
       setState(() => _isLoading = false);
@@ -46,9 +53,10 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
   Widget build(BuildContext context) {
     final requestProvider = Provider.of<GameRequestProvider>(context);
     final eventProvider = Provider.of<EventProvider>(context);
+    final playerProvider = Provider.of<PlayerProvider>(context);
 
-    // Filtrado de solicitudes
-    final filteredRequests = requestProvider.requests.where((req) {
+    // Filtrado de solicitudes de juego
+    final filteredGameRequests = requestProvider.requests.where((req) {
       final matchesName = (req.playerName ?? '')
           .toLowerCase()
           .contains(_searchController.text.toLowerCase());
@@ -57,16 +65,34 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
       return matchesName && matchesEvent;
     }).toList();
 
+    // Filtrado de usuarios pendientes
+    final pendingUsers = playerProvider.allPlayers.where((player) {
+      final matchesName = player.name
+          .toLowerCase()
+          .contains(_searchController.text.toLowerCase());
+      return matchesName && player.status == PlayerStatus.pending;
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: const [
             Icon(Icons.mark_email_unread, color: Colors.white),
             SizedBox(width: 10),
-            Text("Solicitudes de Acceso"),
+            Text("Gestión de Solicitudes"),
           ],
         ),
         backgroundColor: AppTheme.darkBg,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppTheme.primaryPurple,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          tabs: const [
+            Tab(text: "Eventos"),
+            Tab(text: "Nuevos Usuarios"),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -78,121 +104,259 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
         decoration: const BoxDecoration(
           gradient: AppTheme.darkGradient,
         ),
-        child: Column(
+        child: TabBarView(
+          controller: _tabController,
           children: [
-            // Filtros
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
-                children: [
-                  // Buscador por nombre
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+            // TAB 1: Solicitudes de Eventos
+            Column(
+              children: [
+                // Filtros
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Row(
+                    children: [
+                      // Buscador por nombre
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBg,
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar jugador...',
-                          hintStyle:
-                              TextStyle(color: Colors.white.withOpacity(0.5)),
-                          prefixIcon: const Icon(Icons.search,
-                              color: AppTheme.primaryPurple),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 15),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Dropdown de Eventos
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedEventId,
-                          hint: const Text("Filtrar por Evento",
-                              style: TextStyle(color: Colors.white54)),
-                          dropdownColor: const Color(0xFF1A1F3D),
-                          icon: const Icon(Icons.filter_list,
-                              color: AppTheme.secondaryPink),
-                          isExpanded: true,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w500),
-                          items: [
-                            const DropdownMenuItem<String>(
-                              value: null,
-                              child: Text("Todos los eventos"),
+                          child: TextField(
+                            controller: _searchController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Buscar jugador...',
+                              hintStyle: TextStyle(
+                                  color: Colors.white.withOpacity(0.5)),
+                              prefixIcon: const Icon(Icons.search,
+                                  color: AppTheme.primaryPurple),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 15),
                             ),
-                            ...eventProvider.events.map((event) {
-                              return DropdownMenuItem<String>(
-                                value: event.id,
-                                child: Text(
-                                  event.title,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedEventId = value;
-                            });
-                          },
+                            onChanged: (_) => setState(() {}),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 16),
+                      // Dropdown de Eventos
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBg,
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedEventId,
+                              hint: const Text("Filtrar por Evento",
+                                  style: TextStyle(color: Colors.white54)),
+                              dropdownColor: const Color(0xFF1A1F3D),
+                              icon: const Icon(Icons.filter_list,
+                                  color: AppTheme.secondaryPink),
+                              isExpanded: true,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: null,
+                                  child: Text("Todos los eventos"),
+                                ),
+                                ...eventProvider.events.map((event) {
+                                  return DropdownMenuItem<String>(
+                                    value: event.id,
+                                    child: Text(
+                                      event.title,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedEventId = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+
+                // Lista de resultados
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : filteredGameRequests.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "No se encontraron solicitudes",
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 16),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              itemCount: filteredGameRequests.length,
+                              itemBuilder: (context, index) {
+                                final request = filteredGameRequests[index];
+                                return _RequestCard(request: request);
+                              },
+                            ),
+                ),
+              ],
             ),
 
-            // Lista de resultados
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : filteredRequests.isEmpty
-                      ? const Center(
-                          child: Text(
-                            "No se encontraron solicitudes",
-                            style:
-                                TextStyle(color: Colors.white70, fontSize: 16),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          itemCount: filteredRequests.length,
-                          itemBuilder: (context, index) {
-                            final request = filteredRequests[index];
-                            return _RequestCard(request: request);
-                          },
+            // TAB 2: Nuevos Usuarios
+            Column(
+              children: [
+                // Buscador simple para usuarios
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBg,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar usuario pendiente...',
+                        hintStyle:
+                            TextStyle(color: Colors.white.withOpacity(0.5)),
+                        prefixIcon: const Icon(Icons.search,
+                            color: AppTheme.primaryPurple),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 15),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : pendingUsers.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "No hay usuarios pendientes",
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 16),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              itemCount: pendingUsers.length,
+                              itemBuilder: (context, index) {
+                                final player = pendingUsers[index];
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  color: AppTheme.cardBg,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: const BorderSide(
+                                        color: Colors.orange, width: 1),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.all(16),
+                                    leading: CircleAvatar(
+                                      backgroundColor: Colors.orange,
+                                      backgroundImage:
+                                          player.avatarUrl.isNotEmpty
+                                              ? NetworkImage(player.avatarUrl)
+                                              : null,
+                                      child: player.avatarUrl.isEmpty
+                                          ? Text(
+                                              player.name.isNotEmpty
+                                                  ? player.name[0].toUpperCase()
+                                                  : '?',
+                                              style: const TextStyle(
+                                                  color: Colors.white),
+                                            )
+                                          : null,
+                                    ),
+                                    title: Text(
+                                      player.name,
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: Text(
+                                      player.email,
+                                      style: const TextStyle(
+                                          color: Colors.white70),
+                                    ),
+                                    trailing: ElevatedButton.icon(
+                                      onPressed: () async {
+                                        try {
+                                          await Provider.of<PlayerProvider>(
+                                                  context,
+                                                  listen: false)
+                                              .toggleBanUser(player.id, false);
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                  content: Text(
+                                                      'Usuario aprobado exitosamente')),
+                                            );
+                                            _loadData();
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                  content: Text('Error: $e')),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(Icons.check,
+                                          color: Colors.white),
+                                      label: const Text("Aprobar"),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+              ],
             ),
           ],
         ),

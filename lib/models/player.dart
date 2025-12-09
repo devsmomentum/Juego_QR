@@ -66,6 +66,8 @@ class Player {
         return PlayerStatus.shielded;
       case 'banned':
         return PlayerStatus.banned;
+      case 'pending':
+        return PlayerStatus.pending;
       default:
         return PlayerStatus.active;
     }
@@ -120,4 +122,5 @@ enum PlayerStatus {
   frozen,
   shielded,
   banned,
+  pending,
 }
