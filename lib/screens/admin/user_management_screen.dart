@@ -13,11 +13,19 @@ class UserManagementScreen extends StatefulWidget {
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
   bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+  String _filterStatus = 'all'; // 'all', 'active', 'banned'
 
   @override
   void initState() {
     super.initState();
     _loadUsers();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUsers() async {
@@ -30,11 +38,33 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final players = Provider.of<PlayerProvider>(context).allPlayers;
+    final allPlayers = Provider.of<PlayerProvider>(context).allPlayers;
+
+    // Lógica de filtrado
+    final filteredPlayers = allPlayers.where((player) {
+      final searchTerm = _searchController.text.toLowerCase();
+      final matchesSearch = player.name.toLowerCase().contains(searchTerm) ||
+          player.email.toLowerCase().contains(searchTerm);
+
+      bool matchesStatus = true;
+      if (_filterStatus == 'active') {
+        matchesStatus = player.status != PlayerStatus.banned;
+      } else if (_filterStatus == 'banned') {
+        matchesStatus = player.status == PlayerStatus.banned;
+      }
+
+      return matchesSearch && matchesStatus;
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gestión de Usuarios"),
+        title: Row(
+          children: const [
+            Icon(Icons.people, color: Colors.white),
+            SizedBox(width: 10),
+            Text("Gestión de Usuarios"),
+          ],
+        ),
         backgroundColor: AppTheme.darkBg,
         actions: [
           IconButton(
@@ -47,23 +77,123 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         decoration: const BoxDecoration(
           gradient: AppTheme.darkGradient,
         ),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : players.isEmpty
-                ? const Center(
-                    child: Text(
-                      "No hay usuarios registrados",
-                      style: TextStyle(color: Colors.white70, fontSize: 16),
+        child: Column(
+          children: [
+            // Sección de Filtros
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                children: [
+                  // Buscador (Nombre/Email)
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Buscar usuario...',
+                          hintStyle:
+                              TextStyle(color: Colors.white.withOpacity(0.5)),
+                          prefixIcon: const Icon(Icons.search,
+                              color: AppTheme.primaryPurple),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 15),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: players.length,
-                    itemBuilder: (context, index) {
-                      final player = players[index];
-                      return _UserCard(player: player);
-                    },
                   ),
+                  const SizedBox(width: 16),
+                  // Filtro de Estado
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _filterStatus,
+                          dropdownColor: const Color(0xFF1A1F3D),
+                          icon: const Icon(Icons.filter_list,
+                              color: AppTheme.secondaryPink),
+                          isExpanded: true,
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w500),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text("Todos"),
+                            ),
+                            DropdownMenuItem(
+                              value: 'active',
+                              child: Text("Activos",
+                                  style: TextStyle(color: Colors.greenAccent)),
+                            ),
+                            DropdownMenuItem(
+                              value: 'banned',
+                              child: Text("Baneados",
+                                  style: TextStyle(color: Colors.redAccent)),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _filterStatus = value);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Lista de Usuarios
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : filteredPlayers.isEmpty
+                      ? const Center(
+                          child: Text(
+                            "No se encontraron usuarios",
+                            style:
+                                TextStyle(color: Colors.white70, fontSize: 16),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: filteredPlayers.length,
+                          itemBuilder: (context, index) {
+                            final player = filteredPlayers[index];
+                            return _UserCard(player: player);
+                          },
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }

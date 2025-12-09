@@ -46,13 +46,52 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Panel de Administración"),
-        backgroundColor: AppTheme.darkBg,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.darkBg, AppTheme.cardBg],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+          ),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPurple.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.admin_panel_settings,
+                  color: AppTheme.primaryPurple),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              "Panel de Administración",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar Sesión',
-            onPressed: () => _handleLogout(context),
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.logout, color: Colors.redAccent),
+              tooltip: 'Cerrar Sesión',
+              onPressed: () => _handleLogout(context),
+            ),
           ),
         ],
       ),

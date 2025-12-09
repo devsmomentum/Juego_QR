@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/game_request_provider.dart';
+import '../../providers/event_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../models/game_request.dart';
 
@@ -8,21 +9,34 @@ class RequestsManagementScreen extends StatefulWidget {
   const RequestsManagementScreen({super.key});
 
   @override
-  State<RequestsManagementScreen> createState() => _RequestsManagementScreenState();
+  State<RequestsManagementScreen> createState() =>
+      _RequestsManagementScreenState();
 }
 
 class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
   bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+  String? _selectedEventId;
 
   @override
   void initState() {
     super.initState();
-    _loadRequests();
+    _loadData();
   }
 
-  Future<void> _loadRequests() async {
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    await Provider.of<GameRequestProvider>(context, listen: false).fetchAllRequests();
+    await Future.wait([
+      Provider.of<GameRequestProvider>(context, listen: false)
+          .fetchAllRequests(),
+      Provider.of<EventProvider>(context, listen: false).fetchEvents(),
+    ]);
     if (mounted) {
       setState(() => _isLoading = false);
     }
@@ -30,16 +44,33 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final requests = Provider.of<GameRequestProvider>(context).requests;
+    final requestProvider = Provider.of<GameRequestProvider>(context);
+    final eventProvider = Provider.of<EventProvider>(context);
+
+    // Filtrado de solicitudes
+    final filteredRequests = requestProvider.requests.where((req) {
+      final matchesName = (req.playerName ?? '')
+          .toLowerCase()
+          .contains(_searchController.text.toLowerCase());
+      final matchesEvent =
+          _selectedEventId == null || req.eventId == _selectedEventId;
+      return matchesName && matchesEvent;
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Solicitudes de Acceso"),
+        title: Row(
+          children: const [
+            Icon(Icons.mark_email_unread, color: Colors.white),
+            SizedBox(width: 10),
+            Text("Solicitudes de Acceso"),
+          ],
+        ),
         backgroundColor: AppTheme.darkBg,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadRequests,
+            onPressed: _loadData,
           ),
         ],
       ),
@@ -47,23 +78,124 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
         decoration: const BoxDecoration(
           gradient: AppTheme.darkGradient,
         ),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : requests.isEmpty
-                ? const Center(
-                    child: Text(
-                      "No hay solicitudes pendientes",
-                      style: TextStyle(color: Colors.white70, fontSize: 16),
+        child: Column(
+          children: [
+            // Filtros
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                children: [
+                  // Buscador por nombre
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Buscar jugador...',
+                          hintStyle:
+                              TextStyle(color: Colors.white.withOpacity(0.5)),
+                          prefixIcon: const Icon(Icons.search,
+                              color: AppTheme.primaryPurple),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 15),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: requests.length,
-                    itemBuilder: (context, index) {
-                      final request = requests[index];
-                      return _RequestCard(request: request);
-                    },
                   ),
+                  const SizedBox(width: 16),
+                  // Dropdown de Eventos
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedEventId,
+                          hint: const Text("Filtrar por Evento",
+                              style: TextStyle(color: Colors.white54)),
+                          dropdownColor: const Color(0xFF1A1F3D),
+                          icon: const Icon(Icons.filter_list,
+                              color: AppTheme.secondaryPink),
+                          isExpanded: true,
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w500),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text("Todos los eventos"),
+                            ),
+                            ...eventProvider.events.map((event) {
+                              return DropdownMenuItem<String>(
+                                value: event.id,
+                                child: Text(
+                                  event.title,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedEventId = value;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Lista de resultados
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : filteredRequests.isEmpty
+                      ? const Center(
+                          child: Text(
+                            "No se encontraron solicitudes",
+                            style:
+                                TextStyle(color: Colors.white70, fontSize: 16),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: filteredRequests.length,
+                          itemBuilder: (context, index) {
+                            final request = filteredRequests[index];
+                            return _RequestCard(request: request);
+                          },
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -76,7 +208,8 @@ class _RequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+    final requestProvider =
+        Provider.of<GameRequestProvider>(context, listen: false);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -104,7 +237,8 @@ class _RequestCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: request.statusColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -134,7 +268,6 @@ class _RequestCard extends StatelessWidget {
               'Fecha: ${request.createdAt.toString().split('.')[0]}',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
-            
             if (request.isPending) ...[
               const Divider(color: Colors.white24, height: 24),
               Row(
@@ -146,7 +279,8 @@ class _RequestCard extends StatelessWidget {
                         await requestProvider.rejectRequest(request.id);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Solicitud rechazada')),
+                            const SnackBar(
+                                content: Text('Solicitud rechazada')),
                           );
                         }
                       } catch (e) {
@@ -158,7 +292,8 @@ class _RequestCard extends StatelessWidget {
                       }
                     },
                     icon: const Icon(Icons.close, color: Colors.red),
-                    label: const Text('Rechazar', style: TextStyle(color: Colors.red)),
+                    label: const Text('Rechazar',
+                        style: TextStyle(color: Colors.red)),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(

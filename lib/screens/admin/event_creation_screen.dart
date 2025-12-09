@@ -18,28 +18,47 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
   String _title = '';
   String _description = '';
   String? _location; // Ahora es nullable para el Dropdown
-  String _clue = ''; 
+  String _clue = '';
   String _pin = ''; // Variable para el PIN
   int _maxParticipants = 0;
   DateTime _selectedDate = DateTime.now();
-  
+
   // Variable para la imagen seleccionada
-  XFile? _selectedImage; 
+  XFile? _selectedImage;
 
   // Lista de Estados de Venezuela
   final List<String> _states = [
-    'Amazonas', 'Anzoátegui', 'Apure', 'Aragua', 'Barinas', 'Bolívar', 
-    'Carabobo', 'Cojedes', 'Delta Amacuro', 'Distrito Capital', 'Falcón', 
-    'Guárico', 'La Guaira', 'Lara', 'Mérida', 'Miranda', 'Monagas', 
-    'Nueva Esparta', 'Portuguesa', 'Sucre', 'Táchira', 'Trujillo', 
-    'Yaracuy', 'Zulia'
-  ]; 
+    'Amazonas',
+    'Anzoátegui',
+    'Apure',
+    'Aragua',
+    'Barinas',
+    'Bolívar',
+    'Carabobo',
+    'Cojedes',
+    'Delta Amacuro',
+    'Distrito Capital',
+    'Falcón',
+    'Guárico',
+    'La Guaira',
+    'Lara',
+    'Mérida',
+    'Miranda',
+    'Monagas',
+    'Nueva Esparta',
+    'Portuguesa',
+    'Sucre',
+    'Táchira',
+    'Trujillo',
+    'Yaracuy',
+    'Zulia'
+  ];
 
   // Función para seleccionar imagen
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    
+
     if (image != null) {
       setState(() {
         _selectedImage = image;
@@ -78,7 +97,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
       // Guardar usando el Provider
       final provider = Provider.of<EventProvider>(context, listen: false);
-      
+
       // Mostrar indicador de carga (opcional, pero recomendado)
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⏳ Guardando evento...')),
@@ -118,31 +137,44 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
     final inputDecoration = InputDecoration(
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       filled: true,
-      fillColor: const Color.fromARGB(255, 38, 13, 109), // <--- AQUÍ CAMBIAS EL COLOR DE FONDO DE LOS INPUTS
+      fillColor: const Color.fromARGB(255, 38, 13,
+          109), // <--- AQUÍ CAMBIAS EL COLOR DE FONDO DE LOS INPUTS
       contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Panel Admin: Crear Competencia")),
+      appBar: AppBar(
+        title: Row(
+          children: const [
+            Icon(Icons.emoji_events, color: Colors.white),
+            SizedBox(width: 10),
+            Text("Crear Competencia"),
+          ],
+        ),
+      ),
       body: Center(
         child: Container(
           width: 800, // Ancho limitado para que se vea bien en Web
           padding: const EdgeInsets.all(20),
           child: Card(
             elevation: 5,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Padding(
               padding: const EdgeInsets.all(30.0),
               child: Form(
                 key: _formKey,
                 child: ListView(
                   children: [
-                    const Text("Nueva Competencia", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    const Text("Nueva Competencia",
+                        style: TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 20),
 
                     // 1. Título
                     TextFormField(
-                      decoration: inputDecoration.copyWith(labelText: 'Título del Evento'),
+                      decoration: inputDecoration.copyWith(
+                          labelText: 'Título del Evento'),
                       validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                       onSaved: (v) => _title = v!,
                     ),
@@ -150,7 +182,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
                     // 2. Descripción
                     TextFormField(
-                      decoration: inputDecoration.copyWith(labelText: 'Descripción'),
+                      decoration:
+                          inputDecoration.copyWith(labelText: 'Descripción'),
                       maxLines: 3,
                       validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                       onSaved: (v) => _description = v!,
@@ -172,14 +205,18 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                             icon: const Icon(Icons.image),
                             label: const Text("Subir Imagen"),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo.shade50, // Color de fondo del botón
-                              foregroundColor: Colors.indigo, // Color del texto e icono
+                              backgroundColor: Colors
+                                  .indigo.shade50, // Color de fondo del botón
+                              foregroundColor:
+                                  Colors.indigo, // Color del texto e icono
                             ),
                           ),
                           const SizedBox(width: 15),
                           Expanded(
                             child: Text(
-                              _selectedImage == null ? "Ninguna imagen seleccionada" : "✅ ${_selectedImage!.name}",
+                              _selectedImage == null
+                                  ? "Ninguna imagen seleccionada"
+                                  : "✅ ${_selectedImage!.name}",
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -191,9 +228,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                     // 4. Pista
                     TextFormField(
                       decoration: inputDecoration.copyWith(
-                        labelText: 'Pista (Clue)', 
-                        prefixIcon: const Icon(Icons.lightbulb)
-                      ),
+                          labelText: 'Pista (Clue)',
+                          prefixIcon: const Icon(Icons.lightbulb)),
                       validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                       onSaved: (v) => _clue = v!,
                     ),
@@ -202,9 +238,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                     // 4.1 PIN de Acceso
                     TextFormField(
                       decoration: inputDecoration.copyWith(
-                        labelText: 'PIN de Acceso (Código)', 
-                        prefixIcon: const Icon(Icons.lock)
-                      ),
+                          labelText: 'PIN de Acceso (Código)',
+                          prefixIcon: const Icon(Icons.lock)),
                       validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                       onSaved: (v) => _pin = v!,
                     ),
@@ -217,9 +252,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             decoration: inputDecoration.copyWith(
-                              labelText: 'Lugar / Ubicación', 
-                              prefixIcon: const Icon(Icons.map)
-                            ),
+                                labelText: 'Lugar / Ubicación',
+                                prefixIcon: const Icon(Icons.map)),
                             value: _location,
                             items: _states.map((state) {
                               return DropdownMenuItem(
@@ -232,7 +266,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                 _location = value;
                               });
                             },
-                            validator: (v) => v == null ? 'Campo requerido' : null,
+                            validator: (v) =>
+                                v == null ? 'Campo requerido' : null,
                             onSaved: (v) => _location = v,
                           ),
                         ),
@@ -241,9 +276,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         Expanded(
                           child: TextFormField(
                             decoration: inputDecoration.copyWith(
-                              labelText: 'Max Participantes', 
-                              prefixIcon: const Icon(Icons.group)
-                            ),
+                                labelText: 'Max Participantes',
+                                prefixIcon: const Icon(Icons.group)),
                             keyboardType: TextInputType.number,
                             validator: (v) => v!.isEmpty ? 'Requerido' : null,
                             onSaved: (v) => _maxParticipants = int.parse(v!),
@@ -255,15 +289,18 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
                     // Botón Guardar
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.all(20),
-                        backgroundColor: Colors.indigo,
-                        foregroundColor: const Color.fromARGB(255, 255, 255, 255),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _submitForm, 
-                      child: const Text("CREAR EVENTO", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
-                    )
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.all(20),
+                          backgroundColor: Colors.indigo,
+                          foregroundColor:
+                              const Color.fromARGB(255, 255, 255, 255),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _submitForm,
+                        child: const Text("CREAR EVENTO",
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)))
                   ],
                 ),
               ),
