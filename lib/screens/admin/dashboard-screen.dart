@@ -1,10 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../providers/player_provider.dart';
 import 'event_creation_screen.dart';
 import 'requests_management_screen.dart';
+import 'user_management_screen.dart';
+import 'admin_login_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
+
+  void _handleLogout(BuildContext context) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title:
+            const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
+        content: const Text('¿Estás seguro de que quieres salir?',
+            style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Salir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true && context.mounted) {
+      await Provider.of<PlayerProvider>(context, listen: false).logout();
+      if (context.mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,6 +48,13 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Panel de Administración"),
         backgroundColor: AppTheme.darkBg,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar Sesión',
+            onPressed: () => _handleLogout(context),
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -27,7 +70,8 @@ class DashboardScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const EventCreationScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const EventCreationScreen()),
                 );
               },
             ),
@@ -39,7 +83,8 @@ class DashboardScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const RequestsManagementScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const RequestsManagementScreen()),
                 );
               },
             ),
@@ -49,7 +94,11 @@ class DashboardScreen extends StatelessWidget {
               icon: Icons.people,
               color: AppTheme.secondaryPink,
               onTap: () {
-                // TODO: Navegar a gestión de usuarios
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const UserManagementScreen()),
+                );
               },
             ),
             // Agrega más opciones aquí
@@ -104,7 +153,8 @@ class _AdminMenuCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+              const Icon(Icons.arrow_forward_ios,
+                  color: Colors.white54, size: 16),
             ],
           ),
         ),
