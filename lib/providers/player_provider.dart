@@ -4,19 +4,21 @@ import '../models/player.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Player? _currentPlayer;
+  List<Player> _allPlayers = [];
   final _supabase = Supabase.instance.client;
-  
+
   Player? get currentPlayer => _currentPlayer;
-  
+  List<Player> get allPlayers => _allPlayers;
+
   bool get isLoggedIn => _currentPlayer != null;
-  
+
   Future<void> login(String email, String password) async {
     try {
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
-      
+
       if (response.user != null) {
         await _fetchProfile(response.user!.id);
       }
@@ -31,7 +33,7 @@ class PlayerProvider extends ChangeNotifier {
       rethrow;
     }
   }
-  
+
   Future<void> register(String name, String email, String password) async {
     try {
       final response = await _supabase.auth.signUp(
@@ -39,7 +41,7 @@ class PlayerProvider extends ChangeNotifier {
         password: password,
         data: {'name': name}, // This triggers the handle_new_user trigger
       );
-      
+
       if (response.user != null) {
         // Wait a bit for the trigger to create the profile
         await Future.delayed(const Duration(seconds: 1));
@@ -53,12 +55,9 @@ class PlayerProvider extends ChangeNotifier {
 
   Future<void> _fetchProfile(String userId) async {
     try {
-      final data = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
-      
+      final data =
+          await _supabase.from('profiles').select().eq('id', userId).single();
+
       _currentPlayer = Player.fromJson(data);
       notifyListeners();
     } catch (e) {
@@ -66,22 +65,67 @@ class PlayerProvider extends ChangeNotifier {
       // If profile doesn't exist yet (race condition), maybe retry or handle gracefully
     }
   }
-  
+
   Future<void> logout() async {
     await _supabase.auth.signOut();
     _currentPlayer = null;
     notifyListeners();
   }
-  
+
+  Future<void> fetchAllPlayers() async {
+    try {
+      final data = await _supabase
+          .from('profiles')
+          .select()
+          .order('name', ascending: true);
+
+      _allPlayers =
+          (data as List).map((json) => Player.fromJson(json)).toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching all players: $e');
+    }
+  }
+
+  Future<void> toggleBanUser(String userId, bool ban) async {
+    try {
+      // Ejecutar la función de Supabase para banear/desbanear
+      await _supabase.rpc('toggle_ban',
+          params: {'user_id': userId, 'new_status': ban ? 'banned' : 'active'});
+
+      // Actualizar estado local
+      final index = _allPlayers.indexWhere((p) => p.id == userId);
+      if (index != -1) {
+        _allPlayers[index].status =
+            ban ? PlayerStatus.banned : PlayerStatus.active;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error toggling ban: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteUser(String userId) async {
+    try {
+      await _supabase.rpc('delete_user', params: {'user_id': userId});
+      _allPlayers.removeWhere((p) => p.id == userId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting user: $e');
+      rethrow;
+    }
+  }
+
   // Methods below would need to be updated to sync with Supabase DB
-  // For now, we'll keep them updating local state, but in a real app 
+  // For now, we'll keep them updating local state, but in a real app
   // they should call RPCs or update tables.
 
   void addExperience(int xp) {
     if (_currentPlayer != null) {
       final oldLevel = _currentPlayer!.level;
       _currentPlayer!.addExperience(xp);
-      
+
       if (_currentPlayer!.level > oldLevel) {
         // Level up!
         _currentPlayer!.updateProfession();
@@ -89,14 +133,14 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   void addCoins(int amount) {
     if (_currentPlayer != null) {
       _currentPlayer!.coins += amount;
       notifyListeners();
     }
   }
-  
+
   bool spendCoins(int amount) {
     if (_currentPlayer != null && _currentPlayer!.coins >= amount) {
       _currentPlayer!.coins -= amount;
@@ -105,14 +149,14 @@ class PlayerProvider extends ChangeNotifier {
     }
     return false;
   }
-  
+
   void addItemToInventory(String item) {
     if (_currentPlayer != null) {
       _currentPlayer!.addItem(item);
       notifyListeners();
     }
   }
-  
+
   bool useItemFromInventory(String item) {
     if (_currentPlayer != null && _currentPlayer!.removeItem(item)) {
       notifyListeners();
@@ -120,7 +164,7 @@ class PlayerProvider extends ChangeNotifier {
     }
     return false;
   }
-  
+
   void freezePlayer(DateTime until) {
     if (_currentPlayer != null) {
       _currentPlayer!.status = PlayerStatus.frozen;
@@ -128,7 +172,7 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   void unfreezePlayer() {
     if (_currentPlayer != null) {
       _currentPlayer!.status = PlayerStatus.active;
@@ -136,10 +180,11 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   void updateStats(String stat, int value) {
     if (_currentPlayer != null) {
-      _currentPlayer!.stats[stat] = (_currentPlayer!.stats[stat] as int) + value;
+      _currentPlayer!.stats[stat] =
+          (_currentPlayer!.stats[stat] as int) + value;
       _currentPlayer!.updateProfession();
       notifyListeners();
     }

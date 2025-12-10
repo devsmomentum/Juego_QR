@@ -31,18 +31,45 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       try {
         // Intentar iniciar sesión con Supabase
         final supabase = Supabase.instance.client;
-        
-        await supabase.auth.signInWithPassword(
+
+        final authResponse = await supabase.auth.signInWithPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
 
-        if (mounted) {
-          setState(() => _isLoading = false);
-          // Navegar al Dashboard
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const DashboardScreen()),
-          );
+        if (authResponse.user != null) {
+          // Verificar el rol del usuario en la tabla profiles
+          final profile = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', authResponse.user!.id)
+              .single();
+
+          final role = profile['role'] as String?;
+
+          if (role != 'admin') {
+            // Si no es admin, cerrar sesión y mostrar error
+            await supabase.auth.signOut();
+            if (mounted) {
+              setState(() => _isLoading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      '⛔ Acceso denegado: No tienes permisos de administrador.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
+
+          if (mounted) {
+            setState(() => _isLoading = false);
+            // Navegar al Dashboard
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const DashboardScreen()),
+            );
+          }
         }
       } on AuthException catch (e) {
         // Error de autenticación de Supabase
@@ -82,7 +109,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Container(
-                constraints: const BoxConstraints(maxWidth: 400), // Para que se vea bien en web/tablet
+                constraints: const BoxConstraints(
+                    maxWidth: 400), // Para que se vea bien en web/tablet
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -94,7 +122,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: const LinearGradient(
-                            colors: [AppTheme.secondaryPink, AppTheme.primaryPurple],
+                            colors: [
+                              AppTheme.secondaryPink,
+                              AppTheme.primaryPurple
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -113,23 +144,24 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 30),
-                      
+
                       // Título
                       Text(
                         'Administrador',
-                        style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                          color: Colors.white,
-                        ),
+                        style:
+                            Theme.of(context).textTheme.displayMedium?.copyWith(
+                                  color: Colors.white,
+                                ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Acceso al panel de control',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.white70,
-                        ),
+                              color: Colors.white70,
+                            ),
                       ),
                       const SizedBox(height: 50),
-                      
+
                       // Email field
                       TextFormField(
                         controller: _emailController,
@@ -138,14 +170,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         decoration: InputDecoration(
                           labelText: 'Email Administrativo',
                           labelStyle: const TextStyle(color: Colors.white60),
-                          prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.primaryPurple),
+                          prefixIcon: const Icon(Icons.email_outlined,
+                              color: AppTheme.primaryPurple),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                            borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.1)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppTheme.primaryPurple),
+                            borderSide:
+                                const BorderSide(color: AppTheme.primaryPurple),
                           ),
                           filled: true,
                           fillColor: AppTheme.cardBg,
@@ -158,7 +193,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         },
                       ),
                       const SizedBox(height: 20),
-                      
+
                       // Password field
                       TextFormField(
                         controller: _passwordController,
@@ -167,10 +202,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         decoration: InputDecoration(
                           labelText: 'Contraseña',
                           labelStyle: const TextStyle(color: Colors.white60),
-                          prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryPurple),
+                          prefixIcon: const Icon(Icons.lock_outline,
+                              color: AppTheme.primaryPurple),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                              _isPasswordVisible
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                               color: Colors.white60,
                             ),
                             onPressed: () {
@@ -181,11 +219,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                            borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.1)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppTheme.primaryPurple),
+                            borderSide:
+                                const BorderSide(color: AppTheme.primaryPurple),
                           ),
                           filled: true,
                           fillColor: AppTheme.cardBg,
@@ -198,7 +238,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         },
                       ),
                       const SizedBox(height: 40),
-                      
+
                       // Login Button
                       SizedBox(
                         width: double.infinity,

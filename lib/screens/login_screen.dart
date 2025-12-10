@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
+import '../models/player.dart';
 import '../theme/app_theme.dart';
 import 'register_screen.dart';
 import 'scenarios_screen.dart';
@@ -28,22 +29,57 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       try {
-        final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-        
+        final playerProvider =
+            Provider.of<PlayerProvider>(context, listen: false);
+
         // Show loading indicator
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(child: CircularProgressIndicator()),
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
         );
 
         await playerProvider.login(
-          _emailController.text.trim(), 
-          _passwordController.text
-        );
-        
+            _emailController.text.trim(), _passwordController.text);
+
         if (!mounted) return;
         Navigator.pop(context); // Dismiss loading
+
+        // Verificar estado del usuario
+        final player = playerProvider.currentPlayer;
+        if (player != null) {
+          if (player.status == PlayerStatus.pending) {
+            await playerProvider.logout();
+            if (!mounted) return;
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Cuenta Pendiente'),
+                content: const Text(
+                  'Tu cuenta está pendiente de aprobación por un administrador.\n\nPor favor espera a que tu solicitud sea revisada.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Entendido'),
+                  ),
+                ],
+              ),
+            );
+            return;
+          } else if (player.status == PlayerStatus.banned) {
+            await playerProvider.logout();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Tu cuenta ha sido suspendida.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
 
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const ScenariosScreen()),
@@ -51,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (e) {
         if (!mounted) return;
         Navigator.pop(context); // Dismiss loading
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al iniciar sesión: ${e.toString()}'),
@@ -103,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    
+
                     // Title
                     Text(
                       'Bienvenido',
@@ -115,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 50),
-                    
+
                     // Email field
                     TextFormField(
                       controller: _emailController,
@@ -124,7 +160,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Email',
                         labelStyle: TextStyle(color: Colors.white60),
-                        prefixIcon: Icon(Icons.email_outlined, color: Colors.white60),
+                        prefixIcon:
+                            Icon(Icons.email_outlined, color: Colors.white60),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -137,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 20),
-                    
+
                     // Password field
                     TextFormField(
                       controller: _passwordController,
@@ -146,10 +183,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
                         labelStyle: const TextStyle(color: Colors.white60),
-                        prefixIcon: const Icon(Icons.lock_outline, color: Colors.white60),
+                        prefixIcon: const Icon(Icons.lock_outline,
+                            color: Colors.white60),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                            _isPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                             color: Colors.white60,
                           ),
                           onPressed: () {
@@ -170,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 30),
-                    
+
                     // Login button
                     SizedBox(
                       width: double.infinity,
@@ -208,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
+
                     // Register link
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -220,7 +260,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextButton(
                           onPressed: () {
                             Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                              MaterialPageRoute(
+                                  builder: (_) => const RegisterScreen()),
                             );
                           },
                           child: const Text(
