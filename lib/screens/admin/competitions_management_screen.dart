@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../providers/event_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../models/event.dart';
-import 'requests_management_screen.dart';
 
 class CompetitionsManagementScreen extends StatefulWidget {
   const CompetitionsManagementScreen({super.key});

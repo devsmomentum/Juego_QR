@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'screens/splash_screen.dart'; // Mantener import aunque no se use en home, por si acaso
 import 'providers/game_provider.dart';
 import 'providers/player_provider.dart';
 import 'providers/game_request_provider.dart';
