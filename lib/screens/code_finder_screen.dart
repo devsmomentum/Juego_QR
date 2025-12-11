@@ -36,10 +36,13 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
     )..repeat();
 
     _shakeController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-  }
+          duration: const Duration(milliseconds: 500),
+          vsync: this,
+        );
+        
+        // DEBUG: Imprimir el código secreto
+        print("SECRET CODE FOR ${widget.scenario.name}: ${widget.scenario.secretCode}");
+      }
 
   @override
   void dispose() {

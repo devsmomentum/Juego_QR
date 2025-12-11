@@ -8,17 +8,53 @@ import 'requests_management_screen.dart';
 import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _selectedIndex = 0;
+
+  // Lista de vistas disponibles
+  final List<Widget> _views = [
+    const _WelcomeDashboardView(), // Dashboard General / Resumen
+    const EventCreationScreen(), // Crear Competencia
+    const CompetitionsManagementScreen(), // Gestionar Competencias
+    const RequestsManagementScreen(), // Gestionar Solicitudes
+    const UserManagementScreen(), // Usuarios
+  ];
+
+  // Títulos para la navegación
+  final List<String> _titles = [
+    "Dashboard",
+    "Crear Evento",
+    "Competencias",
+    "Solicitudes",
+    "Usuarios",
+    "Reportes", // Placeholder
+    "Configuración" // Placeholder
+  ];
+
+  final List<IconData> _icons = [
+    Icons.dashboard,
+    Icons.add_circle_outline,
+    Icons.emoji_events,
+    Icons.assignment_ind,
+    Icons.people,
+    Icons.bar_chart,
+    Icons.settings,
+  ];
 
   void _handleLogout(BuildContext context) async {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
-        title:
-            const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
-        content: const Text('¿Estás seguro de que quieres salir?',
+        title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
+        content: const Text('¿Estás seguro de que deseas salir?',
             style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
@@ -45,172 +81,266 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppTheme.darkBg, AppTheme.cardBg],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
-          ),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryPurple.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+    // Usamos LayoutBuilder para adaptarnos si es Web/Desktop
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Scaffold(
+          backgroundColor: AppTheme.darkBg,
+          body: Column(
+            children: [
+              // ------------------------------------------------
+              // 1. HEADER SUPERIOR (Logo + Usuario)
+              // ------------------------------------------------
+              Container(
+                height: 70,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBg,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.white.withOpacity(0.1),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Logo / Título
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryPurple.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.admin_panel_settings,
+                          color: AppTheme.primaryPurple),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          "Sistema Administrativo",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        Text(
+                          "Treasure Hunt RPG",
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    // Información de Usuario
+                    Row(
+                      children: [
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: const [
+                            Text(
+                              "Administrador",
+                              style: TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              "admin@system.com", // Placeholder o obtener real
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 12),
+                        CircleAvatar(
+                          backgroundColor: AppTheme.secondaryPink,
+                          child: const Text("A",
+                              style: TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          icon: const Icon(Icons.logout, color: Colors.white54),
+                          tooltip: "Salir",
+                          onPressed: () => _handleLogout(context),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              child: const Icon(Icons.admin_panel_settings,
-                  color: AppTheme.primaryPurple),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              "Panel de Administración",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-                letterSpacing: 0.5,
+
+              // ------------------------------------------------
+              // 2. BARRA DE NAVEGACIÓN HORIZONTAL
+              // ------------------------------------------------
+              Container(
+                height: 60,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2342), // Un tono ligeramente diferente
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      offset: const Offset(0, 4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _titles.length,
+                  itemBuilder: (context, index) {
+                    final isSelected = _selectedIndex == index;
+                    return GestureDetector(
+                      onTap: () {
+                         if (index < _views.length) {
+                             setState(() => _selectedIndex = index);
+                         } else {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             const SnackBar(content: Text("Módulo en desarrollo"))
+                           );
+                         }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppTheme.primaryPurple.withOpacity(0.15)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: isSelected ? Border.all(color: AppTheme.primaryPurple.withOpacity(0.5)) : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _icons[index],
+                              size: 20,
+                              color: isSelected ? AppTheme.primaryPurple : Colors.white54,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _titles[index],
+                              style: TextStyle(
+                                color: isSelected ? AppTheme.primaryPurple : Colors.white70,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.logout, color: Colors.redAccent),
-              tooltip: 'Cerrar Sesión',
-              onPressed: () => _handleLogout(context),
-            ),
+
+              // ------------------------------------------------
+              // 3. ÁREA DE CONTENIDO PRINCIPAL
+              // ------------------------------------------------
+              Expanded(
+                child: Container(
+                  color: AppTheme.darkBg,
+                  // Usamos IndexedStack para mantener el estado de las vistas
+                  // Pero OJO: Si las vistas tienen Scaffold, puede haber conflicto visual.
+                  // Lo ideal es envolverlas en un Theme que elimine el AppBar si es necesario,
+                  // o simplemente aceptar que tendrán un "Header" interno.
+                  child: IndexedStack(
+                    index: _selectedIndex < _views.length ? _selectedIndex : 0,
+                    children: _views,
+                  ),
+                ),
+              ),
+            ],
           ),
+        );
+      },
+    );
+  }
+}
+
+// Vista simple para el "Home" del dashboard
+class _WelcomeDashboardView extends StatelessWidget {
+  const _WelcomeDashboardView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.analytics, size: 80, color: Colors.white24),
+          const SizedBox(height: 20),
+          const Text(
+            "Bienvenido al Panel de Administración",
+            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "Selecciona una opción del menú superior para comenzar.",
+            style: TextStyle(color: Colors.white54),
+          ),
+          const SizedBox(height: 40),
+          // Resumen rápido (Cards estilo Dashboard)
+          Wrap(
+            spacing: 20,
+            runSpacing: 20,
+            alignment: WrapAlignment.center,
+            children: [
+              _SummaryCard(
+                  title: "Usuarios Activos", value: "...", color: Colors.blue),
+              _SummaryCard(
+                  title: "Eventos Creados", value: "...", color: Colors.orange),
+              _SummaryCard(
+                  title: "Solicitudes Pendientes", value: "...", color: Colors.purple),
+            ],
+          )
         ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.darkGradient,
-        ),
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _AdminMenuCard(
-              title: "Crear Competencia",
-              icon: Icons.add_location_alt,
-              color: AppTheme.primaryPurple,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const EventCreationScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 15),
-            _AdminMenuCard(
-              title: "Gestionar Competencias",
-              icon: Icons.emoji_events,
-              color: Colors.blueAccent,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const CompetitionsManagementScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 15),
-            _AdminMenuCard(
-              title: "Gestionar Solicitudes",
-              icon: Icons.assignment_ind,
-              color: Colors.orange,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const RequestsManagementScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 15),
-            _AdminMenuCard(
-              title: "Gestionar Usuarios",
-              icon: Icons.people,
-              color: AppTheme.secondaryPink,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const UserManagementScreen()),
-                );
-              },
-            ),
-            // Agrega más opciones aquí
-          ],
-        ),
       ),
     );
   }
 }
 
-class _AdminMenuCard extends StatelessWidget {
+class _SummaryCard extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final String value;
   final Color color;
-  final VoidCallback onTap;
 
-  const _AdminMenuCard({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
+  const _SummaryCard(
+      {required this.title, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: AppTheme.cardBg,
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(15),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 30),
-              ),
-              const SizedBox(width: 20),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border(left: BorderSide(color: color, width: 4)),
+        boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0,4))
+        ]
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: Colors.white70)),
+          const SizedBox(height: 8),
+          Text(value,
+              style: const TextStyle(
                   color: Colors.white,
-                ),
-              ),
-              const Spacer(),
-              const Icon(Icons.arrow_forward_ios,
-                  color: Colors.white54, size: 16),
-            ],
-          ),
-        ),
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }

@@ -81,123 +81,139 @@ class _CompetitionsManagementScreenState
   Widget build(BuildContext context) {
     final events = Provider.of<EventProvider>(context).events;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Gestionar Competencias"),
-        backgroundColor: AppTheme.darkBg,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
+    // Solo retornamos el contenido, el Dashboard provee el Scaffold y Header
+    return Container(
+      decoration: const BoxDecoration(
           gradient: AppTheme.darkGradient,
-        ),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : events.isEmpty
-                ? const Center(
-                    child: Text(
-                      "No hay competencias activas",
-                      style: TextStyle(color: Colors.white70, fontSize: 16),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: events.length,
-                    itemBuilder: (context, index) {
-                      final event = events[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        color: AppTheme.cardBg,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título de la Sección (Opcional, ya está en las pestañas, pero ayuda al contexto)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, 0),
+            child: Text(
+              "Gestionar Competencias",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : events.isEmpty
+                    ? Center(
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            ListTile(
-                              contentPadding: const EdgeInsets.all(16),
-                              leading: Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.primaryPurple.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                  image: event.imageUrl.isNotEmpty
-                                      ? DecorationImage(
-                                          image: NetworkImage(event.imageUrl),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : null,
-                                ),
-                                child: event.imageUrl.isEmpty
-                                    ? const Icon(Icons.event,
-                                        color: AppTheme.primaryPurple)
-                                    : null,
-                              ),
-                              title: Text(
-                                event.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    event.location,
-                                    style:
-                                        const TextStyle(color: Colors.white70),
-                                  ),
-                                  Text(
-                                    event.date.toString().split(' ')[0],
-                                    style:
-                                        const TextStyle(color: Colors.white54),
-                                  ),
-                                ],
-                              ),
-                              trailing: IconButton(
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => _deleteEvent(event),
-                              ),
-                            ),
-                            const Divider(color: Colors.white10),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        // Navegar a gestión de solicitudes filtrando por este evento
-                                        // Por ahora vamos a la pantalla general, idealmente pasaríamos el ID
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const RequestsManagementScreen(),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.assignment_ind),
-                                      label: const Text("Ver Solicitudes"),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.white,
-                                        side: const BorderSide(
-                                            color: AppTheme.primaryPurple),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            Icon(Icons.event_busy, size: 64, color: Colors.white.withOpacity(0.3)),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "No hay competencias activas",
+                              style: TextStyle(color: Colors.white70, fontSize: 18),
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(24),
+                        itemCount: events.length,
+                        separatorBuilder: (ctx, i) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          final event = events[index];
+                          return Card(
+                            elevation: 4,
+                            color: AppTheme.cardBg,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: Colors.white.withOpacity(0.05)),
+                            ),
+                            child: Column(
+                              children: [
+                                ListTile(
+                                  contentPadding: const EdgeInsets.all(20),
+                                  leading: Hero(
+                                    tag: 'event_${event.id}',
+                                    child: Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        image: event.imageUrl.isNotEmpty
+                                            ? DecorationImage(
+                                                image: NetworkImage(event.imageUrl),
+                                                fit: BoxFit.cover,
+                                              )
+                                            : null,
+                                        color: AppTheme.primaryPurple.withOpacity(0.2),
+                                      ),
+                                      child: event.imageUrl.isEmpty
+                                          ? const Icon(Icons.confirmation_number, color: AppTheme.primaryPurple)
+                                          : null,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    event.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.location_on, size: 14, color: Colors.white54),
+                                        const SizedBox(width: 4),
+                                        Text(event.location, style: const TextStyle(color: Colors.white54)),
+                                        const SizedBox(width: 16),
+                                        Icon(Icons.calendar_today, size: 14, color: Colors.white54),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          event.date.toString().split(' ')[0],
+                                          style: const TextStyle(color: Colors.white54),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                    onPressed: () => _deleteEvent(event),
+                                    tooltip: "Eliminar Evento",
+                                  ),
+                                ),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.2),
+                                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                  ),
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      // TODO: Navegar al detalle
+                                    },
+                                    icon: const Icon(Icons.visibility, size: 18),
+                                    label: const Text("Ver Detalles y Solicitudes"),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppTheme.accentGold,
+                                      side: const BorderSide(color: AppTheme.accentGold, width: 0.5),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }
