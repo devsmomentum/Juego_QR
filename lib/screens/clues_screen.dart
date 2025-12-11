@@ -9,8 +9,30 @@ import 'qr_scanner_screen.dart';
 import 'geolocation_screen.dart';
 import 'shop_screen.dart';
 
-class CluesScreen extends StatelessWidget {
-  const CluesScreen({super.key});
+class CluesScreen extends StatefulWidget {
+  // 1. Recibimos el ID del evento obligatorio
+  final String eventId;
+
+  const CluesScreen({
+    super.key, 
+    required this.eventId
+  });
+
+  @override
+  State<CluesScreen> createState() => _CluesScreenState();
+}
+
+class _CluesScreenState extends State<CluesScreen> {
+  
+  @override
+  void initState() {
+    super.initState();
+    // 2. Llamamos al provider apenas carga la pantalla usando el ID recibido
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<GameProvider>(context, listen: false)
+          .fetchClues(eventId: widget.eventId);
+    });
+  }
 
   void _handleClueAction(BuildContext context, String clueId, String clueType) {
     switch (clueType) {
@@ -93,7 +115,8 @@ class CluesScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 24),
                               ElevatedButton(
-                                onPressed: () => gameProvider.fetchClues(),
+                                // Pasamos el ID nuevamente al reintentar por seguridad
+                                onPressed: () => gameProvider.fetchClues(eventId: widget.eventId),
                                 child: const Text('Reintentar'),
                               ),
                             ],
@@ -119,7 +142,8 @@ class CluesScreen extends StatelessWidget {
                               const SizedBox(height: 10),
                               ElevatedButton(
                                 onPressed: () {
-                                  gameProvider.fetchClues();
+                                  // Pasamos el ID nuevamente al recargar
+                                  gameProvider.fetchClues(eventId: widget.eventId);
                                 },
                                 child: const Text('Recargar'),
                               ),

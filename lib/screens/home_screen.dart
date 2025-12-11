@@ -8,7 +8,11 @@ import 'leaderboard_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  // 1. Agregar esta variable final
+  final String eventId; 
+
+  // 2. Requerirla en el constructor
+  const HomeScreen({super.key, required this.eventId});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -17,12 +21,22 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   
-  final List<Widget> _screens = [
-    const CluesScreen(),
-    const InventoryScreen(),
-    const LeaderboardScreen(),
-    const ProfileScreen(),
-  ];
+  // 3. Quitar la inicialización aquí, usar 'late'
+  late List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    // 4. Inicializar las pantallas dentro de initState para acceder a 'widget.eventId'
+    _screens = [
+      CluesScreen(
+        eventId: widget.eventId, // ¡AQUÍ PASAMOS EL ID DINÁMICO!
+      ),
+      const InventoryScreen(),
+      const LeaderboardScreen(),
+      const ProfileScreen(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {

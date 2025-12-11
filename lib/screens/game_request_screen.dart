@@ -166,8 +166,8 @@ class _GameRequestScreenState extends State<GameRequestScreen>
           ),
         );
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        MaterialPageRoute(builder: (_) => HomeScreen(eventId: widget.eventId!)),
+      );
       }
     }
   }
@@ -329,8 +329,8 @@ class _GameRequestScreenState extends State<GameRequestScreen>
 
                       Navigator.of(context).pop();
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const HomeScreen()),
-                      );
+                      MaterialPageRoute(builder: (_) => HomeScreen(eventId: widget.eventId!)),
+                    );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
@@ -561,9 +561,8 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                                   onPressed: () {
                                     // Navigate to the actual game
                                     Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                          builder: (_) => const HomeScreen()),
-                                    );
+                                    MaterialPageRoute(builder: (_) => HomeScreen(eventId: widget.eventId!)),
+                                  );
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.green,

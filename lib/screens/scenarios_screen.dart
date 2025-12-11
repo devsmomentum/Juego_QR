@@ -76,9 +76,12 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
       
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      Navigator.push(
+      context, 
+      MaterialPageRoute(
+        builder: (_) => HomeScreen(eventId: scenario.id) 
+      )
+    );
     } else {
       // Check if there is already a request
       final request = await requestProvider.getRequestForPlayer(
@@ -278,23 +281,38 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
                               fit: StackFit.expand,
                               children: [
                                 // Background Image
-                                Image.network(
-                                  scenario.imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[800],
-                                      child: const Icon(Icons.broken_image, size: 50, color: Colors.white54),
-                                    );
-                                  },
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                     if (loadingProgress == null) return child;
-                                     return Container(
-                                       color: Colors.black26,
-                                       child: const Center(child: CircularProgressIndicator(color: AppTheme.accentGold)),
-                                     );
-                                  },
-                                ),
+                                // VERIFICACIÓN: Solo intentamos cargar si la URL no está vacía y empieza con http
+                                (scenario.imageUrl.isNotEmpty && scenario.imageUrl.startsWith('http'))
+                                    ? Image.network(
+                                        scenario.imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            color: Colors.grey[800],
+                                            child: const Icon(Icons.broken_image, size: 50, color: Colors.white54),
+                                          );
+                                        },
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return Container(
+                                            color: Colors.black26,
+                                            child: const Center(
+                                                child: CircularProgressIndicator(color: AppTheme.accentGold)),
+                                          );
+                                        },
+                                      )
+                                    // SI LA URL ESTÁ VACÍA, MOSTRAMOS UN PLACEHOLDER
+                                    : Container(
+                                        color: Colors.grey[900],
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: const [
+                                            Icon(Icons.image_not_supported, size: 50, color: Colors.white24),
+                                            SizedBox(height: 8),
+                                            Text("Sin imagen", style: TextStyle(color: Colors.white24, fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
                                 
                                 // Gradient Overlay
                                 Container(
