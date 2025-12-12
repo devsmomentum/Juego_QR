@@ -19,14 +19,20 @@ class _RiddleScreenState extends State<RiddleScreen> {
 
   void _checkAnswer() async {
     final userAnswer = _answerController.text.trim().toLowerCase();
-    final correctAnswer = widget.clue.riddleAnswer?.toLowerCase() ?? '';
+    // Normalizamos la respuesta esperada: trim y lowercase
+    final correctAnswer = widget.clue.riddleAnswer?.trim().toLowerCase() ?? '';
 
     if (userAnswer == correctAnswer) {
       // Respuesta correcta
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
       // Call backend
-      final success = await gameProvider.completeCurrentClue(userAnswer);
+      // Enviamos la respuesta original de la BD (si existe) para asegurar coincidencia exacta en el backend
+      // si este realiza una validación estricta.
+      final success = await gameProvider.completeCurrentClue(
+        widget.clue.riddleAnswer ?? userAnswer, 
+        clueId: widget.clue.id // <--- AGREGAR ESTO
+      );
 
       if (success) {
         if (context.mounted) _showSuccessDialog();

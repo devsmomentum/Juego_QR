@@ -167,7 +167,10 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
   }
 
   void _checkCode() {
-    if (_enteredCode == widget.clue.riddleAnswer) {
+    // Normalizamos la respuesta esperada (trim) para evitar errores por espacios en BD
+    final expected = widget.clue.riddleAnswer?.trim() ?? "";
+    
+    if (_enteredCode == expected) {
       _showSuccessDialog(context, widget.clue);
     } else {
       setState(() {
@@ -432,9 +435,10 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
 
   void _checkAnswer() {
     final userAnswer = _controller.text.trim().toLowerCase();
-    final correctAnswer = widget.clue.riddleAnswer?.toLowerCase() ?? "";
+    // Normalizamos la respuesta esperada: trim y lowercase
+    final correctAnswer = widget.clue.riddleAnswer?.trim().toLowerCase() ?? "";
 
-    if (userAnswer == correctAnswer || userAnswer.contains(correctAnswer.split(' ').first)) {
+    if (userAnswer == correctAnswer || (correctAnswer.isNotEmpty && userAnswer.contains(correctAnswer.split(' ').first))) {
       _showSuccessDialog(context, widget.clue);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -134,32 +134,32 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> completeCurrentClue(String answer) async {
-    if (_currentClueIndex >= _clues.length) return false;
+  Future<bool> completeCurrentClue(String answer, {String? clueId}) async {
     
-    final clue = _clues[_currentClueIndex];
+    String targetId;
+
+    // Lógica para determinar qué ID usar
+    if (clueId != null) {
+      targetId = clueId;
+    } else {
+      // Si no nos pasan ID, usamos el índice interno (comportamiento original)
+      if (_currentClueIndex >= _clues.length) return false;
+      targetId = _clues[_currentClueIndex].id;
+    }
+    
     _isLoading = true;
     notifyListeners();
     
     try {
       final response = await _supabase.functions.invoke('game-play/complete-clue', 
         body: {
-          'clueId': clue.id,
+          'clueId': targetId, // <--- Usamos el ID correcto
           'answer': answer,
         },
         method: HttpMethod.post
       );
       
       if (response.status == 200) {
-        // Refresh clues to get updated status and next unlock
-        // We need to know the current event ID to refresh correctly, 
-        // but fetchClues without ID might work if we assume user only plays one at a time
-        // or we store currentEventId in provider.
-        // For now, let's assume fetchClues handles it or we pass null (fetching all active clues?)
-        // Actually, fetchClues needs eventId to filter. 
-        // Let's assume we can get it from the current clue.
-        // But Clue model doesn't have eventId exposed in Dart yet (it's in DB).
-        // Let's add eventId to Clue model or just refresh all.
         await fetchClues(); 
         return true;
       } else {
