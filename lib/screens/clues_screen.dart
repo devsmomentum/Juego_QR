@@ -8,6 +8,7 @@ import '../widgets/race_track_widget.dart';
 import 'qr_scanner_screen.dart';
 import 'geolocation_screen.dart';
 import 'shop_screen.dart';
+import 'puzzle_screen.dart';
 
 class CluesScreen extends StatelessWidget {
   const CluesScreen({super.key});
@@ -33,9 +34,24 @@ class CluesScreen extends StatelessWidget {
         );
         break;
       case 'minigame':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Minijuego en desarrollo')),
-        );
+        try {
+          final gameProvider = Provider.of<GameProvider>(context, listen: false);
+          final clue = gameProvider.clues.firstWhere(
+            (c) => c.id == clueId,
+            orElse: () => throw Exception('Clue not found'),
+          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: No se pudo cargar el minijuego. $e'),
+              backgroundColor: AppTheme.dangerRed,
+            ),
+          );
+        }
         break;
     }
   }

@@ -105,4 +105,5 @@ enum PuzzleType {
   codeBreaker,  // Código numérico (ej: 1811)
   imageTrivia,  // Adivinar la foto (ej: Salto Ángel)
   wordScramble, // Ordenar letras (ej: AREPA)
+  slidingPuzzle, // Rompecabezas deslizante
 }
