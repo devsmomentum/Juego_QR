@@ -73,4 +73,6 @@ enum PowerType {
   timePenalty,
   hint,
   speedBoost,
+  buff,
+  debuff,
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/game_provider.dart';
+import '../providers/player_provider.dart';
 import '../theme/app_theme.dart';
 import '../models/clue.dart';
 import '../widgets/race_track_widget.dart';
 import 'riddle_screen.dart';
+import '../widgets/minigames/sliding_puzzle_minigame.dart';
 
 class PuzzleScreen extends StatelessWidget {
   final Clue clue;
@@ -22,6 +24,8 @@ class PuzzleScreen extends StatelessWidget {
         return WordScrambleWidget(clue: clue);
       case PuzzleType.riddle:
         return RiddleScreen(clue: clue);
+      case PuzzleType.slidingPuzzle:
+        return SlidingPuzzleWrapper(clue: clue);
     }
   }
 }
@@ -991,9 +995,23 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
 // --- HELPER: SUCCESS DIALOG ---
 void _showSuccessDialog(BuildContext context, Clue clue) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
+  final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-  // Call backend to complete clue
-  final success = await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "");
+  bool success = false;
+  
+  // Handle demo clue specially (no backend call)
+  if (clue.id.startsWith('demo_')) {
+    // Manually award XP and coins for demo clue
+    if (playerProvider.currentPlayer != null) {
+      playerProvider.addExperience(clue.xpReward);
+      playerProvider.addCoins(clue.coinReward);
+      gameProvider.completeLocalClue(clue.id);
+    }
+    success = true;
+  } else {
+    // Call backend to complete clue
+    success = await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "");
+  }
 
   if (!success) {
     if (context.mounted) {
@@ -1091,7 +1109,6 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                 onPressed: () {
                   Navigator.pop(context); // Dialog
                   Navigator.pop(context); // PuzzleScreen
-                  Navigator.pop(context); // QRScreen
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
@@ -1110,4 +1127,78 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       ),
     ),
   );
+}
+
+// --- WIDGET: SLIDING PUZZLE WRAPPER ---
+class SlidingPuzzleWrapper extends StatelessWidget {
+  final Clue clue;
+  const SlidingPuzzleWrapper({super.key, required this.clue});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // AppBar
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentGold.withOpacity(0.2), 
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: AppTheme.accentGold),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.star, color: AppTheme.accentGold, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${clue.xpReward} XP',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Mini Mapa de Carrera
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Consumer<GameProvider>(
+                  builder: (context, game, _) {
+                    return RaceTrackWidget(
+                      currentClueIndex: game.currentClueIndex,
+                      totalClues: game.clues.length,
+                    );
+                  },
+                ),
+              ),
+              
+              const SizedBox(height: 10),
+              
+              Expanded(
+                child: SlidingPuzzleMinigame(
+                  clue: clue,
+                  onSuccess: () => _showSuccessDialog(context, clue),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

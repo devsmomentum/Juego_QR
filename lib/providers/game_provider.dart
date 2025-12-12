@@ -62,6 +62,21 @@ class GameProvider extends ChangeNotifier {
           debugPrint('Clue ${c.title} (ID: ${c.id}): locked=${c.isLocked}, completed=${c.isCompleted}');
         }
         
+        // --- DEMO ONLY: Inject Sliding Puzzle Clue ---
+        _clues.insert(0, Clue(
+          id: 'demo_puzzle_sliding',
+          title: 'Rompecabezas Sliding (Demo)',
+          description: 'Ordena las piezas para resolver el acertijo.',
+          hint: 'Mueve las piezas al espacio vacío.',
+          type: ClueType.minigame,
+          puzzleType: PuzzleType.slidingPuzzle,
+          xpReward: 150,
+          coinReward: 100,
+          isLocked: false,
+          isCompleted: false,
+        ));
+        // ---------------------------------------------
+        
         // Find first unlocked but not completed clue to set as current
         final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
         if (index != -1) {
@@ -106,6 +121,19 @@ class GameProvider extends ChangeNotifier {
     }
   }
   
+  void completeLocalClue(String clueId) {
+    final index = _clues.indexWhere((c) => c.id == clueId);
+    if (index != -1) {
+      _clues[index].isCompleted = true;
+      
+      // Unlock next clue if available
+      if (index + 1 < _clues.length) {
+        _clues[index + 1].isLocked = false;
+      }
+      notifyListeners();
+    }
+  }
+
   Future<bool> completeCurrentClue(String answer) async {
     if (_currentClueIndex >= _clues.length) return false;
     

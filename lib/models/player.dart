@@ -11,6 +11,7 @@ class Player {
   List<String> inventory;
   PlayerStatus status;
   DateTime? frozenUntil;
+  int lives;
   Map<String, dynamic> stats;
 
   Player({
@@ -26,6 +27,7 @@ class Player {
     List<String>? inventory,
     this.status = PlayerStatus.active,
     this.frozenUntil,
+    this.lives = 3,
     Map<String, dynamic>? stats,
   })  : inventory = inventory ?? [],
         stats = stats ??
