@@ -11,7 +11,7 @@ import 'providers/game_request_provider.dart';
 import 'theme/app_theme.dart';
 
 import 'providers/event_provider.dart'; 
-import 'screens/admin/admin_login_screen.dart'; 
+import 'screens/admin/auth_save.dart'; 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,8 +59,8 @@ class TreasureHuntAdminApp extends StatelessWidget {
         title: 'Treasure Hunt Admin',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
-        // FORZAMOS LA PANTALLA DE ADMIN
-        home: const AdminLoginScreen(),
+        // Usamos AuthGate para manejar la sesión
+        home: const AuthGate(),
       ),
     );
   }

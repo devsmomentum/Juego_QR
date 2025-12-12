@@ -48,7 +48,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         final data = response.data;
         
         if (data['session'] != null) {
+          // IMPORTANTE: setSession espera el refresh_token para restaurar la sesión
+          // Asegúrate de que tu Edge Function devuelva el refresh_token correcto.
           await supabase.auth.setSession(data['session']['refresh_token']);
+          
+          // Forzar persistencia si es necesario (aunque setSession debería hacerlo)
+          // En web, esto guarda en localStorage.
         } else {
            throw Exception('No se recibió una sesión válida');
         }
