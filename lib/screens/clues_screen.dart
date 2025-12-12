@@ -35,6 +35,36 @@ class _CluesScreenState extends State<CluesScreen> {
     });
   }
 
+  // NUEVO MÉTODO: Muestra la pista en modo "Solo Lectura"
+  void _showCompletedClueDialog(BuildContext context, dynamic clue) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(clue.title ?? 'Pista Completada'), // Asumiendo que clue tiene title
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "¡Ya completaste este desafío!",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+              const SizedBox(height: 10),
+              Text(clue.description ?? 'Sin descripción'), // Asumiendo que clue tiene description
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cerrar"),
+          )
+        ],
+      ),
+    );
+  }
+
   void _handleClueAction(BuildContext context, String clueId, String clueType) {
     switch (clueType) {
       case 'qrScan':
@@ -171,14 +201,38 @@ class _CluesScreenState extends State<CluesScreen> {
                     itemCount: gameProvider.clues.length,
                     itemBuilder: (context, index) {
                       final clue = gameProvider.clues[index];
-                      // Usamos la propiedad del modelo que viene de la BD, es más seguro y respeta el desbloqueo del backend
-                      final isLocked = clue.isLocked;
                       
+                      // LÓGICA DE FLUJO CORREGIDA:
+                      // Usamos el índice actual del provider para determinar el estado
+                      final int currentIndex = gameProvider.currentClueIndex;
+                      
+                      // 1. Completada: Si el índice de esta pista es menor al nivel actual
+                      final bool isCompleted = index < currentIndex;
+                      
+                      // 2. Bloqueada: Si el índice es mayor al nivel actual
+                      final bool isLocked = index > currentIndex;
+                      
+                      // 3. Actual (Jugable): Si es exactamente el nivel actual
+                      final bool isPlayable = index == currentIndex;
+
                       return ClueCard(
                         clue: clue,
-                        isLocked: isLocked,
+                        // Forzamos el estado visual de bloqueo basado en el flujo lineal
+                        isLocked: isLocked, 
                         onTap: () {
-                          if (!isLocked && !clue.isCompleted) {
+                          if (isLocked) {
+                            // Opción: Mostrar snackbar indicando que está bloqueado
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Debes completar la pista anterior primero.")),
+                            );
+                            return;
+                          }
+
+                          if (isCompleted) {
+                            // CASO: Pista pasada -> Solo mostrar información (sin jugar)
+                            _showCompletedClueDialog(context, clue);
+                          } else if (isPlayable) {
+                            // CASO: Pista actual -> Jugar / Escanear
                             _handleClueAction(context, clue.id, clue.type.toString().split('.').last);
                           }
                         },

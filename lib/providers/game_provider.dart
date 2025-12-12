@@ -44,13 +44,17 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
     
     try {
-      final Map<String, dynamic> queryParams = {};
-      if (idToUse != null) queryParams['eventId'] = idToUse;
+      if (idToUse == null) {
+         debugPrint('Warning: fetchClues called without eventId');
+         _isLoading = false;
+         notifyListeners();
+         return;
+      }
 
       final response = await _supabase.functions.invoke(
-        'game-data', // Changed from game-api/clues
-        method: HttpMethod.get,
-        queryParameters: queryParams,
+        'game-play/get-clues', 
+        body: {'eventId': idToUse},
+        method: HttpMethod.post,
       );
       
       if (response.status == 200) {
@@ -62,27 +66,14 @@ class GameProvider extends ChangeNotifier {
           debugPrint('Clue ${c.title} (ID: ${c.id}): locked=${c.isLocked}, completed=${c.isCompleted}');
         }
         
-        // --- DEMO ONLY: Inject Sliding Puzzle Clue ---
-        _clues.insert(0, Clue(
-          id: 'demo_puzzle_sliding',
-          title: 'Rompecabezas Sliding (Demo)',
-          description: 'Ordena las piezas para resolver el acertijo.',
-          hint: 'Mueve las piezas al espacio vacío.',
-          type: ClueType.minigame,
-          puzzleType: PuzzleType.slidingPuzzle,
-          xpReward: 150,
-          coinReward: 100,
-          isLocked: false,
-          isCompleted: false,
-        ));
-        // ---------------------------------------------
-        
-        // Find first unlocked but not completed clue to set as current
-        final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
+        // Determine current index based on the returned status from Edge Function
+        // The Edge Function ensures linear progression based on completed count
+        final index = _clues.indexWhere((c) => !c.isCompleted);
         if (index != -1) {
           _currentClueIndex = index;
         } else {
-          _currentClueIndex = 0;
+          // If all are completed, set index to length (end of list)
+          _currentClueIndex = _clues.length;
         }
       } else {
         _errorMessage = 'Error fetching clues: ${response.status}';
