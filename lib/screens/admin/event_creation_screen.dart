@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlng;
 import 'package:geolocator/geolocator.dart';
@@ -39,33 +38,33 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
   XFile? _selectedImage;
   bool _isLoading = false;
 
-  // Para mostrar el nombre del estado/ciudad si se desea
-  final List<String> _states = [
-    'Amazonas',
-    'Anzoátegui',
-    'Apure',
-    'Aragua',
-    'Barinas',
-    'Bolívar',
-    'Carabobo',
-    'Cojedes',
-    'Delta Amacuro',
-    'Distrito Capital',
-    'Falcón',
-    'Guárico',
-    'La Guaira',
-    'Lara',
-    'Mérida',
-    'Miranda',
-    'Monagas',
-    'Nueva Esparta',
-    'Portuguesa',
-    'Sucre',
-    'Táchira',
-    'Trujillo',
-    'Yaracuy',
-    'Zulia'
-  ];
+  // // Para mostrar el nombre del estado/ciudad si se desea
+  // final List<String> _states = [
+  //   'Amazonas',
+  //   'Anzoátegui',
+  //   'Apure',
+  //   'Aragua',
+  //   'Barinas',
+  //   'Bolívar',
+  //   'Carabobo',
+  //   'Cojedes',
+  //   'Delta Amacuro',
+  //   'Distrito Capital',
+  //   'Falcón',
+  //   'Guárico',
+  //   'La Guaira',
+  //   'Lara',
+  //   'Mérida',
+  //   'Miranda',
+  //   'Monagas',
+  //   'Nueva Esparta',
+  //   'Portuguesa',
+  //   'Sucre',
+  //   'Táchira',
+  //   'Trujillo',
+  //   'Yaracuy',
+  //   'Zulia'
+  // ];
 
   Future<void> _selectLocationOnMap() async {
     // Obtener ubicación actual para centrar el mapa

@@ -1,18 +1,18 @@
+import 'package:latlong2/latlong.dart';
+
 class GameEvent {
   final String id;
   final String title;
-  final String description;
-  final String locationName; // Nombre descriptivo (estado/ciudad)
-  final double latitude; // Latitud
-  final double longitude; // Longitud
+  final String description; // Esta sería la "pista para solucionar el puzzle"
+  final String locationName;
+  final double latitude;
+  final double longitude;
   final DateTime date;
   final String createdByAdminId;
-
-  // Nuevas propiedades del evento/competencia:
-  final String imageUrl; // URL donde se guarda la imagen del evento
-  final String clue; // La pista que lleva al evento
-  final int maxParticipants; // Capacidad máxima
-  final String pin; // Código de acceso para el usuario
+  final String imageUrl;
+  final String clue;        // <--- CAMBIO: Ahora es obligatorio (Pista de victoria)
+  final int maxParticipants;
+  final String pin;
 
   GameEvent({
     required this.id,
@@ -23,26 +23,11 @@ class GameEvent {
     required this.longitude,
     required this.date,
     required this.createdByAdminId,
-    required this.imageUrl, // AÑADIDO
-    required this.clue, // AÑADIDO
-    required this.maxParticipants, // AÑADIDO
-    required this.pin, // AÑADIDO
+    required this.clue,     // <--- CAMBIO: Ahora es 'required'
+    this.imageUrl = '',
+    this.maxParticipants = 0,
+    this.pin = '',
   });
 
-  // Método toMap actualizado para incluir las nuevas propiedades
-  Map<String, dynamic> toMap() {
-    return {
-      'title': title,
-      'description': description,
-      'locationName': locationName,
-      'latitude': latitude,
-      'longitude': longitude,
-      'date': date.toIso8601String(),
-      'createdByAdminId': createdByAdminId,
-      'imageUrl': imageUrl,
-      'clue': clue,
-      'maxParticipants': maxParticipants,
-      'pin': pin,
-    };
-  }
+  LatLng get location => LatLng(latitude, longitude);
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/mall_store.dart';
 import '../theme/app_theme.dart';
-import 'qr_scanner_screen.dart';
 import 'store_detail_screen.dart';
 
 class MallScreen extends StatelessWidget {

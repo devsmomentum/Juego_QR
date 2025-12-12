@@ -116,13 +116,14 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
     final List<Scenario> scenarios = eventProvider.events.map((event) {
       // Compatibilidad con eventos antiguos y nuevos
       String location = '';
-      if (event.locationName != null && event.locationName!.isNotEmpty) {
-        location = event.locationName!;
-      } else if ((event as dynamic).location != null &&
-          (event as dynamic).location.isNotEmpty) {
-        location = (event as dynamic).location;
-      } else {
-        location = 'Sin ubicación';
+      // 1. Prioridad: Mostrar el nombre del lugar si existe
+      if (event.locationName.isNotEmpty) {
+        location = event.locationName;
+      } 
+      // 2. Si no hay nombre, mostramos las coordenadas numéricas
+      else {
+        // Convertimos latitud y longitud a texto con 4 decimales
+        location = '${event.location.latitude.toStringAsFixed(4)}, ${event.location.longitude.toStringAsFixed(4)}';
       }
       double? latitude;
       double? longitude;

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
-import '../../providers/game_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../theme/app_theme.dart';
 
