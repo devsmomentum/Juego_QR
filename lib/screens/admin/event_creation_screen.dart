@@ -204,9 +204,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                 center: initial,
                                 zoom: 14,
                                 cameraConstraint: CameraConstraint.contain(
-                                  bounds: latlng.LatLngBounds(
-                                    const latlng.LatLng(0.5, -73.5), // Suroeste de Venezuela
-                                    const latlng.LatLng(12.5, -59.5), // Noreste de Venezuela
+                                  bounds: LatLngBounds(
+                                    const latlng.LatLng(
+                                        0.5, -73.5), // Suroeste de Venezuela
+                                    const latlng.LatLng(
+                                        12.5, -59.5), // Noreste de Venezuela
                                   ),
                                 ),
                                 minZoom: 5,
@@ -286,6 +288,21 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               child: Center(
                                 child: ElevatedButton(
                                   onPressed: () {
+                                    // Validación geográfica estricta para Venezuela
+                                    if (temp.latitude < 0.5 ||
+                                        temp.latitude > 12.5 ||
+                                        temp.longitude < -73.5 ||
+                                        temp.longitude > -59.5) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              '⚠️ Por favor selecciona una ubicación dentro de Venezuela'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     picked = temp;
                                     Navigator.of(context).pop();
                                   },
