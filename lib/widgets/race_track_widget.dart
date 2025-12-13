@@ -4,11 +4,13 @@ import '../theme/app_theme.dart';
 class RaceTrackWidget extends StatelessWidget {
   final int currentClueIndex;
   final int totalClues;
+  final VoidCallback? onSurrender;
 
   const RaceTrackWidget({
     super.key,
     required this.currentClueIndex,
     required this.totalClues,
+    this.onSurrender,
   });
 
   @override
@@ -35,20 +37,53 @@ class RaceTrackWidget extends StatelessWidget {
                   fontSize: 14,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.dangerRed,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'LIVE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  if (onSurrender != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: GestureDetector(
+                        onTap: onSurrender,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.dangerRed.withOpacity(0.2),
+                            border: Border.all(color: AppTheme.dangerRed),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.flag, color: AppTheme.dangerRed, size: 12),
+                              SizedBox(width: 4),
+                              Text(
+                                'RENDIRSE',
+                                style: TextStyle(
+                                  color: AppTheme.dangerRed,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.dangerRed,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

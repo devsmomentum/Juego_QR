@@ -106,4 +106,6 @@ enum PuzzleType {
   imageTrivia,  // Adivinar la foto (ej: Salto Ángel)
   wordScramble, // Ordenar letras (ej: AREPA)
   slidingPuzzle, // Rompecabezas deslizante
+  ticTacToe, // La Vieja (X vs O)
+  hangman, // Ahorcado
 }
