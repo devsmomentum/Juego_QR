@@ -27,19 +27,29 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       if (!mounted) return;
 
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      
+      // Unlock the clue!
+      gameProvider.unlockClue(widget.clueId);
+      
       final clue = gameProvider.clues.firstWhere((c) => c.id == widget.clueId);
       
       // Si la pista tiene acertijo o puzzle, ir a la pantalla de puzzle
       if (clue.riddleQuestion != null || clue.puzzleType != PuzzleType.riddle) {
-        Navigator.push(
+        // Replacement for push: pushReplacement so we don't go back to scanner easily?
+        // Actually user might want to go back.
+        Navigator.pop(context); // Close scanner first? 
+        // No, let's push the puzzle, and when puzzle finishes, it pops back to map.
+        // But if I push puzzle from scanner, popping puzzle returns to scanner.
+        // It's better to replace the scanner with the puzzle.
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => PuzzleScreen(clue: clue),
           ),
         );
       } else {
-        // Si no tiene acertijo, completar normalmente
-        final success = await gameProvider.completeCurrentClue("SCANNED");
+        // Si no tiene acertijo, completar normalmente (solo ubicación)
+        final success = await gameProvider.completeCurrentClue("SCANNED", clueId: widget.clueId);
         if (success && mounted) {
           _showSuccessDialog();
         }

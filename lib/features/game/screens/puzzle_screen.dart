@@ -7,6 +7,9 @@ import '../models/clue.dart';
 import '../widgets/race_track_widget.dart';
 import 'riddle_screen.dart';
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
+import '../widgets/minigames/tic_tac_toe_minigame.dart';
+import '../widgets/minigames/hangman_minigame.dart';
+import 'qr_scanner_screen.dart';
 
 class PuzzleScreen extends StatelessWidget {
   final Clue clue;
@@ -26,6 +29,10 @@ class PuzzleScreen extends StatelessWidget {
         return RiddleScreen(clue: clue);
       case PuzzleType.slidingPuzzle:
         return SlidingPuzzleWrapper(clue: clue);
+      case PuzzleType.ticTacToe:
+        return TicTacToeWrapper(clue: clue);
+      case PuzzleType.hangman:
+        return HangmanWrapper(clue: clue);
     }
   }
 }
@@ -249,6 +256,7 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
                     return RaceTrackWidget(
                       currentClueIndex: game.currentClueIndex,
                       totalClues: game.clues.length,
+                      onSurrender: () => showSkipDialog(context),
                     );
                   },
                 ),
@@ -539,6 +547,7 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
                     return RaceTrackWidget(
                       currentClueIndex: game.currentClueIndex,
                       totalClues: game.clues.length,
+                      onSurrender: () => showSkipDialog(context),
                     );
                   },
                 ),
@@ -857,6 +866,7 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
                     return RaceTrackWidget(
                       currentClueIndex: game.currentClueIndex,
                       totalClues: game.clues.length,
+                      onSurrender: () => showSkipDialog(context),
                     );
                   },
                 ),
@@ -1028,107 +1038,191 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (!context.mounted) return;
 
+  // Determine next step
+  final clues = gameProvider.clues;
+  final currentIdx = clues.indexWhere((c) => c.id == clue.id);
+  Clue? nextClue;
+  if (currentIdx != -1 && currentIdx + 1 < clues.length) {
+    nextClue = clues[currentIdx + 1];
+  }
+  
+  // Show unlocked hint if applicable
+  final showNextStep = nextClue != null && nextClue.isLocked;
+
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(25),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.accentGold.withOpacity(0.5),
-              blurRadius: 30,
-              spreadRadius: 5,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
+        children: [
+          // Content Card
+          Container(
+            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 20),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppTheme.primaryPurple, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(15),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.celebration, size: 50, color: AppTheme.accentGold),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '¡DESAFÍO SUPERADO!',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 15),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.star, color: AppTheme.accentGold, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    '+${clue.xpReward} XP',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '¡DESAFÍO COMPLETADO!',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.successGreen,
                   ),
-                  const SizedBox(width: 20),
-                  const Icon(Icons.monetization_on, color: AppTheme.accentGold, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    '+${clue.coinReward}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildRewardBadge(Icons.star, "+${clue.xpReward} XP", AppTheme.accentGold),
+                    const SizedBox(width: 15),
+                    _buildRewardBadge(Icons.monetization_on, "+${clue.coinReward}", Colors.amber),
+                  ],
+                ),
+                
+                if (showNextStep) ...[
+                  const SizedBox(height: 25),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryPurple.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.lock, color: AppTheme.primaryPurple, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              "SIGUIENTE MISIÓN BLOQUEADA",
+                              style: TextStyle(
+                                color: AppTheme.primaryPurple.withOpacity(0.8),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Icon(Icons.location_on, color: AppTheme.accentGold, size: 30),
+                        const SizedBox(height: 5),
+                        Text(
+                          "${nextClue?.hint ?? 'Busca el código QR'}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 25),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // Dialog
-                  Navigator.pop(context); // PuzzleScreen
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppTheme.primaryPurple,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
+                const SizedBox(height: 25),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context); // Dialog
+                      
+                      if (showNextStep) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (context) => QRScannerScreen(clueId: nextClue!.id)),
+                        );
+                      } else {
+                        Navigator.pop(context); // PuzzleScreen
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: showNextStep ? AppTheme.accentGold : AppTheme.primaryPurple,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 5,
+                    ),
+                    icon: Icon(showNextStep ? Icons.qr_code_scanner : Icons.arrow_forward),
+                    label: Text(
+                      showNextStep ? 'IR A ESCANEAR' : 'CONTINUAR',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ),
-                child: const Text(
-                  'CONTINUAR',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+          
+          // Floating Icon Top
+          Positioned(
+            top: -40,
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.cardBg, width: 4),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryPurple.withOpacity(0.5),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.emoji_events, size: 40, color: Colors.white),
+            ),
+          ),
+        ],
       ),
+    ),
+  );
+}
+
+Widget _buildRewardBadge(IconData icon, String label, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.2),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withOpacity(0.5)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+        ),
+      ],
     ),
   );
 }
@@ -1186,6 +1280,7 @@ class SlidingPuzzleWrapper extends StatelessWidget {
                     return RaceTrackWidget(
                       currentClueIndex: game.currentClueIndex,
                       totalClues: game.clues.length,
+                      onSurrender: () => showSkipDialog(context),
                     );
                   },
                 ),
@@ -1195,6 +1290,156 @@ class SlidingPuzzleWrapper extends StatelessWidget {
               
               Expanded(
                 child: SlidingPuzzleMinigame(
+                  clue: clue,
+                  onSuccess: () => _showSuccessDialog(context, clue),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- WIDGET: TIC TAC TOE WRAPPER ---
+class TicTacToeWrapper extends StatelessWidget {
+  final Clue clue;
+  const TicTacToeWrapper({super.key, required this.clue});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // AppBar
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentGold.withOpacity(0.2), 
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: AppTheme.accentGold),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.star, color: AppTheme.accentGold, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${clue.xpReward} XP',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Mini Mapa de Carrera
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Consumer<GameProvider>(
+                  builder: (context, game, _) {
+                    return RaceTrackWidget(
+                      currentClueIndex: game.currentClueIndex,
+                      totalClues: game.clues.length,
+                      onSurrender: () => showSkipDialog(context),
+                    );
+                  },
+                ),
+              ),
+              
+              const SizedBox(height: 10),
+              
+              Expanded(
+                child: TicTacToeMinigame(
+                  clue: clue,
+                  onSuccess: () => _showSuccessDialog(context, clue),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- WIDGET: HANGMAN WRAPPER ---
+class HangmanWrapper extends StatelessWidget {
+  final Clue clue;
+  const HangmanWrapper({super.key, required this.clue});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // AppBar
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentGold.withOpacity(0.2), 
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: AppTheme.accentGold),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.star, color: AppTheme.accentGold, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${clue.xpReward} XP',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Mini Mapa de Carrera
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Consumer<GameProvider>(
+                  builder: (context, game, _) {
+                    return RaceTrackWidget(
+                      currentClueIndex: game.currentClueIndex,
+                      totalClues: game.clues.length,
+                      onSurrender: () => showSkipDialog(context),
+                    );
+                  },
+                ),
+              ),
+              
+              const SizedBox(height: 10),
+              
+              Expanded(
+                child: HangmanMinigame(
                   clue: clue,
                   onSuccess: () => _showSuccessDialog(context, clue),
                 ),

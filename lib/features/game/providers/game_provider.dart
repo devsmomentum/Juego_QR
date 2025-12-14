@@ -66,9 +66,53 @@ class GameProvider extends ChangeNotifier {
           debugPrint('Clue ${c.title} (ID: ${c.id}): locked=${c.isLocked}, completed=${c.isCompleted}');
         }
         
-        // Determine current index based on the returned status from Edge Function
-        // The Edge Function ensures linear progression based on completed count
-        final index = _clues.indexWhere((c) => !c.isCompleted);
+        // --- DEMO: Inject Tic Tac Toe Clue (First - UNLOCKED) ---
+        _clues.insert(0, Clue(
+          id: 'demo_tictactoe',
+          title: 'La Vieja (Tic Tac Toe)',
+          description: 'Gana una partida contra la IA para avanzar.',
+          hint: 'Coloca 3 fichas en línea antes que la IA.',
+          type: ClueType.minigame,
+          puzzleType: PuzzleType.ticTacToe,
+          xpReward: 200,
+          coinReward: 50,
+          isLocked: false,
+          isCompleted: false,
+        ));
+
+        // --- DEMO: Inject Hangman Clue (Second - LOCKED) ---
+        _clues.insert(1, Clue(
+          id: 'demo_hangman',
+          title: 'El Ahorcado',
+          description: 'Adivina la palabra antes de que te ahorquen.',
+          hint: 'Ve a la Cafetería y escanea el código QR en la caja.',
+          riddleQuestion: 'Framework de Google', // Pista del juego
+          riddleAnswer: 'FLUTTER',
+          type: ClueType.minigame,
+          puzzleType: PuzzleType.hangman,
+          xpReward: 150,
+          coinReward: 40,
+          isLocked: true,
+          isCompleted: false,
+        ));
+        
+        // --- DEMO: Inject Sliding Puzzle Clue (Third - LOCKED) ---
+        _clues.insert(2, Clue(
+          id: 'demo_puzzle_sliding',
+          title: 'Rompecabezas Sliding',
+          description: 'Ordena las piezas para resolver el acertijo.',
+          hint: 'Dirígete al Laboratorio de Computación y busca el código cerca de la impresora.',
+          type: ClueType.minigame,
+          puzzleType: PuzzleType.slidingPuzzle,
+          xpReward: 150,
+          coinReward: 100,
+          isLocked: true,
+          isCompleted: false,
+        ));
+        // ---------------------------------------------
+        
+        // Find first unlocked but not completed clue to set as current
+        final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
         if (index != -1) {
           _currentClueIndex = index;
         } else {
@@ -112,15 +156,21 @@ class GameProvider extends ChangeNotifier {
     }
   }
   
+  void unlockClue(String clueId) {
+    final index = _clues.indexWhere((c) => c.id == clueId);
+    if (index != -1) {
+      _clues[index].isLocked = false;
+      _currentClueIndex = index; // Move to this clue
+      notifyListeners();
+    }
+  }
+
   void completeLocalClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
       _clues[index].isCompleted = true;
-      
-      // Unlock next clue if available
-      if (index + 1 < _clues.length) {
-        _clues[index + 1].isLocked = false;
-      }
+      // Note: We do NOT auto-unlock the next clue here. 
+      // The user must scan a QR code to call unlockClue() for the next one.
       notifyListeners();
     }
   }
