@@ -115,20 +115,34 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
   }
 
   void _verifyCode() {
-    if (_codeController.text == widget.scenario.secretCode) {
-      _showSuccessDialog();
-    } else {
-      // Shake animation for error
-      _shakeController.forward(from: 0.0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Código incorrecto. Sigue buscando."),
-          backgroundColor: AppTheme.dangerRed,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+  // 1. Validar longitud exacta antes de verificar el contenido
+  if (_codeController.text.length != 6) {
+    _shakeController.forward(from: 0.0); // Agitar pantalla
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("El código debe ser de 6 dígitos."),
+        backgroundColor: Colors.orange, // Un color de advertencia diferente
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return; // Detener la ejecución aquí
   }
+
+  // 2. Verificar si coincide con el código secreto
+  if (_codeController.text == widget.scenario.secretCode) {
+    _showSuccessDialog();
+  } else {
+    // Shake animation for error
+    _shakeController.forward(from: 0.0);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Código incorrecto. Sigue buscando."),
+        backgroundColor: AppTheme.dangerRed,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
 
   void _showSuccessDialog() {
     showDialog(
@@ -375,23 +389,33 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                                     ),
                                     const SizedBox(height: 10),
                                     TextField(
-                                      controller: _codeController,
-                                      keyboardType: TextInputType.number,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                          fontSize: 24,
-                                          letterSpacing: 5,
-                                          color: Colors
-                                              .white), // Added color: Colors.white explicitly
-                                      decoration: const InputDecoration(
-                                        hintText: "----",
-                                        hintStyle:
-                                            TextStyle(color: Colors.white24),
-                                        filled: true,
-                                        fillColor: Colors.black26,
-                                      ),
-                                      onSubmitted: (_) => _verifyCode(),
+                                    controller: _codeController,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    
+                                    // --- NUEVO: Restricciones de entrada ---
+                                    maxLength: 6, // Limita físicamente a 6 caracteres
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly, // Solo permite números
+                                    ],
+                                    // ---------------------------------------
+                                    
+                                    style: const TextStyle(
+                                        fontSize: 24,
+                                        letterSpacing: 5,
+                                        color: Colors.white),
+                                    decoration: const InputDecoration(
+                                      hintText: "000000", // Ajustado a 6 ceros visualmente
+                                      hintStyle: TextStyle(color: Colors.white24),
+                                      filled: true,
+                                      fillColor: Colors.black26,
+                                      
+                                      // --- NUEVO: Ocultar el contador "0/6" ---
+                                      counterText: "", 
+                                      // ----------------------------------------
                                     ),
+                                    onSubmitted: (_) => _verifyCode(),
+                                  ),
                                     const SizedBox(height: 10),
                                     SizedBox(
                                       width: double.infinity,

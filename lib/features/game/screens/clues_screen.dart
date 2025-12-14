@@ -197,48 +197,61 @@ class _CluesScreenState extends State<CluesScreen> {
                           ),
                         )
                       : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: gameProvider.clues.length,
-                    itemBuilder: (context, index) {
-                      final clue = gameProvider.clues[index];
-                      
-                      // LÓGICA DE FLUJO CORREGIDA:
-                      // Usamos el índice actual del provider para determinar el estado
-                      final int currentIndex = gameProvider.currentClueIndex;
-                      
-                      // 1. Completada: Si el índice de esta pista es menor al nivel actual
-                      final bool isCompleted = index < currentIndex;
-                      
-                      // 2. Bloqueada: Si el índice es mayor al nivel actual
-                      final bool isLocked = index > currentIndex;
-                      
-                      // 3. Actual (Jugable): Si es exactamente el nivel actual
-                      final bool isPlayable = index == currentIndex;
+                          padding: const EdgeInsets.all(16),
+                          itemCount: gameProvider.clues.length,
+                          itemBuilder: (context, index) {
+                            final clue = gameProvider.clues[index];
+                            final int currentIndex = gameProvider.currentClueIndex;
+                            
+                            // ESTADOS:
+                            // 1. Ya pasó: (índice menor al actual)
+                            final bool isPast = index < currentIndex;
+                            // 2. Futuro: (índice mayor al actual)
+                            final bool isFuture = index > currentIndex;
+                            // 3. Presente: (es el índice actual)
+                            final bool isCurrent = index == currentIndex;
 
-                      return ClueCard(
-                        clue: clue,
-                        // Forzamos el estado visual de bloqueo basado en el flujo lineal
-                        isLocked: isLocked, 
-                        onTap: () {
-                          if (isLocked) {
-                            // Opción: Mostrar snackbar indicando que está bloqueado
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Debes completar la pista anterior primero.")),
+                            // DETERMINAR SI SE MUESTRA EL CANDADO VISUALMENTE
+                            // Una pista está bloqueada visualmente si es futura O si es la actual y aún tiene isLocked true
+                            final bool showLockIcon = isFuture || (isCurrent && clue.isLocked);
+
+                            return ClueCard(
+                              clue: clue,
+                              // Usamos showLockIcon para que la UI pinte el candado correctamente
+                              isLocked: showLockIcon, 
+                              onTap: () {
+                                // A. Si es una pista futura, bloqueamos
+                                if (isFuture) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Debes completar la pista anterior primero.")),
+                                  );
+                                  return;
+                                }
+
+                                // B. Si es una pista pasada (completada), mostramos resumen
+                                if (isPast || (isCurrent && clue.isCompleted)) {
+                                  _showCompletedClueDialog(context, clue);
+                                  return;
+                                }
+
+                                // C. Si es la pista ACTUAL (La misión activa)
+                                if (isCurrent) {
+                                  if (clue.isLocked) {
+                                    // --- CORRECCIÓN CLAVE: SI ESTÁ BLOQUEADA, IR AL ESCÁNER QR ---
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => QRScannerScreen(clueId: clue.id)),
+                                    );
+                                  } else {
+                                    // --- SI YA ESTÁ DESBLOQUEADA, IR AL MINIJUEGO ---
+                                    _handleClueAction(context, clue.id, clue.type.toString().split('.').last);
+                                  }
+                                }
+                              },
                             );
-                            return;
-                          }
-
-                          if (isCompleted) {
-                            // CASO: Pista pasada -> Solo mostrar información (sin jugar)
-                            _showCompletedClueDialog(context, clue);
-                          } else if (isPlayable) {
-                            // CASO: Pista actual -> Jugar / Escanear
-                            _handleClueAction(context, clue.id, clue.type.toString().split('.').last);
-                          }
-                        },
-                      );
-                    },
-                  ),
+                          },
+                        ),
+            
             ),
           ],
         ),

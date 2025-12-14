@@ -800,7 +800,6 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
               if (context.mounted) {
                 Navigator.pop(context);
                 Navigator.pop(context);
-                Navigator.pop(context);
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
@@ -1006,31 +1005,52 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
   }
 }
 
-// --- HELPER: SUCCESS DIALOG ---
+
+// --- HELPER: SUCCESS DIALOG (CORREGIDO) ---
 void _showSuccessDialog(BuildContext context, Clue clue) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
+  // 1. Mostrar indicador de carga para dar feedback inmediato
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => const Center(
+      child: CircularProgressIndicator(color: AppTheme.accentGold),
+    ),
+  );
+
   bool success = false;
   
-  // Handle demo clue specially (no backend call)
-  if (clue.id.startsWith('demo_')) {
-    // Manually award XP and coins for demo clue
-    if (playerProvider.currentPlayer != null) {
-      playerProvider.addExperience(clue.xpReward);
-      playerProvider.addCoins(clue.coinReward);
-      gameProvider.completeLocalClue(clue.id);
+  try {
+    if (clue.id.startsWith('demo_')) {
+      if (playerProvider.currentPlayer != null) {
+        playerProvider.addExperience(clue.xpReward);
+        playerProvider.addCoins(clue.coinReward);
+        gameProvider.completeLocalClue(clue.id);
+      }
+      success = true;
+    } else {
+      // Llamada al backend (ahora es silenciosa en el provider, así que controlamos el loader aquí)
+      success = await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "");
     }
-    success = true;
-  } else {
-    // Call backend to complete clue
-    success = await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "");
+  } catch (e) {
+    debugPrint("Error completando pista: $e");
+    success = false;
+  }
+
+  // 2. Cerrar indicador de carga
+  if (context.mounted) {
+    Navigator.pop(context); 
   }
 
   if (!success) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al completar el desafío. Intenta de nuevo.')),
+        const SnackBar(
+          content: Text('Error al guardar el progreso. Verifica tu conexión.'),
+          backgroundColor: AppTheme.dangerRed
+        ),
       );
     }
     return;
@@ -1038,21 +1058,19 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (!context.mounted) return;
 
-  // Determine next step
+  // Lógica para determinar si hay siguiente paso (visual)
   final clues = gameProvider.clues;
   final currentIdx = clues.indexWhere((c) => c.id == clue.id);
   Clue? nextClue;
   if (currentIdx != -1 && currentIdx + 1 < clues.length) {
     nextClue = clues[currentIdx + 1];
   }
-  
-  // Show unlocked hint if applicable
   final showNextStep = nextClue != null && nextClue.isLocked;
 
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (context) => Dialog(
+    builder: (dialogContext) => Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: Colors.transparent,
       child: Stack(
@@ -1067,26 +1085,41 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: AppTheme.primaryPurple, width: 2),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 10)),
               ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  '¡DESAFÍO COMPLETADO!',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.successGreen,
-                  ),
+                const Text('¡DESAFÍO COMPLETADO!', 
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.successGreen),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
+                
+                // Información Desbloqueada
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text("INFORMACIÓN DESBLOQUEADA", 
+                        style: TextStyle(color: AppTheme.accentGold, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(clue.description, 
+                        style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1097,47 +1130,9 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                 ),
                 
                 if (showNextStep) ...[
-                  const SizedBox(height: 25),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryPurple.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.lock, color: AppTheme.primaryPurple, size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              "SIGUIENTE MISIÓN BLOQUEADA",
-                              style: TextStyle(
-                                color: AppTheme.primaryPurple.withOpacity(0.8),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        const Icon(Icons.location_on, color: AppTheme.accentGold, size: 30),
-                        const SizedBox(height: 5),
-                        Text(
-                          "${nextClue?.hint ?? 'Busca el código QR'}",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            height: 1.4,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 20),
+                  Text("¡Siguiente misión desbloqueada en el mapa!", 
+                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontStyle: FontStyle.italic),
                   ),
                 ],
 
@@ -1146,55 +1141,43 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.pop(context); // Dialog
+                      // --- CORRECCIÓN DE NAVEGACIÓN ---
                       
-                      if (showNextStep) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => QRScannerScreen(clueId: nextClue!.id)),
-                        );
-                      } else {
-                        Navigator.pop(context); // PuzzleScreen
-                      }
+                      // 1. Cerrar solo el Diálogo (usando el contexto del builder)
+                      Navigator.of(dialogContext).pop(); 
+                      
+                      // 2. Pequeño delay para asegurar que el diálogo cerró visualmente
+                      // y luego cerrar la pantalla del Puzzle usando el contexto padre
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        if (context.mounted) {
+                          Navigator.of(context).pop(); 
+                        }
+                      });
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: showNextStep ? AppTheme.accentGold : AppTheme.primaryPurple,
-                      foregroundColor: Colors.black,
+                      backgroundColor: AppTheme.primaryPurple,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 5,
                     ),
-                    icon: Icon(showNextStep ? Icons.qr_code_scanner : Icons.arrow_forward),
-                    label: Text(
-                      showNextStep ? 'IR A ESCANEAR' : 'CONTINUAR',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    icon: const Icon(Icons.map),
+                    label: const Text('VOLVER AL MAPA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
             ),
           ),
-          
-          // Floating Icon Top
-          Positioned(
+          // Icono flotante (código original se mantiene igual)
+           Positioned(
             top: -40,
             child: Container(
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: const LinearGradient(colors: [AppTheme.primaryPurple, AppTheme.secondaryPink]),
                 shape: BoxShape.circle,
                 border: Border.all(color: AppTheme.cardBg, width: 4),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryPurple.withOpacity(0.5),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+                boxShadow: [BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 5))],
               ),
               child: const Icon(Icons.emoji_events, size: 40, color: Colors.white),
             ),
@@ -1204,7 +1187,6 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     ),
   );
 }
-
 Widget _buildRewardBadge(IconData icon, String label, Color color) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

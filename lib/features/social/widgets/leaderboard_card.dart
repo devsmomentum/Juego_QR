@@ -65,10 +65,24 @@ class LeaderboardCard extends StatelessWidget {
           
           const SizedBox(width: 12),
           
-          // Avatar
-          CircleAvatar(
-            radius: 22,
-            backgroundImage: NetworkImage(player.avatarUrl),
+          // BORRA EL CIRCLEAVATAR Y PEGA SOLO ESTO:
+          Container(
+            width: 44, // Equivalente a radius 22 * 2
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.grey[800],
+              image: (player.avatarUrl.isNotEmpty && player.avatarUrl.startsWith('http'))
+                  ? DecorationImage(
+                      image: NetworkImage(player.avatarUrl),
+                      fit: BoxFit.cover,
+                      onError: (_, __) {},
+                    )
+                  : null,
+            ),
+            child: (player.avatarUrl.isEmpty || !player.avatarUrl.startsWith('http'))
+                ? const Center(child: Icon(Icons.person, color: Colors.white70, size: 24))
+                : null,
           ),
           
           const SizedBox(width: 12),

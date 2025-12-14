@@ -17,46 +17,36 @@ class QRScannerScreen extends StatefulWidget {
 class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isScanning = true;
   
-  void _simulateScan() {
-    setState(() {
-      _isScanning = false;
-    });
-    
-    // Simulate successful scan
-    Future.delayed(const Duration(seconds: 1), () async {
-      if (!mounted) return;
+  // EN qr_scanner_screen.dart
 
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      
-      // Unlock the clue!
-      gameProvider.unlockClue(widget.clueId);
-      
-      final clue = gameProvider.clues.firstWhere((c) => c.id == widget.clueId);
-      
-      // Si la pista tiene acertijo o puzzle, ir a la pantalla de puzzle
-      if (clue.riddleQuestion != null || clue.puzzleType != PuzzleType.riddle) {
-        // Replacement for push: pushReplacement so we don't go back to scanner easily?
-        // Actually user might want to go back.
-        Navigator.pop(context); // Close scanner first? 
-        // No, let's push the puzzle, and when puzzle finishes, it pops back to map.
-        // But if I push puzzle from scanner, popping puzzle returns to scanner.
-        // It's better to replace the scanner with the puzzle.
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PuzzleScreen(clue: clue),
-          ),
-        );
-      } else {
-        // Si no tiene acertijo, completar normalmente (solo ubicación)
-        final success = await gameProvider.completeCurrentClue("SCANNED", clueId: widget.clueId);
-        if (success && mounted) {
-          _showSuccessDialog();
-        }
-      }
-    });
-  }
+void _simulateScan() {
+  setState(() { _isScanning = false; });
   
+  Future.delayed(const Duration(seconds: 1), () async {
+    if (!mounted) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    
+    // 1. DESBLOQUEAR LA PISTA (Quitar el candado)
+    gameProvider.unlockClue(widget.clueId);
+    
+    final clue = gameProvider.clues.firstWhere((c) => c.id == widget.clueId);
+    
+    // 2. REDIRIGIR AL MINIJUEGO
+    // Usamos pushReplacement para que al dar "Atrás" en el juego, vuelva al mapa, no al escáner.
+    if (clue.type.toString().contains('minigame') || clue.puzzleType != PuzzleType.riddle) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PuzzleScreen(clue: clue),
+        ),
+      );
+    } else {
+      // Caso solo ubicación/check-in
+      final success = await gameProvider.completeCurrentClue("SCANNED", clueId: widget.clueId);
+      if (success && mounted) _showSuccessDialog();
+    }
+  });
+}
   void _showSuccessDialog() {
     showDialog(
       context: context,

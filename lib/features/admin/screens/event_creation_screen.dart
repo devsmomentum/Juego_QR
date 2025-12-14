@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import '../../game/models/event.dart';
 import '../../game/providers/event_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../game/models/clue.dart';
 
 class EventCreationScreen extends StatefulWidget {
   const EventCreationScreen({super.key});
@@ -367,8 +368,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
     }
   }
 
-  void _generateClueForms() {
-    if (_numberOfClues > 0) {
+    void _generateClueForms() {
+        if (_numberOfClues > 0) {
       setState(() {
         _currentClueIndex = 0;
         if (_clueForms.length < _numberOfClues) {
@@ -377,6 +378,9 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
             _clueForms.add({
               'title': 'Pista ${_clueForms.length + 1}',
               'description': '',
+              // Aseguramos que 'type' sea 'minigame' por defecto para las pistas
+              'type': 'minigame', 
+              'puzzle_type': 'riddle', // Valor por defecto
               'riddle_question': '',
               'riddle_answer': '',
               'xp_reward': 50,
@@ -384,14 +388,15 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
             });
           }
         } else {
-          _clueForms = _clueForms.sublist(0, _numberOfClues);
+          // ... (resto de la función)
         }
       });
     } else {
       setState(() => _clueForms = []);
     }
-  }
-
+}
+      
+  
   Future<void> _submitForm() async {
     if (_isLoading) return;
 
@@ -447,6 +452,10 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
         createdEventId = await provider.createEvent(newEvent, _selectedImage);
 
         if (createdEventId != null && _clueForms.isNotEmpty) {
+          debugPrint('--- DATOS A ENVIAR ---');
+          for (var clue in _clueForms) {
+            debugPrint('Pista: ${clue['title']} | Tipo: ${clue['puzzle_type']} | Pregunta: ${clue['riddle_question']}');
+          }
           await Supabase.instance.client.functions.invoke(
             'admin-actions/create-clues-batch',
             body: {
@@ -910,6 +919,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 10),
+                               
                                 AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 300),
                                   child: Container(
@@ -921,96 +931,138 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     ),
                                     child: Column(
                                       children: [
+                                        // --- 1. SELECTOR DE TIPO DE JUEGO (NUEVO) ---
+                                        // ... dentro de tu build ...
+
+                                      // --- 1. SELECTOR DE TIPO DE JUEGO (DINÁMICO) ---
+                                      DropdownButtonFormField<String>(
+                                        value: _clueForms[_currentClueIndex]['puzzle_type'] ?? PuzzleType.riddle.dbValue,
+                                        decoration: inputDecoration.copyWith(
+                                          labelText: 'Tipo de Desafío',
+                                          prefixIcon: const Icon(Icons.games, color: Colors.white54),
+                                        ),
+                                        dropdownColor: const Color(0xFF2A2D3E),
+                                        style: const TextStyle(color: Colors.white),
+                                        
+                                        // AQUI OCURRE LA MAGIA: Generamos la lista desde el modelo automáticamente
+                                        items: PuzzleType.values.map((type) {
+                                          return DropdownMenuItem<String>(
+                                            value: type.dbValue, // Usa el valor exacto para la BD ('ticTacToe')
+                                            child: Text(type.label), // Usa el nombre bonito ('La Vieja...')
+                                          );
+                                        }).toList(),
+
+                                        onChanged: (selectedValue) {
+                                          if (selectedValue == null) return;
+
+                                          setState(() {
+                                            _clueForms[_currentClueIndex]['puzzle_type'] = selectedValue;
+                                            // --- ESTA LÍNEA ES CLAVE ---
+                                            _clueForms[_currentClueIndex]['type'] = 'minigame'; // Aseguramos que siempre sea 'minigame'
+
+                                            final selectedType = PuzzleType.values.firstWhere(
+                                              (e) => e.dbValue == selectedValue, 
+                                              orElse: () => PuzzleType.riddle
+                                            );
+
+                                            // Aplicamos la lógica automática centralizada
+                                            if (selectedType.isAutoValidation) {
+                                              // Para TicTacToe, Sliding Puzzle
+                                              _clueForms[_currentClueIndex]['riddle_answer'] = 'WIN'; 
+                                            } else if (selectedType == PuzzleType.hangman) {
+                                              _clueForms[_currentClueIndex]['riddle_answer'] = ''; 
+                                            } else {
+                                              // Si es riddle o cualquier otro, lo dejamos vacío para que el admin lo llene
+                                              _clueForms[_currentClueIndex]['riddle_answer'] = '';
+                                            }
+
+                                            // Rellenamos la pregunta por defecto si está vacía
+                                            _clueForms[_currentClueIndex]['riddle_question'] = selectedType.defaultQuestion;
+                                          });
+                                        },
+                                      ),
+
+
+                                        const SizedBox(height: 15),
+
+                                        // --- TÍTULO ---
                                         TextFormField(
-                                          initialValue:
-                                              _clueForms[_currentClueIndex]
-                                                  ['title'],
-                                          decoration: inputDecoration.copyWith(
-                                              labelText: 'Título de la Pista'),
-                                          style: const TextStyle(
-                                              color: Colors.white),
-                                          onChanged: (v) =>
-                                              _clueForms[_currentClueIndex]
-                                                  ['title'] = v,
+                                          initialValue: _clueForms[_currentClueIndex]['title'],
+                                          decoration: inputDecoration.copyWith(labelText: 'Título de la Pista'),
+                                          style: const TextStyle(color: Colors.white),
+                                          onChanged: (v) => _clueForms[_currentClueIndex]['title'] = v,
                                         ),
                                         const SizedBox(height: 10),
+
+                                        // --- DESCRIPCIÓN ---
                                         TextFormField(
-                                          initialValue:
-                                              _clueForms[_currentClueIndex]
-                                                  ['description'],
-                                          decoration: inputDecoration.copyWith(
-                                              labelText: 'Descripción'),
-                                          style: const TextStyle(
-                                              color: Colors.white),
-                                          onChanged: (v) =>
-                                              _clueForms[_currentClueIndex]
-                                                  ['description'] = v,
+                                          initialValue: _clueForms[_currentClueIndex]['description'],
+                                          decoration: inputDecoration.copyWith(labelText: 'Instrucciones / Historia'),
+                                          style: const TextStyle(color: Colors.white),
+                                          onChanged: (v) => _clueForms[_currentClueIndex]['description'] = v,
                                         ),
                                         const SizedBox(height: 10),
+
+                                        // --- PREGUNTA / PISTA (Dinámico según tipo) ---
                                         TextFormField(
-                                          initialValue:
-                                              _clueForms[_currentClueIndex]
-                                                  ['riddle_question'],
+                                          // Usamos Key para forzar el redibujado si cambia el tipo de juego
+                                          key: ValueKey('q_${_clueForms[_currentClueIndex]['puzzle_type']}'),
+                                          initialValue: _clueForms[_currentClueIndex]['riddle_question'],
                                           decoration: inputDecoration.copyWith(
-                                              labelText: 'Pregunta / Acertijo'),
-                                          style: const TextStyle(
-                                              color: Colors.white),
-                                          onChanged: (v) =>
-                                              _clueForms[_currentClueIndex]
-                                                  ['riddle_question'] = v,
+                                            labelText: _clueForms[_currentClueIndex]['puzzle_type'] == 'hangman' 
+                                                ? 'Pista de la Palabra (Ej: Framework de Google)' 
+                                                : _clueForms[_currentClueIndex]['puzzle_type'] == 'riddle' 
+                                                    ? 'Pregunta del Acertijo'
+                                                    : 'Instrucción del Juego',
+                                          ),
+                                          style: const TextStyle(color: Colors.white),
+                                          onChanged: (v) => _clueForms[_currentClueIndex]['riddle_question'] = v,
                                         ),
                                         const SizedBox(height: 10),
-                                        TextFormField(
-                                          initialValue:
-                                              _clueForms[_currentClueIndex]
-                                                  ['riddle_answer'],
-                                          decoration: inputDecoration.copyWith(
-                                              labelText: 'Respuesta Correcta'),
-                                          style: const TextStyle(
-                                              color: Colors.white),
-                                          onChanged: (v) =>
-                                              _clueForms[_currentClueIndex]
-                                                  ['riddle_answer'] = v,
-                                        ),
+
+                                        // --- RESPUESTA CORRECTA (Oculto para juegos automáticos) ---
+                                        // Solo mostramos este campo si es 'riddle' o 'hangman'
+                                        if (_clueForms[_currentClueIndex]['puzzle_type'] == 'riddle' || 
+                                            _clueForms[_currentClueIndex]['puzzle_type'] == 'hangman')
+                                          TextFormField(
+                                            key: ValueKey('a_${_clueForms[_currentClueIndex]['puzzle_type']}'),
+                                            initialValue: _clueForms[_currentClueIndex]['riddle_answer'],
+                                            decoration: inputDecoration.copyWith(
+                                              labelText: _clueForms[_currentClueIndex]['puzzle_type'] == 'hangman' 
+                                                  ? 'Palabra a Adivinar (Ej: FLUTTER)' 
+                                                  : 'Respuesta Exacta',
+                                              helperText: _clueForms[_currentClueIndex]['puzzle_type'] == 'hangman' 
+                                                  ? 'Sin espacios ni caracteres especiales preferiblemente.' 
+                                                  : null,
+                                              helperStyle: TextStyle(color: Colors.white54)
+                                            ),
+                                            style: const TextStyle(color: Colors.white),
+                                            onChanged: (v) => _clueForms[_currentClueIndex]['riddle_answer'] = v,
+                                            validator: (v) => v!.isEmpty ? 'Requerido para validar la victoria' : null,
+                                          ),
+
                                         const SizedBox(height: 10),
+
+                                        // --- RECOMPENSAS ---
                                         Row(
                                           children: [
                                             Expanded(
                                               child: TextFormField(
-                                                initialValue: _clueForms[
-                                                            _currentClueIndex]
-                                                        ['xp_reward']
-                                                    .toString(),
-                                                decoration: inputDecoration
-                                                    .copyWith(labelText: 'XP'),
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                style: const TextStyle(
-                                                    color: Colors.white),
-                                                onChanged: (v) => _clueForms[
-                                                            _currentClueIndex]
-                                                        ['xp_reward'] =
-                                                    int.tryParse(v) ?? 0,
+                                                initialValue: _clueForms[_currentClueIndex]['xp_reward'].toString(),
+                                                decoration: inputDecoration.copyWith(labelText: 'XP'),
+                                                keyboardType: TextInputType.number,
+                                                style: const TextStyle(color: Colors.white),
+                                                onChanged: (v) => _clueForms[_currentClueIndex]['xp_reward'] = int.tryParse(v) ?? 0,
                                               ),
                                             ),
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: TextFormField(
-                                                initialValue: _clueForms[
-                                                            _currentClueIndex]
-                                                        ['coin_reward']
-                                                    .toString(),
-                                                decoration:
-                                                    inputDecoration.copyWith(
-                                                        labelText: 'Monedas'),
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                style: const TextStyle(
-                                                    color: Colors.white),
-                                                onChanged: (v) => _clueForms[
-                                                            _currentClueIndex]
-                                                        ['coin_reward'] =
-                                                    int.tryParse(v) ?? 0,
+                                                initialValue: _clueForms[_currentClueIndex]['coin_reward'].toString(),
+                                                decoration: inputDecoration.copyWith(labelText: 'Monedas'),
+                                                keyboardType: TextInputType.number,
+                                                style: const TextStyle(color: Colors.white),
+                                                onChanged: (v) => _clueForms[_currentClueIndex]['coin_reward'] = int.tryParse(v) ?? 0,
                                               ),
                                             ),
                                           ],

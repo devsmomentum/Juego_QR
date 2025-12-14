@@ -16,106 +16,120 @@ class RiddleScreen extends StatefulWidget {
 class _RiddleScreenState extends State<RiddleScreen> {
   final _answerController = TextEditingController();
   bool _showError = false;
+  bool _isLoading = false; // Estado para evitar doble click
 
-  void _checkAnswer() async {
+  Future<void> _checkAnswer() async {
+    if (_isLoading) return; // Prevenir múltiples toques
+
     final userAnswer = _answerController.text.trim().toLowerCase();
-    // Normalizamos la respuesta esperada: trim y lowercase
     final correctAnswer = widget.clue.riddleAnswer?.trim().toLowerCase() ?? '';
 
     if (userAnswer == correctAnswer) {
-      // Respuesta correcta
+      setState(() => _isLoading = true); // Mostrar carga si quisieras
+      
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
-      // Call backend
-      // Enviamos la respuesta original de la BD (si existe) para asegurar coincidencia exacta en el backend
-      // si este realiza una validación estricta.
-      final success = await gameProvider.completeCurrentClue(
-        widget.clue.riddleAnswer ?? userAnswer, 
-        clueId: widget.clue.id // <--- AGREGAR ESTO
-      );
+      try {
+        // Envolvemos en try-catch por si el Provider falla con la ruta del archivo C:/
+        final success = await gameProvider.completeCurrentClue(
+          widget.clue.riddleAnswer ?? userAnswer, 
+          clueId: widget.clue.id
+        );
 
-      if (success) {
-        if (context.mounted) _showSuccessDialog();
-      } else {
-        if (context.mounted) {
+        if (!mounted) return; // IMPORTANTE: Verificar montaje tras el await
+
+        if (success) {
+          _showSuccessDialog();
+        } else {
            ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error al completar. Intenta de nuevo.')),
+            const SnackBar(content: Text('Error al guardar el progreso.')),
           );
         }
+      } catch (e) {
+        debugPrint("Error en completeCurrentClue: $e");
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error interno: $e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
+
     } else {
       // Respuesta incorrecta
       setState(() {
         _showError = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Respuesta incorrecta. ¡Inténtalo de nuevo!'),
-          backgroundColor: AppTheme.dangerRed,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Respuesta incorrecta. ¡Inténtalo de nuevo!'),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+      }
     }
   }
 
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(20)),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.successGreen.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_circle,
-                size: 60,
-                color: AppTheme.successGreen,
-              ),
+void _showSuccessDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      backgroundColor: AppTheme.cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(20)),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.successGreen.withOpacity(0.2),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 20),
-            const Text(
-              '¡Acertijo Resuelto!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '+${widget.clue.xpReward} XP  |  +${widget.clue.coinReward} Monedas',
-              style: const TextStyle(color: AppTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Close riddle screen
-                Navigator.pop(context); // Close QR screen
-              },
-              child: const Text('Continuar'),
-            ),
+            child: const Icon(Icons.check_circle, size: 60, color: AppTheme.successGreen),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            '¡Acertijo Resuelto!',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '+${widget.clue.xpReward} XP  |  +${widget.clue.coinReward} Monedas',
+            style: const TextStyle(color: AppTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ],
       ),
-    );
-  }
-
+      actions: [
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () {
+            // 1. Cerrar el AlertDialog
+            Navigator.of(context).pop(); 
+            
+            // 2. Pequeña espera para asegurar que el diálogo se cerró
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (context.mounted) {
+                // 3. Cerrar la pantalla del Riddle (volver al Mapa/Lista)
+                Navigator.of(context).pop(true); 
+              }
+            });
+          },
+          child: const Text('Continuar'),
+        ),
+      ),
+    ],
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
+    // Tu build original está bien, no necesita cambios mayores
     return Scaffold(
       appBar: AppBar(
         title: const Text('Resolver Acertijo'),
@@ -127,7 +141,6 @@ class _RiddleScreenState extends State<RiddleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Icono de interrogación
             Center(
               child: Container(
                 width: 100,
@@ -145,8 +158,6 @@ class _RiddleScreenState extends State<RiddleScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            
-            // Pregunta
             const Text(
               'ACERTIJO',
               style: TextStyle(
@@ -168,10 +179,9 @@ class _RiddleScreenState extends State<RiddleScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 40),
-
-            // Campo de respuesta
             TextField(
               controller: _answerController,
+              enabled: !_isLoading, // Deshabilitar mientras carga
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: 'Escribe tu respuesta aquí...',
@@ -183,19 +193,19 @@ class _RiddleScreenState extends State<RiddleScreen> {
               },
             ),
             const SizedBox(height: 24),
-
-            // Botón de verificar
             ElevatedButton(
-              onPressed: _checkAnswer,
+              onPressed: _isLoading ? null : _checkAnswer, // Deshabilitar click si carga
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: AppTheme.accentGold,
                 foregroundColor: Colors.black,
               ),
-              child: const Text(
-                'VERIFICAR RESPUESTA',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+              child: _isLoading 
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                : const Text(
+                  'VERIFICAR RESPUESTA',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
             ),
           ],
         ),
