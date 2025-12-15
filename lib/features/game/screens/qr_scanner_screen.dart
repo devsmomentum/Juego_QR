@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/game_provider.dart';
+import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/clue.dart';
 import 'puzzle_screen.dart';
@@ -16,46 +17,61 @@ class QRScannerScreen extends StatefulWidget {
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isScanning = true;
+  bool _isProcessing = false; // Nuevo estado para feedback visual
   
-  // EN qr_scanner_screen.dart
+  void _simulateScan() {
+    if (_isProcessing) return;
 
-void _simulateScan() {
-  setState(() { _isScanning = false; });
-  
-  Future.delayed(const Duration(seconds: 1), () async {
-    if (!mounted) return;
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    setState(() { 
+      _isScanning = false;
+      _isProcessing = true; 
+    });
     
-    // 1. DESBLOQUEAR LA PISTA (Quitar el candado)
-    gameProvider.unlockClue(widget.clueId);
-    
-    final clue = gameProvider.clues.firstWhere((c) => c.id == widget.clueId);
-    
-    // 2. REDIRIGIR AL MINIJUEGO
-    // Usamos pushReplacement para que al dar "Atrás" en el juego, vuelva al mapa, no al escáner.
-    if (clue.type.toString().contains('minigame') || clue.puzzleType != PuzzleType.riddle) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PuzzleScreen(clue: clue),
-        ),
-      );
-    } else {
-      // Caso solo ubicación/check-in
-      final success = await gameProvider.completeCurrentClue("SCANNED", clueId: widget.clueId);
-      if (success && mounted) _showSuccessDialog();
-    }
-  });
-}
+    Future.delayed(const Duration(seconds: 1), () async {
+      if (!mounted) return;
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      
+      try {
+        // 1. DESBLOQUEAR LA PISTA (Quitar el candado visualmente)
+        gameProvider.unlockClue(widget.clueId);
+        
+        final clue = gameProvider.clues.firstWhere((c) => c.id == widget.clueId);
+        
+        // 2. LÓGICA DE REDIRECCIÓN
+        if (clue.type.toString().contains('minigame') || clue.puzzleType != PuzzleType.riddle) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PuzzleScreen(clue: clue),
+            ),
+          );
+        } else {
+          // Caso especial: Check-in sin minijuego
+          final success = await gameProvider.completeCurrentClue("SCANNED", clueId: widget.clueId);
+          
+          if (success && mounted) {
+             final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+             if (playerProvider.currentPlayer != null) {
+                playerProvider.addExperience(clue.xpReward);
+                playerProvider.addCoins(clue.coinReward);
+             }
+             _showSuccessDialog();
+          }
+        }
+      } catch (e) {
+        debugPrint("Error en escaneo: $e");
+        setState(() => _isProcessing = false);
+      }
+    });
+  }
+
   void _showSuccessDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -65,25 +81,13 @@ void _simulateScan() {
                 color: AppTheme.successGreen.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.check_circle,
-                size: 60,
-                color: AppTheme.successGreen,
-              ),
+              child: const Icon(Icons.check_circle, size: 60, color: AppTheme.successGreen),
             ),
             const SizedBox(height: 20),
             const Text(
-              '¡Pista Completada!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Has ganado recompensas',
-              style: TextStyle(color: Colors.white70),
+              '¡Ubicación Confirmada!',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -92,8 +96,8 @@ void _simulateScan() {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
+                Navigator.pop(context); // Dialog
+                Navigator.pop(context); // Screen
               },
               child: const Text('Continuar'),
             ),
@@ -109,68 +113,139 @@ void _simulateScan() {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text('Escanear QR'),
+        elevation: 0,
+        title: const Text('Escanear QR', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Stack(
+      body: Column(
         children: [
-          // Camera simulation
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+          // 1. ÁREA DE CÁMARA (Expansible)
+          Expanded(
+            child: Stack(
+              alignment: Alignment.center,
               children: [
+                // Simulación de cámara (Fondo)
                 Container(
-                  width: 250,
-                  height: 250,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _isScanning ? AppTheme.primaryPurple : AppTheme.successGreen,
-                      width: 3,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  width: double.infinity,
+                  height: double.infinity,
+                  color: Colors.grey[900],
                   child: Center(
                     child: Icon(
-                      _isScanning ? Icons.qr_code_scanner : Icons.check_circle,
-                      size: 100,
-                      color: _isScanning ? Colors.white54 : AppTheme.successGreen,
+                      Icons.camera_alt_outlined, 
+                      size: 80, 
+                      color: Colors.white.withOpacity(0.1)
                     ),
                   ),
                 ),
-                const SizedBox(height: 30),
-                Text(
-                  _isScanning
-                      ? 'Coloca el código QR dentro del marco'
-                      : '¡Código detectado!',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
+                
+                // Marco de Escaneo
+                Container(
+                  width: 280,
+                  height: 280,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _isProcessing 
+                        ? AppTheme.successGreen 
+                        : (_isScanning ? AppTheme.accentGold : AppTheme.successGreen),
+                      width: 4,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isScanning ? AppTheme.accentGold : AppTheme.successGreen).withOpacity(0.2),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      )
+                    ],
                   ),
-                  textAlign: TextAlign.center,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Línea de escaneo animada (simulada estática por ahora)
+                      if (_isScanning)
+                        Container(
+                          width: 260,
+                          height: 2,
+                          color: AppTheme.accentGold.withOpacity(0.5),
+                        ),
+                      
+                      // Icono de estado
+                      if (!_isScanning)
+                         const Icon(Icons.check_circle, size: 80, color: AppTheme.successGreen),
+                    ],
+                  ),
+                ),
+                
+                // Texto de instrucción
+                Positioned(
+                  bottom: 40,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _isProcessing 
+                        ? 'Procesando...' 
+                        : (_isScanning ? 'Apunta al código QR' : '¡Escaneado!'),
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
           
-          // Scan button (simulation)
-          if (_isScanning)
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: ElevatedButton.icon(
-                  onPressed: _simulateScan,
-                  icon: const Icon(Icons.camera),
-                  label: const Text('SIMULAR ESCANEO'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
+          // 2. ÁREA DE BOTÓN "SIMULAR" (Fija abajo)
+          // Esto garantiza que el botón esté "debajo de la vista" y siempre visible
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "MODO DESARROLLADOR",
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.bold
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: (_isScanning && !_isProcessing) ? _simulateScan : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accentGold,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: _isProcessing 
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.qr_code_scanner),
+                    label: Text(
+                      _isProcessing ? 'VERIFICANDO...' : 'SIMULAR ESCANEO QR',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 10), // Padding seguro inferior extra
+              ],
             ),
+          ),
         ],
       ),
     );

@@ -9,6 +9,7 @@ import 'riddle_screen.dart';
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
 import '../widgets/minigames/tic_tac_toe_minigame.dart';
 import '../widgets/minigames/hangman_minigame.dart';
+import 'qr_scanner_screen.dart';
 
 class PuzzleScreen extends StatelessWidget {
   final Clue clue;
@@ -124,7 +125,8 @@ void showSkipDialog(BuildContext context) {
           onPressed: () {
             Navigator.pop(context); // Dialog
             Navigator.pop(context); // PuzzleScreen
-            Navigator.pop(context); // QRScreen
+            // Intentamos cerrar una pantalla más por si venimos del scanner
+            // Navigator.pop(context); // Opcional según flujo
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('No se desbloqueó la siguiente pista. Intenta resolver otro desafío.'),
@@ -173,7 +175,6 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
   }
 
   void _checkCode() {
-    // Normalizamos la respuesta esperada (trim) para evitar errores por espacios en BD
     final expected = widget.clue.riddleAnswer?.trim() ?? "";
     
     if (_enteredCode == expected) {
@@ -230,14 +231,12 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    // Botón Cambiar Pista
                     IconButton(
                       icon: const Icon(Icons.swap_horiz, color: AppTheme.secondaryPink, size: 20),
                       onPressed: () => showClueSelector(context, widget.clue),
                       tooltip: 'Cambiar Pista',
                     ),
                     const SizedBox(width: 4),
-                    // Botón Rendirse
                     IconButton(
                       icon: const Icon(Icons.flag, color: AppTheme.dangerRed, size: 20),
                       onPressed: () => showSkipDialog(context),
@@ -247,7 +246,7 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
                 ),
               ),
 
-              // Mini Mapa de Carrera - CORREGIDO
+              // Mini Mapa de Carrera
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Consumer<GameProvider>(
@@ -269,7 +268,6 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     children: [
-                      // Icon más pequeño
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -306,7 +304,6 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
 
                       const SizedBox(height: 15),
 
-                      // Display más pequeño
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(4, (index) {
@@ -343,7 +340,6 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
 
                       const SizedBox(height: 15),
 
-                      // Teclado más compacto
                       GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -443,7 +439,6 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
 
   void _checkAnswer() {
     final userAnswer = _controller.text.trim().toLowerCase();
-    // Normalizamos la respuesta esperada: trim y lowercase
     final correctAnswer = widget.clue.riddleAnswer?.trim().toLowerCase() ?? "";
 
     if (userAnswer == correctAnswer || (correctAnswer.isNotEmpty && userAnswer.contains(correctAnswer.split(' ').first))) {
@@ -500,7 +495,6 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
         child: SafeArea(
           child: Column(
             children: [
-              // AppBar compacto
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(
@@ -539,7 +533,6 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
                 ),
               ),
 
-              // Mini Mapa - CORREGIDO
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Consumer<GameProvider>(
@@ -575,7 +568,6 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
 
                       const SizedBox(height: 15),
 
-                      // Imagen más pequeña
                       Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
@@ -858,7 +850,6 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
                 ),
               ),
 
-              // Mini Mapa - CORREGIDO
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Consumer<GameProvider>(
@@ -901,7 +892,6 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
 
                       const SizedBox(height: 15),
 
-                      // Palabra
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
                         decoration: BoxDecoration(
@@ -922,7 +912,6 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
 
                       const SizedBox(height: 20),
 
-                      // Letras
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -1026,14 +1015,11 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   
   try {
     if (clue.id.startsWith('demo_')) {
-      if (playerProvider.currentPlayer != null) {
-        playerProvider.addExperience(clue.xpReward);
-        playerProvider.addCoins(clue.coinReward);
-        gameProvider.completeLocalClue(clue.id);
-      }
+      // Si es demo, solo local
+      gameProvider.completeLocalClue(clue.id);
       success = true;
     } else {
-      // Llamada al backend (ahora es silenciosa en el provider, así que controlamos el loader aquí)
+      // Llamada al backend
       success = await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "");
     }
   } catch (e) {
@@ -1046,7 +1032,15 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     Navigator.pop(context); 
   }
 
-  if (!success) {
+  if (success) {
+      // ¡AQUÍ ESTÁ LA SOLUCIÓN!
+      // Actualizamos visualmente las monedas y XP del usuario inmediatamente
+      // Esto asegura que la barra superior refleje los cambios al instante.
+      if (playerProvider.currentPlayer != null) {
+        playerProvider.addExperience(clue.xpReward);
+        playerProvider.addCoins(clue.coinReward);
+      }
+  } else {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1170,7 +1164,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
               ],
             ),
           ),
-          // Icono flotante (código original se mantiene igual)
+          // Icono flotante
            Positioned(
             top: -40,
             child: Container(
@@ -1256,7 +1250,6 @@ class SlidingPuzzleWrapper extends StatelessWidget {
                 ),
               ),
               
-              // Mini Mapa de Carrera - CORREGIDO
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Consumer<GameProvider>(
@@ -1332,7 +1325,6 @@ class TicTacToeWrapper extends StatelessWidget {
                 ),
               ),
               
-              // Mini Mapa de Carrera - CORREGIDO
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Consumer<GameProvider>(
@@ -1408,7 +1400,6 @@ class HangmanWrapper extends StatelessWidget {
                 ),
               ),
               
-              // Mini Mapa de Carrera - CORREGIDO
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Consumer<GameProvider>(
