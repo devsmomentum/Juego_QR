@@ -47,7 +47,7 @@ class Player {
       experience: json['experience'] ?? 0,
       totalXP: json['total_xp'] ?? 0,
       profession: json['profession'] ?? 'Novice',
-      coins: json['coins'] ?? 100,
+      coins: json['total_coins'] ?? 100,
       status: _parseStatus(json['status']),
       frozenUntil: json['frozen_until'] != null
           ? DateTime.parse(json['frozen_until'])
