@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // <--- IMPORTANTE: Necesario para inputFormatters
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -34,12 +34,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       try {
         final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
         
+        // 1. Mostrar indicador de carga
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => const Center(child: CircularProgressIndicator()),
         );
 
+        // 2. Ejecutar registro
         await playerProvider.register(
           _nameController.text.trim(),
           _emailController.text.trim(),
@@ -47,29 +49,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
         
         if (!mounted) return;
+        
+        // 3. Cerrar el indicador de carga
         Navigator.pop(context);
 
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Registro Exitoso'),
-            content: const Text(
-              'Se ha enviado un correo de verificación. Por favor, verifica tu cuenta antes de iniciar sesión.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop();
-                },
-                child: const Text('OK'),
-              ),
-            ],
+        // 4. Mostrar mensaje discreto de éxito
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cuenta creada exitosamente. Por favor inicia sesión.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
+
+        // 5. Regresar inmediatamente a la vista de Login
+        // Esto elimina cualquier flujo de espera o verificación manual en la UI
+        Navigator.pop(context);
+
       } catch (e) {
         if (!mounted) return;
-        Navigator.pop(context);
+        Navigator.pop(context); // Cierra el indicador de carga si hubo error
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -124,17 +123,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           const SizedBox(height: 40),
                           
                           // ==========================================
-                          // CAMPO NOMBRE CON BLOQUEO DE ENTRADA
+                          // CAMPO NOMBRE
                           // ==========================================
                           TextFormField(
                             controller: _nameController,
                             style: const TextStyle(color: Colors.white),
-                            // Aquí están los formateadores que bloquean la entrada
                             inputFormatters: [
-                              // 1. Limita la longitud a 50 caracteres (no deja escribir más)
                               LengthLimitingTextInputFormatter(50),
-                              // 2. Solo permite letras (a-z, A-Z), vocales con tilde, ñ y espacios.
-                              // Cualquier otra tecla (números, símbolos) será ignorada.
                               FilteringTextInputFormatter.allow(
                                 RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]'),
                               ),
@@ -148,9 +143,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               if (value == null || value.isEmpty) {
                                 return 'Ingresa tu nombre';
                               }
-                              // La validación de caracteres extraños ya no es necesaria aquí 
-                              // porque inputFormatters no deja escribirlos, pero mantenemos
-                              // la validación de "Nombre Completo" (espacio).
                               if (!value.trim().contains(' ')) {
                                 return 'Ingresa tu nombre completo (Nombre y Apellido)';
                               }

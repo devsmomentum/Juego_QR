@@ -50,26 +50,12 @@ class _LoginScreenState extends State<LoginScreen> {
         // Verificar estado del usuario
         final player = playerProvider.currentPlayer;
         if (player != null) {
-          if (player.status == PlayerStatus.pending) {
-            await playerProvider.logout();
-            if (!mounted) return;
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Cuenta Pendiente'),
-                content: const Text(
-                  'Tu cuenta está pendiente de aprobación por un administrador.\n\nPor favor espera a que tu solicitud sea revisada.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Entendido'),
-                  ),
-                ],
-              ),
-            );
-            return;
-          } else if (player.status == PlayerStatus.banned) {
+          
+          // --- CAMBIO: Se eliminó el bloqueo por estado 'pending' ---
+          // Ahora los usuarios registrados pueden entrar directamente
+          // aunque la base de datos aún no los marque como activos.
+          
+          if (player.status == PlayerStatus.banned) {
             await playerProvider.logout();
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -83,9 +69,9 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         // Solicitar permisos de ubicación
-        print("DEBUG: Iniciando chequeo de permisos...");
+        // print("DEBUG: Iniciando chequeo de permisos...");
         await _checkPermissions();
-        print("DEBUG: Permisos chequeados. Navegando a ScenariosScreen...");
+        // print("DEBUG: Permisos chequeados. Navegando a ScenariosScreen...");
 
         if (!mounted) return;
 
