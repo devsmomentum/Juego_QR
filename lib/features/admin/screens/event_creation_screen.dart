@@ -692,22 +692,26 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         const SizedBox(height: 20),
 
                         // Fila: Lugar (mapa) y Capacidad
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        // Bloque: Lugar (mapa) y Capacidad
+                        // Usamos LayoutBuilder para decidir si mostrar en fila o columna
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            // Si el ancho es pequeño (móvil), usar columna
+                            if (constraints.maxWidth < 600) {
+                              return Column(
                                 children: [
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppTheme.primaryPurple,
-                                      foregroundColor: Colors.white,
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.primaryPurple,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                      ),
+                                      onPressed: _selectLocationOnMap,
+                                      icon: const Icon(Icons.map),
+                                      label: const Text('Ubicación en Mapa'), // Shortened text
                                     ),
-                                    onPressed: _selectLocationOnMap,
-                                    icon: const Icon(Icons.map),
-                                    label: const Text(
-                                        'Seleccionar ubicación en el mapa'),
                                   ),
                                   if (_locationName != null &&
                                       _latitude != null &&
@@ -715,91 +719,195 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     Padding(
                                       padding: const EdgeInsets.only(top: 8.0),
                                       child: Text(
-                                        'Ubicación: $_locationName\nLat: ${_latitude!.toStringAsFixed(6)}, Lng: ${_longitude!.toStringAsFixed(6)}',
+                                        '📍 $_locationName',
                                         style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 13),
+                                            color: Colors.white70, fontSize: 13),
                                       ),
                                     ),
+                                  const SizedBox(height: 20),
+                                  TextFormField(
+                                    initialValue: _maxParticipants == 0
+                                        ? ''
+                                        : _maxParticipants.toString(),
+                                    decoration: inputDecoration.copyWith(
+                                        labelText: 'Max. Jugadores'),
+                                    style: const TextStyle(color: Colors.white),
+                                    keyboardType: TextInputType.number,
+                                    validator: (v) =>
+                                        v!.isEmpty ? 'Requerido' : null,
+                                    onChanged: (v) {
+                                      if (v.isNotEmpty)
+                                        _maxParticipants = int.tryParse(v) ?? 0;
+                                    },
+                                    onSaved: (v) =>
+                                        _maxParticipants = int.parse(v!),
+                                  ),
                                 ],
-                              ),
-                            ),
-                            const SizedBox(width: 20),
-                            Expanded(
-                              child: TextFormField(
-                                initialValue: _maxParticipants == 0
-                                    ? ''
-                                    : _maxParticipants.toString(),
-                                decoration: inputDecoration.copyWith(
-                                    labelText: 'Max. Jugadores'),
-                                style: const TextStyle(color: Colors.white),
-                                keyboardType: TextInputType.number,
-                                validator: (v) =>
-                                    v!.isEmpty ? 'Requerido' : null,
-                                onChanged: (v) {
-                                  if (v.isNotEmpty)
-                                    _maxParticipants = int.tryParse(v) ?? 0;
-                                },
-                                onSaved: (v) =>
-                                    _maxParticipants = int.parse(v!),
-                              ),
-                            ),
-                          ],
+                              );
+                            } 
+                            // En escritorio, usamos la Row original
+                            else {
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppTheme.primaryPurple,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                          ),
+                                          onPressed: _selectLocationOnMap,
+                                          icon: const Icon(Icons.map),
+                                          label: const Text('Seleccionar ubicación'),
+                                        ),
+                                        if (_locationName != null &&
+                                            _latitude != null &&
+                                            _longitude != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 8.0),
+                                            child: Text(
+                                              'Ubicación: $_locationName',
+                                              style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 13),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  Expanded(
+                                    child: TextFormField(
+                                      initialValue: _maxParticipants == 0
+                                          ? ''
+                                          : _maxParticipants.toString(),
+                                      decoration: inputDecoration.copyWith(
+                                          labelText: 'Max. Jugadores'),
+                                      style: const TextStyle(color: Colors.white),
+                                      keyboardType: TextInputType.number,
+                                      validator: (v) =>
+                                          v!.isEmpty ? 'Requerido' : null,
+                                      onChanged: (v) {
+                                        if (v.isNotEmpty)
+                                          _maxParticipants = int.tryParse(v) ?? 0;
+                                      },
+                                      onSaved: (v) =>
+                                          _maxParticipants = int.parse(v!),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                          },
                         ),
                         const SizedBox(height: 20),
 
                         // Fila: PIN y Pista Inicial
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                initialValue: _pin,
-                                // 1. Muestra el teclado numérico
-                                keyboardType: TextInputType.number,
-                                // 2. Solo permite dígitos y máximo 6 caracteres
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(6),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (constraints.maxWidth < 600) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextFormField(
+                                    initialValue: _pin,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(6),
+                                    ],
+                                    decoration: inputDecoration.copyWith(
+                                      labelText: 'PIN de Acceso',
+                                      prefixIcon: const Icon(Icons.lock_outline,
+                                          color: Colors.white54),
+                                      hintText: '123456',
+                                    ),
+                                    style: const TextStyle(color: Colors.white),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty)
+                                        return 'Requerido';
+                                      if (v.length != 6)
+                                        return 'El PIN debe ser de 6 dígitos';
+                                      return null;
+                                    },
+                                    onChanged: (v) => _pin = v,
+                                    onSaved: (v) => _pin = v!,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  TextFormField(
+                                    initialValue: _clue,
+                                    decoration: inputDecoration.copyWith(
+                                        labelText:
+                                            'Pista Inicial',
+                                        prefixIcon: const Icon(
+                                            Icons.lightbulb_outline,
+                                            color: Colors.white54)),
+                                    style: const TextStyle(color: Colors.white),
+                                    validator: (v) =>
+                                        v!.isEmpty ? 'Requerido' : null,
+                                    onChanged: (v) => _clue = v,
+                                    onSaved: (v) => _clue = v!,
+                                    maxLines: 2, // Allow more space for clue text
+                                  ),
                                 ],
-                                decoration: inputDecoration.copyWith(
-                                  labelText: 'PIN de Acceso',
-                                  prefixIcon: const Icon(Icons.lock_outline,
-                                      color: Colors.white54),
-                                  hintText: '123456', // Opcional: ayuda visual
-                                ),
-                                style: const TextStyle(color: Colors.white),
-                                // 3. Valida que no esté vacío y que tenga exactamente 6 números
-                                validator: (v) {
-                                  if (v == null || v.isEmpty)
-                                    return 'Requerido';
-                                  if (v.length != 6)
-                                    return 'El PIN debe ser de 6 dígitos';
-                                  return null;
-                                },
-                                onChanged: (v) => _pin = v,
-                                onSaved: (v) => _pin = v!,
-                              ),
-                            ),
-                            const SizedBox(width: 20),
-                            Expanded(
-                              flex: 2,
-                              child: TextFormField(
-                                initialValue: _clue,
-                                decoration: inputDecoration.copyWith(
-                                    labelText:
-                                        'Pista Inicial (aparece antes de empezar)',
-                                    prefixIcon: const Icon(
-                                        Icons.lightbulb_outline,
-                                        color: Colors.white54)),
-                                style: const TextStyle(color: Colors.white),
-                                validator: (v) =>
-                                    v!.isEmpty ? 'Requerido' : null,
-                                onChanged: (v) => _clue = v,
-                                onSaved: (v) => _clue = v!,
-                              ),
-                            ),
-                          ],
+                              );
+                            } else {
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      initialValue: _pin,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(6),
+                                      ],
+                                      decoration: inputDecoration.copyWith(
+                                        labelText: 'PIN de Acceso',
+                                        prefixIcon: const Icon(Icons.lock_outline,
+                                            color: Colors.white54),
+                                        hintText: '123456',
+                                      ),
+                                      style: const TextStyle(color: Colors.white),
+                                      validator: (v) {
+                                        if (v == null || v.isEmpty)
+                                          return 'Requerido';
+                                        if (v.length != 6)
+                                          return 'El PIN debe ser de 6 dígitos';
+                                        return null;
+                                      },
+                                      onChanged: (v) => _pin = v,
+                                      onSaved: (v) => _pin = v!,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      initialValue: _clue,
+                                      decoration: inputDecoration.copyWith(
+                                          labelText:
+                                              'Pista Inicial (aparece antes de empezar)',
+                                          prefixIcon: const Icon(
+                                              Icons.lightbulb_outline,
+                                              color: Colors.white54)),
+                                      style: const TextStyle(color: Colors.white),
+                                      validator: (v) =>
+                                          v!.isEmpty ? 'Requerido' : null,
+                                      onChanged: (v) => _clue = v,
+                                      onSaved: (v) => _clue = v!,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                          },
                         ),
                         const SizedBox(height: 40),
 
@@ -810,94 +918,154 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               border: Border.all(color: Colors.white10),
                               borderRadius: BorderRadius.circular(12)),
                           child: Column(
+
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  const Text("Generador de Pistas",
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold)),
-                                  const Spacer(),
-                                  SizedBox(
-                                    width: 100,
-                                    child: TextFormField(
-                                      initialValue: _numberOfClues.toString(),
-                                      textAlign: TextAlign.center,
-                                      // *** Puntos de restricción (1) ***
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.digitsOnly,
-                                        LengthLimitingTextInputFormatter(
-                                            2), // Max. 2 dígitos
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  if (constraints.maxWidth < 400) {
+                                    // Mobile View: Column
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text("Generador de Pistas",
+                                            style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextFormField(
+                                                initialValue: _numberOfClues.toString(),
+                                                textAlign: TextAlign.center,
+                                                keyboardType: TextInputType.number,
+                                                inputFormatters: [
+                                                  FilteringTextInputFormatter.digitsOnly,
+                                                  LengthLimitingTextInputFormatter(2),
+                                                ],
+                                                decoration: inputDecoration.copyWith(
+                                                    contentPadding:
+                                                        const EdgeInsets.all(10),
+                                                    isDense: true,
+                                                    hintText: 'Max 12'),
+                                                style: const TextStyle(color: Colors.white),
+                                                onChanged: (v) {
+                                                  // ... logic copied
+                                                  int? parsedValue = int.tryParse(v);
+                                                  if (parsedValue != null) {
+                                                    if (parsedValue > 12) {
+                                                      _numberOfClues = 12;
+                                                    } else if (parsedValue < 0) {
+                                                      _numberOfClues = 0;
+                                                    } else {
+                                                      _numberOfClues = parsedValue;
+                                                    }
+                                                  } else if (v.isEmpty) {
+                                                    _numberOfClues = 0;
+                                                  }
+                                                  setState(() {
+                                                    _numberOfClues;
+                                                  });
+                                                },
+                                                validator: (v) {
+                                                   // ... validator logic copied
+                                                    if (v == null || v.isEmpty) return 'Requerido';
+                                                    int? num = int.tryParse(v);
+                                                    if (num == null || num <= 0) return 'Mín. 1';
+                                                    if (num > 12) return 'Máximo 12 pistas';
+                                                    return null;
+                                                },
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                 if (_numberOfClues > 12) _numberOfClues = 12;
+                                                 if (_numberOfClues <= 0) return;
+                                                 _generateClueForms();
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: AppTheme.accentGold,
+                                                foregroundColor: Colors.black,
+                                              ),
+                                              child: const Text("Generar"),
+                                            ),
+                                          ],
+                                        )
                                       ],
-                                      decoration: inputDecoration.copyWith(
-                                          contentPadding:
-                                              const EdgeInsets.all(10),
-                                          isDense: true,
-                                          // Opcional: Mostrar un hint de la restricción
-                                          hintText: 'Max 12'),
-                                      style:
-                                          const TextStyle(color: Colors.white),
-                                      onChanged: (v) {
-                                        int? parsedValue = int.tryParse(v);
-
-                                        // Aplicar la restricción al estado
-                                        if (parsedValue != null) {
-                                          // Si el valor es mayor a 12, se queda en 12. Si es 0 o menos, se queda en 0.
-                                          if (parsedValue > 12) {
-                                            _numberOfClues = 12;
-                                            // Opcional: Forzar la actualización del campo visual si se excede 12
-                                            // Es mejor dejar que el validador maneje la retroalimentación
-                                          } else if (parsedValue < 0) {
-                                            _numberOfClues = 0;
-                                          } else {
-                                            _numberOfClues = parsedValue;
-                                          }
-                                        } else if (v.isEmpty) {
-                                          _numberOfClues = 0;
-                                        }
-                                        // Se debe llamar a setState aquí para reflejar el cambio en el campo
-                                        // (si quieres que se limite visualmente al escribir un 13)
-                                        setState(() {
-                                          // Esto asegura que el campo se limite visualmente si el usuario intenta escribir más de 12
-                                          _numberOfClues;
-                                        });
-                                      },
-                                      // Opcional, pero recomendado: validar para mostrar el error al usuario
-                                      validator: (v) {
-                                        if (v == null || v.isEmpty)
-                                          return 'Requerido';
-                                        int? num = int.tryParse(v);
-                                        if (num == null || num <= 0)
-                                          return 'Mín. 1';
-                                        if (num > 12) return 'Máximo 12 pistas';
-                                        return null;
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      // *** Punto de restricción (2) - Lógica en la función ***
-                                      if (_numberOfClues > 12) {
-                                        _numberOfClues =
-                                            12; // Asegura que el valor de estado no exceda
-                                      }
-                                      if (_numberOfClues <= 0) {
-                                        // Opcional: Mostrar un mensaje al usuario
-                                        return; // No hacer nada si no hay pistas
-                                      }
-                                      // Llama a la función de generación con el valor validado
-                                      _generateClueForms();
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppTheme.accentGold,
-                                      foregroundColor: Colors.black,
-                                    ),
-                                    child: const Text("Generar"),
-                                  ),
-                                ],
+                                    );
+                                  } else {
+                                    // Desktop/Wide View: Row
+                                    return Row(
+                                      children: [
+                                        const Text("Generador de Pistas",
+                                            style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold)),
+                                        const Spacer(),
+                                        SizedBox(
+                                          width: 100,
+                                          child: TextFormField(
+                                            initialValue: _numberOfClues.toString(),
+                                            textAlign: TextAlign.center,
+                                            keyboardType: TextInputType.number,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter.digitsOnly,
+                                              LengthLimitingTextInputFormatter(2),
+                                            ],
+                                            decoration: inputDecoration.copyWith(
+                                                contentPadding:
+                                                    const EdgeInsets.all(10),
+                                                isDense: true,
+                                                hintText: 'Max 12'),
+                                            style:
+                                                const TextStyle(color: Colors.white),
+                                            onChanged: (v) {
+                                                // ... logic copied
+                                                int? parsedValue = int.tryParse(v);
+                                                  if (parsedValue != null) {
+                                                    if (parsedValue > 12) {
+                                                      _numberOfClues = 12;
+                                                    } else if (parsedValue < 0) {
+                                                      _numberOfClues = 0;
+                                                    } else {
+                                                      _numberOfClues = parsedValue;
+                                                    }
+                                                  } else if (v.isEmpty) {
+                                                    _numberOfClues = 0;
+                                                  }
+                                                  setState(() {
+                                                    _numberOfClues;
+                                                  });
+                                            },
+                                            validator: (v) {
+                                                // ... validator logic copied
+                                                if (v == null || v.isEmpty) return 'Requerido';
+                                                int? num = int.tryParse(v);
+                                                if (num == null || num <= 0) return 'Mín. 1';
+                                                if (num > 12) return 'Máximo 12 pistas';
+                                                return null;
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                             if (_numberOfClues > 12) _numberOfClues = 12;
+                                             if (_numberOfClues <= 0) return;
+                                             _generateClueForms();
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppTheme.accentGold,
+                                            foregroundColor: Colors.black,
+                                          ),
+                                          child: const Text("Generar"),
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                },
                               ),
                               if (_clueForms.isNotEmpty) ...[
                                 const SizedBox(height: 20),
@@ -949,18 +1117,20 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       // --- 1. SELECTOR DE TIPO DE JUEGO (DINÁMICO) ---
                                       DropdownButtonFormField<String>(
                                         value: _clueForms[_currentClueIndex]['puzzle_type'] ?? PuzzleType.riddle.dbValue,
+                                        isExpanded: true, // Fix overflow
                                         decoration: inputDecoration.copyWith(
                                           labelText: 'Tipo de Desafío',
                                           prefixIcon: const Icon(Icons.games, color: Colors.white54),
                                         ),
                                         dropdownColor: const Color(0xFF2A2D3E),
                                         style: const TextStyle(color: Colors.white),
-                                        
-                                        // AQUI OCURRE LA MAGIA: Generamos la lista desde el modelo automáticamente
                                         items: PuzzleType.values.map((type) {
                                           return DropdownMenuItem<String>(
-                                            value: type.dbValue, // Usa el valor exacto para la BD ('ticTacToe')
-                                            child: Text(type.label), // Usa el nombre bonito ('La Vieja...')
+                                            value: type.dbValue,
+                                            child: Text(
+                                              type.label,
+                                              overflow: TextOverflow.ellipsis, // Fix overflow text
+                                            ),
                                           );
                                         }).toList(),
 
@@ -1102,26 +1272,25 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                 : null,
                             style: ElevatedButton.styleFrom(
                                 backgroundColor: AppTheme.primaryPurple,
-                                // El color se ajusta solo cuando está disabled,
-                                // pero si quieres forzar estilo visual puedes hacerlo aquí
-                                disabledBackgroundColor:
-                                    Colors.grey.withOpacity(0.3),
+                                disabledBackgroundColor: Color(0xFF2A2D3E), // Solid dark color matching input bg
                                 disabledForegroundColor: Colors.white30,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12)),
-                                elevation: 10,
-                                shadowColor:
-                                    AppTheme.primaryPurple.withOpacity(0.5)),
+                                elevation: 0, // Flat button to remove "reflection"
+                                shadowColor: Colors.transparent),
                             child: _isLoading
                                 ? const CircularProgressIndicator(
                                     color: Colors.white)
-                                : const Text("PUBLICAR COMPETENCIA",
+                                : const Text("PUBLICAR", // Shortened to prevent wrapping
                                     style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 1)),
                           ),
+
                         ),
+                        // Espacio extra para evitar que el botón quede pegado al borde o cubierto
+                        const SizedBox(height: 40),
                       ],
                     ),
                   )
