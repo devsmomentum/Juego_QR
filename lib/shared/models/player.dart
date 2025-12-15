@@ -57,6 +57,9 @@ class Player {
         'strength': json['stat_strength'] ?? 0,
         'intelligence': json['stat_intelligence'] ?? 0,
       },
+      inventory: json['inventory'] != null 
+          ? List<String>.from(json['inventory']) 
+          : [],
     );
   }
 
@@ -64,6 +67,10 @@ class Player {
     switch (status) {
       case 'frozen':
         return PlayerStatus.frozen;
+      case 'blinded':
+        return PlayerStatus.blinded;
+      case 'slowed':
+        return PlayerStatus.slowed;
       case 'shielded':
         return PlayerStatus.shielded;
       case 'banned':
@@ -81,6 +88,16 @@ class Player {
 
   bool get isFrozen =>
       status == PlayerStatus.frozen &&
+      frozenUntil != null &&
+      DateTime.now().isBefore(frozenUntil!);
+
+  bool get isBlinded =>
+      status == PlayerStatus.blinded &&
+      frozenUntil != null &&
+      DateTime.now().isBefore(frozenUntil!);
+
+  bool get isSlowed =>
+      status == PlayerStatus.slowed &&
       frozenUntil != null &&
       DateTime.now().isBefore(frozenUntil!);
 
@@ -122,7 +139,9 @@ class Player {
 enum PlayerStatus {
   active,
   frozen,
+  blinded,
   shielded,
   banned,
   pending,
+  slowed,
 }

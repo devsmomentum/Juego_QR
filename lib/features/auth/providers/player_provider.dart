@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
 
@@ -79,8 +80,13 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  StreamSubscription<List<Map<String, dynamic>>>? _profileSubscription;
+
   Future<void> _fetchProfile(String userId) async {
     try {
+      // Subscribe to changes
+      _subscribeToProfile(userId);
+
       final data =
           await _supabase.from('profiles').select().eq('id', userId).single();
 
@@ -92,7 +98,27 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  void _subscribeToProfile(String userId) {
+    _profileSubscription?.cancel();
+    _profileSubscription = _supabase
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', userId)
+        .listen((data) {
+          if (data.isNotEmpty) {
+            // Preserve local fields if necessary or just reload
+            // In a real game, be careful not to overwrite local optimistic updates
+            // But for sabotage (blinded), we WANT the server state.
+            _currentPlayer = Player.fromJson(data.first);
+            notifyListeners();
+          }
+        }, onError: (e) {
+          debugPrint('Profile stream error: $e');
+        });
+  }
+
   Future<void> logout() async {
+    await _profileSubscription?.cancel();
     await _supabase.auth.signOut();
     _currentPlayer = null;
     notifyListeners();
@@ -179,16 +205,66 @@ class PlayerProvider extends ChangeNotifier {
   void addItemToInventory(String item) {
     if (_currentPlayer != null) {
       _currentPlayer!.addItem(item);
+      // Sync with DB
+      _updateInventoryInDb();
       notifyListeners();
+    }
+  }
+
+  Future<void> _updateInventoryInDb() async {
+    if (_currentPlayer == null) return;
+    try {
+      await _supabase.from('profiles').update({
+        'inventory': _currentPlayer!.inventory
+      }).eq('id', _currentPlayer!.id);
+    } catch (e) {
+      debugPrint('Error updating inventory: $e');
     }
   }
 
   bool useItemFromInventory(String item) {
     if (_currentPlayer != null && _currentPlayer!.removeItem(item)) {
+      _updateInventoryInDb();
       notifyListeners();
       return true;
     }
     return false;
+  }
+
+  Future<bool> applySabotage(String targetId, String itemId) async {
+    try {
+      // 1. Remove from inventory
+      if (!useItemFromInventory(itemId)) return false;
+
+      // 2. Determine effect
+      String status = 'frozen'; // default fallback
+      int durationSeconds = 120; // 2 mins default
+
+      if (itemId == 'black_screen') {
+        status = 'blinded';
+        durationSeconds = 5;
+      } else if (itemId == 'freeze') {
+        status = 'frozen';
+        durationSeconds = 120;
+      } else if (itemId == 'slow_motion') {
+        status = 'slowed';
+        durationSeconds = 120; // 2 minutes
+      }
+      
+      final frozenUntil = DateTime.now().add(Duration(seconds: durationSeconds));
+
+      // 3. Update target in DB
+      await _supabase.from('profiles').update({
+        'status': status,
+        'frozen_until': frozenUntil.toIso8601String(),
+      }).eq('id', targetId);
+      
+      return true;
+    } catch (e) {
+      debugPrint('Error applying sabotage: $e');
+      // If failed, maybe should add item back? ignoring for now.
+      return false;
+    }
   }
 
   void freezePlayer(DateTime until) {
@@ -237,3 +313,4 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 }
+

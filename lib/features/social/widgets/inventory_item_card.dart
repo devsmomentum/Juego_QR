@@ -32,55 +32,63 @@ class InventoryItemCard extends StatelessWidget {
         ),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Icon
           Text(
             item.icon,
-            style: const TextStyle(fontSize: 48),
-          ),
-          
-          const SizedBox(height: 12),
-          
-          // Name
-          Text(
-            item.name,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 40),
           ),
           
           const SizedBox(height: 8),
           
-          // Description
-          Text(
-            item.description,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.white60,
+          // Name and Description container
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.description,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white60,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
           
-          const Spacer(),
+          const SizedBox(height: 8),
           
           // Use button
           SizedBox(
             width: double.infinity,
+            height: 36, // Fixed small height
             child: ElevatedButton(
               onPressed: onUse,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.secondaryPink,
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.zero, // Remove internal padding
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text(
                 'Usar',
-                style: TextStyle(fontSize: 14),
+                style: TextStyle(fontSize: 13),
               ),
             ),
           ),

@@ -15,6 +15,7 @@ import 'core/theme/app_theme.dart';
 // 2. Imports nuevos para el Administrador
 import 'features/game/providers/event_provider.dart'; 
 import 'features/admin/screens/admin_login_screen.dart'; 
+import 'shared/widgets/sabotage_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +68,9 @@ class TreasureHuntApp extends StatelessWidget {
         title: 'Treasure Hunt RPG',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
+        builder: (context, child) {
+          return SabotageOverlay(child: child ?? const SizedBox());
+        },
         
         // 5. LÓGICA PRINCIPAL:
         // Si estamos en WEB -> Muestra la pantalla de Login de Admin
