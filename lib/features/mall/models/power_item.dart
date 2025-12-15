@@ -20,8 +20,34 @@ class PowerItem {
   static List<PowerItem> getShopItems() {
     return [
       PowerItem(
+        id: 'black_screen', // Changed from freeze_screen to match DB
+        name: 'Pantalla Negra',
+        description: 'Deja la pantalla negra a un jugador por 5 segundos',
+        type: PowerType.blind,
+        cost: 100,
+        icon: '🕶️',
+        durationMinutes: 0,
+      ),
+      PowerItem(
+        id: 'slow_motion',
+        name: 'Cámara Lenta',
+        description: 'Ralentiza las animaciones del rival (2 min)',
+        type: PowerType.debuff, // We'll add slowMotion type later or reuse debuff
+        cost: 80,
+        icon: '🐢',
+        durationMinutes: 2,
+      ),
+      PowerItem(
+        id: 'energy_drink',
+        name: 'Bebida Energética',
+        description: 'Recupera energía (placeholder)',
+        type: PowerType.buff,
+        cost: 20,
+        icon: '🥤',
+      ),
+      PowerItem(
         id: 'freeze',
-        name: 'Freeze',
+        name: 'Congelar',
         description: 'Congela a un jugador por 2 minutos',
         type: PowerType.freeze,
         cost: 50,
@@ -69,10 +95,12 @@ class PowerItem {
 
 enum PowerType {
   freeze,
+  blind,
   shield,
   timePenalty,
   hint,
   speedBoost,
   buff,
   debuff,
+  slowMotion, // Added new type
 }
