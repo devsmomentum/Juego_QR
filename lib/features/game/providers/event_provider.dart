@@ -184,7 +184,7 @@ class EventProvider with ChangeNotifier {
           .from('clues')
           .select()
           .eq('event_id', eventId)
-          .order('order_index', ascending: true);
+          .order('created_at', ascending: true);
 
       print('✅ Found ${(response as List).length} clues raw data');
       return (response as List).map((json) => Clue.fromJson(json)).toList();
@@ -214,18 +214,17 @@ class EventProvider with ChangeNotifier {
 
   Future<void> addClue(String eventId, Clue clue) async {
     try {
-      // Find current max order
       final maxOrderRes = await _supabase
           .from('clues')
-          .select('order_index')
+          .select('sequence_index')
           .eq('event_id', eventId)
-          .order('order_index', ascending: false)
+          .order('sequence_index', ascending: false)
           .limit(1)
           .maybeSingle();
       
       int nextOrder = 1;
-      if (maxOrderRes != null && maxOrderRes['order_index'] != null) {
-        nextOrder = (maxOrderRes['order_index'] as int) + 1;
+      if (maxOrderRes != null && maxOrderRes['sequence_index'] != null) {
+        nextOrder = (maxOrderRes['sequence_index'] as int) + 1;
       }
 
       await _supabase.from('clues').insert({
@@ -239,13 +238,23 @@ class EventProvider with ChangeNotifier {
         'riddle_answer': clue.riddleAnswer,
         'xp_reward': clue.xpReward,
         'coin_reward': clue.coinReward,
-        'order_index': nextOrder,
-        'isLocked': true, // Default
+        'sequence_index': nextOrder, // Fix: use correct column name
+        // 'is_locked': true, // Default - removed as column doesn't exist
       });
       
       notifyListeners();
     } catch (e) {
       print('Error adding clue: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteClue(String clueId) async {
+    try {
+      await _supabase.from('clues').delete().eq('id', clueId);
+      notifyListeners();
+    } catch (e) {
+      print('Error deleting clue: $e');
       rethrow;
     }
   }

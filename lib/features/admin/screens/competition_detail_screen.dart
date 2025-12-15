@@ -125,6 +125,15 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
       appBar: AppBar(
         backgroundColor: AppTheme.darkBg,
         title: Text(widget.event.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: () {
+              setState(() {});
+              Provider.of<GameRequestProvider>(context, listen: false).fetchAllRequests();
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppTheme.primaryPurple,
@@ -391,6 +400,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                    DropdownButtonFormField<PuzzleType>(
                     value: selectedType,
                     dropdownColor: AppTheme.darkBg,
+                    isExpanded: true, // Fix overflow
                     decoration: InputDecoration(
                       labelText: 'Tipo de Minijuego',
                       filled: true,
@@ -402,7 +412,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                     items: PuzzleType.values.map((type) {
                       return DropdownMenuItem(
                         value: type,
-                        child: Text(type.label),
+                        child: Text(
+                          type.label,
+                          overflow: TextOverflow.ellipsis, // Fix overflow text
+                        ),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -446,12 +459,56 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                     decoration: const InputDecoration(labelText: 'Puntos XP', labelStyle: TextStyle(color: Colors.white70)),
                     onChanged: (v) => xp = int.tryParse(v) ?? 50,
                   ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    initialValue: clue.coinReward.toString(),
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Monedas', labelStyle: TextStyle(color: Colors.white70)),
+                    onChanged: (v) => clue = clue.copyWith(coinReward: int.tryParse(v) ?? 10),
+                  ),
                 ],
               ),
             );
           },
         ),
         actions: [
+          // Delete Button
+          TextButton(
+            onPressed: () {
+               showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: AppTheme.cardBg,
+                  title: const Text('Eliminar Pista', style: TextStyle(color: Colors.white)),
+                  content: const Text('¿Estás seguro de que quieres eliminar esta pista? Esta acción no se puede deshacer.', style: TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () async {
+                        try {
+                          Navigator.pop(context); // Close confirm dialog
+                          await Provider.of<EventProvider>(ctx, listen: false).deleteClue(clue.id);
+                          if (mounted) {
+                            Navigator.pop(ctx); // Close edit dialog
+                            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Pista eliminada')));
+                          }
+                        } catch (e) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      },
+                      child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              );
+            },
+            child: const Text("Eliminar", style: TextStyle(color: Colors.redAccent)),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text("Cancelar"),
@@ -507,6 +564,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
     String answer = '';
     PuzzleType selectedType = PuzzleType.riddle;
     int xp = 50;
+    int coins = 10;
 
     showDialog(
       context: context,
@@ -522,6 +580,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                    DropdownButtonFormField<PuzzleType>(
                     value: selectedType,
                     dropdownColor: AppTheme.darkBg,
+                    isExpanded: true, // Fix overflow
                     decoration: InputDecoration(
                       labelText: 'Tipo de Minijuego',
                       filled: true,
@@ -533,7 +592,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                     items: PuzzleType.values.map((type) {
                       return DropdownMenuItem(
                         value: type,
-                        child: Text(type.label),
+                        child: Text(
+                          type.label,
+                          overflow: TextOverflow.ellipsis, // Fix overflow text
+                        ),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -581,6 +643,14 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                     decoration: const InputDecoration(labelText: 'Puntos XP', labelStyle: TextStyle(color: Colors.white70)),
                     onChanged: (v) => xp = int.tryParse(v) ?? 50,
                   ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    initialValue: coins.toString(),
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Monedas', labelStyle: TextStyle(color: Colors.white70)),
+                    onChanged: (v) => coins = int.tryParse(v) ?? 10,
+                  ),
                 ],
               ),
             );
@@ -608,7 +678,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                   hint: '',
                   type: ClueType.minigame, // Default to minigame
                   xpReward: xp,
-                  coinReward: 10,
+                  coinReward: coins,
                   puzzleType: selectedType,
                   riddleQuestion: question,
                   riddleAnswer: answer,
