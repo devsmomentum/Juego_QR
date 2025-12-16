@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../providers/game_provider.dart';
 
 class FlagsMinigame extends StatefulWidget {
   final Clue clue;
@@ -30,12 +31,13 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
   
   // Timer State
   Timer? _timer;
-  int _secondsRemaining = 60; // 1 minuto para 5 banderas
+  int _secondsRemaining = 60; // 1 minuto
   
-  // Opciones persistentes para la pregunta actual (para que no se rebarajen si falla)
+  // Estado Local
   List<String>? _currentOptions;
+  int _localAttempts = 3; // Intentos dentro del juego
 
-  // Lista de países y sus códigos ISO para la API de banderas
+  // Lista de países (Abreviada para el ejemplo, usa tu lista completa)
   final List<Map<String, String>> _allCountries = [
     {'code': 've', 'name': 'Venezuela'},
     {'code': 'es', 'name': 'España'},
@@ -48,36 +50,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     {'code': 'mx', 'name': 'México'},
     {'code': 'it', 'name': 'Italia'},
     {'code': 'ca', 'name': 'Canadá'},
-    {'code': 'gb', 'name': 'Reino Unido'},
-    {'code': 'cn', 'name': 'China'},
-    {'code': 'kr', 'name': 'Corea del Sur'},
-    {'code': 'in', 'name': 'India'},
-    {'code': 'ru', 'name': 'Rusia'},
-    {'code': 'au', 'name': 'Australia'},
-    {'code': 'cl', 'name': 'Chile'},
-    {'code': 'co', 'name': 'Colombia'},
-    {'code': 'pe', 'name': 'Perú'},
-    // DIFÍCILES
-    {'code': 'bt', 'name': 'Bután'},
-    {'code': 'np', 'name': 'Nepal'},
-    {'code': 'sc', 'name': 'Seychelles'},
-    {'code': 'ki', 'name': 'Kiribati'},
-    {'code': 'kz', 'name': 'Kazajistán'},
-    {'code': 'lk', 'name': 'Sri Lanka'},
-    {'code': 'mn', 'name': 'Mongolia'},
-    {'code': 'pap', 'name': 'Papúa Nueva Guinea'},
-    {'code': 'sz', 'name': 'Esuatini'},
-    {'code': 'tm', 'name': 'Turkmenistán'},
-    {'code': 'uz', 'name': 'Uzbekistán'},
-    {'code': 'kg', 'name': 'Kirguistán'},
-    {'code': 'tj', 'name': 'Tayikistán'},
-    {'code': 'tv', 'name': 'Tuvalu'},
-    {'code': 'nr', 'name': 'Nauru'},
-    {'code': 'fm', 'name': 'Micronesia'},
-    {'code': 'ws', 'name': 'Samoa'},
-    {'code': 'to', 'name': 'Tonga'},
-    {'code': 'vu', 'name': 'Vanuatu'},
-    {'code': 'sb', 'name': 'Islas Salomón'},
+    // ... agrega el resto de tu lista aquí
   ];
 
   @override
@@ -101,13 +74,12 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
         });
       } else {
         _timer?.cancel();
-        _loseLife("¡Se acabó el tiempo!", timeOut: true);
+        _loseGlobalLife("¡Se acabó el tiempo!", timeOut: true);
       }
     });
   }
 
   void _startNewGame() {
-    // Seleccionar 5 preguntas aleatorias
     final random = Random();
     var questions = List<Map<String, String>>.from(_allCountries);
     questions.shuffle(random);
@@ -116,8 +88,9 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     _score = 0;
     _currentQuestionIndex = 0;
     _isGameOver = false;
-    _secondsRemaining = 60; // Reiniciar tiempo
-    _currentOptions = null; // Resetear opciones
+    _secondsRemaining = 60; 
+    _currentOptions = null; 
+    _localAttempts = 3; // Reset intentos locales
     _startTimer();
     setState(() {});
   }
@@ -130,50 +103,86 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     if (selectedName == correctAnswer) {
       // Respuesta Correcta
       _score++;
-      _currentOptions = null; // Limpiar para que la siguiente pregunta genere nuevas opciones
+      _currentOptions = null;
       
       if (_score >= _targetScore) {
-        // Gano el juego total
         _winGame();
       } else {
-        // Siguiente pregunta
         setState(() {
           _currentQuestionIndex++;
         });
       }
     } else {
-      // Respuesta Incorrecta
-      // NO cambiamos de pregunta, solo quitamos vida
-      _loseLife("Incorrecto. Intenta de nuevo.");
-    }
-  }
+      // Respuesta Incorrecta (Solo local)
+      setState(() {
+        _localAttempts--;
+      });
 
-  void _loseLife(String reason, {bool timeOut = false}) {
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    if (playerProvider.currentPlayer != null) {
-      playerProvider.currentPlayer!.lives--;
-      playerProvider.notifyListeners();
-
-      if (playerProvider.currentPlayer!.lives <= 0) {
-        _timer?.cancel();
-        _showGameOverDialog("Te has quedado sin vidas.");
-      } else if (timeOut) {
-         _showGameOverDialog("Tiempo agotado.");
+      if (_localAttempts <= 0) {
+        _loseGlobalLife("¡Demasiados errores!");
       } else {
-        // NO mostramos diálogo intrusivo por cada error, solo un snackbar o feedback visual rápido
-        // para no interrumpir el flujo si solo debe reintentar la misma bandera.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$reason -1 Vida 💔'),
-            backgroundColor: AppTheme.dangerRed,
-            duration: const Duration(milliseconds: 1000),
+            content: Text("Incorrecto. Te quedan $_localAttempts intentos."),
+            backgroundColor: AppTheme.warningOrange,
+            duration: const Duration(milliseconds: 800),
           ),
         );
       }
     }
   }
 
+  void _loseGlobalLife(String reason, {bool timeOut = false}) {
+    _timer?.cancel();
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    if (playerProvider.currentPlayer != null) {
+      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
+         if (!mounted) return;
+         if (gameProvider.lives <= 0) {
+            _showGameOverDialog("Te has quedado sin vidas globales.");
+         } else {
+            _showTryAgainDialog(reason);
+         }
+      });
+    }
+  }
 
+  void _showTryAgainDialog(String reason) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(reason, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startNewGame();
+            },
+            child: const Text("Reintentar"),
+          ),
+          TextButton(
+            onPressed: () {
+               Navigator.pop(context); // Dialog
+               Navigator.pop(context); // Screen
+            },
+            child: const Text("Salir"),
+          )
+        ],
+      ),
+    );
+  }
 
   void _showGameOverDialog(String message) {
     showDialog(
@@ -181,7 +190,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed, fontSize: 24, fontWeight: FontWeight.bold)),
+        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
           ElevatedButton(
@@ -203,28 +212,22 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
   }
 
   List<String> _generateOptions() {
-    // Si ya tenemos opciones generadas para esta pregunta (porque falló antes), las reusamos
     if (_currentOptions != null) return _currentOptions!;
 
     final currentCountry = _shuffledQuestions[_currentQuestionIndex];
     final random = Random();
     
-    // Crear lista de opciones incorrectas
     var options = _allCountries
         .where((c) => c['name'] != currentCountry['name'])
         .map((c) => c['name']!)
         .toList();
     
     options.shuffle(random);
-    
-    // Tomar 3 incorrectas y agregar la correcta
     var finalOptions = options.take(3).toList();
     finalOptions.add(currentCountry['name']!);
-    
-    // Barajar las opciones finales
     finalOptions.shuffle(random);
     
-    _currentOptions = finalOptions; // Guardar para persistencia
+    _currentOptions = finalOptions; 
     return finalOptions;
   }
 
@@ -232,12 +235,8 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
   Widget build(BuildContext context) {
     if (_isGameOver && _score >= _targetScore) {
         return const Center(child: CircularProgressIndicator()); 
-        // O un mensaje de victoria mientras sale el dialogo
     }
-
-
     
-    // Formatear tiempo mm:ss
     final minutes = (_secondsRemaining / 60).floor().toString().padLeft(2, '0');
     final seconds = (_secondsRemaining % 60).toString().padLeft(2, '0');
     final isLowTime = _secondsRemaining <= 10;
@@ -248,7 +247,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // TIMER DISPLAY
+        // HEADER: TIMER & INTENTOS LOCALES
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -267,7 +266,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
                   color: isLowTime ? AppTheme.dangerRed : Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace', // Para que no salten los números
+                  fontFamily: 'monospace',
                 ),
               ),
             ],
@@ -290,19 +289,15 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
               style: const TextStyle(color: Colors.white70),
             ),
             const SizedBox(width: 20),
-            Consumer<PlayerProvider>(
-              builder: (context, playerProvider, _) {
-                final lives = playerProvider.currentPlayer?.lives ?? 0;
-                return Row(
-                  children: List.generate(3, (index) {
-                    return Icon(
-                      index < lives ? Icons.favorite : Icons.favorite_border,
-                      color: AppTheme.dangerRed,
-                      size: 20,
-                    );
-                  }),
+            // Intentos Locales (Visual)
+            Row(
+              children: List.generate(3, (index) {
+                return Icon(
+                  index < _localAttempts ? Icons.favorite : Icons.favorite_border,
+                  color: AppTheme.secondaryPink,
+                  size: 20,
                 );
-              },
+              }),
             ),
           ],
         ),

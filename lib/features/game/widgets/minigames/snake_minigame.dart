@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
+import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class SnakeMinigame extends StatefulWidget {
@@ -26,7 +27,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   // Config
   static const int rows = 20;
   static const int cols = 20;
-  static const int winScore = 15; // Manzanas para ganar
+  static const int winScore = 15;
   
   // Game State
   List<Point<int>> _snake = [const Point(10, 10)];
@@ -36,6 +37,9 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   bool _isPlaying = false;
   bool _isGameOver = false;
   int _score = 0;
+  
+  // Intentos Locales
+  int _crashAllowance = 3; 
   
   // Timer
   Timer? _gameLoop;
@@ -60,13 +64,14 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
     _countdownTimer?.cancel();
     
     setState(() {
-      _snake = [const Point(10, 10), const Point(9, 10), const Point(8, 10)]; // Cuerpo inicial
+      _snake = [const Point(10, 10), const Point(9, 10), const Point(8, 10)];
       _direction = Direction.right;
       _nextDirection = Direction.right;
       _score = 0;
       _secondsRemaining = 90;
       _isPlaying = true;
       _isGameOver = false;
+      _crashAllowance = 3; // Reset intentos
       _generateFood();
     });
 
@@ -85,7 +90,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
           if (_secondsRemaining > 0) {
               setState(() => _secondsRemaining--);
           } else {
-              _loseLife("¡Se acabó el tiempo!", isTimeOut: true);
+              _loseGlobalLife("¡Se acabó el tiempo!", isTimeOut: true);
           }
       });
   }
@@ -118,13 +123,13 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
         // Colisión Paredes
         if (newHead.x < 0 || newHead.x >= cols || newHead.y < 0 || newHead.y >= rows) {
-            _loseLife("¡Chocaste con la pared!");
+            _handleCrash("¡Chocaste con la pared!");
             return;
         }
 
         // Colisión a sí mismo
         if (_snake.contains(newHead)) {
-             _loseLife("¡Te mordiste la cola!");
+             _handleCrash("¡Te mordiste la cola!");
              return;
         }
 
@@ -144,6 +149,38 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
     });
   }
 
+  void _handleCrash(String reason) {
+    setState(() {
+      _crashAllowance--;
+    });
+
+    if (_crashAllowance <= 0) {
+       _loseGlobalLife("¡Agotaste tus intentos!"); 
+    } else {
+       // Pausar y Feedback
+       _gameLoop?.cancel();
+       ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("¡Choque! Intentos: $_crashAllowance. Reiniciando posición..."), 
+            duration: const Duration(milliseconds: 1200),
+            backgroundColor: AppTheme.warningOrange,
+          )
+       );
+       
+       setState(() {
+          // Resetear solo la serpiente, mantener score y tiempo
+          _snake = [const Point(10, 10), const Point(9, 10), const Point(8, 10)];
+          _direction = Direction.right;
+          _nextDirection = Direction.right;
+       });
+       
+       // Reanudar
+       Future.delayed(const Duration(seconds: 1), () {
+         if (!_isGameOver && mounted) _startGameLoop();
+       });
+    }
+  }
+
   void _winGame() {
       _isPlaying = false;
       _isGameOver = true;
@@ -152,30 +189,24 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
       widget.onSuccess();
   }
 
-  void _loseLife(String reason, {bool isTimeOut = false}) {
+  void _loseGlobalLife(String reason, {bool isTimeOut = false}) {
       _isPlaying = false;
       _gameLoop?.cancel();
+      _countdownTimer?.cancel();
       
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      
       if (playerProvider.currentPlayer != null) {
-          playerProvider.currentPlayer!.lives--;
-          playerProvider.notifyListeners(); // Actualizar UI
-          
-          if (playerProvider.currentPlayer!.lives <= 0) {
-               _countdownTimer?.cancel();
-              _showGameOverDialog("Te has quedado sin vidas.");
-          } else {
-               if (isTimeOut) { 
-                 _countdownTimer?.cancel(); // Si fue timeout y aun tiene vidas, igual reiniciamos todo
-                  _showRestartDialog("Tiempo agotado.");
-               } else {
-                 ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("$reason -1 Vida 💔"), backgroundColor: AppTheme.dangerRed, duration: const Duration(milliseconds: 1000)),
-                 );
-                 // Reiniciar tablero tras breve pausa
-                 Future.delayed(const Duration(seconds: 1), _startNewGame);
-               }
-          }
+          gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
+             if (!mounted) return;
+             
+             if (gameProvider.lives <= 0) {
+                _showGameOverDialog("Te has quedado sin vidas.");
+             } else {
+                _showRestartDialog(reason);
+             }
+          });
       }
   }
 
@@ -290,28 +321,23 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                 ),
             ),
              
-             // Lives
-             Consumer<PlayerProvider>(
-                builder: (context, playerProvider, _) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 15),
-                  child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(3, (index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(
-                            index < (playerProvider.currentPlayer?.lives ?? 0) ? Icons.favorite : Icons.favorite_border,
-                            color: AppTheme.dangerRed,
-                            shadows: [if (index < (playerProvider.currentPlayer?.lives ?? 0)) const Shadow(color: AppTheme.dangerRed, blurRadius: 10)],
-                            size: 28,
-                        ),
-                      );
-                      }),
-                  ),
-                );
-                },
-            ),
+             // Intentos Locales (Visualización con Icons)
+             Padding(
+               padding: const EdgeInsets.only(bottom: 15),
+               child: Row(
+                   mainAxisAlignment: MainAxisAlignment.center,
+                   children: List.generate(3, (index) {
+                   return Padding(
+                     padding: const EdgeInsets.symmetric(horizontal: 4),
+                     child: Icon(
+                         index < _crashAllowance ? Icons.flash_on : Icons.flash_off,
+                         color: index < _crashAllowance ? AppTheme.accentGold : Colors.grey,
+                         size: 28,
+                     ),
+                   );
+                   }),
+               ),
+             ),
             
             const Text("Desliza para moverte 👆👇👈👉", style: TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.2)),
             const SizedBox(height: 10),
@@ -331,7 +357,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                         child: Container(
                             margin: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                                color: const Color(0xFF1E1E1E), // Fondo gris muy oscuro
+                                color: const Color(0xFF1E1E1E),
                                 border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.5), width: 2),
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
@@ -345,13 +371,11 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                         final cellSize = constraints.maxWidth / cols;
                                         return Stack(
                                             children: [
-                                                // Grid Background Pattern
                                                 CustomPaint(
                                                   size: Size(constraints.maxWidth, constraints.maxHeight),
                                                   painter: GridPainter(rows, cols, Colors.white.withOpacity(0.03)),
                                                 ),
                                                 
-                                                // Food
                                                 if (_food != null)
                                                     Positioned(
                                                         left: _food!.x * cellSize,
@@ -360,22 +384,10 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                                             width: cellSize,
                                                             height: cellSize,
                                                             alignment: Alignment.center,
-                                                            child: Container(
-                                                              decoration: BoxDecoration(
-                                                                shape: BoxShape.circle,
-                                                                boxShadow: [
-                                                                  BoxShadow(color: Colors.red.withOpacity(0.6), blurRadius: 10, spreadRadius: 2)
-                                                                ]
-                                                              ),
-                                                              child: Text(
-                                                                "🍎", 
-                                                                style: TextStyle(fontSize: cellSize * 0.8),
-                                                              ),
-                                                            ),
+                                                            child: Text("🍎", style: TextStyle(fontSize: cellSize * 0.8)),
                                                         ),
                                                     ),
                                                 
-                                                // Snake
                                                 ..._snake.asMap().entries.map((entry) {
                                                     final index = entry.key;
                                                     final part = entry.value;
@@ -391,10 +403,6 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                                             decoration: BoxDecoration(
                                                                 color: isHead ? AppTheme.successGreen : Colors.greenAccent[400],
                                                                 borderRadius: BorderRadius.circular(isHead ? 6 : 4),
-                                                                gradient: isHead ? const LinearGradient(colors: [Colors.greenAccent, Colors.green]) : null,
-                                                                boxShadow: isHead ? [
-                                                                  BoxShadow(color: Colors.greenAccent.withOpacity(0.4), blurRadius: 8)
-                                                                ] : null
                                                             ),
                                                             child: isHead ? _buildHeadEyes() : null,
                                                         ),
@@ -414,7 +422,6 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   }
 
   Widget _buildHeadEyes() {
-     // Rotar ojos según dirección
      int quarterTurns = 0;
      switch(_direction) {
        case Direction.up: quarterTurns = 0; break;

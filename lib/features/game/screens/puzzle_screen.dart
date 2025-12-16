@@ -5,7 +5,6 @@ import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/clue.dart';
 import '../widgets/race_track_widget.dart';
-import 'riddle_screen.dart';
 
 // --- Imports de Minijuegos Existentes ---
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
@@ -111,16 +110,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver
   Widget build(BuildContext context) {
     // Pasamos _finishLegally a TODOS los hijos para que avisen antes de cerrar o ganar
     switch (widget.clue.puzzleType) {
-      // --- JUEGOS CLÁSICOS ---
-      case PuzzleType.codeBreaker:
-        return CodeBreakerWidget(clue: widget.clue, onFinish: _finishLegally);
-      case PuzzleType.imageTrivia:
-        return ImageTriviaWidget(clue: widget.clue, onFinish: _finishLegally);
-      case PuzzleType.wordScramble:
-        return WordScrambleWidget(clue: widget.clue, onFinish: _finishLegally);
-      case PuzzleType.riddle:
-        // Asumiendo que RiddleScreen puede aceptar onFinish, si no, habría que adaptarlo similar a los otros
-        return RiddleScreen(clue: widget.clue, onFinish: _finishLegally);
+
       case PuzzleType.slidingPuzzle:
         return SlidingPuzzleWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.ticTacToe:

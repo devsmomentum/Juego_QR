@@ -10,7 +10,8 @@ import '../../providers/game_provider.dart';
 // --- WRAPPER ---
 class FindDifferenceWrapper extends StatelessWidget {
   final Clue clue;
-  const FindDifferenceWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const FindDifferenceWrapper({super.key, required this.clue, required this.onFinish});
 
   @override
   Widget build(BuildContext context) {
@@ -18,10 +19,7 @@ class FindDifferenceWrapper extends StatelessWidget {
       clue: clue,
       onSuccess: () {
         Provider.of<GameProvider>(context, listen: false).completeCurrentClue("WIN", clueId: clue.id);
-        Navigator.pop(context);
-      },
-      onFailure: () {
-        // Opcional: Manejar fallo si es necesario fuera del widget
+        onFinish(); // Notificar salida legal
       },
     );
   }
@@ -32,13 +30,11 @@ class FindDifferenceWrapper extends StatelessWidget {
 class FindDifferenceMinigame extends StatefulWidget {
   final Clue clue;
   final VoidCallback onSuccess;
-  final VoidCallback? onFailure;
 
   const FindDifferenceMinigame({
     super.key,
     required this.clue,
     required this.onSuccess,
-    this.onFailure,
   });
 
   @override
@@ -59,10 +55,11 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
   // Distractores (comunes a ambas imágenes)
   late List<_DistractorItem> _distractors;
   
-  // Timer & Vidas
+  // Timer & Intentos Locales
   Timer? _timer;
   int _secondsRemaining = 60;
   bool _isGameOver = false;
+  int _localAttempts = 3; // Intentos dentro del nivel antes de perder vida real
 
   @override
   void initState() {
@@ -80,16 +77,11 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     setState(() {
       _secondsRemaining = 60;
       _isGameOver = false;
+      _localAttempts = 3; // Reiniciar intentos locales
       
       // 1. Definir objetivo
       _targetIcon = _getRandomIcon();
-      _targetColor = AppTheme.accentGold; // El objetivo siempre destaca o tiene color específico? 
-      // El usuario dijo "que en las dos imagenes tenga los mismos iconos y en una imagen este el icono que buscamos"
-      // Vamos a hacerlo un color distinto pero sutil, o el mismo color que el resto para que sea difícil?
-      // "Find the difference" suele ser visual. Hagámoslo del color de los distractores para que sea reto visual por forma,
-      // O un color especial si el usuario quiere buscar ESE icono específico.
-      // Asumiremos color brillante para que coincida con "el icono que buscamos" mostrado en UI.
-      
+      _targetColor = AppTheme.accentGold; 
       _targetInTopImage = _random.nextBool(); // Aleatorio en cuál aparece
 
       // 2. Generar posiciones
@@ -122,7 +114,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
         if (_secondsRemaining > 0) {
           _secondsRemaining--;
         } else {
-          _handleGameOver("¡Se acabó el tiempo!");
+          _handleGameOver("¡Se acabó el tiempo!", timeOut: true);
         }
       });
     });
@@ -131,13 +123,8 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
   void _handleTap(bool isTopImage, TapUpDetails details, BoxConstraints constraints) {
     if (_isGameOver) return;
 
-    // Verificar si tocó cerca del objetivo
-    // Solo es válido si tocó en la imagen CORRECTA (donde está el objetivo)
+    // Verificar si tocó en la imagen correcta (donde está el objetivo)
     if (isTopImage != _targetInTopImage) {
-        // Tocó la imagen donde NO está el objetivo (o sea, es un falso positivo si buscamos el extra)
-        // El usuario dijo: "en una imagen este el icono que buscamos". 
-        // Si el usuario toca donde DEBERIA estar pero no está, es error?
-        // Asumamos que el usuario debe tocar EL ICONO.
         _handleMistake();
         return;
     }
@@ -164,51 +151,107 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
   }
 
   void _handleMistake() {
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    playerProvider.loseLife();
+    setState(() {
+      _localAttempts--;
+    });
 
-    if (playerProvider.currentPlayer != null && playerProvider.currentPlayer!.lives <= 0) {
-      _handleGameOver("¡Te quedaste sin vidas!");
+    if (_localAttempts <= 0) {
+      // Agotó intentos locales -> Pierde vida GLOBAL
+      _loseGlobalLife("¡Agotaste tus intentos!");
     } else {
+      // Solo feedback visual local
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("¡Ups! Ese no es.", style: TextStyle(color: Colors.white)),
-          backgroundColor: AppTheme.dangerRed,
-          duration: Duration(milliseconds: 500),
+        SnackBar(
+          content: Text("¡Ups! Ese no es. Te quedan $_localAttempts intentos."),
+          backgroundColor: AppTheme.warningOrange,
+          duration: const Duration(milliseconds: 800),
         ),
       );
     }
   }
 
-  void _handleGameOver(String reason) {
+  // Lógica centralizada para perder vida real en Supabase
+  void _loseGlobalLife(String reason, {bool timeOut = false}) {
+    _timer?.cancel();
+    setState(() => _isGameOver = true);
+
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    if (playerProvider.currentPlayer != null) {
+       gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
+          if (!mounted) return;
+          
+          if (gameProvider.lives <= 0) {
+             _handleGameOver("¡Te has quedado sin vidas globales!");
+          } else {
+             _showTryAgainDialog(reason); 
+          }
+       });
+    }
+  }
+
+  void _handleGameOver(String reason, {bool timeOut = false}) {
     _timer?.cancel();
     setState(() => _isGameOver = true);
     
+    // Si fue por tiempo, también debe restar vida global
+    if (timeOut) {
+       _loseGlobalLife(reason);
+       return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
+        content: Text(reason, style: const TextStyle(color: Colors.white)),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+               Navigator.pop(context); // Dialog
+               Navigator.pop(context); // Screen
+            },
+            child: const Text("Salir"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showTryAgainDialog(String reason) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
         title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Text(reason, style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(reason, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Cerrar dialog
-              Navigator.pop(context); // Salir minijuego
-            },
-            child: const Text("Salir"),
-          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold),
             onPressed: () {
-              Navigator.pop(context); // Cerrar dialog
-              // Reiniciar vidas si es necesario manualmente o confiar en el provider
-              Provider.of<PlayerProvider>(context, listen: false).resetLives(); 
+              Navigator.pop(context); 
               _startNewLevel();
             },
             child: const Text("Reintentar", style: TextStyle(color: Colors.black)),
-          )
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Dialog
+              Navigator.pop(context); // Screen
+            },
+            child: const Text("Salir"),
+          ),
         ],
       ),
     );
@@ -277,15 +320,13 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                 ),
               ),
 
-              // Vidas
-              Consumer<PlayerProvider>(
-                builder: (context, player, _) => Row(
-                  children: List.generate(3, (index) => Icon(
-                    index < (player.currentPlayer?.lives ?? 0) ? Icons.favorite : Icons.favorite_border,
-                    color: AppTheme.dangerRed,
-                    size: 18,
-                  )),
-                ),
+              // Intentos Locales (Visual)
+              Row(
+                children: List.generate(3, (index) => Icon(
+                  index < _localAttempts ? Icons.favorite : Icons.favorite_border,
+                  color: _localAttempts <= 1 ? AppTheme.dangerRed : AppTheme.secondaryPink,
+                  size: 18,
+                )),
               ),
             ],
           ),
@@ -295,7 +336,6 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Dividimos el espacio en 2
               return Column(
                 children: [
                   // IMAGEN 1 (ARRIBA)
@@ -336,9 +376,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
   Widget _buildGamePanel({required BuildContext context, required bool isTop, required bool showTarget}) {
     return Container(
       width: double.infinity,
-      color: isTop ? const Color(0xFF1A1A2E) : const Color(0xFF16213E), // Ligeramente distintos fondos para diferenciar? O idénticos?
-      // Mejor idénticos para que sea "encuentra diferencia" real.
-      // color: const Color(0xFF1E1E1E), 
+      color: const Color(0xFF1E1E1E), 
       child: LayoutBuilder(
         builder: (context, constraints) {
           return GestureDetector(
@@ -346,7 +384,6 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                 // Fondo estático o patrón (opcional)
                  Positioned.fill(child: Container(color: const Color(0xFF1E1E1E))),
 
                  // 1. Distractores (Idénticos en ambos paneles)
@@ -368,28 +405,14 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                    Positioned(
                      left: _targetPosition.dx * constraints.maxWidth,
                      top: _targetPosition.dy * constraints.maxHeight,
-                     child: TweenAnimationBuilder(
-                       tween: Tween<double>(begin: 0.8, end: 1.2),
-                       duration: const Duration(milliseconds: 1000),
-                       builder: (context, val, child) {
-                          return Transform.scale(
-                            scale: val, // Sutil palpito? No, mejor estático si es difícil.
-                            // Si lo hacemos muy obvio es fácil. 
-                            // El original "Find Object" era difícil.
-                            // Hagámoslo estático pero con el color del objetivo.
-                            // scale: 1.0, 
-                            child: Icon(
-                              _targetIcon,
-                              color: _targetColor,
-                              size: 32, // Un poco más grande o igual?
-                            ),
-                          );
-                       },
-                       onEnd: () {}, // Loop animation manually if needed
-                     ),
+                     child: Icon(
+                        _targetIcon,
+                        color: _targetColor,
+                        size: 32,
+                      ),
                    ),
                    
-                 // Indicador visual de qué panel es (opcional)
+                 // Indicador visual de qué panel es
                  Positioned(
                    top: 8,
                    left: 8,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
+import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class MinesweeperMinigame extends StatefulWidget {
@@ -36,6 +37,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
   
   // Stats
   int _flagsAvailable = totalMines;
+  int _shields = 3; // Intentos Locales (Escudos)
 
   @override
   void initState() {
@@ -52,21 +54,23 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
       if (_secondsRemaining > 0) {
         setState(() => _secondsRemaining--);
       } else {
         _timer?.cancel();
-        _loseLife("¡Tiempo agotado!", timeOut: true);
+        _loseGlobalLife("¡Tiempo agotado!", timeOut: true);
       }
     });
   }
 
   void _startNewGame() {
     _timer?.cancel();
-    _secondsRemaining = 120; // reset
+    _secondsRemaining = 120;
     _isGameOver = false;
     _isFirstMove = true;
     _flagsAvailable = totalMines;
+    _shields = 3; // Reiniciar escudos
     
     // Generar grid vacío
     _grid = List.generate(rows, (r) => List.generate(cols, (c) => Cell(row: r, col: c)));
@@ -171,14 +175,30 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
   void _triggerMine(int r, int c) {
       setState(() {
           _grid[r][c].isExploded = true;
-          // Revelar todas las minas
-          for(var row in _grid) {
-              for(var cell in row) {
-                  if (cell.isMine) cell.isRevealed = true;
-              }
-          }
+          _grid[r][c].isRevealed = true; // Solo revelar esa mina
+          _shields--; // Restar escudo
       });
-      _loseLife("¡BOOM! Has pisado una mina 💣");
+
+      if (_shields <= 0) {
+          // Game Over Real: Revelar todo
+          setState(() {
+            for(var row in _grid) {
+                for(var cell in row) {
+                    if (cell.isMine) cell.isRevealed = true;
+                }
+            }
+          });
+          _loseGlobalLife("¡BOOM! Te quedaste sin escudos.");
+      } else {
+          // Feedback de escudo roto
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("¡Mina detonada! Escudos restantes: $_shields"),
+              backgroundColor: AppTheme.dangerRed,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+      }
   }
 
   void _checkWin() {
@@ -199,21 +219,26 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
       }
   }
 
-  void _loseLife(String reason, {bool timeOut = false}) {
+  void _loseGlobalLife(String reason, {bool timeOut = false}) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
     if (playerProvider.currentPlayer != null) {
-      playerProvider.currentPlayer!.lives--;
-      playerProvider.notifyListeners();
-
-      if (playerProvider.currentPlayer!.lives <= 0) {
-        _timer?.cancel();
-        _showGameOverDialog("Te has quedado sin vidas.");
-      } else {
-        // Delay para ver la explosión antes de reiniciar
-        Future.delayed(const Duration(seconds: 2), () {
-            _showRestartDialog(reason);
-        });
-      }
+      // Llamamos a loseLife para restar la vida en el backend
+      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
+         if (!mounted) return;
+         
+         // Si se quedó sin vidas globales -> Game Over Definitivo
+         if (gameProvider.lives <= 0) {
+            _timer?.cancel();
+            _showGameOverDialog("Te has quedado sin vidas globales.");
+         } else {
+            // Si le quedan vidas, reiniciamos el nivel tras una pausa
+            Future.delayed(const Duration(seconds: 2), () {
+                _showRestartDialog(reason);
+            });
+         }
+      });
     }
   }
 
@@ -224,7 +249,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
         title: Text(title, style: const TextStyle(color: AppTheme.dangerRed)),
-        content: const Text("Inténtalo de nuevo. Se generará un nuevo campo.", style: TextStyle(color: Colors.white)),
+        content: const Text("Has perdido 1 vida. Inténtalo de nuevo. Se generará un nuevo campo.", style: TextStyle(color: Colors.white)),
         actions: [
            TextButton(
             onPressed: () {
@@ -289,6 +314,23 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
                     ],
                  ),
                ),
+               
+               // ESCUDOS (Nuevo)
+               Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                 decoration: BoxDecoration(
+                   color: Colors.black54,
+                   borderRadius: BorderRadius.circular(8),
+                   border: Border.all(color: Colors.blueAccent),
+                 ),
+                 child: Row(
+                    children: [
+                      const Icon(Icons.shield, color: Colors.blueAccent, size: 20),
+                      const SizedBox(width: 8),
+                      Text("$_shields", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                    ],
+                 ),
+               ),
                 
                // Timer
                Container(
@@ -309,7 +351,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
           ),
         ),
         
-        // Lives
+        // Vidas Globales (Solo visualización)
         Consumer<PlayerProvider>(
             builder: (context, playerProvider, _) {
             return Padding(
@@ -328,7 +370,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
             },
         ),
 
-        const Text("Toca para abrir. Mantén para marcar bandera 🚩", style: TextStyle(color: Colors.white54, fontSize: 12)),
+        const Text("Toca para abrir. Mantén para marcar 🚩", style: TextStyle(color: Colors.white54, fontSize: 12)),
         const SizedBox(height: 10),
 
         // GRID
@@ -365,10 +407,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
           ),
         ),
         
-        Padding(
-          padding: const EdgeInsets.only(bottom: 20, top: 10),
-          // Botón eliminado a petición del usuario
-        ),
+        const SizedBox(height: 20),
       ],
     );
   }

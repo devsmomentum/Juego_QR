@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum ClueType {
   qrScan,
   geolocation,
@@ -41,8 +43,9 @@ class Clue {
     this.isLocked = true,
     this.riddleQuestion,
     this.riddleAnswer,
-    this.puzzleType = PuzzleType.riddle, // Por defecto es acertijo
+    this.puzzleType = PuzzleType.slidingPuzzle, // Valor por defecto para evitar error de inicialización
   });
+  
 
   Clue copyWith({
     String? id,
@@ -139,41 +142,31 @@ class Clue {
       puzzleType: json['puzzle_type'] != null 
         ? PuzzleType.values.firstWhere(
             (e) => e.toString().split('.').last == json['puzzle_type'],
-            orElse: () => PuzzleType.riddle,
+            orElse: () => PuzzleType.slidingPuzzle, // Fallback seguro
           )
-        : PuzzleType.riddle,
+        : PuzzleType.slidingPuzzle, // Fallback seguro
     );
   }
 }
-// ... imports
 
 enum PuzzleType {
-  riddle,       
-  codeBreaker,  
-  imageTrivia,  
-  wordScramble, 
   slidingPuzzle, 
   ticTacToe, 
   hangman,
-  tetris,         // NUEVO
-  findDifference, // NUEVO
-  flags,          // NUEVO
-  minesweeper,    // NUEVO
-  snake,          // NUEVO
-  blockFill;      // NUEVO
+  tetris,         
+  findDifference, 
+  flags,          
+  minesweeper,    
+  snake,          
+  blockFill;      
 
   String get dbValue => toString().split('.').last;
 
   String get label {
     switch (this) {
-      case PuzzleType.riddle: return '❓ Acertijo de Texto';
       case PuzzleType.ticTacToe: return '❌⭕ La Vieja (Tic Tac Toe)';
       case PuzzleType.hangman: return '🔤 El Ahorcado';
       case PuzzleType.slidingPuzzle: return '🧩 Rompecabezas (Sliding)';
-      case PuzzleType.codeBreaker: return '🔢 Descifrar Código';
-      case PuzzleType.imageTrivia: return '🖼️ Trivia de Imagen';
-      case PuzzleType.wordScramble: return '🔠 Ordenar Palabras';
-      // --- NUEVOS ---
       case PuzzleType.tetris: return '🧱 Tetris';
       case PuzzleType.findDifference: return '🔎 Encuentra la Diferencia';
       case PuzzleType.flags: return '🏳️ Banderas (Quiz)';
@@ -186,7 +179,7 @@ enum PuzzleType {
   bool get isAutoValidation {
     switch (this) {
       case PuzzleType.ticTacToe:
-      case PuzzleType.slidingPuzzle:      // Todos estos validan la victoria internamente
+      case PuzzleType.slidingPuzzle:      
       case PuzzleType.tetris:
       case PuzzleType.findDifference:
       case PuzzleType.flags:
@@ -204,14 +197,13 @@ enum PuzzleType {
       case PuzzleType.ticTacToe: return 'Gana una partida contra la IA';
       case PuzzleType.slidingPuzzle: return 'Ordena la imagen correctamente';
       case PuzzleType.hangman: return 'Pista sobre la palabra...';
-      // --- NUEVOS ---
       case PuzzleType.tetris: return 'Alcanza el puntaje objetivo';
       case PuzzleType.findDifference: return 'Encuentra el icono diferente';
       case PuzzleType.flags: return 'Adivina 5 banderas correctamente';
       case PuzzleType.minesweeper: return 'Descubre todas las casillas seguras';
       case PuzzleType.snake: return 'Come 15 manzanas sin chocar';
       case PuzzleType.blockFill: return 'Rellena todo el camino';
-      default: return '';
+      
     }
   }
 }
