@@ -11,6 +11,7 @@ import 'geolocation_screen.dart';
 import '../../mall/screens/shop_screen.dart';
 import 'puzzle_screen.dart';
 import '../../game/models/clue.dart'; // Import para usar tipo Clue
+import 'clue_finder_screen.dart'; // Import nuevo
 
 class CluesScreen extends StatefulWidget {
   // 1. Recibimos el ID del evento obligatorio
@@ -251,14 +252,23 @@ class _CluesScreenState extends State<CluesScreen> {
 
                                 // C. Si es la pista ACTUAL (La misión activa)
                                 if (isCurrent) {
-                                  // Verificamos si ya fue escaneada en esta sesión OR si está bloqueada visualmente
-                                  // OJO: Si NO está en _scannedClues, pedimos QR.
+                                  // 1. Verificamos si ya fue escaneada/encontrada
                                   if (!_scannedClues.contains(clue.id)) {
-                                    // NO escaneada -> Pedir QR
-                                    _showUnlockClueDialog(context, clue);
+                                    // 2. Si NO fue encontrada -> Ir a pantalla de Frio/Caliente
+                                    final bool? success = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ClueFinderScreen(clue: clue),
+                                      ),
+                                    );
+                                    
+                                    // 3. Si regresó con éxito (Encontró y Escaneó)
+                                    if (success == true) {
+                                       _unlockAndProceed(clue);
+                                    }
                                     return; 
                                   } else {
-                                    // YA escaneada -> Jugar
+                                    // 4. YA escaneada -> Jugar
                                     _handleClueAction(context, clue.id, clue.type.toString().split('.').last);
                                   }
                                 }

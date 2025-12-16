@@ -222,41 +222,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
     // Only show input if close enough (e.g., < 20 meters)
     final bool showInput = _distanceToTarget <= 20;
     
-    // --- VALIDACION "EVENTO FUTURO" ---
-    // Si el usuario está cerca (<20m) PERO el evento es futuro: mostrar WaitingScreen.
-    // MODIFICADO: Si _forceStart es true (debug), saltamos esta validación.
-    if (showInput && widget.scenario.date != null && !_forceStart) {
-      final now = DateTime.now(); // Local
-      if (widget.scenario.date!.toLocal().isAfter(now)) {
-        // Construir evento mínimo
-        final dummyEvent = GameEvent(
-             id: widget.scenario.id,
-             title: widget.scenario.name,
-             description: widget.scenario.description,
-             locationName: widget.scenario.location,
-             latitude: widget.scenario.latitude ?? 0,
-             longitude: widget.scenario.longitude ?? 0,
-             date: widget.scenario.date!,
-             clue: widget.scenario.starterClue,
-             imageUrl: widget.scenario.imageUrl,
-             maxParticipants: widget.scenario.maxPlayers,
-             pin: widget.scenario.secretCode,
-             createdByAdminId: '',
-        );
 
-        return EventWaitingScreen(
-          event: dummyEvent,
-          onTimerFinished: () {
-            // Al terminar, forzamos inicio y rebuild
-            if (mounted) {
-              setState(() {
-                _forceStart = true;
-              });
-            }
-          },
-        );
-      }
-    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
