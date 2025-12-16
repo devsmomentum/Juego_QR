@@ -43,10 +43,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
   late String _description;
   late String _locationName;
 
-  void _showQRDialog(String data, String title, String label) {
+  void _showQRDialog(String data, String title, String label, {String? hint}) {
     showDialog(
       context: context,
-      builder: (_) => QRDisplayDialog(data: data, title: title, label: label),
+      builder: (_) => QRDisplayDialog(data: data, title: title, label: label, hint: hint),
     );
   }
   late double _latitude;
@@ -422,7 +422,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                       tooltip: "Ver QR",
                       onPressed: () {
                          final qrData = "CLUE:${widget.event.id}:${clue.id}";
-                         _showQRDialog(qrData, clue.title, "Pista: ${clue.puzzleType.label}");
+                         _showQRDialog(qrData, clue.title, "Pista: ${clue.puzzleType.label}", hint: clue.hint);
                       },
                     ),
                     IconButton(
@@ -440,13 +440,20 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
   }
 
   void _showEditClueDialog(Clue clue) {
-    String title = clue.title;
-    String description = clue.description;
-    String question = clue.riddleQuestion ?? '';
-    String answer = clue.riddleAnswer ?? '';
+    // Controllers for persistent state
+    final titleController = TextEditingController(text: clue.title);
+    final descriptionController = TextEditingController(text: clue.description);
+    final questionController = TextEditingController(text: clue.riddleQuestion ?? '');
+    final answerController = TextEditingController(text: clue.riddleAnswer ?? '');
+    final xpController = TextEditingController(text: clue.xpReward.toString());
+    final coinController = TextEditingController(text: clue.coinReward.toString());
+    final hintController = TextEditingController(text: clue.hint);
+    final latController = TextEditingController(text: clue.latitude?.toString() ?? '');
+    final longController = TextEditingController(text: clue.longitude?.toString() ?? '');
+
     PuzzleType selectedType = clue.puzzleType;
-    int xp = clue.xpReward;
-    String hint = clue.hint;
+    
+    // We still need these as variables to handle logic, but data comes from controllers
     double? latitude = clue.latitude;
     double? longitude = clue.longitude;
 
@@ -481,69 +488,68 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                          setStateDialog(() {
                            selectedType = val;
                            // Set default question if switching types
-                           if (question.isEmpty) question = val.defaultQuestion;
+                           if (questionController.text.isEmpty) {
+                             questionController.text = val.defaultQuestion;
+                           }
                          });
                       }
                     },
                   ),
                   const SizedBox(height: 16),
-                  const SizedBox(height: 16),
                   TextFormField(
-                    initialValue: title,
+                    controller: titleController,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Título'),
-                    onChanged: (v) => title = v,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: question,
+                    controller: descriptionController,
+                    maxLines: 2,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _buildInputDecoration('Descripción / Historia'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: questionController,
                     maxLines: 2,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Pregunta / Instrucción'),
-                    onChanged: (v) => question = v,
                   ),
                   const SizedBox(height: 10),
                   if (!selectedType.isAutoValidation)
                     TextFormField(
-                      initialValue: answer,
+                      controller: answerController,
                       style: const TextStyle(color: Colors.white),
                       decoration: _buildInputDecoration('Respuesta Correcta'),
-                      onChanged: (v) => answer = v,
                     ),
                   const SizedBox(height: 10),
-                  const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: xp.toString(),
+                    controller: xpController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Puntos XP'),
-                    onChanged: (v) => xp = int.tryParse(v) ?? 50,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: clue.coinReward.toString(),
+                    controller: coinController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Monedas'),
-                    onChanged: (v) => clue = clue.copyWith(coinReward: int.tryParse(v) ?? 10),
                   ),
                   const SizedBox(height: 20),
                   const Text("📍 Geolocalización (Opcional)", style: TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
-                  const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: hint,
+                    controller: hintController,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Pista de Ubicación QR (ej: Detrás del árbol)', icon: Icons.location_on),
-                    onChanged: (v) => hint = v,
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
-                          key: Key('lat_$latitude'), // Force rebuild on change
-                          initialValue: latitude?.toString() ?? '',
+                          controller: latController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(color: Colors.white),
                           decoration: _buildInputDecoration('Latitud'),
@@ -553,8 +559,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextFormField(
-                           key: Key('long_$longitude'),
-                          initialValue: longitude?.toString() ?? '',
+                          controller: longController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(color: Colors.white),
                           decoration: _buildInputDecoration('Longitud'),
@@ -574,6 +579,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                            setStateDialog(() {
                              latitude = widget.event.latitude;
                              longitude = widget.event.longitude;
+                             latController.text = latitude.toString();
+                             longController.text = longitude.toString();
                            });
                         },
                       ),
@@ -595,6 +602,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                              setStateDialog(() {
                                latitude = position.latitude;
                                longitude = position.longitude;
+                               latController.text = latitude.toString();
+                               longController.text = longitude.toString();
                              });
                            } catch(e) {
                              if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -631,6 +640,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                           await Provider.of<EventProvider>(ctx, listen: false).deleteClue(clue.id);
                           if (mounted) {
                             Navigator.pop(ctx); // Close edit dialog
+                             setState(() {}); // Force refresh
                             ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Pista eliminada')));
                           }
                         } catch (e) {
@@ -656,19 +666,19 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                 // Create updated clue object
                 final updatedClue = Clue(
                   id: clue.id,
-                  title: title,
-                  description: description, // Keep original or add field if needed
-                  hint: hint, // Updated value
+                  title: titleController.text,
+                  description: descriptionController.text, // Keep original or add field if needed
+                  hint: hintController.text, // Updated value
                   type: clue.type,
                   latitude: latitude, // Updated value
                   longitude: longitude, // Updated value
                   qrCode: clue.qrCode,
                   minigameUrl: clue.minigameUrl,
-                  xpReward: xp,
-                  coinReward: clue.coinReward,
+                  xpReward: int.tryParse(xpController.text) ?? 50,
+                  coinReward: int.tryParse(coinController.text) ?? 10,
                   puzzleType: selectedType,
-                  riddleQuestion: question,
-                  riddleAnswer: answer,
+                  riddleQuestion: questionController.text,
+                  riddleAnswer: answerController.text,
                   isLocked: clue.isLocked,
                   isCompleted: clue.isCompleted
                 );
@@ -693,16 +703,19 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
 
 
   void _showAddClueDialog() {
-    // Default values for new clue
-    String title = '';
-    String description = '';
-    String question = '';
-    String answer = '';
-    PuzzleType selectedType = PuzzleType.riddle;
-    int xp = 50;
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final questionController = TextEditingController();
+    final answerController = TextEditingController();
+    final xpController = TextEditingController(text: '50');
+    final coinController = TextEditingController(text: '10');
+    final hintController = TextEditingController();
+    final latController = TextEditingController();
+    final longController = TextEditingController();
 
-    int coins = 10;
-    String hint = '';
+    PuzzleType selectedType = PuzzleType.riddle;
+    questionController.text = PuzzleType.riddle.defaultQuestion;
+
     double? latitude;
     double? longitude;
 
@@ -720,24 +733,22 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                    DropdownButtonFormField<PuzzleType>(
                     value: selectedType,
                     dropdownColor: AppTheme.darkBg,
-                    isExpanded: true, // Fix overflow
+                    isExpanded: true, 
                     decoration: _buildInputDecoration('Tipo de Minijuego', icon: Icons.games),
                     style: const TextStyle(color: Colors.white),
                     items: PuzzleType.values.map((type) {
                       return DropdownMenuItem(
                         value: type,
-                        child: Text(
-                          type.label,
-                          overflow: TextOverflow.ellipsis, // Fix overflow text
-                        ),
+                        child: Text(type.label, overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: (val) {
                       if (val != null) {
                          setStateDialog(() {
                            selectedType = val;
-                           // Set default question
-                           if (question.isEmpty) question = val.defaultQuestion;
+                           if (questionController.text.isEmpty) {
+                             questionController.text = val.defaultQuestion;
+                           }
                          });
                       }
                     },
@@ -745,63 +756,58 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                   const SizedBox(height: 16),
                   const SizedBox(height: 16),
                   TextFormField(
+                    controller: titleController,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Título'),
-                    onChanged: (v) => title = v,
                   ),
                   const SizedBox(height: 10),
                    TextFormField(
+                    controller: descriptionController,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Descripción / Historia'),
-                    onChanged: (v) => description = v,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: question,
+                    controller: questionController,
                     maxLines: 2,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Pregunta / Instrucción'),
-                    onChanged: (v) => question = v,
                   ),
                   const SizedBox(height: 10),
                   if (!selectedType.isAutoValidation)
                     TextFormField(
+                      controller: answerController,
                       style: const TextStyle(color: Colors.white),
                       decoration: _buildInputDecoration('Respuesta Correcta'),
-                      onChanged: (v) => answer = v,
                     ),
                   const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: xp.toString(),
+                    controller: xpController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Puntos XP'),
-                    onChanged: (v) => xp = int.tryParse(v) ?? 50,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
-                    initialValue: coins.toString(),
+                    controller: coinController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Monedas'),
-                    onChanged: (v) => coins = int.tryParse(v) ?? 10,
                   ),
                   const SizedBox(height: 20),
                   const Text("📍 Geolocalización (Opcional)", style: TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
-                  const SizedBox(height: 10),
                   TextFormField(
+                    controller: hintController,
                     style: const TextStyle(color: Colors.white),
                     decoration: _buildInputDecoration('Pista de Ubicación QR (ej: Detrás del árbol)', icon: Icons.location_on),
-                    onChanged: (v) => hint = v,
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
-                          key: Key('lat_add_$latitude'), 
-                          initialValue: latitude?.toString() ?? '',
+                          controller: latController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(color: Colors.white),
                           decoration: _buildInputDecoration('Latitud'),
@@ -811,8 +817,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextFormField(
-                           key: Key('long_add_$longitude'),
-                          initialValue: longitude?.toString() ?? '',
+                          controller: longController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(color: Colors.white),
                           decoration: _buildInputDecoration('Longitud'),
@@ -832,6 +837,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                            setStateDialog(() {
                              latitude = widget.event.latitude;
                              longitude = widget.event.longitude;
+                             latController.text = latitude.toString();
+                             longController.text = longitude.toString();
                            });
                         },
                       ),
@@ -853,6 +860,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                              setStateDialog(() {
                                latitude = position.latitude;
                                longitude = position.longitude;
+                               latController.text = latitude.toString();
+                               longController.text = longitude.toString();
                              });
                            } catch(e) {
                              if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -875,7 +884,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
             onPressed: () async {
               try {
-                if (title.isEmpty) {
+                if (titleController.text.isEmpty) {
                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El título es requerido')));
                    return;
                 }
@@ -883,17 +892,17 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                 // Create new clue object
                 final newClue = Clue(
                   id: '', // Will be generated by DB
-                  title: title,
-                  description: description,
-                  hint: hint,
+                  title: titleController.text,
+                  description: descriptionController.text,
+                  hint: hintController.text,
                   type: ClueType.minigame, // Default to minigame
-                  xpReward: xp,
-                  coinReward: coins,
+                  xpReward: int.tryParse(xpController.text) ?? 50,
+                  coinReward: int.tryParse(coinController.text) ?? 10,
                   latitude: latitude,
                   longitude: longitude,
                   puzzleType: selectedType,
-                  riddleQuestion: question,
-                  riddleAnswer: answer,
+                  riddleQuestion: questionController.text,
+                  riddleAnswer: answerController.text,
                 );
 
                 await Provider.of<EventProvider>(context, listen: false).addClue(widget.event.id, newClue);

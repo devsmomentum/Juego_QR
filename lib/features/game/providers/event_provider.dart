@@ -215,7 +215,11 @@ class EventProvider with ChangeNotifier {
           .eq('event_id', eventId)
           .order('created_at', ascending: true);
 
-      print('✅ Found ${(response as List).length} clues raw data');
+      if (response != null && (response as List).isNotEmpty) {
+        print('📦 First clue RAW data: ${response[0]}');
+        print('❓ Hint in RAW data: "${response[0]['hint']}"');
+      }
+
       return (response as List).map((json) => Clue.fromJson(json)).toList();
     } catch (e) {
       print('❌ Error fetching clues for event: $e');
@@ -225,7 +229,9 @@ class EventProvider with ChangeNotifier {
 
   Future<void> updateClue(Clue clue) async {
     try {
-      await _supabase.from('clues').update({
+      print('📤 Updating Clue ID: ${clue.id} - Hint to save: "${clue.hint}"');
+      
+      final response = await _supabase.from('clues').update({
         'title': clue.title,
         'description': clue.description,
         'puzzle_type': clue.puzzleType.toString().split('.').last,
@@ -236,17 +242,21 @@ class EventProvider with ChangeNotifier {
         'latitude': clue.latitude,
         'longitude': clue.longitude,
         'hint': clue.hint,
-      }).eq('id', clue.id);
+      }).eq('id', clue.id).select();
+      
+      print('✅ Update Response: $response');
       
       notifyListeners();
     } catch (e) {
-      print('Error updating clue: $e');
+      print('❌ Error updating clue: $e');
       rethrow;
     }
   }
 
   Future<void> addClue(String eventId, Clue clue) async {
     try {
+      print('➕ Adding Clue - Hint to save: "${clue.hint}"');
+
       final maxOrderRes = await _supabase
           .from('clues')
           .select('sequence_index')
@@ -260,7 +270,7 @@ class EventProvider with ChangeNotifier {
         nextOrder = (maxOrderRes['sequence_index'] as int) + 1;
       }
 
-      await _supabase.from('clues').insert({
+      final response = await _supabase.from('clues').insert({
         'event_id': eventId,
         'title': clue.title,
         'description': clue.description,
@@ -274,11 +284,13 @@ class EventProvider with ChangeNotifier {
         'sequence_index': nextOrder,
         'latitude': clue.latitude,
         'longitude': clue.longitude,
-      });
+      }).select();
+      
+      print('✅ Add Response: $response');
       
       notifyListeners();
     } catch (e) {
-      print('Error adding clue: $e');
+      print('❌ Error adding clue: $e');
       rethrow;
     }
   }
