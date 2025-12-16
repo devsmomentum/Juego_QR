@@ -61,6 +61,7 @@ class ProgressHeader extends StatelessWidget {
                   ],
                 ),
               ),
+              // Coins
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -69,10 +70,34 @@ class ProgressHeader extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.monetization_on, size: 16, color: Colors.white),
+                    const Icon(Icons.monetization_on, size: 16, color: Colors.amber),
                     const SizedBox(width: 4),
                     Text(
                       '${player.coins}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(width: 8),
+
+              // Lives
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.favorite, size: 16, color: Colors.redAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${player.lives}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,

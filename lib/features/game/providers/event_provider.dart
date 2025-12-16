@@ -133,6 +133,34 @@ class EventProvider with ChangeNotifier {
   // Eliminar evento
   Future<void> deleteEvent(String eventId) async {
     try {
+      // 1. Buscar el evento localmente para obtener la URL de la imagen
+      final index = _events.indexWhere((e) => e.id == eventId);
+      if (index != -1) {
+        final event = _events[index];
+        
+        // 2. Intentar borrar imagen de Storage si existe
+        if (event.imageUrl.isNotEmpty) {
+          try {
+            // URL típica: .../storage/v1/object/public/events-images/events/timestamp.jpg
+            // Necesitamos extraer: events/timestamp.jpg
+            final uri = Uri.parse(event.imageUrl);
+            // La estructura del path suele incluir el bucket 'events-images'
+            // Buscamos el segmento después del bucket
+            final pathSegments = uri.pathSegments;
+            final bucketIndex = pathSegments.indexOf('events-images');
+            
+            if (bucketIndex != -1 && bucketIndex < pathSegments.length - 1) {
+              final filePath = pathSegments.sublist(bucketIndex + 1).join('/');
+              print('🗑️ Intetando borrar imagen: $filePath');
+              await _supabase.storage.from('events-images').remove([filePath]);
+            }
+          } catch (e) {
+            print('⚠️ Error eliminando imagen del storage (no bloqueante): $e');
+            // Continuamos con el borrado del registro aunque falle la imagen
+          }
+        }
+      }
+
       await _supabase.from('events').delete().eq('id', eventId);
       _events.removeWhere((e) => e.id == eventId);
       notifyListeners();
@@ -187,7 +215,11 @@ class EventProvider with ChangeNotifier {
           .eq('event_id', eventId)
           .order('created_at', ascending: true);
 
-      print('✅ Found ${(response as List).length} clues raw data');
+      if (response != null && (response as List).isNotEmpty) {
+        print('📦 First clue RAW data: ${response[0]}');
+        print('❓ Hint in RAW data: "${response[0]['hint']}"');
+      }
+
       return (response as List).map((json) => Clue.fromJson(json)).toList();
     } catch (e) {
       print('❌ Error fetching clues for event: $e');
@@ -197,7 +229,9 @@ class EventProvider with ChangeNotifier {
 
   Future<void> updateClue(Clue clue) async {
     try {
-      await _supabase.from('clues').update({
+      print('📤 Updating Clue ID: ${clue.id} - Hint to save: "${clue.hint}"');
+      
+      final response = await _supabase.from('clues').update({
         'title': clue.title,
         'description': clue.description,
         'puzzle_type': clue.puzzleType.toString().split('.').last,
@@ -208,17 +242,21 @@ class EventProvider with ChangeNotifier {
         'latitude': clue.latitude,
         'longitude': clue.longitude,
         'hint': clue.hint,
-      }).eq('id', clue.id);
+      }).eq('id', clue.id).select();
+      
+      print('✅ Update Response: $response');
       
       notifyListeners();
     } catch (e) {
-      print('Error updating clue: $e');
+      print('❌ Error updating clue: $e');
       rethrow;
     }
   }
 
   Future<void> addClue(String eventId, Clue clue) async {
     try {
+      print('➕ Adding Clue - Hint to save: "${clue.hint}"');
+
       final maxOrderRes = await _supabase
           .from('clues')
           .select('sequence_index')
@@ -232,7 +270,7 @@ class EventProvider with ChangeNotifier {
         nextOrder = (maxOrderRes['sequence_index'] as int) + 1;
       }
 
-      await _supabase.from('clues').insert({
+      final response = await _supabase.from('clues').insert({
         'event_id': eventId.trim(),
         'title': clue.title,
         'description': clue.description,
@@ -246,11 +284,13 @@ class EventProvider with ChangeNotifier {
         'sequence_index': nextOrder,
         'latitude': clue.latitude,
         'longitude': clue.longitude,
-      });
+      }).select();
+      
+      print('✅ Add Response: $response');
       
       notifyListeners();
     } catch (e) {
-      print('Error adding clue: $e');
+      print('❌ Error adding clue: $e');
       rethrow;
     }
   }
