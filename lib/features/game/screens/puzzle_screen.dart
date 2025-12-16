@@ -20,45 +20,89 @@ import '../widgets/minigames/minesweeper_minigame.dart';
 import '../widgets/minigames/snake_minigame.dart';
 import '../widgets/minigames/block_fill_minigame.dart';
 
-class PuzzleScreen extends StatelessWidget {
+// --- Import del Servicio de Penalización ---
+import '../services/penalty_service.dart';
+
+class PuzzleScreen extends StatefulWidget {
   final Clue clue;
 
   const PuzzleScreen({super.key, required this.clue});
 
   @override
+  State<PuzzleScreen> createState() => _PuzzleScreenState();
+}
+
+class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver {
+  final PenaltyService _penaltyService = PenaltyService();
+  bool _legalExit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Bandera arriba: El jugador está intentando jugar. 
+    // Si sale sin _finishLegally, el servicio sabrá que fue un abandono forzoso.
+    _penaltyService.attemptStartGame();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // LEAVER BUSTER: Si minimiza (paused) y no ha salido legalmente, lo sacamos.
+    // Esto previene trampas de salir al home del móvil para buscar respuestas.
+    if (state == AppLifecycleState.paused && !_legalExit) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Cierre forzoso = Penalización latente
+      }
+    }
+  }
+
+  // Helper para marcar salida legal (Ganar o Rendirse)
+  Future<void> _finishLegally() async {
+    _legalExit = true;
+    await _penaltyService.markGameFinishedLegally();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    switch (clue.puzzleType) {
+    // Pasamos _finishLegally a TODOS los hijos para que avisen antes de cerrar o ganar
+    switch (widget.clue.puzzleType) {
       // --- JUEGOS CLÁSICOS ---
       case PuzzleType.codeBreaker:
-        return CodeBreakerWidget(clue: clue);
+        return CodeBreakerWidget(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.imageTrivia:
-        return ImageTriviaWidget(clue: clue);
+        return ImageTriviaWidget(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.wordScramble:
-        return WordScrambleWidget(clue: clue);
+        return WordScrambleWidget(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.riddle:
-        return RiddleScreen(clue: clue);
+        // Asumiendo que RiddleScreen puede aceptar onFinish, si no, habría que adaptarlo similar a los otros
+        return RiddleScreen(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.slidingPuzzle:
-        return SlidingPuzzleWrapper(clue: clue);
+        return SlidingPuzzleWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.ticTacToe:
-        return TicTacToeWrapper(clue: clue);
+        return TicTacToeWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.hangman:
-        return HangmanWrapper(clue: clue);
+        return HangmanWrapper(clue: widget.clue, onFinish: _finishLegally);
       
       // --- JUEGOS NUEVOS ---
       case PuzzleType.tetris:
-        return TetrisWrapper(clue: clue);
+        return TetrisWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.findDifference:
-        // El archivo find_difference_minigame.dart ya incluye su propio Wrapper público
-        return FindDifferenceWrapper(clue: clue); 
+        // El wrapper existente debe modificarse para aceptar onFinish o envolverse aquí
+        return FindDifferenceWrapper(clue: widget.clue, onFinish: _finishLegally); 
       case PuzzleType.flags:
-        return FlagsWrapper(clue: clue);
+        return FlagsWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.minesweeper:
-        return MinesweeperWrapper(clue: clue);
+        return MinesweeperWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.snake:
-        return SnakeWrapper(clue: clue);
+        return SnakeWrapper(clue: widget.clue, onFinish: _finishLegally);
       case PuzzleType.blockFill:
-        return BlockFillWrapper(clue: clue);
-        
+        return BlockFillWrapper(clue: widget.clue, onFinish: _finishLegally);
     }
   }
 }
@@ -132,7 +176,8 @@ void showClueSelector(BuildContext context, Clue currentClue) {
   );
 }
 
-void showSkipDialog(BuildContext context) {
+/// Diálogo de rendición actualizado para manejar la salida legal
+void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -148,9 +193,18 @@ void showSkipDialog(BuildContext context) {
           child: const Text('Cancelar'),
         ),
         ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
+            // RENDICIÓN = SALIDA LEGAL (Aunque perdedora)
+            if (onLegalExit != null) {
+              onLegalExit();
+            }
+
             Navigator.pop(context); // Dialog
             Navigator.pop(context); // PuzzleScreen
+            
+            final gameProvider = Provider.of<GameProvider>(context, listen: false);
+            await gameProvider.skipCurrentClue(); // Lógica de saltar pista en Provider
+
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('No se desbloqueó la siguiente pista. Intenta resolver otro desafío.'),
@@ -167,11 +221,12 @@ void showSkipDialog(BuildContext context) {
   );
 }
 
-// --- WIDGETS INTEGRADOS ---
+// --- WIDGETS INTEGRADOS (Con soporte de onFinish) ---
 
 class CodeBreakerWidget extends StatefulWidget {
   final Clue clue;
-  const CodeBreakerWidget({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const CodeBreakerWidget({super.key, required this.clue, required this.onFinish});
 
   @override
   State<CodeBreakerWidget> createState() => _CodeBreakerWidgetState();
@@ -201,6 +256,8 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
   void _checkCode() {
     final expected = widget.clue.riddleAnswer?.trim() ?? "";
     if (_enteredCode == expected) {
+      // ÉXITO: LLAMAR CALLBACK LEGAL
+      widget.onFinish();
       _showSuccessDialog(context, widget.clue);
     } else {
       setState(() {
@@ -222,8 +279,8 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
     return _buildMinigameScaffold(
       context, 
       widget.clue,
+      widget.onFinish,
       SingleChildScrollView( 
-        // --- CORRECCIÓN AQUÍ: Se agregó EdgeInsets.symmetric ---
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           children: [
@@ -306,7 +363,8 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
 
 class ImageTriviaWidget extends StatefulWidget {
   final Clue clue;
-  const ImageTriviaWidget({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const ImageTriviaWidget({super.key, required this.clue, required this.onFinish});
   @override
   State<ImageTriviaWidget> createState() => _ImageTriviaWidgetState();
 }
@@ -319,6 +377,8 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
     final userAnswer = _controller.text.trim().toLowerCase();
     final correctAnswer = widget.clue.riddleAnswer?.trim().toLowerCase() ?? "";
     if (userAnswer == correctAnswer || (correctAnswer.isNotEmpty && userAnswer.contains(correctAnswer.split(' ').first))) {
+      // ÉXITO: LLAMAR CALLBACK LEGAL
+      widget.onFinish();
       _showSuccessDialog(context, widget.clue);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ Incorrecto'), backgroundColor: AppTheme.dangerRed));
@@ -330,6 +390,7 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
     return _buildMinigameScaffold(
       context,
       widget.clue,
+      widget.onFinish,
       SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -377,7 +438,8 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
 
 class WordScrambleWidget extends StatefulWidget {
   final Clue clue;
-  const WordScrambleWidget({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const WordScrambleWidget({super.key, required this.clue, required this.onFinish});
   @override
   State<WordScrambleWidget> createState() => _WordScrambleWidgetState();
 }
@@ -409,6 +471,8 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
 
   void _checkAnswer() {
     if (_currentWord == widget.clue.riddleAnswer?.toUpperCase()) {
+      // ÉXITO: LLAMAR CALLBACK LEGAL
+      widget.onFinish();
       _showSuccessDialog(context, widget.clue);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ Incorrecto'), backgroundColor: AppTheme.dangerRed));
@@ -419,7 +483,7 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
   @override
   Widget build(BuildContext context) {
     return _buildMinigameScaffold(
-      context, widget.clue,
+      context, widget.clue, widget.onFinish,
       SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -454,7 +518,7 @@ class _WordScrambleWidgetState extends State<WordScrambleWidget> {
   }
 }
 
-// --- LOGICA DE VICTORIA ---
+// --- LOGICA DE VICTORIA COMPARTIDA ---
 
 void _showSuccessDialog(BuildContext context, Clue clue) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -488,6 +552,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (success) {
       if (playerProvider.currentPlayer != null) {
+        
         await playerProvider.refreshProfile();
       }
   } else {
@@ -628,65 +693,157 @@ Widget _buildRewardBadge(IconData icon, String label, Color color) {
   );
 }
 
-// --- WRAPPERS ---
+// --- WRAPPERS ACTUALIZADOS CON ONFINISH ---
 
 class SlidingPuzzleWrapper extends StatelessWidget {
   final Clue clue;
-  const SlidingPuzzleWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const SlidingPuzzleWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, SlidingPuzzleMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue,
+    onFinish,
+    SlidingPuzzleMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class TicTacToeWrapper extends StatelessWidget {
   final Clue clue;
-  const TicTacToeWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const TicTacToeWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, TicTacToeMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    TicTacToeMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class HangmanWrapper extends StatelessWidget {
   final Clue clue;
-  const HangmanWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const HangmanWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, HangmanMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    HangmanMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class TetrisWrapper extends StatelessWidget {
   final Clue clue;
-  const TetrisWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const TetrisWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, TetrisMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    TetrisMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class FlagsWrapper extends StatelessWidget {
   final Clue clue;
-  const FlagsWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const FlagsWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, FlagsMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    FlagsMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class MinesweeperWrapper extends StatelessWidget {
   final Clue clue;
-  const MinesweeperWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const MinesweeperWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, MinesweeperMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    MinesweeperMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class SnakeWrapper extends StatelessWidget {
   final Clue clue;
-  const SnakeWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const SnakeWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, SnakeMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    SnakeMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
 class BlockFillWrapper extends StatelessWidget {
   final Clue clue;
-  const BlockFillWrapper({super.key, required this.clue});
+  final VoidCallback onFinish;
+  const BlockFillWrapper({super.key, required this.clue, required this.onFinish});
   @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(context, clue, BlockFillMinigame(clue: clue, onSuccess: () => _showSuccessDialog(context, clue)));
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    BlockFillMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
 }
 
-Widget _buildMinigameScaffold(BuildContext context, Clue clue, Widget child) {
+// Para FindDifference, asumo que existe un wrapper similar o debes crearlo si no existe en el archivo original
+class FindDifferenceWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const FindDifferenceWrapper({super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+    context, 
+    clue, 
+    onFinish,
+    FindDifferenceMinigame(clue: clue, onSuccess: () {
+      onFinish();
+      _showSuccessDialog(context, clue);
+    })
+  );
+}
+
+
+// --- SCAFFOLD COMPARTIDO ACTUALIZADO (Soporta onFinish para Rendición Legal) ---
+
+Widget _buildMinigameScaffold(BuildContext context, Clue clue, VoidCallback onFinish, Widget child) {
   return Scaffold(
     body: Container(
       decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
@@ -700,6 +857,8 @@ Widget _buildMinigameScaffold(BuildContext context, Clue clue, Widget child) {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                    // OJO: Si presionan Back sin ganar ni rendirse, es un abandono (penalización)
+                    // El Navigator.pop activará el ciclo de vida o simplemente no llamará a _finishLegally
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Spacer(),
@@ -721,6 +880,13 @@ Widget _buildMinigameScaffold(BuildContext context, Clue clue, Widget child) {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  // Botón de Rendirse Integrado en el Scaffold Compartido
+                  IconButton(
+                    icon: const Icon(Icons.flag, color: AppTheme.dangerRed, size: 20),
+                    tooltip: 'Rendirse',
+                    onPressed: () => showSkipDialog(context, onFinish),
+                  ),
                 ],
               ),
             ),
@@ -734,7 +900,9 @@ Widget _buildMinigameScaffold(BuildContext context, Clue clue, Widget child) {
                     leaderboard: game.leaderboard,
                     currentPlayerId: Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.id ?? '',
                     totalClues: game.clues.length,
-                    onSurrender: () => showSkipDialog(context),
+                    // Pasamos el onFinish al callback de rendición del widget RaceTrack si lo soporta
+                    // O usamos el botón del AppBar definido arriba
+                    onSurrender: () => showSkipDialog(context, onFinish),
                   );
                 },
               ),

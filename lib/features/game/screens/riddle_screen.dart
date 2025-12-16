@@ -7,8 +7,9 @@ import '../models/clue.dart';
 
 class RiddleScreen extends StatefulWidget {
   final Clue clue;
+  final Future<void> Function() onFinish; // CORRECCIÓN: Cambiado de VoidCallback a Future<void> Function()
 
-  const RiddleScreen({super.key, required this.clue});
+  const RiddleScreen({super.key, required this.clue, required this.onFinish});
 
   @override
   State<RiddleScreen> createState() => _RiddleScreenState();
@@ -44,6 +45,12 @@ class _RiddleScreenState extends State<RiddleScreen> {
           await playerProvider.refreshProfile();
           
           if (mounted) _showSuccessDialog();
+
+          // --- LEAVER BUSTER: MARCAR JUEGO COMO TERMINADO LEGALMENTE ---
+          // Ahora esto es válido porque onFinish retorna un Future
+          await widget.onFinish();
+          
+          _showSuccessDialog();
         } else {
            ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Error al guardar el progreso.')),
