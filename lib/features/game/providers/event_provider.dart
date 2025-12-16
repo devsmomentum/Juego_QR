@@ -49,7 +49,7 @@ class EventProvider with ChangeNotifier {
             'location_name': event.locationName,
             'latitude': event.latitude,
             'longitude': event.longitude,
-            'date': event.date.toIso8601String(),
+            'date': event.date.toUtc().toIso8601String(),
             'clue': event.clue, // <--- Ahora se envía obligatoriamente
             'image_url': imageUrl,
             'max_participants': event.maxParticipants,
@@ -107,7 +107,7 @@ class EventProvider with ChangeNotifier {
             'location_name': event.locationName,
             'latitude': event.latitude,
             'longitude': event.longitude,
-            'date': event.date.toIso8601String(),
+            'date': event.date.toUtc().toIso8601String(),
             'clue': event.clue,
             'image_url': imageUrl,
             'max_participants': event.maxParticipants,

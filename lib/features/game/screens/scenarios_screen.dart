@@ -13,8 +13,11 @@ import '../providers/game_request_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import 'code_finder_screen.dart';
 import 'game_request_screen.dart';
+import 'event_waiting_screen.dart'; // Import Waiting Screen
+import '../models/event.dart'; // Import GameEvent model
 import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
+import '../widgets/scenario_countdown.dart';
 import '../services/penalty_service.dart'; // IMPORT AGREGADO
 
 class ScenariosScreen extends StatefulWidget {
@@ -157,6 +160,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
       Navigator.push(context,
           MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
     } else {
+
+
       // Check if there is already a request
       final request = await requestProvider.getRequestForPlayer(
           playerProvider.currentPlayer!.id, scenario.id);
@@ -195,17 +200,11 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
       }
       else {
         location =
-            '${event.location.latitude.toStringAsFixed(4)}, ${event.location.longitude.toStringAsFixed(4)}';
+            '${event.latitude.toStringAsFixed(4)}, ${event.longitude.toStringAsFixed(4)}';
       }
-      double? latitude;
-      double? longitude;
-      try {
-        latitude = (event as dynamic).latitude;
-        longitude = (event as dynamic).longitude;
-      } catch (_) {
-        latitude = null;
-        longitude = null;
-      }
+      double? latitude = event.latitude;
+      double? longitude = event.longitude;
+
       return Scenario(
         id: event.id,
         name: event.title,
@@ -218,6 +217,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
         secretCode: event.pin,
         latitude: latitude,
         longitude: longitude,
+        date: event.date,
       );
     }).toList();
 
@@ -544,7 +544,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
                                                   overflow:
                                                       TextOverflow.ellipsis,
                                                 ),
-                                                const SizedBox(height: 20),
+                                                const SizedBox(height: 10),
+                                                
+                                                // COUNTDOWN (si fecha existe)
+                                                if (scenario.date != null)
+                                                  Center(child: ScenarioCountdown(targetDate: scenario.date!)),
+
+                                                const SizedBox(height: 10),
                                                 SizedBox(
                                                   width: double.infinity,
                                                   child: ElevatedButton(

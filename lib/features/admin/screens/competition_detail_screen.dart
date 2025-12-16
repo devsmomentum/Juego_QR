@@ -326,6 +326,82 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
               decoration: inputDecoration.copyWith(labelText: 'Nombre de Ubicación'),
               onSaved: (v) => _locationName = v!,
             ),
+            const SizedBox(height: 16),
+            
+            // --- DATE & TIME PICKER ---
+            InkWell(
+              onTap: () async {
+                // 1. Pick Date
+                final pickedDate = await showDatePicker(
+                  context: context,
+                  initialDate: _selectedDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2030),
+                  builder: (context, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: AppTheme.primaryPurple,
+                          onPrimary: Colors.white,
+                          surface: AppTheme.cardBg,
+                          onSurface: Colors.white,
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+
+                if (pickedDate != null) {
+                  // 2. Pick Time (if date was picked)
+                  if (!context.mounted) return;
+                  final pickedTime = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(_selectedDate),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          timePickerTheme: TimePickerThemeData(
+                            backgroundColor: AppTheme.cardBg,
+                            hourMinuteTextColor: Colors.white,
+                            dayPeriodTextColor: Colors.white,
+                            dialHandColor: AppTheme.primaryPurple,
+                            dialBackgroundColor: AppTheme.darkBg,
+                            entryModeIconColor: AppTheme.accentGold,
+                          ),
+                          colorScheme: const ColorScheme.dark(
+                            primary: AppTheme.primaryPurple,
+                            onPrimary: Colors.white,
+                            surface: AppTheme.cardBg,
+                            onSurface: Colors.white,
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+
+                  if (pickedTime != null) {
+                    setState(() {
+                      _selectedDate = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+                    });
+                  }
+                }
+              },
+              child: InputDecorator(
+                decoration: _buildInputDecoration('Fecha y Hora del Evento', icon: Icons.access_time),
+                child: Text(
+                  "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}   ${_selectedDate.hour.toString().padLeft(2,'0')}:${_selectedDate.minute.toString().padLeft(2,'0')}",
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
              const SizedBox(height: 30),
             
             SizedBox(
@@ -568,8 +644,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  Wrap(
+                    alignment: WrapAlignment.spaceEvenly,
+                    spacing: 10,
+                    runSpacing: 5,
                     children: [
                       TextButton.icon(
                         icon: const Icon(Icons.store, size: 16),
@@ -826,8 +904,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  Wrap(
+                    alignment: WrapAlignment.spaceEvenly,
+                    spacing: 10,
+                    runSpacing: 5,
                     children: [
                       TextButton.icon(
                         icon: const Icon(Icons.store, size: 16),
