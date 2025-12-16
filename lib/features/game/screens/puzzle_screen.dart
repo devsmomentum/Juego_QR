@@ -43,6 +43,45 @@ class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver
     // Bandera arriba: El jugador está intentando jugar. 
     // Si sale sin _finishLegally, el servicio sabrá que fue un abandono forzoso.
     _penaltyService.attemptStartGame();
+    
+    // Verificar vidas al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLives();
+    });
+  }
+
+  Future<void> _checkLives() async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    if (playerProvider.currentPlayer != null) {
+       await gameProvider.fetchLives(playerProvider.currentPlayer!.id);
+       if (gameProvider.lives <= 0) {
+         if (!mounted) return;
+         _showNoLivesDialog();
+       }
+    }
+  }
+
+  void _showNoLivesDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("¡Sin vidas!", style: TextStyle(color: Colors.white)),
+        content: const Text("Te has quedado sin vidas. Necesitas comprar más en la tienda para continuar jugando.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Close screen
+            },
+            child: const Text("Entendido"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

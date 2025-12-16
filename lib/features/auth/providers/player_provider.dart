@@ -245,31 +245,41 @@ Future<void> syncRealInventory() async {
 
   // --- LÓGICA DE TIENDA ---
 
-  Future<bool> purchaseItem(String itemId, int cost) async {
-    if (_currentPlayer == null) return false;
-    if (_currentPlayer!.coins < cost) return false;
+ // player_provider.dart
 
-    try {
-      final response = await _supabase.rpc('buy_item', params: {
-        'p_user_id': _currentPlayer!.id,
-        'p_item_id': itemId,
-        'p_cost': cost
-      });
+Future<bool> purchaseItem(String itemId, int cost, {bool isPower = true}) async {
+  if (currentPlayer == null) return false;
 
-      if (response != null && response['success'] == true) {
-        await refreshProfile(); 
-        return true;
-      } else {
-        debugPrint("Error en compra (Backend): ${response['message']}");
-        return false;
-      }
+  try {
+    // Llamada a la función SQL mejorada
+    final response = await Supabase.instance.client.rpc('buy_item', params: {
+      'p_user_id': currentPlayer!.id,
+      'p_item_id': itemId,
+      'p_cost': cost,
+      'p_is_power': isPower, // Enviamos si es poder o item normal
+    });
 
-    } catch (e) {
-      debugPrint("Error crítico RPC compra: $e");
-      return false;
+    // Parsear respuesta JSON de la BD
+    final data = response as Map<String, dynamic>;
+    final success = data['success'] as bool;
+    final message = data['message'] as String;
+
+    if (success) {
+      // Actualizar monedas localmente y perfil
+      currentPlayer!.coins -= cost; // Optimistic update
+      await refreshProfile(); // Refresh completo para asegurar
+      notifyListeners();
+      return true;
+    } else {
+      // Si falló (ej: Max vidas alcanzado), lanzamos el mensaje que vino de SQL
+      throw message; 
     }
+  } catch (e) {
+    debugPrint("Error transacción: $e");
+    // Re-lanzar el error (string) para que la UI lo muestre en el SnackBar
+    rethrow; 
   }
-
+}
   // --- MINIGAME LIFE MANAGEMENT (OPTIMIZED RPC) ---
 
   Future<void> loseLife() async {

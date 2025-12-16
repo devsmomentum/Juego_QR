@@ -89,25 +89,6 @@ class PowerItem {
         color: Colors.indigo,
         durationMinutes: 5,
       ),
-      const PowerItem(
-        id: 'speed_boost',
-        name: 'Velocidad',
-        description: 'Aumenta tu velocidad',
-        type: PowerType.speedBoost,
-        cost: 40,
-        icon: '⚡',
-        color: Colors.yellow,
-        durationMinutes: 3,
-      ),
-      const PowerItem(
-        id: 'energy_drink',
-        name: 'Bebida Energética',
-        description: 'Recupera energía',
-        type: PowerType.buff,
-        cost: 20,
-        icon: '🥤',
-        color: Colors.green,
-      ),
       
       // --- UTILIDAD ---
       const PowerItem(
@@ -118,6 +99,15 @@ class PowerItem {
         cost: 30,
         icon: '💡',
         color: Colors.amber,
+      ),
+      const PowerItem(
+        id: 'extra_life',
+        name: 'Vida Extra',
+        description: 'Recupera una vida perdida',
+        type: PowerType.buff,
+        cost: 50,
+        icon: '❤️',
+        color: Colors.red,
       ),
       // --- IMPORTANTE: Agregamos este por si acaso quedó basura vieja en la BD ---
       const PowerItem(

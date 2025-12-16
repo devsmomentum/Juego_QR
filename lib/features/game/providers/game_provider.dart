@@ -12,6 +12,7 @@ class GameProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _currentEventId;
   String? _errorMessage;
+  int _lives = 3;
   
   // Timer para el ranking en tiempo real
   Timer? _leaderboardTimer;
@@ -30,11 +31,65 @@ class GameProvider extends ChangeNotifier {
   int get completedClues => _clues.where((c) => c.isCompleted).length;
   int get totalClues => _clues.length;
   String? get currentEventId => _currentEventId;
+  int get lives => _lives;
   
   GameProvider() {
     // Constructor
   }
+
+  // --- GESTIÓN DE VIDAS ---
+
+  Future<void> fetchLives(String userId) async {
+    if (_currentEventId == null) return;
+    try {
+      final response = await _supabase
+          .from('game_players')
+          .select('lives')
+          .eq('event_id', _currentEventId!)
+          .eq('user_id', userId)
+          .maybeSingle();
+      
+      if (response != null) {
+        _lives = response['lives'];
+        notifyListeners();
+      } else {
+        // Si no existe registro, asumimos 3 (o creamos el registro si es necesario al unirse)
+        _lives = 3;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching lives: $e');
+    }
+  }
   
+Future<void> loseLife(String userId) async {
+  // Nota: _lives es tu variable local para actualización optimista
+  if (_lives <= 0) return;
+  
+  try {
+    // 1. Optimistic Update (Feedback instantáneo visual)
+    _lives--;
+    notifyListeners();
+    
+    // 2. Ejecutar en Supabase
+    // Usamos la función que acabamos de mejorar en SQL
+    final response = await _supabase.rpc('lose_life', params: {
+      'p_user_id': userId,
+    });
+    
+    // 3. Sincronizar verdad (Response trae las vidas reales restantes)
+    if (response != null) {
+      _lives = response as int;
+    }
+    notifyListeners();
+
+  } catch (e) {
+    debugPrint('Error perdiendo vida: $e');
+    // Rollback visual si falló la conexión
+    _lives++; 
+    notifyListeners();
+  }
+}
   // --- GESTIÓN DEL RANKING EN TIEMPO REAL ---
 
   /// Inicia la actualización automática del ranking cada 20 segundos

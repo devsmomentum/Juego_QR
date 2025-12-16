@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
+import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class TicTacToeMinigame extends StatefulWidget {
@@ -70,20 +71,24 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
   }
 
   void _loseLife(String reason) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
     if (playerProvider.currentPlayer != null) {
-      playerProvider.currentPlayer!.lives--;
-      playerProvider.notifyListeners();
-
-      if (playerProvider.currentPlayer!.lives <= 0) {
-        _showGameOverDialog();
-      } else {
-        _showTryAgainDialog(reason);
-      }
+      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
+        if (!mounted) return;
+        
+        if (gameProvider.lives <= 0) {
+          _showGameOverDialog();
+        } else {
+          _showTryAgainDialog(reason);
+        }
+      });
     }
   }
 
   void _showTryAgainDialog(String reason) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -95,7 +100,10 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
           children: [
             Text(reason, style: const TextStyle(color: Colors.white)),
             const SizedBox(height: 10),
-            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text("Has perdido 1 vida ❤️\nTe quedan ${gameProvider.lives}", 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
         actions: [

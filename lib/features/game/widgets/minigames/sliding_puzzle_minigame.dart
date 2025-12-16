@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
+import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class SlidingPuzzleMinigame extends StatefulWidget {
@@ -130,23 +131,25 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   }
 
   void _loseLife(String reason) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
     if (playerProvider.currentPlayer != null) {
-      // Logic for reducing lives would go here if Player had logic for it.
-      // Since we just added the field, we can do:
-      playerProvider.currentPlayer!.lives--;
-      playerProvider.notifyListeners(); // Force update
-
-      if (playerProvider.currentPlayer!.lives <= 0) {
-        // Game Over Total?
-        _showGameOverDialog();
-      } else {
-        _showTryAgainDialog(reason);
-      }
+      // Usar GameProvider para gestionar vidas del evento
+      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
+        if (!mounted) return;
+        
+        if (gameProvider.lives <= 0) {
+          _showGameOverDialog();
+        } else {
+          _showTryAgainDialog(reason);
+        }
+      });
     }
   }
 
   void _showTryAgainDialog(String reason) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -158,7 +161,10 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
           children: [
             Text(reason, style: const TextStyle(color: Colors.white)),
             const SizedBox(height: 10),
-            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text("Has perdido 1 vida ❤️\nTe quedan ${gameProvider.lives}", 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
         actions: [

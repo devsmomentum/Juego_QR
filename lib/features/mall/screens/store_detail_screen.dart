@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/mall_store.dart';
 import '../models/power_item.dart';
 import '../../auth/providers/player_provider.dart';
+import '../../game/providers/game_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../widgets/shop_item_card.dart';
 
@@ -22,6 +23,25 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     if (_isLoading) return;
 
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    
+    // Verificar límite de vidas
+    if (item.id == 'extra_life') {
+      if (playerProvider.currentPlayer != null) {
+         // Actualizar vidas antes de verificar
+         await gameProvider.fetchLives(playerProvider.currentPlayer!.id);
+      }
+      
+      if (gameProvider.lives >= 3) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Ya tienes el máximo de vidas (3)!'),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+        return;
+      }
+    }
     
     // Verificar monedas visualmente
     if ((playerProvider.currentPlayer?.coins ?? 0) < item.cost) {
@@ -33,34 +53,39 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       );
       return;
     }
-
-    setState(() => _isLoading = true);
+setState(() => _isLoading = true);
 
     try {
-      // Llamamos al método centralizado en el provider que maneja Supabase
-      final success = await playerProvider.purchaseItem(item.id, item.cost);
+      // 1. Intentar comprar
+      await playerProvider.purchaseItem(
+        item.id, 
+        item.cost, 
+        isPower: item.type != PowerType.utility // Ejemplo de lógica
+      );
       
+      // 2. Éxito
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('¡${item.name} comprado!'), backgroundColor: AppTheme.successGreen),
+      );
+      
+      // Actualizar vidas en GameProvider si fue una vida
+      if (item.id == 'extra_life') {
+         // Asumiendo que tienes acceso al userId
+         Provider.of<GameProvider>(context, listen: false).fetchLives(playerProvider.currentPlayer!.id);
+      }
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${item.name} comprado!'),
-            backgroundColor: AppTheme.successGreen,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error en la transacción. Verifica tu conexión.'),
-            backgroundColor: AppTheme.dangerRed,
-          ),
-        );
-      }
+    } catch (e) {
+      // 3. Error (Aquí atrapamos el "¡Ya tienes el máximo de 3 vidas!")
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()), // Muestra el mensaje exacto de SQL
+          backgroundColor: AppTheme.dangerRed,
+        ),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
