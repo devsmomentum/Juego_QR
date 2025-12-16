@@ -10,6 +10,7 @@ class Scenario {
   final String secretCode; // The code they need to find
   final double? latitude;
   final double? longitude;
+  final DateTime? date;
 
   const Scenario({
     required this.id,
@@ -23,5 +24,6 @@ class Scenario {
     required this.secretCode,
     this.latitude,
     this.longitude,
+    this.date,
   });
 }

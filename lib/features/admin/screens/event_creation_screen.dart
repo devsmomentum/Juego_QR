@@ -670,6 +670,82 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         ),
                         const SizedBox(height: 20),
 
+                         // --- DATE & TIME PICKER ---
+                        InkWell(
+                          onTap: () async {
+                            // 1. Pick Date
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: _selectedDate,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime(2030),
+                              builder: (context, child) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    colorScheme: const ColorScheme.dark(
+                                      primary: AppTheme.primaryPurple,
+                                      onPrimary: Colors.white,
+                                      surface: AppTheme.cardBg,
+                                      onSurface: Colors.white,
+                                    ),
+                                  ),
+                                  child: child!,
+                                );
+                              },
+                            );
+                            
+                            if (pickedDate != null) {
+                              // 2. Pick Time (if date was picked)
+                              if (!context.mounted) return;
+                              final pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(_selectedDate),
+                                builder: (context, child) {
+                                  return Theme(
+                                    data: Theme.of(context).copyWith(
+                                      timePickerTheme: TimePickerThemeData(
+                                        backgroundColor: AppTheme.cardBg,
+                                        hourMinuteTextColor: Colors.white,
+                                        dayPeriodTextColor: Colors.white,
+                                        dialHandColor: AppTheme.primaryPurple,
+                                        dialBackgroundColor: AppTheme.darkBg,
+                                        entryModeIconColor: AppTheme.accentGold,
+                                      ),
+                                      colorScheme: const ColorScheme.dark(
+                                        primary: AppTheme.primaryPurple,
+                                        onPrimary: Colors.white,
+                                        surface: AppTheme.cardBg,
+                                        onSurface: Colors.white,
+                                      ),
+                                    ),
+                                    child: child!,
+                                  );
+                                },
+                              );
+
+                              if (pickedTime != null) {
+                                setState(() {
+                                  _selectedDate = DateTime(
+                                    pickedDate.year,
+                                    pickedDate.month,
+                                    pickedDate.day,
+                                    pickedTime.hour,
+                                    pickedTime.minute,
+                                  );
+                                });
+                              }
+                            }
+                          },
+                          child: InputDecorator(
+                            decoration: inputDecoration.copyWith(labelText: 'Fecha y Hora del Evento', prefixIcon: const Icon(Icons.access_time, color: Colors.white54)),
+                            child: Text(
+                              "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}   ${_selectedDate.hour.toString().padLeft(2,'0')}:${_selectedDate.minute.toString().padLeft(2,'0')}",
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
                         // 3. Imagen
                         InkWell(
                           onTap: _pickImage,
@@ -1442,8 +1518,10 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                           ],
                                         ),
                                         const SizedBox(height: 10),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        Wrap(
+                                          alignment: WrapAlignment.spaceEvenly,
+                                          spacing: 10,
+                                          runSpacing: 5,
                                           children: [
                                             TextButton.icon(
                                               icon: const Icon(Icons.store, size: 16),

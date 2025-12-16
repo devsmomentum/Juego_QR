@@ -1,12 +1,15 @@
 import 'dart:async'; // Importar Timer
+import 'dart:ui'; // Para FontFeature
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/providers/player_provider.dart';
 import '../providers/game_request_provider.dart';
 import '../providers/game_provider.dart';
+import '../providers/event_provider.dart'; // Import EventProvider
 import '../../../core/theme/app_theme.dart';
 import '../models/game_request.dart';
+import '../models/event.dart'; // Import GameEvent
 import '../../layouts/screens/home_screen.dart';
 import '../../auth/screens/login_screen.dart';
 
@@ -46,6 +49,8 @@ class _GameRequestScreenState extends State<GameRequestScreen>
     
     _setupRealtimeSubscription();
     _startPolling(); // Iniciar sondeo como respaldo
+    _startCountdown(); // Iniciar cuenta regresiva
+
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -138,6 +143,77 @@ class _GameRequestScreenState extends State<GameRequestScreen>
       }
       await _checkApprovalStatus();
     });
+  }
+
+  // --- COUNTDOWN LOGIC ---
+  Duration? _timeUntilStart;
+  Timer? _countdownTimer;
+  bool _eventStarted = false; // Flag to show "Started" message
+
+  void _startCountdown() async {
+    final eventProvider = Provider.of<EventProvider>(context, listen: false);
+    final currentEventId = widget.eventId;
+    if (currentEventId == null) return;
+    
+    // FORCE REFRESH: Always fetch from Supabase to get the latest Date/Time
+    // This ensures that if we just edited the event, we see the change immediately.
+    try {
+      await eventProvider.fetchEvents(); 
+    } catch (_) {
+      // Ignore network errors, fallback to local cache
+    }
+    
+    // Get event from provider
+    GameEvent? event;
+    try {
+      event = eventProvider.events.firstWhere((e) => e.id == currentEventId);
+    } catch (e) {
+      return; // Event still not found
+    }
+
+    if (event == null) return;
+    
+    final now = DateTime.now();
+    
+    // Debug info
+    print("Countdown Debug: Event Date: ${event.date} vs Now: $now");
+
+    if (event.date.isAfter(now)) {
+      if (mounted) {
+        setState(() {
+           _timeUntilStart = event!.date.difference(now);
+           _eventStarted = false;
+        });
+      }
+      
+      _countdownTimer?.cancel();
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        final now = DateTime.now();
+        if (event!.date.isAfter(now)) {
+          setState(() {
+            _timeUntilStart = event!.date.difference(now);
+          });
+        } else {
+          timer.cancel();
+          setState(() {
+            _timeUntilStart = null;
+            _eventStarted = true; // Event started!
+          });
+        }
+      });
+    } else {
+      // Event already started
+      if (mounted) {
+        setState(() {
+          _timeUntilStart = null;
+          _eventStarted = true;
+        });
+      }
+    }
   }
 
   Future<void> _checkApprovalStatus() async {
@@ -427,6 +503,47 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
+
+                            // --- COUNTDOWN WIDGET ---
+                            if (_timeUntilStart != null)
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                margin: const EdgeInsets.only(bottom: 20),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: AppTheme.accentGold),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Text("LA COMPETENCIA INICIA EN:", style: TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      "${_timeUntilStart!.inDays}d ${_timeUntilStart!.inHours % 24}h ${_timeUntilStart!.inMinutes % 60}m ${_timeUntilStart!.inSeconds % 60}s",
+                                      style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()]),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (_eventStarted)
+                               Container(
+                                padding: const EdgeInsets.all(20),
+                                margin: const EdgeInsets.only(bottom: 20),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: Colors.greenAccent),
+                                ),
+                                child: const Column(
+                                  children: [
+                                    Icon(Icons.play_circle_fill, color: Colors.greenAccent, size: 40),
+                                    SizedBox(height: 10),
+                                    Text("¡COMPETENCIA EN CURSO!", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 18)),
+                                    SizedBox(height: 5),
+                                    Text("¡Corre a buscar las pistas!", style: TextStyle(color: Colors.white70)),
+                                  ],
+                                ),
+                              ),
 
                             // Info Card
                             Container(

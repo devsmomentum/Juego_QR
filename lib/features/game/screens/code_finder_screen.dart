@@ -7,6 +7,8 @@ import '../models/scenario.dart';
 import '../../../core/theme/app_theme.dart';
 import 'game_request_screen.dart';
 import 'qr_scanner_screen.dart'; // Import scanner
+import 'event_waiting_screen.dart'; // Import Waiting Screen
+import '../models/event.dart'; // Import GameEvent
 
 class CodeFinderScreen extends StatefulWidget {
   final Scenario scenario;
@@ -20,13 +22,20 @@ class CodeFinderScreen extends StatefulWidget {
 class _CodeFinderScreenState extends State<CodeFinderScreen>
     with TickerProviderStateMixin {
   // State for the "Hot/Cold" mechanic
-  double _distanceToTarget = 800.0; // Start far away (meters)
+  double _distanceToTarget = 800.0; // Valor inicial (placeholder) hasta tener GPS
   StreamSubscription<Position>? _positionStreamSubscription;
+
+  // GPS Smoothing Buffer
+  final List<Position> _positionBuffer = [];
+  static const int _bufferLimit = 5; // Usamos 5 para mayor estabilidad (configurable a 3)
 
   // Controllers
   final TextEditingController _codeController = TextEditingController();
   late AnimationController _pulseController;
   late AnimationController _shakeController;
+  
+  // Debug State
+  bool _forceStart = false;
 
   @override
   void initState() {
@@ -56,16 +65,19 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
       return;
     }
 
-    // Configuración de precisión para el stream
+    // Configuración estándar para móviles
+    // Usamos high para un buen balance entre batería y precisión
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 2, // Actualizar cada 2 metros
+      distanceFilter: 0,
     );
 
     _positionStreamSubscription =
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
             (Position position) {
-      // Calcular distancia en tiempo real
+      
+      // --- LÓGICA ORIGINAL (SIN FILTROS COMPLEJOS) ---
+      // Calculamos la distancia directa usando la fórmula del Haversine (nativa de Geolocator)
       double distanceInMeters = Geolocator.distanceBetween(
         position.latitude,
         position.longitude,
@@ -209,6 +221,42 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
   Widget build(BuildContext context) {
     // Only show input if close enough (e.g., < 20 meters)
     final bool showInput = _distanceToTarget <= 20;
+    
+    // --- VALIDACION "EVENTO FUTURO" ---
+    // Si el usuario está cerca (<20m) PERO el evento es futuro: mostrar WaitingScreen.
+    // MODIFICADO: Si _forceStart es true (debug), saltamos esta validación.
+    if (showInput && widget.scenario.date != null && !_forceStart) {
+      final now = DateTime.now(); // Local
+      if (widget.scenario.date!.toLocal().isAfter(now)) {
+        // Construir evento mínimo
+        final dummyEvent = GameEvent(
+             id: widget.scenario.id,
+             title: widget.scenario.name,
+             description: widget.scenario.description,
+             locationName: widget.scenario.location,
+             latitude: widget.scenario.latitude ?? 0,
+             longitude: widget.scenario.longitude ?? 0,
+             date: widget.scenario.date!,
+             clue: widget.scenario.starterClue,
+             imageUrl: widget.scenario.imageUrl,
+             maxParticipants: widget.scenario.maxPlayers,
+             pin: widget.scenario.secretCode,
+             createdByAdminId: '',
+        );
+
+        return EventWaitingScreen(
+          event: dummyEvent,
+          onTimerFinished: () {
+            // Al terminar, forzamos inicio y rebuild
+            if (mounted) {
+              setState(() {
+                _forceStart = true;
+              });
+            }
+          },
+        );
+      }
+    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,

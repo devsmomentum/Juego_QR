@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../game/screens/clues_screen.dart';
+import '../../game/screens/event_waiting_screen.dart';
+import '../../game/providers/event_provider.dart';
 import '../../social/screens/inventory_screen.dart';
 import '../../social/screens/leaderboard_screen.dart';
 import '../../social/screens/profile_screen.dart';
@@ -41,6 +43,36 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final player = Provider.of<PlayerProvider>(context).currentPlayer;
+    final eventProvider = Provider.of<EventProvider>(context);
+
+    // 1. Validar si el evento ha comenzado
+    // Buscamos el evento actual
+    // Nota: Deberíamos asegurar que los eventos estén cargados.
+    // Si no lo están, eventProvider.events podría estar vacío o no contener el nuestro.
+    // Asumimos que al entrar aquí ya tenemos datos (desde ScenariosScreen/Login)
+    try {
+      final event = eventProvider.events.firstWhere((e) => e.id == widget.eventId);
+      
+      // Chequear fecha
+      // Nota: Recuerda que la fecha en el modelo ahora viene de un parseo UTC si Provider lo maneja bien,
+      // la comparación se hace convirtiendo a local o usando isAfter.
+      // event.date es DateTime. 
+      final now = DateTime.now();
+      
+      // Si el evento es futuro (más de 5 segundos de margen)
+      if (event.date.toLocal().isAfter(now)) {
+        return EventWaitingScreen(
+          event: event,
+          onTimerFinished: () {
+            // Cuando termine, reconstruimos para mostrar la app real
+            setState(() {});
+          },
+        );
+      }
+    } catch (_) {
+      // Si no encontramos el evento, dejamos pasar (fallback) o mostramos loading
+      // Por ahora dejamos pasar para no bloquear erróneamente.
+    }
     
     return Scaffold(
       body: Stack(
