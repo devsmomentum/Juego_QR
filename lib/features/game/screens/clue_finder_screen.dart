@@ -1,0 +1,301 @@
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
+import 'dart:math' as math;
+import '../models/clue.dart';
+import '../../../core/theme/app_theme.dart';
+import 'qr_scanner_screen.dart';
+
+class ClueFinderScreen extends StatefulWidget {
+  final Clue clue;
+
+  const ClueFinderScreen({super.key, required this.clue});
+
+  @override
+  State<ClueFinderScreen> createState() => _ClueFinderScreenState();
+}
+
+class _ClueFinderScreenState extends State<ClueFinderScreen>
+    with TickerProviderStateMixin {
+  
+  // --- STATE ---
+  double _distanceToTarget = 800.0;
+  StreamSubscription<Position>? _positionStreamSubscription;
+  
+  // Animations
+  late AnimationController _pulseController;
+  late AnimationController _shakeController;
+
+  // Debug
+  bool _forceProximity = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+
+    _shakeController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    
+    _startLocationUpdates();
+  }
+
+  Future<void> _startLocationUpdates() async {
+    if (widget.clue.latitude == null || widget.clue.longitude == null) {
+      // Fallback if no location (shouldn't happen for geolocation clues, but safety first)
+      setState(() => _distanceToTarget = 0); 
+      return;
+    }
+
+    const LocationSettings locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 0,
+    );
+
+    _positionStreamSubscription =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+            (Position position) {
+      
+      final double distanceInMeters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        widget.clue.latitude!,
+        widget.clue.longitude!,
+      );
+
+      if (mounted) {
+        setState(() {
+          _distanceToTarget = distanceInMeters;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionStreamSubscription?.cancel();
+    _pulseController.dispose();
+    _shakeController.dispose();
+    super.dispose();
+  }
+
+  // --- LOGIC ---
+
+  void _handleScannedCode(String scannedCode) {
+    // Expected format: Simple ID match or specific prefix
+    // For now, we trust the scanner returned something useful.
+    // If the clue has a specific QR code string, we match it.
+    // If not, we assume ANY valid scan of the clue ID works.
+    
+    bool isValid = false;
+    
+    // 1. Check if it matches clue ID explicitly
+    if (scannedCode.contains(widget.clue.id)) {
+      isValid = true;
+    } 
+    // 2. Check if it matches the stored expected QR code (if any)
+    else if (widget.clue.qrCode != null && widget.clue.qrCode!.isNotEmpty) {
+      if (scannedCode == widget.clue.qrCode) isValid = true;
+    }
+    // 3. Permissive fallback for testing: if scanned code starts with 'CLUE:'
+    else if (scannedCode.startsWith("CLUE:")) {
+        isValid = true;
+    }
+
+    if (isValid) {
+      // Direct navigation as requested
+      Navigator.pop(context, true); 
+    } else {
+      _shakeController.forward(from: 0.0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Código incorrecto para esta misión."),
+          backgroundColor: AppTheme.dangerRed,
+        ),
+      );
+    }
+  }
+
+  // --- UI HELPERS ---
+
+  String get _temperatureStatus {
+    double dist = _forceProximity ? 5.0 : _distanceToTarget;
+    if (dist > 500) return "CONGELADO";
+    if (dist > 200) return "FRÍO";
+    if (dist > 50) return "TIBIO";
+    if (dist > 20) return "CALIENTE";
+    return "¡AQUÍ ESTÁ!";
+  }
+
+  Color get _temperatureColor {
+    double dist = _forceProximity ? 5.0 : _distanceToTarget;
+    if (dist > 500) return Colors.cyanAccent;
+    if (dist > 200) return Colors.blue;
+    if (dist > 50) return Colors.orange;
+    if (dist > 20) return Colors.deepOrange;
+    return AppTheme.successGreen;
+  }
+
+  IconData get _temperatureIcon {
+    double dist = _forceProximity ? 5.0 : _distanceToTarget;
+    if (dist > 200) return Icons.ac_unit;
+    if (dist > 50) return Icons.device_thermostat;
+    return Icons.local_fire_department;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Current Distance Logic
+    double currentDistance = _forceProximity ? 5.0 : _distanceToTarget;
+    bool showInput = currentDistance <= 20;
+
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: Text(widget.clue.title.toUpperCase(), style: const TextStyle(fontSize: 14)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Stack(
+        children: [
+          // Dynamic Gradient Background
+          AnimatedContainer(
+            duration: const Duration(seconds: 1),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppTheme.darkBg,
+                  _temperatureColor.withOpacity(0.3),
+                ],
+              ),
+            ),
+          ),
+          
+          SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Hint Card
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          children: [
+                             Icon(Icons.search, color: AppTheme.accentGold),
+                             SizedBox(width: 8),
+                             Text("OBJETIVO", style: TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          widget.clue.hint.isNotEmpty ? widget.clue.hint : "Encuentra la ubicación...",
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 18, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Thermometer
+                 Column(
+                    children: [
+                      AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: 1.0 + (_pulseController.value * 0.2),
+                            child: Icon(_temperatureIcon, size: 80, color: _temperatureColor),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        _temperatureStatus,
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: _temperatureColor,
+                          shadows: [BoxShadow(color: _temperatureColor.withOpacity(0.5), blurRadius: 20)],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (!showInput)
+                        Text(
+                          "${currentDistance.toInt()}m del objetivo",
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                         // Debug Trigger
+                      if (!showInput)
+                        TextButton(
+                          onPressed: () => setState(() => _forceProximity = true),
+                          child: const Text("Simular Estar Cerca (Debug)", style: TextStyle(color: Colors.white24)),
+                        )
+                    ],
+                 ),
+
+                // Footer / Action Area
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  child: showInput
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              "¡ESTÁS EN LA ZONA!",
+                              style: TextStyle(color: AppTheme.successGreen, fontWeight: FontWeight.bold, fontSize: 20),
+                            ),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.accentGold,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                onPressed: () async {
+                                  final scanned = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const QRScannerScreen()),
+                                  );
+                                  if (scanned != null) {
+                                    _handleScannedCode(scanned);
+                                  }
+                                },
+                                icon: const Icon(Icons.qr_code),
+                                label: const Text("ESCANEAR CÓDIGO"),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                             TextButton(
+                                onPressed: () => _handleScannedCode(widget.clue.id), // Force Success
+                                child: const Text("Simular Escaneo (Debug)", style: TextStyle(color: Colors.white30)),
+                              )
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
