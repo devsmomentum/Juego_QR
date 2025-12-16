@@ -25,6 +25,9 @@ class _HomeScreenState extends State<HomeScreen> {
   
   // 3. Quitar la inicialización aquí, usar 'late'
   late List<Widget> _screens;
+  
+  // Debug logic
+  bool _forceGameStart = false;
 
   @override
   void initState() {
@@ -60,12 +63,14 @@ class _HomeScreenState extends State<HomeScreen> {
       final now = DateTime.now();
       
       // Si el evento es futuro (más de 5 segundos de margen)
-      if (event.date.toLocal().isAfter(now)) {
+      if (event.date.toLocal().isAfter(now) && !_forceGameStart) {
         return EventWaitingScreen(
           event: event,
           onTimerFinished: () {
             // Cuando termine, reconstruimos para mostrar la app real
-            setState(() {});
+            setState(() {
+               _forceGameStart = true;
+            });
           },
         );
       }
