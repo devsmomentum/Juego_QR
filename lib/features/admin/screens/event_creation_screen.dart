@@ -99,11 +99,34 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
   Future<void> _selectLocationOnMap() async {
     // Obtener ubicación actual para centrar el mapa
+    // 1. Validar Permisos explícitamente antes de obtener ubicación
     Position? position;
     try {
-      position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-    } catch (_) {}
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Servicios de ubicación deshabilitados.');
+        // Opcional: Mostrar alerta para activar
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('Permiso de ubicación denegado.');
+        }
+      }
+      
+      if (permission == LocationPermission.whileInUse || 
+          permission == LocationPermission.always) {
+         // Mostrar toast o feedback visual si es necesario
+         position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5), // Timeout corto para no bloquear
+         );
+      }
+    } catch (e) {
+      debugPrint("Error obteniendo ubicación: $e");
+    }
     final latlng.LatLng initial = position != null
         ? latlng.LatLng(position.latitude, position.longitude)
         : const latlng.LatLng(10.4806, -66.9036); // Caracas por defecto
