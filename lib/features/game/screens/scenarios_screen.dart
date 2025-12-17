@@ -98,6 +98,33 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
         }
         return;
       }
+
+      // Check for Fake GPS
+      try {
+        final position = await Geolocator.getCurrentPosition();
+        if (position.isMocked) {
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppTheme.cardBg,
+                title: const Text('⛔ Ubicación Falsa', style: TextStyle(color: Colors.red)),
+                content: const Text(
+                  'Se ha detectado el uso de una aplicación de ubicación falsa.\n\nDesactívala para poder jugar.',
+                  style: TextStyle(color: Colors.white),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido'))
+                ],
+              ),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        // Ignore location errors here, let the game handle it later if needed or retry
+      }
     }
 
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
