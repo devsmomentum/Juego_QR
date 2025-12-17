@@ -69,6 +69,40 @@ class EventProvider with ChangeNotifier {
       rethrow;
     }
   }
+  // Crear CLUES en Lote (Client Side)
+  Future<void> createCluesBatch(String eventId, List<Map<String, dynamic>> cluesData) async {
+    try {
+      if (cluesData.isEmpty) return;
+
+      final List<Map<String, dynamic>> toInsert = [];
+      
+      for (int i = 0; i < cluesData.length; i++) {
+        final clue = cluesData[i];
+        toInsert.add({
+          'event_id': eventId,
+          'title': clue['title'],
+          'description': clue['description'],
+          'hint': clue['hint'] ?? '',
+          'type': clue['type'] ?? 'minigame',
+          'latitude': clue['latitude'],
+          'longitude': clue['longitude'],
+          'puzzle_type': clue['puzzle_type'] ?? 'slidingPuzzle', // Fallback
+          'riddle_question': clue['riddle_question'],
+          'riddle_answer': clue['riddle_answer'],
+          'xp_reward': clue['xp_reward'] ?? 50,
+          'coin_reward': clue['coin_reward'] ?? 10,
+          'sequence_index': i + 1, // Guardamos el orden explícito
+        });
+      }
+
+      await _supabase.from('clues').insert(toInsert);
+      
+      print("✅ ${toInsert.length} Pistas creadas exitosamente para el evento $eventId");
+    } catch (e) {
+      print("❌ Error creando lote de pistas: $e");
+      rethrow;
+    }
+  }
 
   // Actualizar evento
   Future<void> updateEvent(GameEvent event, XFile? imageFile) async {
@@ -213,7 +247,7 @@ class EventProvider with ChangeNotifier {
           .from('clues')
           .select()
           .eq('event_id', eventId)
-          .order('created_at', ascending: true);
+          .order('sequence_index', ascending: true);
 
       if (response != null && (response as List).isNotEmpty) {
         print('📦 First clue RAW data: ${response[0]}');
@@ -242,6 +276,7 @@ class EventProvider with ChangeNotifier {
         'latitude': clue.latitude,
         'longitude': clue.longitude,
         'hint': clue.hint,
+        'sequence_index': clue.sequenceIndex,
       }).eq('id', clue.id).select();
       
       print('✅ Update Response: $response');

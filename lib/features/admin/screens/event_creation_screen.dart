@@ -460,16 +460,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
         if (createdEventId != null && _clueForms.isNotEmpty) {
           debugPrint('--- DATOS A ENVIAR ---');
           for (var clue in _clueForms) {
-            debugPrint('Pista: ${clue['title']} | Tipo: ${clue['puzzle_type']} | Pregunta: ${clue['riddle_question']}');
+            debugPrint('Pista: ${clue['title']} | Tipo: ${clue['puzzle_type']} | Lat: ${clue['latitude']} | Long: ${clue['longitude']}');
           }
-          await Supabase.instance.client.functions.invoke(
-            'admin-actions/create-clues-batch',
-            body: {
-              'eventId': createdEventId,
-              'clues': _clueForms,
-            },
-            method: HttpMethod.post,
-          );
+          
+          // USAMOS EL PROVIDER DIRECTAMENTE (Más seguro para lat/long)
+          await provider.createCluesBatch(createdEventId, _clueForms);
         }
 
         if (mounted) {
