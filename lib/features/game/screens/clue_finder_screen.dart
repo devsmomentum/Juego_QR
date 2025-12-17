@@ -21,6 +21,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
   // --- STATE ---
   double _distanceToTarget = 800.0;
   StreamSubscription<Position>? _positionStreamSubscription;
+  final List<Position> _positionHistory = []; // Cola para suavizado
   
   // Animations
   late AnimationController _pulseController;
@@ -61,9 +62,30 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
             (Position position) {
       
+      if (position.isMocked) {
+         _handleFakeGPS();
+         return;
+      }
+
+      // --- SUAVIZADO DE GPS ---
+      _positionHistory.add(position);
+      if (_positionHistory.length > 5) {
+        _positionHistory.removeAt(0); // Mantener solo los últimos 5 puntos
+      }
+
+      double avgLat = 0;
+      double avgLng = 0;
+      for (var p in _positionHistory) {
+        avgLat += p.latitude;
+        avgLng += p.longitude;
+      }
+      avgLat /= _positionHistory.length;
+      avgLng /= _positionHistory.length;
+
+      // Calcular distancia con el promedio suavizado
       final double distanceInMeters = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
+        avgLat,
+        avgLng,
         widget.clue.latitude!,
         widget.clue.longitude!,
       );
@@ -74,6 +96,44 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
         });
       }
     });
+  }
+
+  void _handleFakeGPS() {
+    // Evitar acumulacion de dialogos
+    if (!mounted) return;
+    
+    // Detener actualizaciones si es necesario o simplemente bloquear la UI
+    // Mostramos un dialogo que no se puede cerrar facilmente
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false, // Bloquear botón atrás
+        child: AlertDialog(
+          backgroundColor: AppTheme.cardBg,
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 40),
+              SizedBox(width: 10),
+              Expanded(child: Text("Ubicación Falsa Detectada", style: TextStyle(color: Colors.white, fontSize: 18))),
+            ],
+          ),
+          content: const Text(
+            "Para jugar limpio, debes desactivar las aplicaciones de ubicación falsa (Fake GPS).\n\nEl juego se detendrá hasta que uses tu ubicación real.",
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Cerrar dialogo
+                Navigator.of(context).pop(); // Salir de la pantalla de juego
+              },
+              child: const Text("SALIR DEL JUEGO", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -152,7 +212,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
   Widget build(BuildContext context) {
     // Current Distance Logic
     double currentDistance = _forceProximity ? 5.0 : _distanceToTarget;
-    bool showInput = currentDistance <= 20;
+    bool showInput = currentDistance <= 35;
 
     return Scaffold(
       extendBodyBehindAppBar: true,

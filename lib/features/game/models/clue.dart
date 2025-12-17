@@ -25,7 +25,8 @@ class Clue {
   // Nuevos campos para acertijos
   final String? riddleQuestion;
   final String? riddleAnswer;
-  final PuzzleType puzzleType; // Nuevo campo
+  final PuzzleType puzzleType;
+  final int sequenceIndex; // Para ordenar las pistas
 
   Clue({
     required this.id,
@@ -43,7 +44,8 @@ class Clue {
     this.isLocked = true,
     this.riddleQuestion,
     this.riddleAnswer,
-    this.puzzleType = PuzzleType.slidingPuzzle, // Valor por defecto para evitar error de inicialización
+    this.puzzleType = PuzzleType.slidingPuzzle,
+    this.sequenceIndex = 0,
   });
   
 
@@ -64,6 +66,7 @@ class Clue {
     String? riddleQuestion,
     String? riddleAnswer,
     PuzzleType? puzzleType,
+    int? sequenceIndex,
   }) {
     return Clue(
       id: id ?? this.id,
@@ -82,6 +85,7 @@ class Clue {
       riddleQuestion: riddleQuestion ?? this.riddleQuestion,
       riddleAnswer: riddleAnswer ?? this.riddleAnswer,
       puzzleType: puzzleType ?? this.puzzleType,
+      sequenceIndex: sequenceIndex ?? this.sequenceIndex,
     );
   }
   
@@ -144,7 +148,8 @@ class Clue {
             (e) => e.toString().split('.').last == json['puzzle_type'],
             orElse: () => PuzzleType.slidingPuzzle, // Fallback seguro
           )
-        : PuzzleType.slidingPuzzle, // Fallback seguro
+        : PuzzleType.slidingPuzzle, 
+      sequenceIndex: json['sequence_index'] ?? 0,
     );
   }
 }

@@ -76,6 +76,11 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
             (Position position) {
       
+      if (position.isMocked) {
+         _handleFakeGPS();
+         return;
+      }
+      
       // --- LÓGICA ORIGINAL (SIN FILTROS COMPLEJOS) ---
       // Calculamos la distancia directa usando la fórmula del Haversine (nativa de Geolocator)
       double distanceInMeters = Geolocator.distanceBetween(
@@ -93,6 +98,41 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
     }, onError: (error) {
       print("Error en stream de ubicación: $error");
     });
+  }
+
+  void _handleFakeGPS() {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false, 
+        child: AlertDialog(
+          backgroundColor: AppTheme.cardBg,
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 40),
+              SizedBox(width: 10),
+              Expanded(child: Text("Ubicación Falsa Detectada", style: TextStyle(color: Colors.white, fontSize: 18))),
+            ],
+          ),
+          content: const Text(
+            "Para jugar limpio, debes desactivar las aplicaciones de ubicación falsa (Fake GPS).\n\nEl juego se detendrá hasta que uses tu ubicación real.",
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Cerrar dialogo
+                Navigator.of(context).pop(); // Salir de la pantalla de juego
+              },
+              child: const Text("SALIR DEL JUEGO", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override

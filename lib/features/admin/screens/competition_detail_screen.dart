@@ -757,7 +757,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
                   riddleQuestion: questionController.text,
                   riddleAnswer: answerController.text,
                   isLocked: clue.isLocked,
-                  isCompleted: clue.isCompleted
+                  isCompleted: clue.isCompleted,
+                  sequenceIndex: clue.sequenceIndex,
                 );
 
                 await Provider.of<EventProvider>(context, listen: false).updateClue(updatedClue);

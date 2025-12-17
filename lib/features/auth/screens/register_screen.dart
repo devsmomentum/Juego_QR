@@ -19,6 +19,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _acceptedTerms = false;
+  
+  // Lista básica de palabras prohibidas (se puede expandir)
+  final List<String> _bannedWords = ['admin', 'root', 'moderator', 'tonto', 'estupido', 'idiota', 'groseria', 'puto', 'mierda'];
 
   @override
   void dispose() {
@@ -31,6 +35,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleRegister() async {
     if (_formKey.currentState!.validate()) {
+      if (!_acceptedTerms) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Debes aceptar los términos y condiciones para continuar.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       try {
         final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
         
@@ -63,7 +77,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
 
         // 5. Regresar inmediatamente a la vista de Login
-        // Esto elimina cualquier flujo de espera o verificación manual en la UI
         Navigator.pop(context);
 
       } catch (e) {
@@ -146,6 +159,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               if (!value.trim().contains(' ')) {
                                 return 'Ingresa tu nombre completo (Nombre y Apellido)';
                               }
+                              
+                              // Filtro de groserías
+                              final lowerValue = value.toLowerCase();
+                              for (final word in _bannedWords) {
+                                if (lowerValue.contains(word)) {
+                                  return 'Nombre no permitido. Elige otro.';
+                                }
+                              }
+                              
                               return null;
                             },
                           ),
@@ -168,6 +190,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               if (!value.contains('@')) {
                                 return 'Email inválido';
                               }
+                              
+                              // Bloqueo de dominios temporales
+                              final domain = value.split('@').last.toLowerCase();
+                              final blockedDomains = ['yopmail.com', 'tempmail.com', '10minutemail.com', 'guerrillamail.com', 'mailinator.com'];
+                              
+                              if (blockedDomains.contains(domain)) {
+                                return 'Dominio de correo no permitido';
+                              }
+                              
                               return null;
                             },
                           ),
@@ -240,6 +271,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               return null;
                             },
                           ),
+                          const SizedBox(height: 20),
+                          
+                          // TÉRMINOS Y CONDICIONES
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                              "Acepto los términos y condiciones de uso.",
+                              style: TextStyle(color: Colors.white70, fontSize: 14),
+                            ),
+                            value: _acceptedTerms,
+                            activeColor: AppTheme.accentGold,
+                            checkColor: Colors.black,
+                            onChanged: (newValue) {
+                              setState(() {
+                                _acceptedTerms = newValue ?? false;
+                              });
+                            },
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+                          
                           const SizedBox(height: 30),
                           
                           // Register button
