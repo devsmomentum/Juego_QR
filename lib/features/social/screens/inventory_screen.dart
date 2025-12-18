@@ -199,7 +199,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   /// Lógica centralizada para usar items (Ataque vs Defensa)
   Future<void> _handleItemUse(BuildContext context, PowerItem item, String myPlayerId) async {
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
     // Lista de IDs considerados ofensivos/sabotaje
@@ -212,16 +211,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
       
       // 1. Obtener lista de candidatos (Rivales)
       List<dynamic> candidates = [];
+      final eventId = widget.eventId ?? gameProvider.currentEventId;
       
-      if (gameProvider.currentEventId != null && gameProvider.leaderboard.isNotEmpty) {
-        // Usar leaderboard del evento actual si existe
-        candidates = gameProvider.leaderboard;
-      } else {
-        // Fallback: Cargar lista global si no hay evento o leaderboard vacío
-        if (playerProvider.allPlayers.isEmpty) {
-           await playerProvider.fetchAllPlayers();
+      if (eventId != null) {
+        // Si estamos en un evento, SOLO mostrar participantes del ranking
+        // Esto asegura que se muestren en orden de ranking y solo los del evento
+        if (gameProvider.leaderboard.isEmpty && gameProvider.currentEventId == eventId) {
+           await gameProvider.fetchLeaderboard();
         }
-        candidates = playerProvider.allPlayers;
+        candidates = gameProvider.leaderboard;
       }
 
       // 2. Filtrar: Excluirme a mí mismo
@@ -315,22 +313,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ),
     );
 
-    // Ejecutar lógica en backend
-    final success = await playerProvider.usePower(
-      powerId: item.id,
-      targetUserId: targetId,
-    );
+    bool success = false;
+    try {
+      // Ejecutar lógica en backend
+      success = await playerProvider.usePower(
+        powerId: item.id,
+        targetUserId: targetId,
+      );
+    } catch (e) {
+      debugPrint('Error executing power: $e');
+      success = false;
+    } finally {
+      // Asegurar que cerramos el loading pase lo que pase
+      if (context.mounted) {
+        Navigator.pop(context); 
+      }
+    }
 
     if (!context.mounted) return;
-    Navigator.pop(context); // Cerrar loading
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             isOffensive 
-              ? '¡Ataque enviado a $targetName!' 
-              : '¡${item.name} activado!'
+              ? '¡Ataque enviado correctamente a $targetName!' 
+              : '¡${item.name} activado correctamente!'
           ),
           backgroundColor: AppTheme.successGreen,
           behavior: SnackBarBehavior.floating,
@@ -339,7 +347,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Error: No se pudo usar el objeto (¿Sin munición?)'),
+          content: Text('Error: No se pudo usar el objeto (¿Sin munición o error de conexión?)'),
           backgroundColor: AppTheme.dangerRed,
         ),
       );
