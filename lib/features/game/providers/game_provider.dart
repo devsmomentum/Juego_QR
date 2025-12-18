@@ -13,6 +13,7 @@ class GameProvider extends ChangeNotifier {
   String? _currentEventId;
   String? _errorMessage;
   int _lives = 3;
+  bool _isRaceCompleted = false;
   
   // Timer para el ranking en tiempo real
   Timer? _leaderboardTimer;
@@ -32,6 +33,9 @@ class GameProvider extends ChangeNotifier {
   int get totalClues => _clues.length;
   String? get currentEventId => _currentEventId;
   int get lives => _lives;
+  bool get isRaceCompleted => _isRaceCompleted;
+  
+  bool get hasCompletedAllClues => totalClues > 0 && completedClues == totalClues;
   
   GameProvider() {
     // Constructor
@@ -293,6 +297,12 @@ Future<void> loseLife(String userId) async {
       );
       
       if (response.status == 200) {
+        // Check if race was completed by this action
+        final data = response.data as Map<String, dynamic>?;
+        if (data != null && data['raceCompleted'] == true) {
+          _isRaceCompleted = true;
+        }
+        
         await fetchClues(silent: true); 
         // También actualizamos el ranking si completó una pista
         fetchLeaderboard(); 
@@ -303,6 +313,29 @@ Future<void> loseLife(String userId) async {
     } catch (e) {
       debugPrint('Error completing clue: $e');
       return false;
+    }
+  }
+  
+  /// Check race completion status from server
+  Future<void> checkRaceStatus() async {
+    if (_currentEventId == null) return;
+    
+    try {
+      final response = await _supabase.functions.invoke(
+        'game-play/check-race-status',
+        body: {'eventId': _currentEventId},
+        method: HttpMethod.post,
+      );
+      
+      if (response.status == 200) {
+        final data = response.data as Map<String, dynamic>?;
+        if (data != null) {
+          _isRaceCompleted = data['isCompleted'] ?? false;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking race status: $e');
     }
   }
   

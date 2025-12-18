@@ -21,6 +21,7 @@ import '../widgets/minigames/block_fill_minigame.dart';
 
 // --- Import del Servicio de Penalización ---
 import '../services/penalty_service.dart';
+import 'winner_celebration_screen.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -631,6 +632,35 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       if (playerProvider.currentPlayer != null) {
         
         await playerProvider.refreshProfile();
+      }
+      
+      // Check if race was completed or if player completed all clues
+      if (gameProvider.isRaceCompleted || gameProvider.hasCompletedAllClues) {
+        // Get player position
+        int playerPosition = 1;
+        final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+        if (gameProvider.leaderboard.isNotEmpty) {
+          final index = gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
+          playerPosition = index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
+        }
+        
+        // Navigate to winner celebration screen
+        if (context.mounted) {
+          // Get event ID from the current clue
+          // We need to pass the event ID - assuming we can get it from somewhere
+          // For now, navigate with position and completed clues
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => WinnerCelebrationScreen(
+                eventId: gameProvider.currentEventId ?? '',
+                playerPosition: playerPosition,
+                totalCluesCompleted: gameProvider.completedClues,
+              ),
+            ),
+            (route) => route.isFirst, // Remove all routes except first
+          );
+        }
+        return; // Don't show normal success dialog
       }
   } else {
     if (context.mounted) {

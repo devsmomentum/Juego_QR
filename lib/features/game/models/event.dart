@@ -13,6 +13,9 @@ class GameEvent {
   final String clue;        // <--- CAMBIO: Ahora es obligatorio (Pista de victoria)
   final int maxParticipants;
   final String pin;
+  final String status;      // Status: 'pending', 'active', 'completed'
+  final DateTime? completedAt;
+  final String? winnerId;
 
   GameEvent({
     required this.id,
@@ -27,7 +30,14 @@ class GameEvent {
     this.imageUrl = '',
     this.maxParticipants = 0,
     this.pin = '',
+    this.status = 'pending',
+    this.completedAt,
+    this.winnerId,
   });
 
   LatLng get location => LatLng(latitude, longitude);
+  
+  bool get isCompleted => status == 'completed';
+  bool get isActive => status == 'active';
+  bool get isPending => status == 'pending';
 }

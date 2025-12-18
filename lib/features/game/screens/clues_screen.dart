@@ -12,6 +12,7 @@ import '../../mall/screens/shop_screen.dart';
 import 'puzzle_screen.dart';
 import '../../game/models/clue.dart'; // Import para usar tipo Clue
 import 'clue_finder_screen.dart'; // Import nuevo
+import 'winner_celebration_screen.dart'; // Import for celebration screen
 
 class CluesScreen extends StatefulWidget {
   // 1. Recibimos el ID del evento obligatorio
@@ -32,12 +33,55 @@ class _CluesScreenState extends State<CluesScreen> {
   void initState() {
     super.initState();
     // 2. Llamamos al provider apenas carga la pantalla usando el ID recibido
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      
+      // Check race completion status first
+      await gameProvider.checkRaceStatus();
+      
+      // If race is completed, navigate to winner celebration
+      if (gameProvider.isRaceCompleted && mounted) {
+        _navigateToWinnerScreen();
+        return;
+      }
+      
       gameProvider.fetchClues(eventId: widget.eventId);
       // Opcional: Cargar ranking inicial para que la pista no se vea vacía
       gameProvider.fetchLeaderboard(); 
     });
+  }
+  
+  void _navigateToWinnerScreen() async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    // Get player's position and completed clues
+    final position = _getPlayerPosition();
+    final completedClues = gameProvider.completedClues;
+    
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => WinnerCelebrationScreen(
+            eventId: widget.eventId,
+            playerPosition: position,
+            totalCluesCompleted: completedClues,
+          ),
+        ),
+      );
+    }
+  }
+  
+  int _getPlayerPosition() {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+    
+    final leaderboard = gameProvider.leaderboard;
+    if (leaderboard.isEmpty) return 1;
+    
+    final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
+    return index >= 0 ? index + 1 : leaderboard.length + 1;
   }
 
   // NUEVO MÉTODO: Muestra la pista en modo "Solo Lectura"
