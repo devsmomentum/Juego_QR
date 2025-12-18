@@ -6,6 +6,7 @@ import '../../auth/providers/player_provider.dart';
 import '../../game/providers/game_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../widgets/shop_item_card.dart';
+import '../../../shared/utils/game_ui_utils.dart'; // Add this import
 
 class StoreDetailScreen extends StatefulWidget {
   final MallStore store;
@@ -20,19 +21,16 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   bool _isLoading = false;
 
   Future<void> _purchaseItem(BuildContext context, PowerItem item) async {
-    if (_isLoading) return;
-
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
-    final String? eventId = gameProvider.currentEventId;
-  
-  if (eventId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No hay un evento activo seleccionado.')),
-    );
-    return;
-  }
+    final eventId = gameProvider.currentEventId;
+
+    // if (eventId == null) ...
+    if (eventId == null) {
+      showGameSnackBar(context, title: 'Error', message: 'No hay un evento activo seleccionado.', isError: true);
+      return;
+    }
     
     // Verificar límite de vidas
     if (item.id == 'extra_life') {
@@ -42,11 +40,12 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       }
       
       if (gameProvider.lives >= 3) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Ya tienes el máximo de vidas (3)!'),
-            backgroundColor: AppTheme.dangerRed,
-          ),
+        showGameDialog(
+          context, 
+          title: 'Vida al Máximo', 
+          message: '¡Ya tienes 3 vidas! No puedes cargar más por ahora. Úsalas sabiamente.',
+          icon: Icons.favorite,
+          iconColor: AppTheme.dangerRed
         );
         return;
       }
@@ -54,15 +53,17 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     
     // Verificar monedas visualmente
     if ((playerProvider.currentPlayer?.coins ?? 0) < item.cost) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No tienes suficientes monedas'),
-          backgroundColor: AppTheme.dangerRed,
-        ),
+      showGameDialog(
+        context,
+        title: 'Saldo Insuficiente',
+        message: 'No tienes suficientes monedas para este objeto. ¡Resuelve más puzzles!',
+        icon: Icons.monetization_on_outlined,
+        iconColor: AppTheme.accentGold
       );
       return;
     }
-setState(() => _isLoading = true);
+    
+    setState(() => _isLoading = true);
 
     try {
       // 1. Intentar comprar
@@ -70,30 +71,27 @@ setState(() => _isLoading = true);
         item.id, 
         eventId,
         item.cost, 
-        isPower: item.type != PowerType.utility // Ejemplo de lógica
+        isPower: item.type != PowerType.utility
       );
       
       // 2. Éxito
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('¡${item.name} comprado!'), backgroundColor: AppTheme.successGreen),
+      showGameSnackBar(
+        context, 
+        title: '¡Compra Exitosa!', 
+        message: 'Has obtenido: ${item.name}', 
+        isError: false
       );
       
       // Actualizar vidas en GameProvider si fue una vida
       if (item.id == 'extra_life') {
-         // Asumiendo que tienes acceso al userId
          Provider.of<GameProvider>(context, listen: false).fetchLives(playerProvider.currentPlayer!.id);
       }
 
     } catch (e) {
-      // 3. Error (Aquí atrapamos el "¡Ya tienes el máximo de 3 vidas!")
+      // 3. Error
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()), // Muestra el mensaje exacto de SQL
-          backgroundColor: AppTheme.dangerRed,
-        ),
-      );
+      showGameSnackBar(context, title: 'Error de Compra', message: e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -115,11 +113,16 @@ setState(() => _isLoading = true);
                 backgroundColor: AppTheme.darkBg,
                 flexibleSpace: FlexibleSpaceBar(
                   title: Text(widget.store.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  background: Image.network(
-                    widget.store.imageUrl,
-                    fit: BoxFit.cover,
-                     errorBuilder: (_,__,___) => Container(color: Colors.grey[800]),
-                  ),
+                  background: (widget.store.imageUrl.isNotEmpty && widget.store.imageUrl.startsWith('http'))
+                    ? Image.network(
+                        widget.store.imageUrl,
+                        fit: BoxFit.cover,
+                         errorBuilder: (_,__,___) => Container(color: Colors.grey[800]),
+                      )
+                    : Container(
+                        color: Colors.grey[800],
+                        child: const Icon(Icons.store, color: Colors.white24, size: 50),
+                      ),
                 ),
               ),
               SliverToBoxAdapter(
@@ -138,17 +141,42 @@ setState(() => _isLoading = true);
                             "Productos Disponibles",
                             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accentGold.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(color: AppTheme.accentGold)
-                            ),
-                            child: Text(
-                              "💰 ${player?.coins ?? 0}",
-                              style: const TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold),
-                            ),
+                          Row(
+                            children: [
+                              // Monedas
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accentGold.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: AppTheme.accentGold)
+                                ),
+                                child: Text(
+                                  "💰 ${player?.coins ?? 0}",
+                                  style: const TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Vidas
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.dangerRed.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: AppTheme.dangerRed)
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.favorite, size: 14, color: AppTheme.dangerRed),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "${player?.lives ?? 0}",
+                                      style: const TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           )
                         ],
                       ),
