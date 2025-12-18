@@ -46,7 +46,7 @@ class _ShopScreenState extends State<ShopScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final success = await playerProvider.purchaseItem(item.id, eventId, item.cost);
+      final success = await playerProvider.purchaseItem(item.id, eventId, item.cost, );
       
       if (!mounted) return;
 

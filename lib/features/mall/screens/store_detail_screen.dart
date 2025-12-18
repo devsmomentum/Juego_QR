@@ -27,12 +27,32 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
     final String? eventId = gameProvider.currentEventId;
   
-  if (eventId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No hay un evento activo seleccionado.')),
-    );
-    return;
-  }
+  // VALIDACIÓN 1: El event_id es obligatorio para filtrar por game_player_id
+    if (eventId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay un evento activo seleccionado.')),
+      );
+      return;
+    }
+    
+    // VALIDACIÓN 2: Determinar si es un poder (p_is_power en tu SQL)
+    // Excluimos utilidades y vidas de la lógica de la tabla player_powers
+    final bool isPower = item.type != PowerType.utility && item.id != 'extra_life';
+    
+    if (isPower) {
+      // VALIDACIÓN 3: Límite de 3 unidades (Coincide con p_is_power y v_current_quantity >= 3)
+      // playerProvider.getPowerCount debe estar filtrando localmente por el eventId actual
+      final int count = playerProvider.getPowerCount(item.id, eventId);
+      if (count >= 3) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Límite alcanzado: Máximo 3 por evento.'), 
+            backgroundColor: AppTheme.dangerRed
+          ),
+        );
+        return;
+      }
+    }
     
     // Verificar límite de vidas
     if (item.id == 'extra_life') {
@@ -65,24 +85,26 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 setState(() => _isLoading = true);
 
     try {
-      // 1. Intentar comprar
+      // LLAMADA AL SQL: Aquí es donde invocas tu función 'buy_item'
+      // Tu PlayerProvider debe ejecutar: supabase.rpc('buy_item', params: {...})
       await playerProvider.purchaseItem(
         item.id, 
         eventId,
         item.cost, 
-        isPower: item.type != PowerType.utility // Ejemplo de lógica
+        isPower: isPower
       );
       
-      // 2. Éxito
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('¡${item.name} comprado!'), backgroundColor: AppTheme.successGreen),
       );
       
-      // Actualizar vidas en GameProvider si fue una vida
-      if (item.id == 'extra_life') {
-         // Asumiendo que tienes acceso al userId
-         Provider.of<GameProvider>(context, listen: false).fetchLives(playerProvider.currentPlayer!.id);
+      // ACTUALIZACIÓN: Refrescar usando tu nueva función 'get_my_inventory_by_event'
+      // fetchInventory debe llamar internamente a esa función SQL
+      if (item.id != 'extra_life') {
+         await playerProvider.fetchInventory(playerProvider.currentPlayer!.id, eventId);
+      } else {
+         await gameProvider.fetchLives(playerProvider.currentPlayer!.id);
       }
 
     } catch (e) {

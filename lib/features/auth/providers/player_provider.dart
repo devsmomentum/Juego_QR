@@ -8,10 +8,18 @@ class PlayerProvider extends ChangeNotifier {
   List<Player> _allPlayers = [];
   final _supabase = Supabase.instance.client;
 
+  // Mapa para guardar el inventario filtrado por evento
+  // Estructura: { eventId: { powerId: quantity } }
+  final Map<String, Map<String, int>> _eventInventories = {};
+
   Player? get currentPlayer => _currentPlayer;
   List<Player> get allPlayers => _allPlayers;
-
   bool get isLoggedIn => _currentPlayer != null;
+
+  // --- NUEVO: Obtener cantidad de un poder específico en un evento ---
+  int getPowerCount(String itemId, String eventId) {
+    return _eventInventories[eventId]?[itemId] ?? 0;
+  }
 
   // --- AUTHENTICATION ---
 
@@ -84,6 +92,102 @@ class PlayerProvider extends ChangeNotifier {
   // --- PROFILE MANAGEMENT ---
 
   StreamSubscription<List<Map<String, dynamic>>>? _profileSubscription;
+  
+Future<void> fetchInventory(String userId, String eventId) async {
+    try {
+      // Llamamos a la nueva función SQL que retorna el campo 'slug'
+      final List<dynamic> response = await _supabase.rpc('get_my_inventory_by_event', params: {
+        'p_user_id': userId,
+        'p_event_id': eventId,
+      });
+
+      // Procesar datos y guardarlos en el mapa de inventarios
+      final Map<String, int> eventItems = {};
+      final List<String> inventoryList = [];
+
+      for (var item in response) {
+        // CAMBIO CLAVE: Usamos 'slug' en lugar de 'power_id'
+        // Esto permite que coincida con los IDs de PowerItem.getShopItems() (ej: 'freeze')
+        final String itemId = item['slug'] ?? item['power_id'].toString();
+        final int qty = item['quantity'] ?? 0;
+        
+        eventItems[itemId] = qty;
+        
+        // Llenamos la lista plana para que la UI (InventoryScreen) pueda iterar
+        for (int i = 0; i < qty; i++) {
+          inventoryList.add(itemId);
+        }
+      }
+
+      // Guardamos la relación cantidad/item para validaciones de la tienda (máx 3)
+      _eventInventories[eventId] = eventItems;
+      
+      // Actualizamos el inventario del jugador actual para que la UI se refresque
+      if (_currentPlayer != null) {
+        _currentPlayer!.inventory = inventoryList;
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching event inventory: $e');
+    }
+  }
+  // --- LÓGICA DE TIENDA ACTUALIZADA ---
+
+  Future<bool> purchaseItem(String itemId, String eventId, int cost, {bool isPower = true}) async {
+    if (_currentPlayer == null) return false;
+
+    try {
+      // Llamada a la función SQL: buy_item
+      await _supabase.rpc('buy_item', params: {
+        'p_user_id': _currentPlayer!.id,
+        'p_event_id': eventId,
+        'p_item_id': itemId,
+        'p_cost': cost,
+        'p_is_power': isPower,
+      });
+
+      // Si la función SQL no lanzó excepción, la compra fue exitosa
+      // Actualizamos monedas localmente para feedback inmediato
+      _currentPlayer!.coins -= cost;
+      
+      // Refrescamos el inventario específico para que el contador de la tienda se actualice
+      await fetchInventory(_currentPlayer!.id, eventId);
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("Error en compra: $e");
+      // Re-lanzamos el error para que el SnackBar en la UI lo muestre
+      rethrow;
+    }
+  }
+
+  // --- USO DE PODERES ---
+
+  Future<bool> usePower({required String powerId, required String targetUserId}) async {
+    if (_currentPlayer == null) return false;
+    try {
+      // Necesitamos el contexto del evento para saber qué inventario refrescar
+      // Aquí asumo que usas el game_player_id como en tu SQL use_power_mechanic
+      
+      final response = await _supabase.rpc('use_power_mechanic', params: {
+        'p_caster_id': _currentPlayer!.id, // Ajustar según tu lógica de IDs en use_power_mechanic
+        'p_target_id': targetUserId,
+        'p_power_id': powerId,
+      });
+
+      if (response['success'] == true) {
+        // En lugar de syncRealInventory genérico, aquí deberías refrescar 
+        // el inventario del evento actual si tienes el ID a mano.
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error usando poder: $e');
+      return false;
+    }
+  }
 
   Future<void> refreshProfile() async {
     if (_currentPlayer != null) {
@@ -191,96 +295,13 @@ Future<void> syncRealInventory() async {
       debugPrint('Error CRITICO syncing real inventory: $e');
     }
   }
-  Future<bool> usePower({
-    required String powerId, 
-    required String targetUserId 
-  }) async {
-    if (_currentPlayer == null) return false;
 
-    try {
-      final casterRes = await _supabase
-          .from('game_players')
-          .select('id')
-          .eq('user_id', _currentPlayer!.id)
-          .maybeSingle();
-
-      if (casterRes == null) return false;
-      final String casterId = casterRes['id'];
-
-      final targetRes = await _supabase
-          .from('game_players')
-          .select('id')
-          .eq('user_id', targetUserId)
-          .maybeSingle();
-
-      if (targetRes == null) return false;
-      final String targetId = targetRes['id'];
-
-      final response = await _supabase.rpc('use_power_mechanic', params: {
-        'p_caster_id': casterId,
-        'p_target_id': targetId,
-        'p_power_id': powerId,
-      });
-
-      if (response['success'] == true) {
-        await syncRealInventory();
-        
-        if (targetUserId == _currentPlayer!.id) {
-           await Future.delayed(const Duration(milliseconds: 200));
-           // Refresco simple
-           await refreshProfile(); 
-        }
-        
-        return true;
-      } else {
-        debugPrint('Fallo lógica Backend: ${response['message']}');
-        return false;
-      }
-
-    } catch (e) {
-      debugPrint('Error crítico al usar poder: $e');
-      return false;
-    }
-  }
 
   // --- LÓGICA DE TIENDA ---
 
  // player_provider.dart
 
-Future<bool> purchaseItem(String itemId, String eventId, int cost, {bool isPower = true}) async {
-  if (currentPlayer == null) return false;
 
-  try {
-    // Llamada a la función SQL mejorada
-    final response = await Supabase.instance.client.rpc('buy_item', params: {
-      'p_user_id': currentPlayer!.id,
-      'p_event_id': eventId,
-      'p_item_id': itemId,
-      'p_cost': cost,
-      'p_is_power': isPower, // Enviamos si es poder o item normal
-    });
-
-    // Parsear respuesta JSON de la BD
-    final data = response as Map<String, dynamic>;
-    final success = data['success'] as bool;
-    final message = data['message'] as String;
-
-    if (success) {
-      // Actualizar monedas localmente y perfil
-      currentPlayer!.coins -= cost; // Optimistic update
-      await refreshProfile(); // Refresh completo para asegurar
-      notifyListeners();
-      return true;
-    } else {
-      // Si falló (ej: Max vidas alcanzado), lanzamos el mensaje que vino de SQL
-      throw message; 
-    }
-  } catch (e) {
-    debugPrint("Error transacción: $e");
-    // Re-lanzar el error (string) para que la UI lo muestre en el SnackBar
-    rethrow; 
-  }
-}
   // --- MINIGAME LIFE MANAGEMENT (OPTIMIZED RPC) ---
 
   Future<void> loseLife() async {

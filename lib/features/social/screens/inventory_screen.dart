@@ -7,8 +7,42 @@ import '../../../core/theme/app_theme.dart';
 import '../widgets/inventory_item_card.dart';
 import '../../mall/screens/mall_screen.dart';
 
-class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key});
+class InventoryScreen extends StatefulWidget {
+  final String? eventId;
+  const InventoryScreen({super.key, this.eventId});
+
+  @override
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<InventoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchInventory();
+    });
+  }
+
+  @override
+  void didUpdateWidget(InventoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.eventId != oldWidget.eventId) {
+      _fetchInventory();
+    }
+  }
+
+  Future<void> _fetchInventory() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final player = playerProvider.currentPlayer;
+    
+    final eventId = widget.eventId ?? gameProvider.currentEventId;
+
+    if (player != null && eventId != null) {
+      await playerProvider.fetchInventory(player.id, eventId);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

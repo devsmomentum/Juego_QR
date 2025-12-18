@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
       CluesScreen(
         eventId: widget.eventId, // ¡AQUÍ PASAMOS EL ID DINÁMICO!
       ),
-      const InventoryScreen(),
+      InventoryScreen(eventId: widget.eventId),
       const LeaderboardScreen(),
       const ProfileScreen(),
     ];
