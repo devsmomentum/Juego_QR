@@ -49,8 +49,8 @@ class GameProvider extends ChangeNotifier {
           .eq('user_id', userId)
           .maybeSingle();
       
-      if (response != null) {
-        _lives = response['lives'];
+      if (response != null && response['lives'] != null) {
+        _lives = response['lives'] as int;
         notifyListeners();
       } else {
         // Si no existe registro, asumimos 3 (o creamos el registro si es necesario al unirse)

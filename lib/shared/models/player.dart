@@ -41,7 +41,7 @@ class Player {
 
   factory Player.fromJson(Map<String, dynamic> json) {
     return Player(
-      id: json['id'],
+      id: json['id'] ?? json['user_id'] ?? '',
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       avatarUrl: json['avatar_url'] ?? '',

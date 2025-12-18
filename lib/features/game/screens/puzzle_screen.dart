@@ -696,31 +696,32 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: Colors.transparent,
       child: Stack(
-        alignment: Alignment.topCenter,
+        alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          // Fondo del Confetti
+          // Fuegos artificiales centrales y pequeños
           Align(
-            alignment: Alignment.topCenter,
+            alignment: Alignment.center,
             child: ConfettiWidget(
               confettiController: _confettiController,
               blastDirectionality: BlastDirectionality.explosive,
               shouldLoop: false,
               colors: const [
-                AppTheme.primaryPurple,
-                AppTheme.secondaryPink,
                 AppTheme.accentGold,
                 AppTheme.successGreen,
                 Colors.yellow,
-                Colors.orange,
+                Colors.white,
               ],
-              numberOfParticles: 20,
-              gravity: 0.1,
+              numberOfParticles: 15, // Menos partículas para algo más simple
+              gravity: 0.2,
+              maxBlastForce: 10,
+              minBlastForce: 5,
+              particleDrag: 0.05,
             ),
           ),
           
           Container(
-            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 20),
+            padding: const EdgeInsets.only(top: 40, left: 20, right: 20, bottom: 20),
             decoration: BoxDecoration(
               color: AppTheme.cardBg,
               borderRadius: BorderRadius.circular(24),
@@ -732,6 +733,8 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const Icon(Icons.emoji_events, size: 50, color: AppTheme.accentGold),
+                const SizedBox(height: 15),
                 const Text('¡DESAFÍO COMPLETADO!', 
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.successGreen),
                   textAlign: TextAlign.center,
@@ -796,20 +799,6 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                   ),
                 ),
               ],
-            ),
-          ),
-          
-          Positioned(
-            top: -40,
-            child: Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppTheme.primaryPurple, AppTheme.secondaryPink]),
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.cardBg, width: 4),
-                boxShadow: [BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 5))],
-              ),
-              child: const Icon(Icons.emoji_events, size: 40, color: Colors.white),
             ),
           ),
         ],
