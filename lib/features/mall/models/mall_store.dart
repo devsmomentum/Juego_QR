@@ -35,14 +35,6 @@ class MallStore {
             cost: 50,
             type: PowerType.buff,
           ),
-          PowerItem(
-            id: 'energy_drink',
-            name: 'Energía',
-            description: 'Aumenta tu velocidad de movimiento por 5 minutos.',
-            icon: '⚡',
-            cost: 30,
-            type: PowerType.buff,
-          ),
         ],
       ),
       MallStore(

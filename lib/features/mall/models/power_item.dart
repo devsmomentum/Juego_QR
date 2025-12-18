@@ -89,8 +89,27 @@ class PowerItem {
         color: Colors.indigo,
         durationMinutes: 5,
       ),
+      const PowerItem(
+        id: 'shield_pro',
+        name: 'Escudo Pro',
+        description: 'Protección contra cualquier sabotaje por 10 min.',
+        type: PowerType.shield,
+        cost: 100,
+        icon: '🛡️',
+        color: Colors.deepPurple,
+        durationMinutes: 10,
+      ),
+      const PowerItem(
+        id: 'cure_all',
+        name: 'Cura Total',
+        description: 'Elimina cualquier efecto negativo activo.',
+        type: PowerType.buff,
+        cost: 40,
+        icon: '💊',
+        color: Colors.teal,
+      ),
       
-      // --- UTILIDAD ---
+
       const PowerItem(
         id: 'hint',
         name: 'Pista Extra',
