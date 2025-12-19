@@ -35,6 +35,14 @@ class MallStore {
             cost: 50,
             type: PowerType.buff,
           ),
+          PowerItem(
+            id: 'cure_all',
+            name: 'Cura Total',
+            description: 'Elimina cualquier efecto negativo activo.',
+            icon: '💊',
+            cost: 40,
+            type: PowerType.buff,
+          ),
         ],
       ),
       MallStore(
@@ -60,6 +68,22 @@ class MallStore {
             cost: 60,
             type: PowerType.debuff,
           ),
+           PowerItem(
+        id: 'time_penalty',
+        name: 'Penalización',
+        description: 'Resta 3 minutos de progreso',
+        type: PowerType.timePenalty,
+        cost: 60,
+        icon: '⏱️',
+      ),
+      PowerItem(
+        id: 'freeze',
+        name: 'Congelar',
+        description: 'Congela al rival por 120s',
+        type: PowerType.freeze,
+        cost: 50,
+        icon: '❄️',
+      ),
         ],
       ),
        MallStore(
@@ -77,14 +101,24 @@ class MallStore {
             cost: 100,
             type: PowerType.buff,
           ),
-          PowerItem(
-            id: 'cure_all',
-            name: 'Cura Total',
-            description: 'Elimina cualquier efecto negativo activo.',
-            icon: '💊',
-            cost: 40,
-            type: PowerType.buff,
+          
+           PowerItem(
+        id: 'shield',
+        name: 'Escudo',
+        description: 'Bloquea sabotajes por 300s',
+        type: PowerType.shield,
+        cost: 75,
+        icon: '🛡️',
           ),
+          PowerItem(
+          id: 'hint',
+          name: 'Pista Extra',
+          description: 'Revela información clave',
+          type: PowerType.hint,
+          cost: 30,
+          icon: '💡',
+        ),
+          
         ],
       ),
     ];

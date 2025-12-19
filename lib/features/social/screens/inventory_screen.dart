@@ -295,7 +295,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             return;
                           }
                           Navigator.pop(modalContext);
-                          _executePower(item, targetGp, rival.name, isOffensive: true, effectProvider: effectProvider);
+                          _executePower(item, targetGp, rival.name, isOffensive: true, effectProvider: effectProvider, gameProvider: gameProvider);
                         },
                       );
                     },
@@ -316,7 +316,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         showGameSnackBar(context, title: 'Sin gamePlayerId', message: 'Aún no entras al evento activo', isError: true);
         return;
       }
-      _executePower(item, myGamePlayerId, "Mí mismo", isOffensive: false, effectProvider: effectProvider);
+      _executePower(item, myGamePlayerId, "Mí mismo", isOffensive: false, effectProvider: effectProvider, gameProvider: gameProvider);
     }
   }
 
@@ -324,7 +324,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     PowerItem item, 
     String targetGamePlayerId, 
     String targetName,
-    {required bool isOffensive, required PowerEffectProvider effectProvider}
+    {required bool isOffensive, required PowerEffectProvider effectProvider, required GameProvider gameProvider}
   ) async {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
@@ -344,6 +344,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         powerSlug: item.id,
         targetGamePlayerId: targetGamePlayerId,
         effectProvider: effectProvider,
+        gameProvider: gameProvider,
       );
     } catch (e) {
       debugPrint('Error executing power: $e');
@@ -358,6 +359,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (!context.mounted) return;
 
     if (success) {
+      if (isOffensive) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (_) => const _AttackSuccessDialog(targetName: ''),
+        );
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -409,9 +417,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
 }
 
 class _AttackSuccessDialog extends StatefulWidget {
-  final PowerItem item;
+  final PowerItem? item;
   final String targetName;
-  const _AttackSuccessDialog({required this.item, required this.targetName});
+  const _AttackSuccessDialog({this.item, required this.targetName});
 
   @override
   State<_AttackSuccessDialog> createState() => _AttackSuccessDialogState();
@@ -471,12 +479,12 @@ class _AttackSuccessDialogState extends State<_AttackSuccessDialog> with SingleT
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(widget.item.icon, style: const TextStyle(fontSize: 80)),
+                  Text(widget.item?.icon ?? '⚡', style: const TextStyle(fontSize: 80)),
                   const SizedBox(height: 10),
                   Material(
                     color: Colors.transparent,
                     child: Text(
-                      '¡${widget.item.id == "extra_life" || widget.item.id == "shield" ? "USADO" : "LANZADO"}!',
+                      widget.item == null ? '¡ATAQUE ENVIADO!' : '¡${widget.item!.id == "extra_life" || widget.item!.id == "shield" ? "USADO" : "LANZADO"}!',
                       style: const TextStyle(
                         color: AppTheme.accentGold, 
                         fontSize: 20, 

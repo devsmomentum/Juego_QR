@@ -14,6 +14,8 @@ class GameProvider extends ChangeNotifier {
   String? _errorMessage;
   int _lives = 3;
   bool _isRaceCompleted = false;
+  bool _hintActive = false;
+  String? _activeHintText;
   
   // Timer para el ranking en tiempo real
   Timer? _leaderboardTimer;
@@ -34,6 +36,8 @@ class GameProvider extends ChangeNotifier {
   String? get currentEventId => _currentEventId;
   int get lives => _lives;
   bool get isRaceCompleted => _isRaceCompleted;
+  bool get hintActive => _hintActive;
+  String? get activeHintText => _activeHintText;
   
   bool get hasCompletedAllClues => totalClues > 0 && completedClues == totalClues;
   
@@ -220,6 +224,8 @@ Future<void> loseLife(String userId) async {
       if (response.status == 200) {
         final List<dynamic> data = response.data;
         _clues = data.map((json) => Clue.fromJson(json)).toList();
+        _hintActive = false;
+        _activeHintText = null;
         
         final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
         _currentClueIndex = (index != -1) ? index : _clues.length;
@@ -268,6 +274,33 @@ Future<void> loseLife(String userId) async {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
       _clues[index].isCompleted = true;
+      _hintActive = false;
+      _activeHintText = null;
+      notifyListeners();
+    }
+  }
+
+  void applyHintForCurrentClue() {
+    if (currentClue != null) {
+      _hintActive = true;
+      _activeHintText = currentClue!.hint;
+      notifyListeners();
+    }
+  }
+
+  void clearHint() {
+    _hintActive = false;
+    _activeHintText = null;
+    notifyListeners();
+  }
+
+  void applyTimePenaltyToPlayer(String targetGamePlayerId, {int penalty = 1}) {
+    final idx = _leaderboard.indexWhere((p) =>
+        p.gamePlayerId == targetGamePlayerId || p.id == targetGamePlayerId);
+    if (idx != -1) {
+      final updated = _leaderboard[idx];
+      final newXp = (updated.totalXP - penalty).clamp(0, totalClues > 0 ? totalClues : updated.totalXP);
+      updated.totalXP = newXp;
       notifyListeners();
     }
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/player.dart';
 import '../providers/power_effect_provider.dart';
+import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import 'power_gesture_wrapper.dart';
 
@@ -23,16 +24,22 @@ class RaceTrackWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final effectProvider = Provider.of<PowerEffectProvider>(context, listen: false);
+    final effectProvider = Provider.of<PowerEffectProvider>(context);
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final bool slowMotionActive = effectProvider.activePowerSlug == 'slow_motion';
+    final double speedMultiplier = slowMotionActive ? 0.5 : 1.0;
 
     // Lógica principal: Seleccionar quién aparece en la carrera basado ESTRICTAMENTE en progreso del evento
     final activeRacers = _selectRacersToShow();
 
     void handleSwipeAttack() async {
+      if (slowMotionActive) {
+        await Future.delayed(const Duration(milliseconds: 350));
+      }
       final me = playerProvider.currentPlayer;
       if (me == null) return;
 
-      final offensiveSlugs = <String>{'freeze', 'black_screen', 'slow_motion'};
+      final offensiveSlugs = <String>{'freeze', 'black_screen', 'slow_motion', 'time_penalty'};
       final String selectedPowerSlug = me.inventory.firstWhere(
         (slug) => offensiveSlugs.contains(slug),
         orElse: () => '',
@@ -70,11 +77,18 @@ class RaceTrackWidget extends StatelessWidget {
         powerSlug: selectedPowerSlug,
         targetGamePlayerId: targetGamePlayerId,
         effectProvider: effectProvider,
+        gameProvider: gameProvider,
       );
 
       if (!success && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No se pudo lanzar el sabotaje')),
+        );
+      } else if (success && context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (_) => const _AttackSentDialog(),
         );
       }
     }
@@ -103,7 +117,7 @@ class RaceTrackWidget extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
                    Text(
                     '🏁 CARRERA EN VIVO',
@@ -114,7 +128,7 @@ class RaceTrackWidget extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: 8),
-                  _LiveIndicator(),
+                  _LiveIndicator(speedMultiplier: speedMultiplier),
                 ],
               ),
               if (onSurrender != null)
@@ -194,7 +208,7 @@ class RaceTrackWidget extends StatelessWidget {
                       return _buildRacerAvatar(
                         context: context,
                         player: racer.player,
-                        progress: progress,
+                        progress: (progress * speedMultiplier).clamp(0.0, 1.0),
                         trackWidth: trackWidth,
                         offsetY: racer.laneOffset,
                         isMe: racer.isMe,
@@ -462,7 +476,8 @@ class _RacerDisplayInfo {
 }
 
 class _LiveIndicator extends StatefulWidget {
-  const _LiveIndicator();
+  final double speedMultiplier;
+  const _LiveIndicator({this.speedMultiplier = 1.0});
 
   @override
   State<_LiveIndicator> createState() => _LiveIndicatorState();
@@ -474,8 +489,22 @@ class _LiveIndicatorState extends State<_LiveIndicator> with SingleTickerProvide
   @override
   void initState() {
     super.initState();
+    _setupController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.speedMultiplier != widget.speedMultiplier) {
+      _controller.dispose();
+      _setupController();
+    }
+  }
+
+  void _setupController() {
+    final durationMs = (1000 / widget.speedMultiplier).round();
     _controller = AnimationController(
-      duration: const Duration(seconds: 1),
+      duration: Duration(milliseconds: durationMs),
       vsync: this,
     )..repeat(reverse: true);
   }
@@ -506,6 +535,36 @@ class _LiveIndicatorState extends State<_LiveIndicator> with SingleTickerProvide
             fontSize: 8,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttackSentDialog extends StatelessWidget {
+  const _AttackSentDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.accentGold, width: 2),
+          boxShadow: [
+            BoxShadow(color: AppTheme.accentGold.withOpacity(0.4), blurRadius: 12),
+          ],
+        ),
+        child: const Text(
+          '¡ATAQUE ENVIADO!',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            letterSpacing: 1.5,
           ),
         ),
       ),

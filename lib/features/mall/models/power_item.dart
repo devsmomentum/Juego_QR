@@ -36,31 +36,21 @@ class PowerItem {
   // ESTA ES LA LISTA MAESTRA QUE DEBE COINCIDIR CON LA BASE DE DATOS
   static List<PowerItem> getShopItems() {
     return [
-      // --- OFENSIVOS ---
+      // Catálogo oficial (9 poderes) alineado con Supabase
       const PowerItem(
-        id: 'freeze', // ID EXACTO DE LA BD
-        name: 'Congelar',
-        description: 'Congela a un jugador por 2 minutos',
-        type: PowerType.freeze,
-        cost: 50,
-        icon: '❄️',
-        color: Colors.cyan,
-        durationMinutes: 2,
-      ),
-      const PowerItem(
-        id: 'black_screen', // ID EXACTO DE LA BD
+        id: 'black_screen',
         name: 'Pantalla Negra',
-        description: 'Ciega al rival temporalmente',
+        description: 'Ciega al rival por 5s',
         type: PowerType.blind,
         cost: 100,
         icon: '🕶️',
         color: Colors.black87,
-        durationMinutes: 0, 
+        durationMinutes: 0,
       ),
       const PowerItem(
         id: 'slow_motion',
         name: 'Cámara Lenta',
-        description: 'Ralentiza al oponente',
+        description: 'Reduce la velocidad del rival por 120s',
         type: PowerType.debuff,
         cost: 80,
         icon: '🐢',
@@ -70,29 +60,27 @@ class PowerItem {
       const PowerItem(
         id: 'time_penalty',
         name: 'Penalización',
-        description: 'Resta tiempo al oponente',
+        description: 'Resta 3 minutos de progreso',
         type: PowerType.timePenalty,
         cost: 60,
         icon: '⏱️',
         color: Colors.redAccent,
-        durationMinutes: 3,
+        durationMinutes: 0,
       ),
-
-      // --- DEFENSIVOS ---
       const PowerItem(
-        id: 'shield', // ID EXACTO DE LA BD
-        name: 'Escudo',
-        description: 'Protección contra ataques',
-        type: PowerType.shield,
-        cost: 75,
-        icon: '🛡️',
-        color: Colors.indigo,
-        durationMinutes: 5,
+        id: 'hint',
+        name: 'Pista Extra',
+        description: 'Revela información clave',
+        type: PowerType.hint,
+        cost: 30,
+        icon: '💡',
+        color: Colors.amber,
+        durationMinutes: 0,
       ),
       const PowerItem(
         id: 'shield_pro',
         name: 'Escudo Pro',
-        description: 'Protección contra cualquier sabotaje por 10 min.',
+        description: 'Bloquea sabotajes por 600s',
         type: PowerType.shield,
         cost: 100,
         icon: '🛡️',
@@ -102,41 +90,42 @@ class PowerItem {
       const PowerItem(
         id: 'cure_all',
         name: 'Cura Total',
-        description: 'Elimina cualquier efecto negativo activo.',
+        description: 'Limpia todos los efectos activos',
         type: PowerType.buff,
         cost: 40,
         icon: '💊',
         color: Colors.teal,
-      ),
-      
-
-      const PowerItem(
-        id: 'hint',
-        name: 'Pista Extra',
-        description: 'Revela información clave',
-        type: PowerType.hint,
-        cost: 30,
-        icon: '💡',
-        color: Colors.amber,
+        durationMinutes: 0,
       ),
       const PowerItem(
-        id: 'extra_life',
-        name: 'Vida Extra',
-        description: 'Recupera una vida perdida',
-        type: PowerType.buff,
-        cost: 50,
-        icon: '❤️',
-        color: Colors.red,
-      ),
-      // --- IMPORTANTE: Agregamos este por si acaso quedó basura vieja en la BD ---
-      const PowerItem(
-        id: 'return', 
+        id: 'return',
         name: 'Devolución',
-        description: 'Devuelve el ataque',
+        description: 'Devuelve el ataque al origen',
         type: PowerType.utility,
         cost: 60,
         icon: '↩️',
         color: Colors.purple,
+        durationMinutes: 0,
+      ),
+      const PowerItem(
+        id: 'freeze',
+        name: 'Congelar',
+        description: 'Congela al rival por 120s',
+        type: PowerType.freeze,
+        cost: 50,
+        icon: '❄️',
+        color: Colors.cyan,
+        durationMinutes: 2,
+      ),
+      const PowerItem(
+        id: 'shield',
+        name: 'Escudo',
+        description: 'Bloquea sabotajes por 300s',
+        type: PowerType.shield,
+        cost: 75,
+        icon: '🛡️',
+        color: Colors.indigo,
+        durationMinutes: 5,
       ),
     ];
   }

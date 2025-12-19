@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
 import '../../game/providers/power_effect_provider.dart';
+import '../../game/providers/game_provider.dart';
 
 class PlayerProvider extends ChangeNotifier {
   Player? _currentPlayer;
@@ -252,6 +253,8 @@ Future<void> fetchInventory(String userId, String eventId) async {
     required String powerSlug,
     required String targetGamePlayerId,
     required PowerEffectProvider effectProvider,
+    GameProvider? gameProvider,
+    bool allowReturnForward = true,
   }) async {
     if (_currentPlayer == null) return false;
 
@@ -262,16 +265,46 @@ Future<void> fetchInventory(String userId, String eventId) async {
     }
 
     try {
-      final response = await _supabase.rpc('use_power_mechanic', params: {
-        'p_caster_id': casterGamePlayerId,
-        'p_target_id': targetGamePlayerId,
-        'p_power_slug': powerSlug,
-      });
+      bool success = false;
 
-      final success = response is Map && response['success'] == true;
+      if (powerSlug == 'cure_all') {
+        final response = await _supabase.rpc('clear_active_powers', params: {
+          'p_target_id': targetGamePlayerId,
+        });
+        success = response != null;
+        if (success) {
+          effectProvider.clearActiveEffect();
+        }
+      } else if (powerSlug == 'return') {
+        // Armar devolución para el próximo ataque entrante
+        success = true;
+        effectProvider.armReturn();
+      } else {
+        final response = await _supabase.rpc('use_power_mechanic', params: {
+          'p_caster_id': casterGamePlayerId,
+          'p_target_id': targetGamePlayerId,
+          'p_power_slug': powerSlug,
+        });
+        success = response is Map && response['success'] == true;
+      }
+
+      // Evitar rebotes infinitos de devoluciones
+      if (!allowReturnForward && powerSlug == 'return') {
+        success = true;
+      }
 
       if (success) {
-        // Refrescamos inventario y mantenemos el listener activo
+        // Hooks de front inmediato
+        if (powerSlug == 'time_penalty' && gameProvider != null) {
+          gameProvider.applyTimePenaltyToPlayer(targetGamePlayerId);
+        }
+        if (powerSlug == 'hint' && gameProvider != null && targetGamePlayerId == casterGamePlayerId) {
+          gameProvider.applyHintForCurrentClue();
+        }
+        if (powerSlug == 'shield' || powerSlug == 'shield_pro') {
+          effectProvider.setShielded(true, sourceSlug: powerSlug);
+        }
+
         await syncRealInventory(effectProvider: effectProvider);
       }
       return success;
@@ -421,6 +454,14 @@ Future<void> syncRealInventory({PowerEffectProvider? effectProvider}) async {
       final String gamePlayerId = gamePlayerRes['id'];
       _currentPlayer!.gamePlayerId = gamePlayerId;
       effectProvider?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
+      effectProvider?.configureReturnHandler((slug, casterId) {
+        return usePower(
+          powerSlug: slug,
+          targetGamePlayerId: casterId,
+          effectProvider: effectProvider,
+          allowReturnForward: false,
+        );
+      });
       effectProvider?.startListening(gamePlayerId);
       debugPrint("GamePlayer encontrado: $gamePlayerId");
 
