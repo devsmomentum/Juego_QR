@@ -25,6 +25,9 @@ import '../widgets/minigames/block_fill_minigame.dart';
 // --- Import del Servicio de Penalización ---
 import '../services/penalty_service.dart';
 import 'winner_celebration_screen.dart';
+import '../widgets/animated_lives_widget.dart';
+import '../widgets/loss_flash_overlay.dart';
+import '../widgets/success_celebration_dialog.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -50,7 +53,40 @@ class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver
     // Verificar vidas al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLives();
+      
+      // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
+      Provider.of<GameProvider>(context, listen: false).addListener(_checkRaceCompletion);
     });
+  }
+
+  void _checkRaceCompletion() {
+    if (!mounted) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+
+    // Si la carrera terminó (alguien ganó) y yo no he terminado todo
+    if (gameProvider.isRaceCompleted && !gameProvider.hasCompletedAllClues) {
+      _finishLegally(); // Quitamos penalización
+      
+      final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+      final leaderboard = gameProvider.leaderboard;
+      int position = 1;
+      if (leaderboard.isNotEmpty) {
+        final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
+        position = index >= 0 ? index + 1 : leaderboard.length + 1;
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => WinnerCelebrationScreen(
+            eventId: gameProvider.currentEventId ?? '',
+            playerPosition: position,
+            totalCluesCompleted: gameProvider.completedClues,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    }
   }
 
   Future<void> _checkLives() async {
@@ -90,6 +126,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Limpiar listener de fin de carrera
+    try {
+      Provider.of<GameProvider>(context, listen: false).removeListener(_checkRaceCompletion);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -713,150 +753,16 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     builder: (dialogContext) => SuccessCelebrationDialog(
       clue: clue,
       showNextStep: showNextStep,
+      onMapReturn: () {
+        Navigator.of(dialogContext).pop(); 
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (context.mounted) {
+            Navigator.of(context).pop(); 
+          }
+        });
+      },
     ),
   );
-}
-
-class SuccessCelebrationDialog extends StatefulWidget {
-  final Clue clue;
-  final bool showNextStep;
-  const SuccessCelebrationDialog({super.key, required this.clue, required this.showNextStep});
-
-  @override
-  State<SuccessCelebrationDialog> createState() => _SuccessCelebrationDialogState();
-}
-
-class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
-  late ConfettiController _confettiController;
-
-  @override
-  void initState() {
-    super.initState();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 5));
-    _confettiController.play();
-  }
-
-  @override
-  void dispose() {
-    _confettiController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      backgroundColor: Colors.transparent,
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          // Fuegos artificiales centrales y pequeños
-          Align(
-            alignment: Alignment.center,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive,
-              shouldLoop: false,
-              colors: const [
-                AppTheme.accentGold,
-                AppTheme.successGreen,
-                Colors.yellow,
-                Colors.white,
-              ],
-              numberOfParticles: 15, // Menos partículas para algo más simple
-              gravity: 0.2,
-              maxBlastForce: 10,
-              minBlastForce: 5,
-              particleDrag: 0.05,
-            ),
-          ),
-          
-          Container(
-            padding: const EdgeInsets.only(top: 40, left: 20, right: 20, bottom: 20),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBg,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppTheme.primaryPurple, width: 2),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 10)),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.emoji_events, size: 50, color: AppTheme.accentGold),
-                const SizedBox(height: 15),
-                const Text('¡DESAFÍO COMPLETADO!', 
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.successGreen),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text("INFORMACIÓN DESBLOQUEADA", 
-                        style: TextStyle(color: AppTheme.accentGold, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(widget.clue.description, 
-                        style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildRewardBadge(Icons.star, "+${widget.clue.xpReward} XP", AppTheme.accentGold),
-                    const SizedBox(width: 15),
-                    _buildRewardBadge(Icons.monetization_on, "+${widget.clue.coinReward}", Colors.amber),
-                  ],
-                ),
-                if (widget.showNextStep) ...[
-                  const SizedBox(height: 20),
-                  Text("¡Siguiente misión desbloqueada en el mapa!", 
-                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontStyle: FontStyle.italic),
-                  ),
-                ],
-                const SizedBox(height: 25),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop(); // Cierra el diálogo
-                      Future.delayed(const Duration(milliseconds: 100), () {
-                        if (context.mounted) {
-                          Navigator.of(context).pop(); // Vuelve al mapa
-                        }
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 5,
-                    ),
-                    icon: const Icon(Icons.map),
-                    label: const Text('VOLVER AL MAPA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 Widget _buildRewardBadge(IconData icon, String label, Color color) {
@@ -1036,77 +942,87 @@ Widget _buildMinigameScaffold(BuildContext context, Clue clue, VoidCallback onFi
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
         child: SafeArea(
-          child: Stack(
-            children: [
-              Column(
+          child: Consumer<GameProvider>(
+            builder: (context, game, _) {
+              return Stack(
                 children: [
-                  // AppBar Personalizado
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentGold.withOpacity(0.2), 
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: AppTheme.accentGold),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star, color: AppTheme.accentGold, size: 12),
-                              const SizedBox(width: 4),
-                              Text(
-                                '+${clue.xpReward} XP',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                   Column(
+                    children: [
+                      // AppBar Personalizado
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            const Spacer(),
+                            
+                            // INDICADOR DE VIDAS CON ANIMACIÓN
+                            AnimatedLivesWidget(lives: game.lives),
+                            const SizedBox(width: 10),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentGold.withOpacity(0.2), 
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(color: AppTheme.accentGold),
                               ),
-                            ],
-                          ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.star, color: AppTheme.accentGold, size: 12),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '+${clue.xpReward} XP',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.flag, color: AppTheme.dangerRed, size: 20),
+                              tooltip: 'Rendirse',
+                              onPressed: () => showSkipDialog(context, onFinish),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.flag, color: AppTheme.dangerRed, size: 20),
-                          tooltip: 'Rendirse',
-                          onPressed: () => showSkipDialog(context, onFinish),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Mapa de Progreso
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Consumer<GameProvider>(
-                      builder: (context, game, _) {
-                        return RaceTrackWidget(
+                      ),
+                      
+                      // Mapa de Progreso
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: RaceTrackWidget(
                           leaderboard: game.leaderboard,
-                          currentPlayerId: Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.id ?? '',
+                          currentPlayerId: player?.id ?? '',
                           totalClues: game.clues.length,
                           onSurrender: () => showSkipDialog(context, onFinish),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 10),
+                      
+                      Expanded(
+                        child: IgnorePointer(
+                          ignoring: player != null && player.isFrozen,
+                          child: child,
+                        ),
+                      ),
+                    ],
                   ),
                   
-                  const SizedBox(height: 10),
-                  
-                  Expanded(
-                    child: IgnorePointer(
-                      ignoring: player != null && player.isFrozen,
-                      child: child,
-                    ),
-                  ),
+                  // Efecto Visual de Daño (Flash Rojo) al perder vida
+                  LossFlashOverlay(lives: game.lives),
                 ],
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
     ),
   );
 }
+
+// --- WIDGETS DE SOPORTE PARA ANIMACIONES MOVIDOS A ARCHIVOS EXTERNOS ---

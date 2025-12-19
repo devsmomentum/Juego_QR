@@ -36,19 +36,29 @@ class _CluesScreenState extends State<CluesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       
-      // Check race completion status first
+      // 1. PRIMERO cargar pistas y configurar el ID del evento (esto limpia el estado anterior)
+      await gameProvider.fetchClues(eventId: widget.eventId);
+      
+      // 2. LUEGO comprobar si la carrera ya terminó en el servidor
       await gameProvider.checkRaceStatus();
       
-      // If race is completed, navigate to winner celebration
+      // 3. Si ya terminó, redirigir
       if (gameProvider.isRaceCompleted && mounted) {
         _navigateToWinnerScreen();
         return;
       }
       
-      gameProvider.fetchClues(eventId: widget.eventId);
-      // Opcional: Cargar ranking inicial para que la pista no se vea vacía
-      gameProvider.fetchLeaderboard(); 
+      // 4. FINALMENTE iniciar el polling de ranking
+      gameProvider.startLeaderboardUpdates();
     });
+  }
+
+  @override
+  void dispose() {
+    // Importante: Detener actualizaciones al salir
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.stopLeaderboardUpdates();
+    super.dispose();
   }
   
   void _navigateToWinnerScreen() async {
