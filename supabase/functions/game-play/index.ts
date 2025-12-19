@@ -160,20 +160,49 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: 'Incorrect answer' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // 2. Marcar pista actual como completada
-      const { error: updateError } = await supabaseAdmin
+      // 1.5 Check if already completed to avoid overwriting timestamp and double counting
+      const { data: existingProgress } = await supabaseAdmin
         .from('user_clue_progress')
-        .upsert({
-          user_id: user.id,
-          clue_id: clueId,
-          is_completed: true,
-          is_locked: false,
-          completed_at: new Date().toISOString()
-        }, { onConflict: 'user_id, clue_id' })
+        .select('is_completed')
+        .eq('user_id', user.id)
+        .eq('clue_id', clueId)
+        .maybeSingle();
 
-      if (updateError) {
-        console.error('[complete-clue] Error updating current clue:', updateError)
-        throw updateError
+      if (!existingProgress?.is_completed) {
+        // 2. Marcar pista actual como completada
+        const { error: updateError } = await supabaseAdmin
+          .from('user_clue_progress')
+          .upsert({
+            user_id: user.id,
+            clue_id: clueId,
+            is_completed: true,
+            is_locked: false,
+            completed_at: new Date().toISOString()
+          }, { onConflict: 'user_id, clue_id' })
+
+        if (updateError) {
+          console.error('[complete-clue] Error updating current clue:', updateError)
+          throw updateError
+        }
+
+        // 2.5 Update game_players stats (completed_clues_count)
+        const { data: gamePlayer } = await supabaseAdmin
+          .from('game_players')
+          .select('id, completed_clues_count')
+          .eq('user_id', user.id)
+          .eq('event_id', clue.event_id)
+          .maybeSingle();
+          
+        if (gamePlayer) {
+            await supabaseAdmin
+              .from('game_players')
+              .update({ 
+                completed_clues_count: (gamePlayer.completed_clues_count || 0) + 1 
+              })
+              .eq('id', gamePlayer.id);
+        }
+      } else {
+        console.log('[complete-clue] Clue already completed, skipping stats update.');
       }
 
       console.log(`[complete-clue] Current clue completed. Sequence Index: ${clue.sequence_index}`);

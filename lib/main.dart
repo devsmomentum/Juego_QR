@@ -14,6 +14,7 @@ import 'core/theme/app_theme.dart';
 
 // 2. Imports nuevos para el Administrador
 import 'features/game/providers/event_provider.dart'; 
+import 'features/game/providers/power_effect_provider.dart';
 import 'features/admin/screens/admin_login_screen.dart'; 
 import 'shared/widgets/sabotage_overlay.dart';
 
@@ -63,6 +64,7 @@ class TreasureHuntApp extends StatelessWidget {
         
         // 4. Agregamos el Provider de Eventos para que funcione en la Web
         ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) => PowerEffectProvider()),
       ],
       child: MaterialApp(
         title: 'Treasure Hunt RPG',
