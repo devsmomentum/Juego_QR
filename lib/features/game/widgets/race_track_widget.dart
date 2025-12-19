@@ -364,7 +364,7 @@ class RaceTrackWidget extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  '$pistas pts', // Muestra "pts" o "pistas"
+                  '$pistas pistas', // Muestra "pistas" claramente
                   style: TextStyle(
                     color: isMe ? Colors.black87 : Colors.white70,
                     fontSize: 8,
