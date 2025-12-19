@@ -37,6 +37,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
   List<String>? _currentOptions;
   int _localAttempts = 3; 
 
+  // Lista de países balanceada (Nivel Intermedio)
   final List<Map<String, String>> _allCountries = [
     {'code': 've', 'name': 'Venezuela'},
     {'code': 'es', 'name': 'España'},
@@ -49,28 +50,30 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     {'code': 'mx', 'name': 'México'},
     {'code': 'it', 'name': 'Italia'},
     {'code': 'ca', 'name': 'Canadá'},
-    {'code': 'gb', 'name': 'Reino Unido'},
-    {'code': 'cn', 'name': 'China'},
-    {'code': 'ru', 'name': 'Rusia'},
-    {'code': 'kr', 'name': 'Corea del Sur'},
-    {'code': 'au', 'name': 'Australia'},
-    {'code': 'co', 'name': 'Colombia'},
-    {'code': 'pe', 'name': 'Perú'},
-    {'code': 'cl', 'name': 'Chile'},
     {'code': 'pt', 'name': 'Portugal'},
-    {'code': 'nl', 'name': 'Países Bajos'},
-    {'code': 'be', 'name': 'Bélgica'},
+    {'code': 'au', 'name': 'Australia'},
+    {'code': 'kr', 'name': 'Corea del Sur'},
     {'code': 'ch', 'name': 'Suiza'},
+    {'code': 'gr', 'name': 'Grecia'},
+    {'code': 'be', 'name': 'Bélgica'},
+    {'code': 'nl', 'name': 'Países Bajos'},
     {'code': 'se', 'name': 'Suecia'},
     {'code': 'no', 'name': 'Noruega'},
     {'code': 'dk', 'name': 'Dinamarca'},
     {'code': 'fi', 'name': 'Finlandia'},
-    {'code': 'gr', 'name': 'Grecia'},
+    {'code': 'pl', 'name': 'Polonia'},
     {'code': 'tr', 'name': 'Turquía'},
-    {'code': 'eg', 'name': 'Egipto'},
     {'code': 'za', 'name': 'Sudáfrica'},
-    {'code': 'in', 'name': 'India'},
+    {'code': 'eg', 'name': 'Egipto'},
     {'code': 'th', 'name': 'Tailandia'},
+    {'code': 'vn', 'name': 'Vietnam'},
+    {'code': 'ph', 'name': 'Filipinas'},
+    {'code': 'my', 'name': 'Malasia'},
+    {'code': 'id', 'name': 'Indonesia'},
+    {'code': 'co', 'name': 'Colombia'},
+    {'code': 'cl', 'name': 'Chile'},
+    {'code': 'pe', 'name': 'Perú'},
+    {'code': 'uy', 'name': 'Uruguay'},
   ];
 
   @override

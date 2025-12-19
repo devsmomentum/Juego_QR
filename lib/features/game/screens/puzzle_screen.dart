@@ -7,6 +7,7 @@ import '../models/clue.dart';
 import '../widgets/race_track_widget.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
 
+import 'package:confetti/confetti.dart';
 
 // --- Imports de Minijuegos Existentes ---
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
@@ -709,15 +710,70 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (dialogContext) => Dialog(
+    builder: (dialogContext) => SuccessCelebrationDialog(
+      clue: clue,
+      showNextStep: showNextStep,
+    ),
+  );
+}
+
+class SuccessCelebrationDialog extends StatefulWidget {
+  final Clue clue;
+  final bool showNextStep;
+  const SuccessCelebrationDialog({super.key, required this.clue, required this.showNextStep});
+
+  @override
+  State<SuccessCelebrationDialog> createState() => _SuccessCelebrationDialogState();
+}
+
+class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
+  late ConfettiController _confettiController;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 5));
+    _confettiController.play();
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: Colors.transparent,
       child: Stack(
-        alignment: Alignment.topCenter,
+        alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
+          // Fuegos artificiales centrales y pequeños
+          Align(
+            alignment: Alignment.center,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [
+                AppTheme.accentGold,
+                AppTheme.successGreen,
+                Colors.yellow,
+                Colors.white,
+              ],
+              numberOfParticles: 15, // Menos partículas para algo más simple
+              gravity: 0.2,
+              maxBlastForce: 10,
+              minBlastForce: 5,
+              particleDrag: 0.05,
+            ),
+          ),
+          
           Container(
-            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 20),
+            padding: const EdgeInsets.only(top: 40, left: 20, right: 20, bottom: 20),
             decoration: BoxDecoration(
               color: AppTheme.cardBg,
               borderRadius: BorderRadius.circular(24),
@@ -729,6 +785,8 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const Icon(Icons.emoji_events, size: 50, color: AppTheme.accentGold),
+                const SizedBox(height: 15),
                 const Text('¡DESAFÍO COMPLETADO!', 
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.successGreen),
                   textAlign: TextAlign.center,
@@ -748,7 +806,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                         style: TextStyle(color: AppTheme.accentGold, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
                       ),
                       const SizedBox(height: 8),
-                      Text(clue.description, 
+                      Text(widget.clue.description, 
                         style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
                         textAlign: TextAlign.center,
                       ),
@@ -758,12 +816,12 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildRewardBadge(Icons.star, "+${clue.xpReward} XP", AppTheme.accentGold),
+                    _buildRewardBadge(Icons.star, "+${widget.clue.xpReward} XP", AppTheme.accentGold),
                     const SizedBox(width: 15),
-                    _buildRewardBadge(Icons.monetization_on, "+${clue.coinReward}", Colors.amber),
+                    _buildRewardBadge(Icons.monetization_on, "+${widget.clue.coinReward}", Colors.amber),
                   ],
                 ),
-                if (showNextStep) ...[
+                if (widget.showNextStep) ...[
                   const SizedBox(height: 20),
                   Text("¡Siguiente misión desbloqueada en el mapa!", 
                     style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontStyle: FontStyle.italic),
@@ -774,10 +832,10 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.of(dialogContext).pop(); 
+                      Navigator.of(context).pop(); // Cierra el diálogo
                       Future.delayed(const Duration(milliseconds: 100), () {
                         if (context.mounted) {
-                          Navigator.of(context).pop(); 
+                          Navigator.of(context).pop(); // Vuelve al mapa
                         }
                       });
                     },
@@ -789,36 +847,34 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
                       elevation: 5,
                     ),
                     icon: const Icon(Icons.map),
-                    label: const Text('VOLVER AL MAPA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    label: const Text('VOLVER AL MAPA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
             ),
           ),
-           Positioned(
-            top: -40,
-            child: Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppTheme.primaryPurple, AppTheme.secondaryPink]),
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.cardBg, width: 4),
-                boxShadow: [BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 5))],
-              ),
-              child: const Icon(Icons.emoji_events, size: 40, color: Colors.white),
-            ),
-          ),
         ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 Widget _buildRewardBadge(IconData icon, String label, Color color) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: color, size: 14), const SizedBox(width: 4), Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12))]),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.2), 
+      borderRadius: BorderRadius.circular(20), 
+      border: Border.all(color: color.withOpacity(0.5))
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min, 
+      children: [
+        Icon(icon, color: color, size: 14), 
+        const SizedBox(width: 4), 
+        Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12))
+      ]
+    ),
   );
 }
 
