@@ -8,6 +8,7 @@ import '../../features/game/widgets/effects/freeze_effect.dart';
 import '../../features/game/widgets/effects/invisibility_effect.dart';
 import '../../features/game/widgets/effects/life_steal_effect.dart';
 import '../../features/game/widgets/effects/return_success_effect.dart';
+import '../../features/game/widgets/effects/return_rejection_effect.dart';
 import '../models/player.dart';
 
 class SabotageOverlay extends StatefulWidget {
@@ -86,6 +87,8 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         // Capas de sabotaje (se activan según el slug recibido de la DB)
         if (activeSlug == 'black_screen') const BlindEffect(),
         if (activeSlug == 'freeze') const FreezeEffect(),
+        if (defenseAction == DefenseAction.returned)
+      ReturnRejectionEffect(returnedBy: powerProvider.returnedByPlayerName),
         if (activeSlug == 'life_steal')
           LifeStealEffect(
               casterName: _resolvePlayerNameFromLeaderboard(
@@ -96,6 +99,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
         if (activeSlug == 'return' && powerProvider.activeEffectCasterId != powerProvider.listeningForId)
         const ReturnSuccessEffect(),
+
+        if (defenseAction == DefenseAction.shieldBlocked)
+      _DefenseFeedbackToast(action: defenseAction),
 
         if (_lifeStealBannerText != null)
           Positioned(
@@ -151,11 +157,14 @@ class _DefenseFeedbackToast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (action == null) return const SizedBox.shrink();
+    // Si la acción es 'returned', devolvemos shrink porque el mensaje detallado 
+    // (ReturnRejectionEffect) ya se está mostrando en el Stack principal.
+    if (action == null || action == DefenseAction.returned) {
+      return const SizedBox.shrink();
+    }
 
-    final message = action == DefenseAction.shieldBlocked
-        ? '🛡️ ¡ATAQUE BLOQUEADO POR ESCUDO!'
-        : '↩️ ¡ATAQUE DEVUELTO!';
+    // Aquí solo llegamos si action == DefenseAction.shieldBlocked
+    const String message = '🛡️ ¡ATAQUE BLOQUEADO POR ESCUDO!';
 
     return Positioned(
       top: 16,
@@ -187,9 +196,9 @@ class _DefenseFeedbackToast extends StatelessWidget {
               ),
             ],
           ),
-          child: Text(
+          child: const Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
             ),
