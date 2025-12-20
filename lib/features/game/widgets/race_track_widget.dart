@@ -193,29 +193,12 @@ class RaceTrackWidget extends StatelessWidget {
                     ),
 
                     // 2. Renderizar corredores seleccionados
-                    ...activeRacers.map((racer) {
-                      // CÁLCULO CRÍTICO:
-                      // Usamos racer.player.totalXP porque en el GameProvider (línea 87 aprox)
-                      // mapeamos el conteo de pistas de la DB a este campo.
-                      // NO usamos XP global, usamos "Pistas completadas en ESTE evento".
-                      final int pistasCompletadas = racer.player.totalXP;
-                      
-                      // Evitamos división por cero
-                      final double progress = totalClues > 0 
-                          ? (pistasCompletadas / totalClues).clamp(0.0, 1.0) 
-                          : 0.0;
-                      
-                      return _buildRacerAvatar(
-                        context: context,
-                        player: racer.player,
-                        progress: (progress * speedMultiplier).clamp(0.0, 1.0),
-                        trackWidth: trackWidth,
-                        offsetY: racer.laneOffset,
-                        isMe: racer.isMe,
-                        isLeader: racer.isLeader,
-                        pistas: pistasCompletadas,
-                      );
-                    }),
+                    // ORDENAMIENTO (Z-Index): Primero renderizar a los otros, y al final a MÍ (isMe=true)
+                    // para que mi avatar quede siempre encima.
+                    ...activeRacers.where((r) => !r.isMe).map((racer) => _buildRacer(context, racer, trackWidth, speedMultiplier)),
+                    
+                    ...activeRacers.where((r) => r.isMe).map((racer) => _buildRacer(context, racer, trackWidth, speedMultiplier)),
+
                   ],
                 );
               },
@@ -239,6 +222,25 @@ class RaceTrackWidget extends StatelessWidget {
       ),
       ),
     );
+  }
+
+  // Helper para construir el widget del corredor limpiamente
+  Widget _buildRacer(BuildContext context, _RacerDisplayInfo racer, double trackWidth, double speedMultiplier) {
+      final int pistasCompletadas = racer.player.totalXP;
+      final double progress = totalClues > 0 
+          ? (pistasCompletadas / totalClues).clamp(0.0, 1.0) 
+          : 0.0;
+
+      return _buildRacerAvatar(
+        context: context,
+        player: racer.player,
+        progress: (progress * speedMultiplier).clamp(0.0, 1.0),
+        trackWidth: trackWidth,
+        offsetY: racer.laneOffset,
+        isMe: racer.isMe,
+        isLeader: racer.isLeader,
+        pistas: pistasCompletadas,
+      );
   }
 
   // --- LÓGICA DE SELECCIÓN (Corregida para Datos de Evento) ---
@@ -364,7 +366,9 @@ class RaceTrackWidget extends StatelessWidget {
     required bool isLeader,
     required int pistas,
   }) {
-    final double avatarSize = isMe ? 40 : 32;
+    // [VISUAL UPDATE] Tamaños más pequeños para evitar superposición
+    final double avatarSize = isMe ? 36 : 28; // Antes 40 / 32
+    
     // Ajuste para que el centro del avatar esté en el punto exacto, sin salirse del ancho
     final double maxScroll = trackWidth - avatarSize; 
     
@@ -378,7 +382,7 @@ class RaceTrackWidget extends StatelessWidget {
           if (isMe)
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
-              child: Icon(Icons.arrow_drop_down, color: AppTheme.accentGold, size: 20),
+              child: Icon(Icons.arrow_drop_down, color: AppTheme.accentGold, size: 18),
             ),
 
           // Avatar
@@ -388,13 +392,13 @@ class RaceTrackWidget extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: isMe ? AppTheme.accentGold : (isLeader ? Colors.amber : Colors.white30),
-                width: isMe ? 2 : 1.5,
+                color: isMe ? AppTheme.accentGold : (isLeader ? Colors.amber : Colors.white24),
+                width: isMe ? 2 : 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isMe ? AppTheme.accentGold.withOpacity(0.4) : Colors.black26,
-                  blurRadius: isMe ? 12 : 4,
+                  color: isMe ? AppTheme.accentGold.withOpacity(0.3) : Colors.black26,
+                  blurRadius: isMe ? 8 : 4,
                   spreadRadius: 1,
                 )
               ],
@@ -409,7 +413,7 @@ class RaceTrackWidget extends StatelessWidget {
                       player.name.isNotEmpty ? player.name[0].toUpperCase() : '?',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: isMe ? 16 : 12,
+                        fontSize: isMe ? 14 : 10,
                         fontWeight: FontWeight.bold,
                       ),
                     )
@@ -418,13 +422,15 @@ class RaceTrackWidget extends StatelessWidget {
           ),
           
           // Etiqueta de Nombre y Pistas
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
+          
+          // [VISUAL UPDATE] Etiqueta flotante con mejor legibilidad
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
             decoration: BoxDecoration(
-              color: isMe ? AppTheme.accentGold : Colors.black87,
-              borderRadius: BorderRadius.circular(8),
-              border: isMe ? null : Border.all(color: Colors.white12),
+              color: isMe ? AppTheme.accentGold : Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(6),
+              border: isMe ? null : Border.all(color: Colors.white10),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -433,18 +439,21 @@ class RaceTrackWidget extends StatelessWidget {
                   isMe ? 'TÚ' : (isLeader ? 'TOP 1' : _getShortName(player.name)),
                   style: TextStyle(
                     color: isMe ? Colors.black : Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 9, // Letra pequeña pero legible
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  '$pistas pistas', // Muestra "pistas" claramente
-                  style: TextStyle(
-                    color: isMe ? Colors.black87 : Colors.white70,
-                    fontSize: 8,
+                if(isMe || isLeader) ...[
+                   const SizedBox(width: 3),
+                   Text(
+                   '$pistas', 
+                    style: TextStyle(
+                      color: isMe ? Colors.black87 : Colors.white70,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                ]
               ],
             ),
           ),
@@ -456,7 +465,11 @@ class RaceTrackWidget extends StatelessWidget {
   String _getShortName(String fullName) {
     if (fullName.isEmpty) return 'J';
     final parts = fullName.split(' ');
-    if (parts.isNotEmpty) return parts[0];
+    if (parts.isNotEmpty) {
+        String name = parts[0];
+        if (name.length > 5) name = name.substring(0, 5); // Max 5 chars
+        return name;
+    }
     return fullName.substring(0, 3);
   }
 }

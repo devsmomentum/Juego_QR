@@ -175,8 +175,8 @@ Future<void> loseLife(String userId) async {
   }
 
   /// Método público para cargar ranking (puede mostrar loading)
-  Future<void> fetchLeaderboard() async {
-    await _fetchLeaderboardInternal(silent: false);
+  Future<void> fetchLeaderboard({bool silent = false}) async {
+    await _fetchLeaderboardInternal(silent: silent);
   }
 
   Future<void> _fetchLeaderboardInternal({bool silent = false}) async {

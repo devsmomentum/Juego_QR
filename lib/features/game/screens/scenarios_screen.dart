@@ -196,14 +196,26 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
       if (!mounted) return;
 
       if (request != null) {
-        // Already requested, go to status screen
-        Navigator.of(context).push(
-          MaterialPageRoute(
-              builder: (_) => GameRequestScreen(
-                    eventId: scenario.id,
-                    eventTitle: scenario.name,
-                  )),
-        );
+        // [MEJORA] Si ya está aprobado, entrar directo al juego
+        if (request.isApproved) {
+            // Inicializar juego (registrar en game_players si hace falta)
+            await Provider.of<GameProvider>(context, listen: false)
+                .startGame(scenario.id);
+            
+            if (!mounted) return;
+            
+            Navigator.push(context,
+              MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
+        } else {
+            // Todavía pendiente o rechazado
+            Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => GameRequestScreen(
+                        eventId: scenario.id,
+                        eventTitle: scenario.name,
+                    )),
+            );
+        }
       } else {
         // New user, must find code first
         Navigator.of(context).push(
@@ -245,6 +257,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
         latitude: latitude,
         longitude: longitude,
         date: event.date,
+        isCompleted: event.winnerId != null && event.winnerId!.isNotEmpty,
       );
     }).toList();
 
@@ -493,41 +506,37 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
                                                 // State Tag
                                                 Row(
                                                   children: [
+                                                    // Badge de Estado (Finalizada vs Max Players)
                                                     Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 12,
-                                                          vertical: 6),
+                                                      padding: const EdgeInsets.symmetric(
+                                                          horizontal: 12, vertical: 6),
                                                       decoration: BoxDecoration(
-                                                        color: Colors.black54,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(20),
+                                                        color: scenario.isCompleted 
+                                                            ? AppTheme.dangerRed.withOpacity(0.9) // Rojo si finalizó
+                                                            : Colors.black54,
+                                                        borderRadius: BorderRadius.circular(20),
                                                         border: Border.all(
-                                                            color:
-                                                                Colors.white24),
+                                                            color: Colors.white24),
                                                       ),
                                                       child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
+                                                        mainAxisSize: MainAxisSize.min,
                                                         children: [
-                                                          const Icon(
-                                                              Icons.people,
-                                                              color: Colors
-                                                                  .white70,
-                                                              size: 12),
-                                                          const SizedBox(
-                                                              width: 4),
+                                                          Icon(
+                                                              scenario.isCompleted 
+                                                                  ? Icons.emoji_events // Trofeo si finalizó
+                                                                  : Icons.people,
+                                                              color: Colors.white,
+                                                              size: 14), // Un poco más grande
+                                                          const SizedBox(width: 6),
                                                           Text(
-                                                            'MAX ${scenario.maxPlayers}',
-                                                            style:
-                                                                const TextStyle(
-                                                              color:
-                                                                  Colors.white,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 10,
+                                                            scenario.isCompleted 
+                                                                ? 'FINALIZADA'
+                                                                : 'MAX ${scenario.maxPlayers}',
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 12, // Más legible
+                                                              letterSpacing: 0.5,
                                                             ),
                                                           ),
                                                         ],
@@ -573,8 +582,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
                                                 ),
                                                 const SizedBox(height: 10),
                                                 
-                                                // COUNTDOWN (si fecha existe)
-                                                if (scenario.date != null)
+                                                // COUNTDOWN (si fecha existe y NO ha terminado)
+                                                if (scenario.date != null && !scenario.isCompleted)
                                                   Center(child: ScenarioCountdown(targetDate: scenario.date!)),
 
                                                 const SizedBox(height: 10),

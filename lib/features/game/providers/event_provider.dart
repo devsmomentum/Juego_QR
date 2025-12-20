@@ -218,23 +218,24 @@ class EventProvider with ChangeNotifier {
   // Helper para mapear
   GameEvent _mapJsonToEvent(Map<String, dynamic> data) {
     return GameEvent(
-      id: data['id'],
-      title: data['title'],
-      description: data['description'] ?? '',
-      locationName: data['location_name'] ?? '',
+      id: data['id'] as String,
+      title: data['title'] as String,
+      description: (data['description'] ?? '') as String,
+      locationName: (data['location_name'] ?? '') as String,
       latitude: (data['latitude'] is double)
             ? data['latitude']
             : (double.tryParse(data['latitude'].toString()) ?? 0.0),
       longitude: (data['longitude'] is double)
             ? data['longitude']
             : (double.tryParse(data['longitude'].toString()) ?? 0.0),
-      date: DateTime.parse(data['date']),
-      createdByAdminId: data['created_by_admin_id'] ?? '',
-      imageUrl: data['image_url'] ?? '',
+      date: DateTime.parse(data['date'] as String),
+      createdByAdminId: (data['created_by_admin_id'] ?? '') as String,
+      imageUrl: (data['image_url'] ?? '') as String,
       // CAMBIO IMPORTANTE: Si la BD trae null, ponemos string vacío, pero nunca null
-      clue: data['clue'] ?? '¡Pista desbloqueada!', 
-      maxParticipants: data['max_participants'] ?? 0,
-      pin: data['pin'] ?? '',
+      clue: (data['clue'] ?? '¡Pista desbloqueada!') as String, 
+      maxParticipants: (data['max_participants'] ?? 0) as int,
+      pin: (data['pin'] ?? '') as String,
+      winnerId: data['winner_id'] as String?, // Map winner_id field
     );
   }
 
