@@ -141,6 +141,31 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
     }
   }
 
+Future<bool> _showConfirmDialog() async {
+  return await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppTheme.cardBg, // Usa el tema definido en tu app
+      title: const Text("Confirmar Reinicio", style: TextStyle(color: Colors.white)),
+      content: const Text(
+        "¿Estás seguro? Se expulsará a todos los jugadores, se borrará su progreso y las pistas volverán a bloquearse. Esta acción no se puede deshacer.",
+        style: TextStyle(color: Colors.white70),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text("Cancelar"),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text("REINICIAR", style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  ) ?? false; // Retorna false si el usuario cierra el diálogo sin presionar nada
+}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,6 +173,38 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
         backgroundColor: AppTheme.darkBg,
         title: Text(widget.event.title),
         actions: [
+          IconButton(
+      icon: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
+      tooltip: "Reiniciar Competencia",
+      onPressed: () async {
+        final confirmed = await _showConfirmDialog();
+        if (!confirmed) return;
+
+        setState(() => _isLoading = true);
+        try {
+          // 1. Llamar al reset nuclear en el servidor
+          await Provider.of<EventProvider>(context, listen: false)
+              .restartCompetition(widget.event.id);
+          
+          // 2. Limpiar las solicitudes locales
+          Provider.of<GameRequestProvider>(context, listen: false).clearLocalRequests();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('✅ Competencia reiniciada exitosamente')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error al reiniciar: $e'), backgroundColor: Colors.red),
+            );
+          }
+        } finally {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      },
+    ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
@@ -779,6 +836,53 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
     );
   }
 
+void _showRestartConfirmDialog() {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppTheme.cardBg,
+      title: const Text("¿Reiniciar Competencia?", style: TextStyle(color: Colors.white)),
+      content: const Text(
+        "Esto expulsará a todos los participantes actuales, eliminará su progreso y bloqueará las pistas nuevamente. Esta acción no se puede deshacer.",
+        style: TextStyle(color: Colors.white70),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancelar"),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () async {
+          final confirm = await _showConfirmDialog(); // Diálogo de confirmación
+          if (!confirm) return;
+
+          setState(() => _isLoading = true);
+          try {
+            // 1. Ejecutar limpieza en base de datos
+            await Provider.of<EventProvider>(context, listen: false)
+                .restartCompetition(widget.event.id);
+            
+            // 2. Limpiar visualmente la lista de solicitudes/participantes
+            Provider.of<GameRequestProvider>(context, listen: false).clearLocalRequests();
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('✅ Competencia y progreso eliminados correctamente')),
+              );
+            }
+          } catch (e) {
+            // Manejo de error
+          } finally {
+            if (mounted) setState(() => _isLoading = false);
+          }
+        },
+          child: const Text("REINICIAR AHORA", style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
 
   void _showAddClueDialog() {
     final titleController = TextEditingController();
@@ -1003,6 +1107,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> with 
     );
   }
 }
+
+
+
 
 class _RequestTile extends StatelessWidget {
   final GameRequest request;

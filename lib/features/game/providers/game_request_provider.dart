@@ -38,6 +38,11 @@ class GameRequestProvider extends ChangeNotifier {
     }
   }
 
+void clearLocalRequests() {
+  _requests = []; // Vacía la lista local
+  notifyListeners();
+}
+
   Future<GameRequest?> getRequestForPlayer(String playerId, String eventId) async {
     try {
       final data = await _supabase

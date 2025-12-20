@@ -331,6 +331,23 @@ class EventProvider with ChangeNotifier {
     }
   }
 
+  Future<void> restartCompetition(String eventId) async {
+  try {
+    // Llamamos a la función RPC de Supabase
+    await _supabase.rpc('reset_competition_final_v4', params: {
+      'p_event_id': eventId,
+    });
+
+    // Opcional: Si tienes estados locales que limpiar en otros providers, 
+    // podrías disparar un refresco aquí.
+    await fetchEvents(); 
+    notifyListeners();
+  } catch (e) {
+    print('Error al reiniciar competencia: $e');
+    rethrow;
+  }
+}
+
   Future<void> deleteClue(String clueId) async {
     try {
       await _supabase.from('clues').delete().eq('id', clueId);

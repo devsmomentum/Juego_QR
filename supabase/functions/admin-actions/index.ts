@@ -43,6 +43,7 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
 
+      // 1. Obtener la solicitud
       const { data: request, error: reqError } = await supabaseAdmin
         .from('game_requests')
         .select('*')
@@ -51,17 +52,26 @@ serve(async (req) => {
 
       if (reqError) throw reqError
 
+      // 2. Aprobar solicitud
       await supabaseAdmin
         .from('game_requests')
         .update({ status: 'approved' })
         .eq('id', requestId)
 
-      await supabaseAdmin
-        .from('event_participants')
+      // 3. CREAR JUGADOR REAL (Aquí está la magia)
+      // Al insertar aquí, se genera un UUID nuevo que servirá para inventarios y poderes
+      const { error: insertError } = await supabaseAdmin
+        .from('game_players')
         .insert({
           user_id: request.user_id,
-          event_id: request.event_id
+          event_id: request.event_id,
+          lives: 3 // Vidas iniciales
         })
+
+      if (insertError) {
+         // Si falla (ej: usuario ya existe), lanzamos error
+         throw insertError
+      }
 
       return new Response(
         JSON.stringify({ success: true }),
@@ -89,34 +99,42 @@ serve(async (req) => {
     }
 
     // --- CREATE CLUES BATCH ---
-    if (path === 'create-clues-batch') {
-      const { eventId, clues } = await req.json()
+
+  if (path === 'create-clues-batch') {
+    const { eventId, clues } = await req.json()
+    
+    if (!eventId || !clues || !Array.isArray(clues)) throw new Error('eventId and clues array are required')
+
+    const cluesToInsert = clues.map((clue: any, index: number) => ({
+      event_id: eventId,
+      sequence_index: index,
+      title: clue.title,
+      description: clue.description,
       
-      if (!eventId || !clues || !Array.isArray(clues)) throw new Error('eventId and clues array are required')
+      // CORRECCIÓN 1: Usar el tipo que viene de Flutter, no forzar 'qrScan'
+      type: clue.type || 'minigame', 
 
-      const cluesToInsert = clues.map((clue: any, index: number) => ({
-        event_id: eventId,
-        sequence_index: index,
-        title: clue.title,
-        description: clue.description,
-        riddle_question: clue.riddle_question,
-        riddle_answer: clue.riddle_answer,
-        xp_reward: clue.xp_reward || 50,
-        coin_reward: clue.coin_reward || 10,
-        type: 'qrScan'
-      }))
+      // CORRECCIÓN 2: Agregar el campo puzzle_type
+      puzzle_type: clue.puzzle_type,
 
-      const { error } = await supabaseClient
-        .from('clues')
-        .insert(cluesToInsert)
+      // El resto de campos siguen igual
+      riddle_question: clue.riddle_question,
+      riddle_answer: clue.riddle_answer,
+      xp_reward: clue.xp_reward || 50,
+      coin_reward: clue.coin_reward || 10,
+    }))
 
-      if (error) throw error
+    const { error } = await supabaseClient
+      .from('clues')
+      .insert(cluesToInsert)
 
-      return new Response(
-        JSON.stringify({ success: true, message: 'Clues created' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    if (error) throw error
+
+    return new Response(
+      JSON.stringify({ success: true, message: 'Clues created' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
 
     return new Response(
       JSON.stringify({ error: 'Not Found' }),

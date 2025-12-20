@@ -61,6 +61,39 @@ serve(async (req) => {
 
       if (error) throw error
 
+      // // Ensure the user starts with 100 coins.
+      // // We use the Service Role key to bypass RLS and safely upsert the profile.
+      // if (data?.user?.id) {
+      //   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      //   if (!serviceKey) {
+      //     throw new Error(
+      //       'Missing SUPABASE_SERVICE_ROLE_KEY. Set it in Supabase Edge Function secrets to initialize profile coins.'
+      //     )
+      //   }
+
+      //   const serviceClient = createClient(
+      //     Deno.env.get('SUPABASE_URL') ?? '',
+      //     serviceKey,
+      //     { auth: { persistSession: false } }
+      //   )
+
+      //   const { error: profileError } = await serviceClient
+      //     .from('profiles')
+      //     .upsert(
+      //       {
+      //         id: data.user.id,
+      //         email,
+      //         name,
+      //         role: 'user',
+      //         total_coins: 100,
+      //         coins: 100,
+      //       },
+      //       { onConflict: 'id' }
+      //     )
+
+      //   if (profileError) throw profileError
+      // }
+
       return new Response(
         JSON.stringify(data),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

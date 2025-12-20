@@ -395,54 +395,6 @@ bool _coerceRpcSuccess(dynamic response) {
     return true;
   }
 
-  Future<void> _applyLifeStealCasterGain({
-    required String casterGamePlayerId,
-    required String targetGamePlayerId,
-  }) async {
-    // Con RLS, sólo podemos actualizar nuestro propio game_player.
-    // Para evitar “crear vida” cuando el rival está en 0, leemos sus vidas (SELECT sí está permitido por policy).
-    const int maxAttempts = 3;
-
-    for (int attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        final casterRes = await _supabase
-            .from('game_players')
-            .select('id, lives')
-            .eq('id', casterGamePlayerId)
-            .maybeSingle();
-        final targetRes = await _supabase
-            .from('game_players')
-            .select('id, lives')
-            .eq('id', targetGamePlayerId)
-            .maybeSingle();
-
-        if (casterRes == null || targetRes == null) return;
-
-        final int casterLives = (casterRes['lives'] as num?)?.toInt() ?? 0;
-        final int targetLives = (targetRes['lives'] as num?)?.toInt() ?? 0;
-
-        // Si el rival no tiene vida, no hay nada que robar.
-        if (targetLives <= 0) return;
-
-        // Si ya estamos en 3, sólo se descuenta al rival (lo hará el rival al recibir el efecto).
-        if (casterLives >= 3) return;
-
-        final int newCasterLives = (casterLives + 1).clamp(0, 3);
-
-        final casterUpdated = await _supabase
-            .from('game_players')
-            .update({'lives': newCasterLives})
-            .eq('id', casterGamePlayerId)
-            .eq('lives', casterLives)
-            .select();
-
-        if (casterUpdated.isNotEmpty) return;
-      } catch (e) {
-        debugPrint('_applyLifeStealCasterGain error: $e');
-        return;
-      }
-    }
-  }
 
   Future<bool> _decrementPowerBySlug(
       String powerSlug, String gamePlayerId) async {
@@ -618,7 +570,6 @@ bool _coerceRpcSuccess(dynamic response) {
       }
 
       final String gamePlayerId = gamePlayerRes['id'];
-      final String? eventId = gamePlayerRes['event_id']?.toString();
       _currentPlayer!.gamePlayerId = gamePlayerId;
       effectProvider
           ?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
@@ -808,8 +759,7 @@ bool _coerceRpcSuccess(dynamic response) {
   Future<void> debugToggleStatus(String status) async {
     if (_currentPlayer == null) return;
     try {
-      final expiration =
-          DateTime.now().toUtc().add(const Duration(seconds: 15));
+      
       final newStatus =
           _currentPlayer!.status.name == status ? 'active' : status;
 

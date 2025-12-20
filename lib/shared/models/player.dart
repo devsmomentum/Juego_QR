@@ -54,7 +54,7 @@ class Player {
       experience: json['experience'] ?? 0,
       totalXP: json['total_xp'] ?? 0,
       profession: json['profession'] ?? 'Novice',
-      coins: json['total_coins'] ?? 100,
+      coins: json['total_coins'] ?? json['coins'] ?? 100,
       status: _parseStatus(json['status']),
       frozenUntil: json['frozen_until'] != null
           ? DateTime.parse(json['frozen_until'])
@@ -64,13 +64,12 @@ class Player {
         'strength': json['stat_strength'] ?? 0,
         'intelligence': json['stat_intelligence'] ?? 0,
       },
-        eventsCompleted: json['events_completed'] != null
+      eventsCompleted: json['events_completed'] != null
           ? List<String>.from(json['events_completed'])
           : [],
-        inventory: json['inventory'] != null
-          ? List<String>.from(json['inventory'])
-          : [],
-        gamePlayerId: json['player_id'] ?? json['game_player_id'],
+      inventory:
+          json['inventory'] != null ? List<String>.from(json['inventory']) : [],
+      gamePlayerId: json['player_id'] ?? json['game_player_id'],
     );
   }
 
@@ -88,7 +87,7 @@ class Player {
         return PlayerStatus.banned;
       case 'pending':
         return PlayerStatus.pending;
-        case 'invisible': // <--- Agregamos este caso
+      case 'invisible': // <--- Agregamos este caso
         return PlayerStatus.invisible;
       default:
         return PlayerStatus.active;
@@ -103,15 +102,18 @@ class Player {
 
   bool get isFrozen =>
       status == PlayerStatus.frozen &&
-      (frozenUntil == null || DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
+      (frozenUntil == null ||
+          DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
 
   bool get isBlinded =>
       status == PlayerStatus.blinded &&
-      (frozenUntil == null || DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
+      (frozenUntil == null ||
+          DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
 
   bool get isSlowed =>
       status == PlayerStatus.slowed &&
-      (frozenUntil == null || DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
+      (frozenUntil == null ||
+          DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
 
   void addExperience(int xp) {
     experience += xp;
