@@ -104,8 +104,8 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       if (activeSlug == 'blur_screen') const BlurScreenEffect(), // El efecto que marea
       
       // --- ESTADOS BENEFICIOSOS (BUFFS) ---
-     if (isPlayerInvisible) 
-      InvisibilityEffect(expiresAt: powerProvider.activePowerExpiresAt), // El aura púrpura de sigilo
+     if (isPlayerInvisible || activeSlug == 'invisibility') 
+        const InvisibilityEffect(),
 
         if (activeSlug == 'return' && powerProvider.activeEffectCasterId != powerProvider.listeningForId)
         const ReturnSuccessEffect(),
