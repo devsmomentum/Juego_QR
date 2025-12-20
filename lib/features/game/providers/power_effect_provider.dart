@@ -224,22 +224,22 @@ class PowerEffectProvider extends ChangeNotifier {
 
     // Aplicación real de life_steal para la víctima (RLS-safe):
     // el propio cliente víctima se descuenta a sí mismo vía PlayerProvider/RPC.
-    final effectId = _activeEffectId;
-    if (latestSlug == 'life_steal' &&
-        effectId != null &&
-        effectId.isNotEmpty &&
-        effectId != _lastLifeStealHandledEffectId &&
-        _lifeStealVictimHandler != null) {
-      _lastLifeStealHandledEffectId = effectId;
-      // Fire-and-forget para no bloquear la UI del overlay.
-      () async {
-        try {
-          await _lifeStealVictimHandler!(effectId, _activeEffectCasterId);
-        } catch (e) {
-          debugPrint('PowerEffectProvider: life_steal handler error: $e');
-        }
-      }();
-    }
+    // final effectId = _activeEffectId;
+    // if (latestSlug == 'life_steal' &&
+    //     effectId != null &&
+    //     effectId.isNotEmpty &&
+    //     effectId != _lastLifeStealHandledEffectId &&
+    //     _lifeStealVictimHandler != null) {
+    //   _lastLifeStealHandledEffectId = effectId;
+    //   // Fire-and-forget para no bloquear la UI del overlay.
+    //   () async {
+    //     try {
+    //       await _lifeStealVictimHandler!(effectId, _activeEffectCasterId);
+    //     } catch (e) {
+    //       debugPrint('PowerEffectProvider: life_steal handler error: $e');
+    //     }
+    //   }();
+    // }
 
     // Manejo de devolución reactiva
     if (_returnArmed && _returnHandler != null) {

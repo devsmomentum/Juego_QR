@@ -256,13 +256,12 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   // --- USO DE PODERES ---
-
-  Future<bool> usePower({
+Future<bool> usePower({
     required String powerSlug,
     required String targetGamePlayerId,
     required PowerEffectProvider effectProvider,
     GameProvider? gameProvider,
-    bool allowReturnForward = true,
+    bool allowReturnForward = true, // Reintegrado para evitar errores de compilación
   }) async {
     if (_currentPlayer == null) return false;
     if (_isProcessing) return false;
@@ -278,21 +277,28 @@ class PlayerProvider extends ChangeNotifier {
     try {
       bool success = false;
 
-      // Por ahora: invisibility NO hace nada (ni RPC, ni consumo, ni efectos).
+      // 1. Lógica original: INVISIBILIDAD
       if (powerSlug == 'invisibility') {
         success = true;
-      } else if (powerSlug == 'blur_screen') {
-        // blur_screen: ataque global a todos los rivales del evento (excluyéndote).
-        // Consumimos 1 unidad y escribimos directamente en active_powers.
-        final paid =
-            await _decrementPowerBySlug('blur_screen', casterGamePlayerId);
+      } 
+      // 2. NUEVA LÓGICA: ROBO DE VIDA (ATÓMICO)
+      else if (powerSlug == 'life_steal') {
+        // Llamamos al nuevo RPC que resta vida al rival y te suma a ti en un solo paso
+        final response = await _supabase.rpc('use_life_steal_atomic', params: {
+          'p_caster_gp_id': casterGamePlayerId,
+          'p_target_gp_id': targetGamePlayerId,
+        });
+        success = response as bool;
+      }
+      // 3. Lógica original: PANTALLA BORROSA
+      else if (powerSlug == 'blur_screen') {
+        final paid = await _decrementPowerBySlug('blur_screen', casterGamePlayerId);
         if (!paid) {
           debugPrint('usePower(blur_screen): sin cantidad disponible.');
           return false;
         }
         if (gameProvider == null) {
-          debugPrint(
-              'usePower(blur_screen): gameProvider requerido para obtener rivales.');
+          debugPrint('usePower(blur_screen): gameProvider requerido.');
           return false;
         }
         await _broadcastBlurScreenToEventRivals(
@@ -300,47 +306,35 @@ class PlayerProvider extends ChangeNotifier {
           casterGamePlayerId: casterGamePlayerId,
         );
         success = true;
-      } else if (powerSlug == 'return') {
-        // Persistencia (Point C): descontar inmediatamente en player_powers.
+      } 
+      // 4. Lógica original: DEVOLUCIÓN (RETURN)
+      else if (powerSlug == 'return') {
         final paid = await _decrementPowerBySlug('return', casterGamePlayerId);
-        if (!paid) {
-          debugPrint('usePower(return): sin cantidad disponible.');
-          return false;
-        }
-        // Armar devolución para el próximo ataque entrante
+        if (!paid) return false;
         success = true;
         effectProvider.armReturn();
-      } else {
+      } 
+      // 5. Lógica original: OTROS PODERES (CONGELAR, PANTALLA NEGRA, ETC.)
+      else {
         final response = await _supabase.rpc('use_power_mechanic', params: {
           'p_caster_id': casterGamePlayerId,
           'p_target_id': targetGamePlayerId,
           'p_power_slug': powerSlug,
         });
         success = _coerceRpcSuccess(response);
-
-        // life_steal: con RLS, el atacante NO puede actualizar las vidas del rival.
-        // Estrategia sin tocar backend:
-        // - el rival se descuenta a sí mismo al recibir el efecto (ver SabotageOverlay)
-        // - el atacante solo se incrementa a sí mismo aquí (tope 3)
-        if (success && powerSlug == 'life_steal') {
-          await _applyLifeStealCasterGain(
-            casterGamePlayerId: casterGamePlayerId,
-            targetGamePlayerId: targetGamePlayerId,
-          );
-        }
       }
 
-      // Evitar rebotes infinitos de devoluciones
+      // Protección original contra bucles de devolución
       if (!allowReturnForward && powerSlug == 'return') {
         success = true;
       }
 
       if (success) {
-        // Hooks de front inmediato
+        // Hooks de interfaz originales
         if (powerSlug == 'shield') {
           effectProvider.setShielded(true, sourceSlug: powerSlug);
         }
-
+        // Sincronización completa de inventario y vidas tras el uso
         await syncRealInventory(effectProvider: effectProvider);
       }
       return success;
@@ -351,7 +345,6 @@ class PlayerProvider extends ChangeNotifier {
       _isProcessing = false;
     }
   }
-
   bool _coerceRpcSuccess(dynamic response) {
     if (response == null) {
       // Muchas funciones SQL retornan void/null cuando salen bien.
@@ -622,9 +615,9 @@ class PlayerProvider extends ChangeNotifier {
           allowReturnForward: false,
         );
       });
-      effectProvider?.configureLifeStealVictimHandler((effectId, casterId) {
-        return loseLife(eventId: eventId);
-      });
+      // effectProvider?.configureLifeStealVictimHandler((effectId, casterId) {
+      //   return loseLife(eventId: eventId);
+      // });
       effectProvider?.startListening(gamePlayerId);
       debugPrint("GamePlayer encontrado: $gamePlayerId");
 
