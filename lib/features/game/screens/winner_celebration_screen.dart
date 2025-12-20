@@ -25,32 +25,70 @@ class WinnerCelebrationScreen extends StatefulWidget {
 
 class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   late ConfettiController _confettiController;
+  late int _currentPosition; // Mutable state for position
 
   @override
   void initState() {
     super.initState();
+    _currentPosition = widget.playerPosition; // Initialize
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
     
-    // Start confetti for top 3 finishers
-    if (widget.playerPosition <= 3) {
+    // Start confetti for top 3 finishers (positive ranks only)
+    if (_currentPosition >= 1 && _currentPosition <= 3) {
       _confettiController.play();
     }
     
-    // Load final leaderboard
+    // Load final leaderboard and update position if needed
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      
+      // Add listener to self-correct position
+      gameProvider.addListener(_updatePositionFromLeaderboard);
+      
       gameProvider.fetchLeaderboard();
+      // Try immediate update if data exists
+      _updatePositionFromLeaderboard();
     });
+  }
+  
+  void _updatePositionFromLeaderboard() {
+    if (!mounted) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+    
+    if (gameProvider.leaderboard.isNotEmpty) {
+      final index = gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
+      final newPos = index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
+      
+      // Update if position changed or was 0 (unknown)
+      if (newPos != _currentPosition && newPos > 0) {
+        setState(() {
+          _currentPosition = newPos;
+        });
+        // Check for confetti again
+        if (newPos >= 1 && newPos <= 3) {
+          _confettiController.play();
+        } else {
+             _confettiController.stop();
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
+    // Remove listener safely
+    try {
+        Provider.of<GameProvider>(context, listen: false).removeListener(_updatePositionFromLeaderboard);
+    } catch(_) {}
+    
     _confettiController.dispose();
     super.dispose();
   }
 
   String _getMedalEmoji() {
-    switch (widget.playerPosition) {
+    switch (_currentPosition) {
       case 1:
         return '🏆';
       case 2:
@@ -63,9 +101,9 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   }
 
   String _getCelebrationMessage() {
-    if (widget.playerPosition == 1) {
+    if (_currentPosition == 1) {
       return '¡Eres el Campeón!';
-    } else if (widget.playerPosition <= 3) {
+    } else if (_currentPosition >= 1 && _currentPosition <= 3) {
       return '¡Podio Merecido!';
     } else {
       return '¡Carrera Completada!';
@@ -73,7 +111,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   }
 
   Color _getPositionColor() {
-    switch (widget.playerPosition) {
+    switch (_currentPosition) {
       case 1:
         return const Color(0xFFFFD700); // Gold
       case 2:
@@ -166,7 +204,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                           ),
                         ),
                         child: Text(
-                          'Posición #${widget.playerPosition}',
+                          'Posición #$_currentPosition',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,

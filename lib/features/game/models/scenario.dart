@@ -11,6 +11,8 @@ class Scenario {
   final double? latitude;
   final double? longitude;
   final DateTime? date;
+  final bool isCompleted; // Nueva propiedad
+
 
   const Scenario({
     required this.id,
@@ -25,5 +27,7 @@ class Scenario {
     this.latitude,
     this.longitude,
     this.date,
+    this.isCompleted = false,
   });
+
 }

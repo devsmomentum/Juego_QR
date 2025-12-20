@@ -44,6 +44,11 @@ class _CluesScreenState extends State<CluesScreen> {
       
       // 3. Si ya terminó, redirigir
       if (gameProvider.isRaceCompleted && mounted) {
+        // Asegurarnos de tener el ranking antes de ir a la pantalla de ganador
+        if (gameProvider.leaderboard.isEmpty) {
+          await gameProvider.fetchLeaderboard(silent: true);
+        }
+        if (!mounted) return;
         _navigateToWinnerScreen();
         return;
       }
@@ -88,7 +93,7 @@ class _CluesScreenState extends State<CluesScreen> {
     final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
     
     final leaderboard = gameProvider.leaderboard;
-    if (leaderboard.isEmpty) return 1;
+    if (leaderboard.isEmpty) return 0; // Default to 0 (Unranked) instead of 1
     
     final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
     return index >= 0 ? index + 1 : leaderboard.length + 1;

@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../models/clue.dart';
 import '../widgets/race_track_widget.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
+import '../../../shared/models/player.dart'; // Import Player model
 
 import 'package:confetti/confetti.dart';
 
@@ -41,6 +42,7 @@ class PuzzleScreen extends StatefulWidget {
 class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver {
   final PenaltyService _penaltyService = PenaltyService();
   bool _legalExit = false;
+  bool _isNavigatingToWinner = false; // Flag to prevent double navigation
 
   @override
   void initState() {
@@ -59,22 +61,35 @@ class _PuzzleScreenState extends State<PuzzleScreen> with WidgetsBindingObserver
     });
   }
 
-  void _checkRaceCompletion() {
-    if (!mounted) return;
+  void _checkRaceCompletion() async {
+    if (!mounted || _isNavigatingToWinner) return;
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
     // Si la carrera terminó (alguien ganó) y yo no he terminado todo
     if (gameProvider.isRaceCompleted && !gameProvider.hasCompletedAllClues) {
+      _isNavigatingToWinner = true; // Set flag
       _finishLegally(); // Quitamos penalización
       
       final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
-      final leaderboard = gameProvider.leaderboard;
-      int position = 1;
+      List<Player> leaderboard = gameProvider.leaderboard;
+      
+      // Si el leaderboard está vacío, intentamos traerlo una vez más para asegurar la posición
+      if (leaderboard.isEmpty) {
+        await gameProvider.fetchLeaderboard(silent: true);
+        leaderboard = gameProvider.leaderboard;
+      }
+
+      int position = 0; // Default to 0 (Unranked) instead of 1
       if (leaderboard.isNotEmpty) {
         final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
         position = index >= 0 ? index + 1 : leaderboard.length + 1;
+      } else {
+        // Fallback si falla todo: Posición muy alta para no decir "Campeón"
+        position = 999; 
       }
+
+      if (!mounted) return;
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
@@ -700,11 +715,15 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       // Check if race was completed or if player completed all clues
       if (gameProvider.isRaceCompleted || gameProvider.hasCompletedAllClues) {
         // Get player position
-        int playerPosition = 1;
+        int playerPosition = 0; // Default 0
         final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+        
+        // Wait for leaderboard if needed? (Cant await easily here without bigger refactor, better safegaurd default)
         if (gameProvider.leaderboard.isNotEmpty) {
           final index = gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
           playerPosition = index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
+        } else {
+          playerPosition = 999; // Safe default
         }
         
         // Navigate to winner celebration screen
