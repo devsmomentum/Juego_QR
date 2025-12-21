@@ -255,7 +255,6 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-
 // --- LÓGICA DE USO DE PODERES ---
 
   Future<bool> usePower({
@@ -284,21 +283,20 @@ class PlayerProvider extends ChangeNotifier {
       if (powerSlug == 'invisibility') {
         response = await _supabase.rpc('use_power_mechanic', params: {
           'p_caster_id': casterGamePlayerId,
-          'p_target_id': casterGamePlayerId, 
+          'p_target_id': casterGamePlayerId,
           'p_power_slug': 'invisibility',
         });
         success = _coerceRpcSuccess(response);
-      }
-      else if (powerSlug == 'life_steal') {
+      } else if (powerSlug == 'life_steal') {
         response = await _supabase.rpc('use_power_mechanic', params: {
           'p_caster_id': casterGamePlayerId,
           'p_target_id': targetGamePlayerId,
           'p_power_slug': 'life_steal',
         });
         success = _coerceRpcSuccess(response);
-      }
-      else if (powerSlug == 'blur_screen') {
-        final paid = await _decrementPowerBySlug('blur_screen', casterGamePlayerId);
+      } else if (powerSlug == 'blur_screen') {
+        final paid =
+            await _decrementPowerBySlug('blur_screen', casterGamePlayerId);
         if (!paid) {
           _isProcessing = false;
           return false;
@@ -310,16 +308,14 @@ class PlayerProvider extends ChangeNotifier {
           );
         }
         success = true;
-      } 
-      else if (powerSlug == 'return') {
-         response = await _supabase.rpc('use_power_mechanic', params: {
-           'p_caster_id': casterGamePlayerId,
-           'p_target_id': casterGamePlayerId,
-           'p_power_slug': 'return',
-         });
-         success = _coerceRpcSuccess(response);
-      } 
-      else {
+      } else if (powerSlug == 'return') {
+        response = await _supabase.rpc('use_power_mechanic', params: {
+          'p_caster_id': casterGamePlayerId,
+          'p_target_id': casterGamePlayerId,
+          'p_power_slug': 'return',
+        });
+        success = _coerceRpcSuccess(response);
+      } else {
         response = await _supabase.rpc('use_power_mechanic', params: {
           'p_caster_id': casterGamePlayerId,
           'p_target_id': targetGamePlayerId,
@@ -341,7 +337,7 @@ class PlayerProvider extends ChangeNotifier {
       if (success && response is Map && response['returned'] == true) {
         final String name = response['returned_by_name'] ?? 'Un rival';
         effectProvider.notifyPowerReturned(name);
-        await refreshProfile(); 
+        await refreshProfile();
       }
 
       if (success) {
@@ -359,8 +355,7 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-
-bool _coerceRpcSuccess(dynamic response) {
+  bool _coerceRpcSuccess(dynamic response) {
     if (response == null) {
       // Muchas funciones SQL retornan void/null cuando salen bien.
       return true;
@@ -394,7 +389,6 @@ bool _coerceRpcSuccess(dynamic response) {
     // Fallback: si no fue excepción, tratamos como éxito.
     return true;
   }
-
 
   Future<bool> _decrementPowerBySlug(
       String powerSlug, String gamePlayerId) async {
@@ -759,7 +753,6 @@ bool _coerceRpcSuccess(dynamic response) {
   Future<void> debugToggleStatus(String status) async {
     if (_currentPlayer == null) return;
     try {
-      
       final newStatus =
           _currentPlayer!.status.name == status ? 'active' : status;
 
@@ -808,8 +801,8 @@ bool _coerceRpcSuccess(dynamic response) {
       }
 
       final now = DateTime.now().toUtc();
-      // Según tu DB: blur_screen duration = 10
-      final expiresAt = now.add(const Duration(seconds: 10)).toIso8601String();
+      final duration = await _getPowerDurationFromDb(powerSlug: 'blur_screen');
+      final expiresAt = now.add(duration).toIso8601String();
 
       final rivals = gameProvider.leaderboard
           .where((p) => p.gamePlayerId != null && p.gamePlayerId!.isNotEmpty)
@@ -833,6 +826,30 @@ bool _coerceRpcSuccess(dynamic response) {
       await _supabase.from('active_powers').insert(payloads);
     } catch (e) {
       debugPrint('_broadcastBlurScreenToEventRivals error: $e');
+    }
+  }
+
+  final Map<String, Duration> _powerDurationCache = {};
+
+  Future<Duration> _getPowerDurationFromDb({required String powerSlug}) async {
+    final cached = _powerDurationCache[powerSlug];
+    if (cached != null) return cached;
+
+    try {
+      final row = await _supabase
+          .from('powers')
+          .select('duration')
+          .eq('slug', powerSlug)
+          .maybeSingle();
+
+      final seconds = (row?['duration'] as num?)?.toInt() ?? 0;
+      final duration =
+          seconds <= 0 ? Duration.zero : Duration(seconds: seconds);
+      _powerDurationCache[powerSlug] = duration;
+      return duration;
+    } catch (e) {
+      debugPrint('_getPowerDurationFromDb($powerSlug) error: $e');
+      return Duration.zero;
     }
   }
 }

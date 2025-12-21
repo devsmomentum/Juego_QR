@@ -22,13 +22,13 @@ class PowerEffectProvider extends ChangeNotifier {
   String? get returnedByPlayerName => _returnedByPlayerName;
 
   final Map<String, String> _powerIdToSlugCache = {};
+  final Map<String, Duration> _powerSlugToDurationCache = {};
 
   // Guardamos el slug del poder activo (ej: 'black_screen', 'freeze')
   String? _activePowerSlug;
   String? _activeEffectId;
   String? _activeEffectCasterId;
   DateTime? _activePowerExpiresAt; // Nueva variable
-
 
   DateTime? get activePowerExpiresAt => _activePowerExpiresAt; // Nuevo getter
 
@@ -191,11 +191,10 @@ class PowerEffectProvider extends ChangeNotifier {
 
         // 2) Insertar efecto reflejado al atacante (sin consumir inventario extra).
         try {
-          final expiresAt = (latestEffect['expires_at']?.toString()) ??
-              DateTime.now()
-                  .toUtc()
-                  .add(const Duration(seconds: 6))
-                  .toIso8601String();
+          final nowUtc = DateTime.now().toUtc();
+          final duration =
+              await _getPowerDurationFromDb(powerSlug: slugToReturn);
+          final expiresAt = nowUtc.add(duration).toIso8601String();
           final payload = <String, dynamic>{
             'target_id': casterId,
             'caster_id': _listeningForId,
@@ -206,7 +205,7 @@ class PowerEffectProvider extends ChangeNotifier {
             payload['event_id'] = latestEffect['event_id'];
           }
           await supabase.from('active_powers').insert(payload);
-          _activePowerExpiresAt = DateTime.parse(expiresAt); 
+          _activePowerExpiresAt = DateTime.parse(expiresAt);
         } catch (e) {
           debugPrint('PowerEffectProvider: error reflejando efecto: $e');
         }
@@ -231,19 +230,21 @@ class PowerEffectProvider extends ChangeNotifier {
 
     _activePowerSlug = latestSlug;
 
+    // Guardamos la fecha exacta para la UI
+    _activePowerExpiresAt = DateTime.parse(latestEffect['expires_at']);
+
     // Aplicación real de life_steal para la víctima (RLS-safe):
     // el propio cliente víctima se descuenta a sí mismo vía PlayerProvider/RPC.
     // final effectId = _activeEffectId;
-      if (latestSlug == 'life_steal' &&
-      _activeEffectId != _lastLifeStealHandledEffectId &&
-      _lifeStealVictimHandler != null) {
-    
-    _lastLifeStealHandledEffectId = _activeEffectId;
-    
-    // Llamamos al handler que restará la vida localmente
-    _lifeStealVictimHandler!(_activeEffectId!, _activeEffectCasterId);
-  }
-      // Manejo de devolución reactiva
+    if (latestSlug == 'life_steal' &&
+        _activeEffectId != _lastLifeStealHandledEffectId &&
+        _lifeStealVictimHandler != null) {
+      _lastLifeStealHandledEffectId = _activeEffectId;
+
+      // Llamamos al handler que restará la vida localmente
+      _lifeStealVictimHandler!(_activeEffectId!, _activeEffectCasterId);
+    }
+    // Manejo de devolución reactiva
     if (_returnArmed && _returnHandler != null) {
       final casterId = latestEffect['caster_id'];
       final slugToReturn = latestSlug;
@@ -259,11 +260,13 @@ class PowerEffectProvider extends ChangeNotifier {
     final expiresAt = DateTime.parse(latestEffect['expires_at']);
     final durationRemaining = expiresAt.difference(now);
 
+    if (durationRemaining <= Duration.zero) {
+      _clearEffect();
+      return;
+    }
+
     _expiryTimer = Timer(durationRemaining, () {
-      _activePowerSlug = null;
-      _activeEffectId = null;
-      _activeEffectCasterId = null;
-      notifyListeners();
+      _clearEffect();
     });
 
     debugPrint('¿Llegó Life Steal?: ${latestSlug == 'life_steal'}');
@@ -299,6 +302,31 @@ class PowerEffectProvider extends ChangeNotifier {
       return slug;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<Duration> _getPowerDurationFromDb({required String powerSlug}) async {
+    final cached = _powerSlugToDurationCache[powerSlug];
+    if (cached != null) return cached;
+
+    final supabase = _supabaseClient;
+    if (supabase == null) return Duration.zero;
+
+    try {
+      final row = await supabase
+          .from('powers')
+          .select('duration')
+          .eq('slug', powerSlug)
+          .maybeSingle();
+
+      final seconds = (row?['duration'] as num?)?.toInt() ?? 0;
+      final duration =
+          seconds <= 0 ? Duration.zero : Duration(seconds: seconds);
+      _powerSlugToDurationCache[powerSlug] = duration;
+      return duration;
+    } catch (e) {
+      debugPrint('_getPowerDurationFromDb($powerSlug) error: $e');
+      return Duration.zero;
     }
   }
 
@@ -338,14 +366,14 @@ class PowerEffectProvider extends ChangeNotifier {
   }
 
 // 3. AÑADE ESTE MÉTODO AL FINAL DE LA CLASE (antes del dispose)
-void notifyPowerReturned(String byPlayerName) {
-  _returnedByPlayerName = byPlayerName;
-  
-  // Esto activa el toast visual que ya tienes configurado
-  _registerDefenseAction(DefenseAction.returned); 
-  
-  notifyListeners();
-}
+  void notifyPowerReturned(String byPlayerName) {
+    _returnedByPlayerName = byPlayerName;
+
+    // Esto activa el toast visual que ya tienes configurado
+    _registerDefenseAction(DefenseAction.returned);
+
+    notifyListeners();
+  }
 
   @override
   void dispose() {

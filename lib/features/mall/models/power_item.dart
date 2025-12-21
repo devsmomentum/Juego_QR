@@ -39,7 +39,7 @@ class PowerItem {
       const PowerItem(
         id: 'black_screen',
         name: 'Pantalla Negra',
-        description: 'Ciega al rival por 5s',
+        description: 'Ciega al rival por 25s',
         type: PowerType.blind,
         cost: 100,
         icon: '🕶️',
@@ -71,7 +71,7 @@ class PowerItem {
       const PowerItem(
         id: 'freeze',
         name: 'Congelar',
-        description: 'Congela al rival por 120s',
+        description: 'Congela al rival por 30s',
         type: PowerType.freeze,
         cost: 50,
         icon: '❄️',
@@ -81,7 +81,7 @@ class PowerItem {
       const PowerItem(
         id: 'shield',
         name: 'Escudo',
-        description: 'Bloquea sabotajes por 300s',
+        description: 'Bloquea sabotajes por 120s',
         type: PowerType.shield,
         cost: 150,
         icon: '🛡️',
