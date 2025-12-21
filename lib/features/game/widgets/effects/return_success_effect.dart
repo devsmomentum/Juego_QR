@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 class ReturnSuccessEffect extends StatefulWidget {
-  const ReturnSuccessEffect({super.key});
+  final String returnedBy; // Añadimos el nombre
+  const ReturnSuccessEffect({super.key, required this.returnedBy});
 
   @override
   State<ReturnSuccessEffect> createState() => _ReturnSuccessEffectState();
@@ -10,6 +11,7 @@ class ReturnSuccessEffect extends StatefulWidget {
 class _ReturnSuccessEffectState extends State<ReturnSuccessEffect> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _pulse;
+  
 
   @override
   void initState() {
@@ -39,18 +41,19 @@ class _ReturnSuccessEffectState extends State<ReturnSuccessEffect> with SingleTi
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.replay_circle_filled, color: Colors.white, size: 80),
-              SizedBox(height: 10),
+            children: [ // ❌ Eliminamos el 'const' de aquí
+              const Icon(Icons.replay_circle_filled, color: Colors.white, size: 80),
+              const SizedBox(height: 10),
               Text(
-            "¡ATAQUE DEVUELTO!", 
-            style: TextStyle(
-              color: Colors.white, 
-              fontWeight: FontWeight.w900, // CAMBIADO: w900 en lugar de black
-              fontSize: 22, 
-              letterSpacing: 1.5,
-            ),
-          ),
+                "¡ATAQUE DEVUELTO A ${widget.returnedBy.toUpperCase()}!", 
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white, 
+                  fontWeight: FontWeight.w900, 
+                  fontSize: 18, 
+                  letterSpacing: 1.1,
+                ),
+              ),
             ],
           ),
         ),
