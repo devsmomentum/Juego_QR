@@ -376,19 +376,27 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
             Navigator.pop(context); // Dialog
             Navigator.pop(context); // PuzzleScreen
 
+            // Deduct life logic
+            final playerProvider =
+                Provider.of<PlayerProvider>(context, listen: false);
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
-            await gameProvider
-                .skipCurrentClue(); // Lógica de saltar pista en Provider
+            
+            if (playerProvider.currentPlayer != null) {
+               await gameProvider.loseLife(playerProvider.currentPlayer!.id);
+            }
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                    'No se desbloqueó la siguiente pista. Intenta resolver otro desafío.'),
-                backgroundColor: AppTheme.warningOrange,
-                duration: Duration(seconds: 3),
-              ),
-            );
+            // No llamamos a skipCurrentClue(), simplemente salimos.
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Te has rendido. Puedes volver a intentarlo cuando estés listo.'),
+                  backgroundColor: AppTheme.warningOrange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
           },
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
           child: const Text('Rendirse'),
