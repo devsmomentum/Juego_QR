@@ -9,6 +9,7 @@ import 'requests_management_screen.dart';
 import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 import '../../auth/screens/login_screen.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -274,8 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // 3. ÁREA DE CONTENIDO PRINCIPAL
                 // ------------------------------------------------
                 Expanded(
-                  child: Container(
-                    color: AppTheme.darkBg,
+                  child: AnimatedCyberBackground(
                     child: IndexedStack(
                       // Usamos la lista local 'views'
                       index: _selectedIndex < views.length ? _selectedIndex : 0,

@@ -284,25 +284,28 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: Stack(
-        children: [
-          // Dynamic Background
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 1000),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppTheme.darkBg,
-                  _temperatureColor.withOpacity(0.3),
-                ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppTheme.darkGradient,
+        ),
+        child: Stack(
+          children: [
+            // Dynamic Proximity Glow
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 1000),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    _temperatureColor.withOpacity(0.3),
+                  ],
+                ),
               ),
             ),
-          ),
-
-          // Content
-          SafeArea(
+            // Content
+            SafeArea(
             child: LayoutBuilder(
               // Use LayoutBuilder to check for available space
               builder: (context, constraints) {
@@ -559,6 +562,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -7,6 +7,7 @@ import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import 'package:audioplayers/audioplayers.dart';
+import '../game_over_dialog.dart';
 
 class TetrisMinigame extends StatefulWidget {
   final Clue clue;
@@ -391,19 +392,12 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed, fontSize: 24, fontWeight: FontWeight.bold)),
-        content: const Text("Te has quedado sin vidas. Ve a la Tienda a comprar más.", style: TextStyle(color: Colors.white)),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-               Navigator.pop(context); // Dialog
-               Navigator.pop(context); // Screen
-            },
-            child: const Text("Salir"),
-          )
-        ],
+      builder: (context) => GameOverDialog(
+        reason: "Te has quedado sin vidas. Ve a la Tienda a comprar más.",
+        onExit: () {
+          Navigator.pop(context); // Dialog
+          Navigator.pop(context); // Screen
+        },
       ),
     );
   }

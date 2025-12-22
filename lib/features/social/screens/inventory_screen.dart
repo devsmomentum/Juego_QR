@@ -9,6 +9,7 @@ import '../widgets/inventory_item_card.dart';
 import '../../mall/screens/mall_screen.dart';
 import '../../../shared/utils/game_ui_utils.dart';
 import '../../game/providers/power_effect_provider.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 // PowerSwipeAction se mantiene disponible pero no se usa en este flujo simplificado
 
 class InventoryScreen extends StatefulWidget {
@@ -65,10 +66,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final uniqueItems = inventoryCounts.keys.toList();
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.darkGradient,
-        ),
+      body: AnimatedCyberBackground(
         child: SafeArea(
           child: Column(
             children: [
@@ -482,9 +480,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
           ),
           const SizedBox(height: 10),
-          Text(
+          const Text(
             'Visita La Tiendita para comprar poderes',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: TextStyle(color: Colors.white54),
             textAlign: TextAlign.center,
           ),
         ],

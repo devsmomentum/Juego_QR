@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart'; // IMPORT AGREGADO
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 import '../widgets/clue_card.dart';
 import '../../../shared/widgets/progress_header.dart';
 import '../widgets/race_track_widget.dart';
@@ -15,6 +16,7 @@ import '../../game/models/clue.dart'; // Import para usar tipo Clue
 import 'clue_finder_screen.dart'; // Import nuevo
 import 'winner_celebration_screen.dart'; // Import for celebration screen
 import 'story_intro_screen.dart'; // Import for story introduction
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class CluesScreen extends StatefulWidget {
   // 1. Recibimos el ID del evento obligatorio
@@ -37,7 +39,10 @@ class _CluesScreenState extends State<CluesScreen> {
     // Check if user has seen the story introduction
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
-      final hasSeenStory = prefs.getBool('has_seen_asthoria_story_${widget.eventId}') ?? false;
+      final String storyKey = 'has_seen_asthoria_story_v3_${widget.eventId}';
+      final hasSeenStory = prefs.getBool(storyKey) ?? false;
+      
+      debugPrint("DEBUG: Checking story intro. hasSeenStory: $hasSeenStory for event: ${widget.eventId}");
       
       if (!hasSeenStory && mounted) {
         // Show story introduction
@@ -53,7 +58,7 @@ class _CluesScreenState extends State<CluesScreen> {
         );
         
         // Mark as seen
-        await prefs.setBool('has_seen_asthoria_story_${widget.eventId}', true);
+        await prefs.setBool(storyKey, true);
       }
       
       // Continue with normal initialization
@@ -160,7 +165,13 @@ class _CluesScreenState extends State<CluesScreen> {
       case 'geolocation':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => GeolocationScreen(clueId: clueId)),
+          MaterialPageRoute(
+            builder: (_) => ClueFinderScreen(
+              clue: Provider.of<GameProvider>(context, listen: false)
+                  .clues
+                  .firstWhere((c) => c.id == clueId),
+            ),
+          ),
         );
         break;
       case 'npcInteraction':
@@ -199,13 +210,15 @@ class _CluesScreenState extends State<CluesScreen> {
   Widget build(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context);
     
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.darkGradient,
-      ),
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: AnimatedCyberBackground(
         child: Column(
           children: [
+            SafeArea(
+              bottom: false,
+              child: Container(), // Empty bridge for column spacing
+            ),
 
             
             // Header

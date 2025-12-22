@@ -19,6 +19,7 @@ import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../widgets/scenario_countdown.dart';
 import '../services/penalty_service.dart'; // IMPORT AGREGADO
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class ScenariosScreen extends StatefulWidget {
   const ScenariosScreen({super.key});
@@ -262,10 +263,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
     }).toList();
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.darkGradient,
-        ),
+      body: AnimatedCyberBackground(
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -28,6 +28,9 @@ import 'winner_celebration_screen.dart';
 import '../widgets/animated_lives_widget.dart';
 import '../widgets/loss_flash_overlay.dart';
 import '../widgets/success_celebration_dialog.dart';
+import '../../../shared/widgets/time_stamp_animation.dart';
+import '../widgets/mission_briefing_overlay.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -43,6 +46,7 @@ class _PuzzleScreenState extends State<PuzzleScreen>
   final PenaltyService _penaltyService = PenaltyService();
   bool _legalExit = false;
   bool _isNavigatingToWinner = false; // Flag to prevent double navigation
+  bool _showBriefing = true; // Empieza mostrando la historia
 
   @override
   void initState() {
@@ -262,6 +266,13 @@ class _PuzzleScreenState extends State<PuzzleScreen>
         gameWidget =
             BlockFillWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
+    }
+
+    if (_showBriefing) {
+      return MissionBriefingOverlay(
+        stampIndex: (widget.clue.sequenceIndex % 9) + 1,
+        onStart: () => setState(() => _showBriefing = false),
+      );
     }
 
     return gameWidget;
@@ -934,6 +945,21 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (!context.mounted) return;
 
+  // 1. Mostrar la Animación del Sello Temporal
+  await showGeneralDialog(
+    context: context,
+    barrierDismissible: false,
+    pageBuilder: (dialogContext, _, __) => Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.85),
+      body: TimeStampAnimation(
+        index: (clue.sequenceIndex % 9) + 1,
+        onComplete: () => Navigator.pop(dialogContext),
+      ),
+    ),
+  );
+
+  if (!context.mounted) return;
+
   final clues = gameProvider.clues;
   final currentIdx = clues.indexWhere((c) => c.id == clue.id);
   Clue? nextClue;
@@ -1164,8 +1190,11 @@ Widget _buildMinigameScaffold(
 
   return SabotageOverlay(
     child: Scaffold(
+      backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+        decoration: const BoxDecoration(
+          gradient: AppTheme.darkGradient,
+        ),
         child: SafeArea(
           child: Consumer<GameProvider>(
             builder: (context, game, _) {

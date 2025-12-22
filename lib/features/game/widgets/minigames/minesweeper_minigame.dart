@@ -6,6 +6,7 @@ import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../game_over_dialog.dart';
 
 class MinesweeperMinigame extends StatefulWidget {
   final Clue clue;
@@ -25,7 +26,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
   // Configuración Difficulty: Easy (4x4)
   static const int rows = 6;
   static const int cols = 6;
-  static const int totalMines = 7;
+  static const int totalMines = 5;
 
   late List<List<Cell>> _grid;
   bool _isFirstMove = true;
@@ -267,19 +268,12 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-               Navigator.pop(context); 
-               Navigator.pop(context); 
-            },
-            child: const Text("Salir"),
-          ),
-        ],
+      builder: (context) => GameOverDialog(
+        reason: message.isNotEmpty ? message : "Has perdido. ¡Inténtalo de nuevo!",
+        onExit: () {
+          Navigator.pop(context); 
+          Navigator.pop(context); 
+        },
       ),
     );
   }

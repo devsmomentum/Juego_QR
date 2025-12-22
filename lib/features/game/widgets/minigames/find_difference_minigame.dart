@@ -6,6 +6,7 @@ import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../game_over_dialog.dart';
 
 class FindDifferenceMinigame extends StatefulWidget {
   final Clue clue;
@@ -158,15 +159,9 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.black,
-        title: const Text("GAME OVER", style: TextStyle(color: Colors.red)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
-            child: const Text("SALIR", style: TextStyle(color: Colors.white)),
-          )
-        ],
+      builder: (context) => GameOverDialog(
+        reason: "No has encontrado las diferencias a tiempo.",
+        onExit: () => Navigator.popUntil(context, (route) => route.isFirst),
       ),
     );
   }
@@ -181,13 +176,21 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("ANOMALÍA DETECTADA", style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold)),
-                  Text("Encuentra el icono que sobra y toca ese cuadro", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("ANOMALÍA DETECTADA", style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                    Text(
+                      "Encuentra el icono que sobra y toca ese cuadro", 
+                      style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -206,12 +209,16 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
 
           // Paneles compactos
           Expanded(
-            child: Column(
-              children: [
-                _buildCompactPanel(isTop: true),
-                const SizedBox(height: 16),
-                _buildCompactPanel(isTop: false),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Column(
+                  children: [
+                    _buildCompactPanel(isTop: true, maxHeight: constraints.maxHeight * 0.45),
+                    const SizedBox(height: 16),
+                    _buildCompactPanel(isTop: false, maxHeight: constraints.maxHeight * 0.45),
+                  ],
+                );
+              },
             ),
           ),
 
@@ -235,7 +242,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     );
   }
 
-  Widget _buildCompactPanel({required bool isTop}) {
+  Widget _buildCompactPanel({required bool isTop, required double maxHeight}) {
     bool hasTarget = isTop == _targetInTopImage;
     
     return Expanded(
@@ -253,7 +260,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
               // Distractors
               ..._distractors.map((d) => Positioned(
                 left: d.position.dx * (MediaQuery.of(context).size.width - 80),
-                top: d.position.dy * (MediaQuery.of(context).size.height * 0.2),
+                top: d.position.dy * maxHeight,
                 child: Opacity(
                   opacity: 0.3,
                   child: Transform.rotate(
@@ -267,7 +274,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
               if (hasTarget)
                 Positioned(
                   left: _targetPosition.dx * (MediaQuery.of(context).size.width - 80),
-                  top: _targetPosition.dy * (MediaQuery.of(context).size.height * 0.2),
+                  top: _targetPosition.dy * maxHeight,
                   child: Opacity(
                     opacity: 0.3,
                     child: Icon(_targetIcon, color: Colors.white, size: 22),

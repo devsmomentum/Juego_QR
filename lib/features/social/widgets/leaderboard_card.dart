@@ -132,17 +132,45 @@ class LeaderboardCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               // Aquí mostramos "Pistas" porque el provider inyectó el conteo en totalXP
-              Text(
-                '${player.totalXP} Pistas', 
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white70,
-                ),
+              // Sellos Visuales (Iconos)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(player.totalXP, (index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(colors: _getStampGradient(index)),
+                        boxShadow: [
+                           BoxShadow(color: _getStampGradient(index)[0].withOpacity(0.5), blurRadius: 4)
+                        ]
+                      ),
+                    ),
+                  );
+                }),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  List<Color> _getStampGradient(int index) {
+      const gradients = [
+        [Color(0xFF3B82F6), Color(0xFF06B6D4)],
+        [Color(0xFF06B6D4), Color(0xFF10B981)],
+        [Color(0xFF10B981), Color(0xFF84CC16)],
+        [Color(0xFF84CC16), Color(0xFFF59E0B)],
+        [Color(0xFFF59E0B), Color(0xFFEF4444)],
+        [Color(0xFFEF4444), Color(0xFFEC4899)],
+        [Color(0xFFEC4899), Color(0xFFD946EF)],
+        [Color(0xFFD946EF), Color(0xFF8B5CF6)],
+        [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+      ];
+      return gradients[index % gradients.length];
   }
 }

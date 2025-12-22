@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
+import '../models/story_data.dart';
 import '../../../core/theme/app_theme.dart';
 
 class StoryIntroScreen extends StatefulWidget {
@@ -32,79 +33,7 @@ class _StoryIntroScreenState extends State<StoryIntroScreen>
       description:
           'Año 2412. Te despiertas en una ciudad de neón y metal frío. No recuerdas cómo llegaste aquí, pero tu armadura de caballero desentona con las pantallas holográficas que te rodean.\n\nUn anciano que se hace llamar "El Arquitecto" te contacta por un visor: un experimento de alquimia prohibida te lanzó al futuro.\n\nPara volver a tu hogar en el Reino de Asthoria, debes localizar 9 Fallas Temporales (códigos QR) y extraer su energía a través de simulaciones de datos.',
       icon: Icons.auto_stories,
-      gradient: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 1',
-      subtitle: 'Fragmentos de Memoria',
-      description:
-          'El mapa de tu reino está corrupto en la base de datos del futuro. Deberás reconstruirlo pieza por pieza para calibrar tu brújula temporal.',
-      icon: Icons.extension,
-      gradient: [Color(0xFF3B82F6), Color(0xFF06B6D4)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 2',
-      subtitle: 'El Código de Acceso',
-      description:
-          'La terminal de seguridad no reconoce tu lenguaje antiguo. Deberás descifrar las palabras clave antes de que el sistema te bloquee permanentemente.',
-      icon: Icons.lock_open,
-      gradient: [Color(0xFF06B6D4), Color(0xFF10B981)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 3',
-      subtitle: 'Archivos Históricos',
-      description:
-          'Para confirmar tu procedencia, el ordenador central te pondrá a prueba sobre los símbolos de los reinos que dejaron de existir hace siglos.',
-      icon: Icons.history_edu,
-      gradient: [Color(0xFF10B981), Color(0xFF84CC16)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 4',
-      subtitle: 'Campo de Desechos Nanobot',
-      description:
-          'El camino hacia la zona de carga está plagado de peligros ocultos. Deberás avanzar con extrema precaución para no activar las defensas automáticas.',
-      icon: Icons.warning_amber,
-      gradient: [Color(0xFF84CC16), Color(0xFFF59E0B)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 5',
-      subtitle: 'Sobrecarga de Datos',
-      description:
-          'Los circuitos de la ciudad están al límite. Deberás navegar por el flujo de información sin tocar las paredes de datos o el sistema colapsará.',
-      icon: Icons.cable,
-      gradient: [Color(0xFFF59E0B), Color(0xFFEF4444)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 6',
-      subtitle: 'Restauración de Legado',
-      description:
-          'Una imagen de tu castillo está fragmentada por el tiempo. Deberás restaurarla completamente para anclar tu mente al pasado.',
-      icon: Icons.palette,
-      gradient: [Color(0xFFEF4444), Color(0xFFEC4899)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 7',
-      subtitle: 'Falla en la Simulación',
-      description:
-          'El futuro está intentando engañarte con una copia falsa de tu realidad. Deberás encontrar las anomalías en la matriz para romper el encantamiento.',
-      icon: Icons.visibility,
-      gradient: [Color(0xFFEC4899), Color(0xFFD946EF)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 8',
-      subtitle: 'Sincronización de Núcleo',
-      description:
-          'Un último ajuste de sistemas antes de la gran apertura del portal. Cada segundo cuenta.',
-      icon: Icons.settings_suggest,
-      gradient: [Color(0xFFD946EF), Color(0xFF8B5CF6)],
-    ),
-    StoryPage(
-      title: 'Sello Temporal 9',
-      subtitle: 'El Salto de Fe',
-      description:
-          'La realidad se está desmoronando mientras el portal se abre. Deberás estabilizar la brecha cuántica con precisión perfecta para permitir tu regreso a Asthoria.',
-      icon: Icons.flash_on,
-      gradient: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+      gradient: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
     ),
   ];
 
@@ -248,51 +177,54 @@ class _StoryIntroScreenState extends State<StoryIntroScreen>
                   ),
 
                   // Page indicator
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        _storyPages.length,
-                        (index) => AnimatedContainer(
-                          duration: Duration(milliseconds: 300),
-                          margin: EdgeInsets.symmetric(horizontal: 4),
-                          width: _currentPage == index ? 24 : 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(4),
-                            color: _currentPage == index
-                                ? Colors.white
-                                : Colors.white30,
+                  if (_storyPages.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          _storyPages.length,
+                          (index) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: _currentPage == index ? 24 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                              color: _currentPage == index
+                                  ? Colors.white
+                                  : Colors.white30,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
 
                   // Navigation buttons
                   Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: _storyPages.length > 1 
+                          ? MainAxisAlignment.spaceBetween 
+                          : MainAxisAlignment.center,
                       children: [
                         // Previous button
-                        if (_currentPage > 0)
+                        if (_storyPages.length > 1 && _currentPage > 0)
                           ElevatedButton.icon(
                             onPressed: _previousPage,
-                            icon: Icon(Icons.arrow_back),
-                            label: Text('Anterior'),
+                            icon: const Icon(Icons.arrow_back),
+                            label: const Text('Anterior'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white24,
                               foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 24,
                                 vertical: 16,
                               ),
                             ),
                           )
-                        else
-                          SizedBox(width: 120),
+                        else if (_storyPages.length > 1)
+                          const SizedBox(width: 120),
 
                         // Next/Start button
                         ElevatedButton.icon(
@@ -301,14 +233,14 @@ class _StoryIntroScreenState extends State<StoryIntroScreen>
                               ? Icons.play_arrow
                               : Icons.arrow_forward),
                           label: Text(_currentPage == _storyPages.length - 1
-                              ? 'Comenzar'
-                              : 'Siguiente'),
+                              ? 'COMENZAR'
+                              : 'SIGUIENTE'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryPurple,
                             foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 18,
                             ),
                             elevation: 8,
                           ),
