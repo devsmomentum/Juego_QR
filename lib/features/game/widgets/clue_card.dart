@@ -56,18 +56,28 @@ class ClueCard extends StatelessWidget {
                             ? LinearGradient(
                                 colors: [Colors.grey.shade700, Colors.grey.shade800],
                               )
-                            : AppTheme.primaryGradient,
+                            : (clue.type == ClueType.minigame)
+                                ? LinearGradient(
+                                    colors: _getStampGradient(clue.sequenceIndex),
+                                  )
+                                : AppTheme.primaryGradient,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
-                    child: Text(
-                      clue.isCompleted
-                          ? '✓'
-                          : isLocked
-                              ? '🔒'
-                              : clue.typeIcon,
-                      style: const TextStyle(fontSize: 28),
-                    ),
+                    child: clue.isCompleted
+                        ? const Text('✓', style: TextStyle(fontSize: 28))
+                        : isLocked
+                            ? const Text('🔒', style: TextStyle(fontSize: 28))
+                            : (clue.type == ClueType.minigame)
+                                ? Icon(
+                                    _getStampIcon(clue.sequenceIndex),
+                                    color: Colors.white,
+                                    size: 32,
+                                  )
+                                : Text(
+                                    clue.typeIcon,
+                                    style: const TextStyle(fontSize: 28),
+                                  ),
                   ),
                 ),
                 
@@ -152,5 +162,34 @@ class ClueCard extends StatelessWidget {
         ),
       ),
     );
+  }
+  IconData _getStampIcon(int index) {
+    const icons = [
+      Icons.extension,
+      Icons.lock_open,
+      Icons.history_edu,
+      Icons.warning_amber,
+      Icons.cable,
+      Icons.palette,
+      Icons.visibility,
+      Icons.settings_suggest,
+      Icons.flash_on,
+    ];
+    return icons[index % icons.length];
+  }
+
+  List<Color> _getStampGradient(int index) {
+    const gradients = [
+      [Color(0xFF3B82F6), Color(0xFF06B6D4)],
+      [Color(0xFF06B6D4), Color(0xFF10B981)],
+      [Color(0xFF10B981), Color(0xFF84CC16)],
+      [Color(0xFF84CC16), Color(0xFFF59E0B)],
+      [Color(0xFFF59E0B), Color(0xFFEF4444)],
+      [Color(0xFFEF4444), Color(0xFFEC4899)],
+      [Color(0xFFEC4899), Color(0xFFD946EF)],
+      [Color(0xFFD946EF), Color(0xFF8B5CF6)],
+      [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+    ];
+    return gradients[index % gradients.length];
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/game_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 import 'dart:math' as math;
 
 class GeolocationScreen extends StatefulWidget {

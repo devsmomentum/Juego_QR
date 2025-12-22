@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import 'register_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../admin/screens/dashboard-screen.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -202,14 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF0A0E27), Color(0xFF1A1F3A)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+      body: AnimatedCyberBackground(
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(

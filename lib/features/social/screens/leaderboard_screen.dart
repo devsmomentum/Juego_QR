@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../game/providers/game_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../widgets/leaderboard_card.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -34,13 +35,55 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final gameProvider = Provider.of<GameProvider>(context);
     final leaderboard = gameProvider.leaderboard;
     
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.darkGradient,
-      ),
+    return AnimatedCyberBackground(
       child: SafeArea(
         child: Column(
           children: [
+            // Winner Celebration Section
+            if (leaderboard.isNotEmpty && leaderboard[0].totalXP >= gameProvider.totalClues && gameProvider.totalClues > 0)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppTheme.accentGold.withOpacity(0.2), Colors.transparent],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(seconds: 1),
+                      curve: Curves.elasticOut,
+                      builder: (context, value, child) {
+                        return Transform.scale(scale: value, child: child);
+                      },
+                      child: const Icon(Icons.emoji_events, size: 60, color: AppTheme.accentGold),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "¡FELICIDADES ${leaderboard[0].name.toUpperCase()}!",
+                      style: const TextStyle(
+                        color: AppTheme.accentGold,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
+                        letterSpacing: 2,
+                        shadows: [Shadow(blurRadius: 10, color: AppTheme.accentGold)],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      "Ha recolectado TODOS los sellos",
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+
             // Header
             Padding(
               padding: const EdgeInsets.all(20.0),

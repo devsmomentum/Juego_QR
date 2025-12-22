@@ -50,47 +50,52 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         // Actions removed temporarily to ensure compatibility with MobileScanner v7+
         // functionality can be re-added once API is verified.
       ),
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: cameraController,
-            onDetect: _onDetect,
-          ),
-          // Overlay
-          Container(
-            decoration: ShapeDecoration(
-              shape: QrScannerOverlayShape(
-                borderColor: AppTheme.accentGold,
-                borderRadius: 20,
-                borderLength: 40,
-                borderWidth: 10,
-                cutOutSize: 300,
-              ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppTheme.darkGradient,
+        ),
+        child: Stack(
+          children: [
+            MobileScanner(
+              controller: cameraController,
+              onDetect: _onDetect,
             ),
-          ),
-          if (_isProcessing)
-             Container(
-              color: Colors.black54,
-              child: const Center(child: CircularProgressIndicator(color: AppTheme.accentGold)),
-             ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Text(
-                widget.expectedClueId != null 
-                    ? "Busca el código QR de la pista" 
-                    : "Escanea el código QR",
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontSize: 16, 
-                  fontWeight: FontWeight.bold,
-                  shadows: [Shadow(blurRadius: 10, color: Colors.black)],
+            // Overlay
+            Container(
+              decoration: ShapeDecoration(
+                shape: QrScannerOverlayShape(
+                  borderColor: AppTheme.accentGold,
+                  borderRadius: 20,
+                  borderLength: 40,
+                  borderWidth: 10,
+                  cutOutSize: 300,
                 ),
               ),
             ),
-          ),
-        ],
+            if (_isProcessing)
+              Container(
+                color: Colors.black54,
+                child: const Center(child: CircularProgressIndicator(color: AppTheme.accentGold)),
+              ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Text(
+                  widget.expectedClueId != null 
+                      ? "Busca el código QR de la pista" 
+                      : "Escanea el código QR",
+                  style: const TextStyle(
+                    color: Colors.white, 
+                    fontSize: 16, 
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(blurRadius: 10, color: Colors.black)],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

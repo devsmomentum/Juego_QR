@@ -221,25 +221,28 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Stack(
-        children: [
-          // Dynamic Gradient Background
-          AnimatedContainer(
-            duration: const Duration(seconds: 1),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppTheme.darkBg,
-                  _temperatureColor.withOpacity(0.3),
-                ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppTheme.darkGradient,
+        ),
+        child: Stack(
+          children: [
+            // Dynamic Gradient Overlay (Over the animated background)
+            AnimatedContainer(
+              duration: const Duration(seconds: 1),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    _temperatureColor.withOpacity(0.2),
+                  ],
+                ),
               ),
             ),
-          ),
-          
-          SafeArea(
-            child: Column(
+            SafeArea(
+              child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Hint Card
@@ -356,6 +359,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
