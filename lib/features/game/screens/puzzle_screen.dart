@@ -270,7 +270,7 @@ class _PuzzleScreenState extends State<PuzzleScreen>
 
     if (_showBriefing) {
       return MissionBriefingOverlay(
-        stampIndex: (widget.clue.sequenceIndex % 9) + 1,
+        stampIndex: ((widget.clue.sequenceIndex - 1) % 9) + 1,
         onStart: () => setState(() => _showBriefing = false),
       );
     }
@@ -964,7 +964,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     pageBuilder: (dialogContext, _, __) => Scaffold(
       backgroundColor: Colors.black.withOpacity(0.85),
       body: TimeStampAnimation(
-        index: (clue.sequenceIndex % 9) + 1,
+        index: ((clue.sequenceIndex - 1) % 9) + 1,
         onComplete: () => Navigator.pop(dialogContext),
       ),
     ),
