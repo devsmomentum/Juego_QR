@@ -441,6 +441,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
     if (!context.mounted) return;
 
+    // Map result to a success boolean without changing logic
+    final bool success = result == PowerUseResult.success;
+
     if (success) {
       final suppressed = effectProvider.lastDefenseAction == DefenseAction.stealFailed;
       if (suppressed) {

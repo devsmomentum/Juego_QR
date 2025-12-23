@@ -87,6 +87,9 @@ class RaceTrackWidget extends StatelessWidget {
         gameProvider: gameProvider,
       );
 
+      // Map result to a success boolean without changing logic
+      final bool success = result == PowerUseResult.success;
+
       if (result == PowerUseResult.error && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No se pudo lanzar el sabotaje')),
