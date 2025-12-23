@@ -60,6 +60,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
         setState(() => _secondsRemaining--);
       } else {
         _timer?.cancel();
+        _isGameOver = true; // FIX: Bloquear interacciones inmediatamente
         _loseGlobalLife("¡Tiempo agotado!", timeOut: true);
       }
     });
@@ -182,6 +183,9 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
 
       if (_shields <= 0) {
           // Game Over Real: Revelar todo
+          // FIX: Bloquear interacciones inmediatamente
+          _isGameOver = true; 
+          
           setState(() {
             for(var row in _grid) {
                 for(var cell in row) {
