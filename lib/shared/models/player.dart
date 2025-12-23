@@ -27,7 +27,7 @@ class Player {
     this.experience = 0,
     this.totalXP = 0,
     this.profession = 'Novice',
-    this.coins = 100,
+    this.coins = 300,
     List<String>? inventory,
     this.status = PlayerStatus.active,
     this.frozenUntil,
@@ -58,7 +58,7 @@ class Player {
           ? (json['total_coins'] as num).toInt() 
           : (json['coins'] is num 
               ? (json['coins'] as num).toInt() 
-              : int.tryParse(json['coins']?.toString() ?? '100') ?? 100)),
+              : int.tryParse(json['coins']?.toString() ?? '300') ?? 300)),
       status: _parseStatus(json['status']),
       frozenUntil: json['frozen_until'] != null
           ? DateTime.parse(json['frozen_until'])

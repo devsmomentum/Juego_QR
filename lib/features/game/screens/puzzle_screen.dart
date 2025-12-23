@@ -169,7 +169,7 @@ class _PuzzleScreenState extends State<PuzzleScreen>
 
   // Helper para marcar salida legal (Ganar o Rendirse)
   Future<void> _finishLegally() async {
-    _legalExit = true;
+    setState(() => _legalExit = true);
     await _penaltyService.markGameFinishedLegally();
   }
 
@@ -275,7 +275,17 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       );
     }
 
-    return gameWidget;
+    // WRAPPER DE SEGURIDAD: Evitar salir sin penalización
+    return PopScope(
+      canPop: _legalExit,
+      onPopInvoked: (didPop) async {
+        if (didPop || _legalExit) return;
+        
+        // Si intenta salir con Back, mostramos el diálogo de rendición (que cobra vida)
+        showSkipDialog(context, _finishLegally);
+      },
+      child: gameWidget,
+    );
   }
 }
 
