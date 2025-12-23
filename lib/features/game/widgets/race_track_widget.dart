@@ -92,6 +92,8 @@ class RaceTrackWidget extends StatelessWidget {
           const SnackBar(content: Text('No se pudo lanzar el sabotaje')),
         );
       } else if (success && context.mounted) {
+        final suppressed = effectProvider.lastDefenseAction == DefenseAction.stealFailed;
+        if (suppressed) return;
         showDialog(
           context: context,
           barrierDismissible: true,
@@ -553,6 +555,9 @@ class RaceTrackWidget extends StatelessWidget {
                           content: Text('No se pudo lanzar el sabotaje')),
                     );
                   } else {
+                    final suppressed =
+                        effectProvider.lastDefenseAction == DefenseAction.stealFailed;
+                    if (suppressed) return;
                     showDialog(
                       context: context,
                       barrierDismissible: true,

@@ -435,6 +435,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (!context.mounted) return;
 
     if (success) {
+      final suppressed = effectProvider.lastDefenseAction == DefenseAction.stealFailed;
+      if (suppressed) {
+        // No mostramos mensajes ni confirmación de 'ataque enviado' porque
+        // el servidor indicó que no había vidas para robar (no se envió efecto).
+        return;
+      }
       if (isOffensive) {
         showDialog(
           context: context,

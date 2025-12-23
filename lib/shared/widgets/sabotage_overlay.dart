@@ -10,6 +10,7 @@ import '../../features/game/widgets/effects/life_steal_effect.dart';
 import '../../features/game/widgets/effects/return_success_effect.dart';
 import '../../features/game/widgets/effects/return_rejection_effect.dart';
 import '../../features/game/widgets/effects/invisibility_effect.dart';
+import '../../features/game/widgets/effects/steal_failed_effect.dart';
 import '../models/player.dart';
 import '../../features/auth/providers/player_provider.dart';
 
@@ -155,6 +156,13 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         if (defenseAction == DefenseAction.shieldBlocked)
           _DefenseFeedbackToast(action: defenseAction),
 
+        if (defenseAction == DefenseAction.stealFailed)
+          StealFailedEffect(
+            key: ValueKey(
+              powerProvider.lastDefenseActionAt?.millisecondsSinceEpoch ?? 0,
+            ),
+          ),
+
         if (_lifeStealBannerText != null)
           Positioned(
             top: 12,
@@ -195,8 +203,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             ),
           ),
 
-        // Feedback rápido para el atacante cuando su acción fue bloqueada o devuelta.
-        _DefenseFeedbackToast(action: defenseAction),
+        // Feedback rápido para el atacante cuando su acción fue bloqueada o falló.
       ],
     );
   }
@@ -211,7 +218,9 @@ class _DefenseFeedbackToast extends StatelessWidget {
   Widget build(BuildContext context) {
     // Si la acción es 'returned', devolvemos shrink porque el mensaje detallado
     // (ReturnRejectionEffect) ya se está mostrando en el Stack principal.
-    if (action == null || action == DefenseAction.returned) {
+    if (action == null ||
+        action == DefenseAction.returned ||
+        action == DefenseAction.stealFailed) {
       return const SizedBox.shrink();
     }
 
@@ -248,7 +257,7 @@ class _DefenseFeedbackToast extends StatelessWidget {
               ),
             ],
           ),
-          child: const Text(
+          child: Text(
             message,
             style: TextStyle(
               color: Colors.white,

@@ -36,6 +36,7 @@ class PowerEffectProvider extends ChangeNotifier {
   String? get activeEffectId => _activeEffectId;
   String? get activeEffectCasterId => _activeEffectCasterId;
   DefenseAction? get lastDefenseAction => _lastDefenseAction;
+  DateTime? get lastDefenseActionAt => _lastDefenseActionAt;
 
   SupabaseClient? get _supabaseClient {
     try {
@@ -375,6 +376,10 @@ class PowerEffectProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void notifyStealFailed() {
+    _registerDefenseAction(DefenseAction.stealFailed);
+  }
+
   @override
   void dispose() {
     _subscription?.cancel();
@@ -384,4 +389,4 @@ class PowerEffectProvider extends ChangeNotifier {
   }
 }
 
-enum DefenseAction { shieldBlocked, returned }
+enum DefenseAction { shieldBlocked, returned, stealFailed }

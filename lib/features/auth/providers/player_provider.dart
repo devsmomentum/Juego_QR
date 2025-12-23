@@ -340,6 +340,14 @@ class PlayerProvider extends ChangeNotifier {
         await refreshProfile();
       }
 
+      // Life steal fallido: objetivo sin vidas (igual se consume el ítem en servidor)
+      if (success &&
+          response is Map &&
+          response['stolen'] == false &&
+          response['reason'] == 'target_no_lives') {
+        effectProvider.notifyStealFailed();
+      }
+
       if (success) {
         if (powerSlug == 'shield') {
           effectProvider.setShielded(true, sourceSlug: powerSlug);
