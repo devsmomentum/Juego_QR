@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../core/utils/error_handler.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -104,7 +105,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    e.toString(),
+                    ErrorHandler.getFriendlyErrorMessage(e),
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
