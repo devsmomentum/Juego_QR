@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -31,8 +32,8 @@ class ConnectivityService {
   /// Estado actual de conectividad
   ConnectivityStatus get currentStatus => _currentStatus;
   
-  /// Tiempo de gracia antes de considerar desconexión (20 segundos)
-  static const Duration gracePeriod = Duration(seconds: 20);
+  /// Tiempo de gracia antes de considerar desconexión (10 segundos)
+  static const Duration gracePeriod = Duration(seconds: 10);
   
   /// Intervalo entre pings (5 segundos)
   static const Duration pingInterval = Duration(seconds: 5);
@@ -41,8 +42,8 @@ class ConnectivityService {
   static const int lowSignalThreshold = 1;
   
   /// Número de pings fallidos para considerar desconexión total
-  /// Con 5s de intervalo y 20s de gracia = 4 pings fallidos
-  static const int offlineThreshold = 4;
+  /// Con 5s de intervalo y 10s de gracia = 2 pings fallidos
+  static const int offlineThreshold = 2;
 
   /// Inicia el monitoreo de conectividad
   void startMonitoring() {
@@ -71,7 +72,7 @@ class ConnectivityService {
   /// Realiza un ping a Supabase para verificar conectividad
   Future<void> _checkConnection() async {
     try {
-      final supabaseUrl = Supabase.instance.client.restUrl;
+      final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
       
       // Ping al health endpoint de Supabase REST
       final response = await http.get(

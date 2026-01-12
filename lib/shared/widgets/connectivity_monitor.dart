@@ -6,6 +6,7 @@ import '../../features/game/providers/connectivity_provider.dart';
 import '../../features/auth/providers/player_provider.dart';
 import '../../core/services/connectivity_service.dart';
 import '../utils/global_keys.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/admin/screens/admin_login_screen.dart';
 import 'low_signal_overlay.dart';
@@ -25,7 +26,7 @@ class ConnectivityMonitor extends StatefulWidget {
 
 class _ConnectivityMonitorState extends State<ConnectivityMonitor> {
   Timer? _countdownTimer;
-  int _secondsRemaining = 20;
+  int _secondsRemaining = 10;
   bool _showOverlay = false;
   bool _hasTriggeredDisconnect = false;
 
@@ -69,7 +70,7 @@ class _ConnectivityMonitorState extends State<ConnectivityMonitor> {
     
     setState(() {
       _showOverlay = true;
-      _secondsRemaining = 20;
+      _secondsRemaining = 10;
     });
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -93,7 +94,7 @@ class _ConnectivityMonitorState extends State<ConnectivityMonitor> {
       if (mounted) {
         setState(() {
           _showOverlay = false;
-          _secondsRemaining = 20;
+          _secondsRemaining = 10;
         });
       }
     }
@@ -114,20 +115,39 @@ class _ConnectivityMonitorState extends State<ConnectivityMonitor> {
     // Si estaba en minijuego, pierde vida
     if (connectivity.isInMinigame) {
       final eventId = connectivity.currentEventId;
-      await playerProvider.loseLife(eventId: eventId);
+      
+      // 1. Guardar penalización pendiente LOCALMENTE (Por si no hay internet ahora)
+      unawaited(SharedPreferences.getInstance().then((prefs) {
+        prefs.setBool('pending_life_loss', true);
+        if (eventId != null) prefs.setString('pending_life_loss_event', eventId);
+        debugPrint('ConnectivityMonitor: Penalización guardada localmente');
+      }));
+
+      // 2. Intentar enviar al servidor de todos modos (Last chance)
+      unawaited(
+        playerProvider.loseLife(eventId: eventId).timeout(
+              const Duration(seconds: 1),
+              onTimeout: () => debugPrint('ConnectivityMonitor: LoseLife timeout sync'),
+            ),
+      );
       message = '¡Perdiste conexión durante el minijuego!\nHas perdido una vida.';
-      debugPrint('ConnectivityMonitor: Vida perdida por desconexión en minijuego');
     } else {
       message = 'Perdiste conexión a internet.\nPor favor, reconéctate e inicia sesión.';
-      debugPrint('ConnectivityMonitor: Desconexión fuera de minijuego');
     }
 
-    // Detener monitoreo y hacer logout
-    connectivity.stopMonitoring();
-    await playerProvider.logout();
-
-    // Mostrar mensaje y redirigir
+    // 1. Mostrar mensaje y redirigir INMEDIATAMENTE
     _showDisconnectMessage(message);
+
+    // 2. Ejecutar limpieza de sesión en segundo plano
+    unawaited(
+      playerProvider.logout().timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => debugPrint('ConnectivityMonitor: Logout timeout'),
+          ),
+    );
+
+    // 3. Detener monitoreo local
+    connectivity.stopMonitoring();
   }
 
   void _showDisconnectMessage(String message) {

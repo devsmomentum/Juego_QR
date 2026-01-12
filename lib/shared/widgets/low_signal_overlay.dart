@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 
 /// Overlay visual que se muestra cuando hay señal baja.
-/// Incluye un contador regresivo de 20 segundos.
+/// Incluye un contador regresivo de 10 segundos.
 class LowSignalOverlay extends StatefulWidget {
   final int secondsRemaining;
   final VoidCallback? onTimeout;
@@ -46,7 +46,7 @@ class _LowSignalOverlayState extends State<LowSignalOverlay>
             margin: const EdgeInsets.all(32),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.darkCard,
+              color: AppTheme.cardBg,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: Colors.orange.withOpacity(0.5),
@@ -157,7 +157,7 @@ class _LowSignalOverlayState extends State<LowSignalOverlay>
   }
 
   Widget _buildCountdownIndicator() {
-    final progress = widget.secondsRemaining / 20.0;
+    final progress = widget.secondsRemaining / 10.0;
     
     return Column(
       children: [

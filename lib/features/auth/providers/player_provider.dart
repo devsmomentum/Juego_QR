@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/models/player.dart';
 import '../../game/providers/power_effect_provider.dart';
 import '../../game/providers/game_provider.dart';
@@ -148,6 +149,25 @@ class PlayerProvider extends ChangeNotifier {
     
     notifyListeners();
     _isLoggingOut = false;
+  }
+
+  Future<void> _checkPendingPenalties(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('pending_life_loss') == true) {
+        final eventId = prefs.getString('pending_life_loss_event');
+        debugPrint('PlayerProvider: Procesando penalización pendiente para $userId');
+        
+        await loseLife(eventId: eventId);
+        
+        // Limpiar para no cobrar doble
+        await prefs.remove('pending_life_loss');
+        await prefs.remove('pending_life_loss_event');
+        debugPrint('PlayerProvider: Penalización pendiente aplicada con éxito');
+      }
+    } catch (e) {
+      debugPrint('Error consumiendo penalización: $e');
+    }
   }
 
   // --- PROFILE MANAGEMENT ---
@@ -527,6 +547,9 @@ class PlayerProvider extends ChangeNotifier {
 
       _currentPlayer = newPlayer;
       notifyListeners();
+
+      // --- NUEVO: Verificar penalizaciones pendientes de desconexiones previas ---
+      unawaited(_checkPendingPenalties(userId));
 
       // ASEGURAR que los listeners estén corriendo pero SOLAMENTE UNA VEZ
       _startListeners(userId);
