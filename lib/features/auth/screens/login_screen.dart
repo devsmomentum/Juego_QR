@@ -8,6 +8,7 @@ import 'register_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../admin/screens/dashboard-screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../core/utils/error_handler.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -99,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    e.toString(),
+                    ErrorHandler.getFriendlyErrorMessage(e),
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
