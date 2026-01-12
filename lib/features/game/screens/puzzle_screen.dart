@@ -7,6 +7,7 @@ import '../models/clue.dart';
 import '../widgets/race_track_widget.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
 import '../../../shared/models/player.dart'; // Import Player model
+import '../providers/connectivity_provider.dart';
 
 // --- Imports de Minijuegos Existentes ---
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
@@ -59,6 +60,11 @@ class _PuzzleScreenState extends State<PuzzleScreen>
     // Verificar vidas al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLives();
+
+      // --- MARCAR ENTRADA A MINIJUEGO PARA CONNECTIVITY ---
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      final eventId = gameProvider.currentEventId ?? '';
+      context.read<ConnectivityProvider>().enterMinigame(eventId);
 
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
       Provider.of<GameProvider>(context, listen: false)
@@ -148,6 +154,12 @@ class _PuzzleScreenState extends State<PuzzleScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    
+    // --- MARCAR SALIDA DEL MINIJUEGO PARA CONNECTIVITY ---
+    try {
+      context.read<ConnectivityProvider>().exitMinigame();
+    } catch (_) {}
+    
     // Limpiar listener de fin de carrera
     try {
       Provider.of<GameProvider>(context, listen: false)

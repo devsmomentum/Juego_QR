@@ -10,6 +10,7 @@ import '../../game/screens/scenarios_screen.dart';
 import '../../admin/screens/dashboard-screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../game/providers/connectivity_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -104,6 +105,9 @@ class _LoginScreenState extends State<LoginScreen> {
             MaterialPageRoute(builder: (_) => const DashboardScreen()),
           );
         } else {
+          // Iniciar monitoreo de conectividad después del login exitoso
+          context.read<ConnectivityProvider>().startMonitoring();
+          
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const ScenariosScreen()),
           );

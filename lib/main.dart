@@ -15,8 +15,10 @@ import 'core/theme/app_theme.dart';
 
 import 'features/game/providers/event_provider.dart'; 
 import 'features/game/providers/power_effect_provider.dart';
+import 'features/game/providers/connectivity_provider.dart';
 import 'features/admin/screens/admin_login_screen.dart'; 
 import 'shared/widgets/sabotage_overlay.dart';
+import 'shared/widgets/connectivity_monitor.dart';
 import 'shared/utils/global_keys.dart'; // Importar llaves globales
 import 'features/auth/widgets/auth_monitor.dart'; // Importar AuthMonitor
 import 'features/mall/providers/store_provider.dart';
@@ -68,6 +70,7 @@ class TreasureHuntApp extends StatelessWidget {
         Provider(create: (_) => PenaltyService()),
         ChangeNotifierProvider(create: (_) => StoreProvider()),
         ChangeNotifierProvider(create: (_) => PowerEffectProvider()),
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
       ],
       child: MaterialApp(
         title: 'Treasure Hunt RPG',
@@ -76,7 +79,9 @@ class TreasureHuntApp extends StatelessWidget {
         theme: AppTheme.darkTheme,
         builder: (context, child) {
           return AuthMonitor(
-            child: SabotageOverlay(child: child ?? const SizedBox()),
+            child: ConnectivityMonitor(
+              child: SabotageOverlay(child: child ?? const SizedBox()),
+            ),
           );
         },
         
