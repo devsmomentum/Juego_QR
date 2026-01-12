@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -194,6 +195,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
+                // === BOTÓN DE DESARROLLADOR ===
+                if (kDebugMode) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context); // Solo cierra sin pedir permiso
+                      },
+                      icon: const Icon(Icons.developer_mode),
+                      label: const Text('DEV: Saltar Permisos'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart'; // Import Geolocator
@@ -504,6 +505,59 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                                     ),
                                   ],
                                 ),
+                              ),
+                            ),
+                          // === BOTONES DE DESARROLLADOR ===
+                          if (kDebugMode)
+                            Container(
+                              margin: const EdgeInsets.only(top: 20),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    "🔧 MODO DESARROLLADOR",
+                                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.orange,
+                                            foregroundColor: Colors.black,
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                          ),
+                                          onPressed: () {
+                                            setState(() => _distanceToTarget = 5);
+                                          },
+                                          icon: const Icon(Icons.location_on, size: 16),
+                                          label: const Text("Forzar Zona", style: TextStyle(fontSize: 11)),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                          ),
+                                          onPressed: () {
+                                            _showSuccessDialog(); // Simula éxito directo
+                                          },
+                                          icon: const Icon(Icons.skip_next, size: 16),
+                                          label: const Text("Saltar Todo", style: TextStyle(fontSize: 11)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                         ],

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
@@ -344,6 +345,54 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                         )
                       : const SizedBox.shrink(),
                 ),
+                // === BOTONES DE DESARROLLADOR ===
+                if (kDebugMode)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Column(
+                      children: [
+                        const Divider(color: Colors.orange),
+                        const Text(
+                          "🔧 MODO DESARROLLADOR",
+                          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                onPressed: () {
+                                  setState(() => _forceProximity = true);
+                                },
+                                icon: const Icon(Icons.location_on, size: 18),
+                                label: const Text("Forzar Proximidad", style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context, true); // Simula escaneo exitoso
+                                },
+                                icon: const Icon(Icons.skip_next, size: 18),
+                                label: const Text("Saltar QR", style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
