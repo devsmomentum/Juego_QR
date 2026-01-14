@@ -343,7 +343,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                       : const SizedBox.shrink(),
                 ),
                 // === BOTONES DE DESARROLLADOR ===
-                if (kDebugMode)
+                if (true) // Developer Button Enabled
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     child: Column(

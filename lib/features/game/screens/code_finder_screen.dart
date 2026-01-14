@@ -508,7 +508,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                               ),
                             ),
                           // === BOTONES DE DESARROLLADOR ===
-                          if (kDebugMode)
+                          if (true) // Developer Button Enabled
                             Container(
                               margin: const EdgeInsets.only(top: 20),
                               padding: const EdgeInsets.all(16),

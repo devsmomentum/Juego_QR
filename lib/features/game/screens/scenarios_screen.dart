@@ -32,11 +32,12 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
   late PageController _pageController;
   int _currentPage = 0;
   bool _isLoading = true;
-  final PenaltyService _penaltyService = PenaltyService(); // INSTANCIA SERVICIO
+  late final PenaltyService _penaltyService; // Dependency Injection
 
   @override
   void initState() {
     super.initState();
+    _penaltyService = context.read<PenaltyService>(); // Init Service
     print("DEBUG: ScenariosScreen initState");
     _pageController = PageController(viewportFraction: 0.85);
     WidgetsBinding.instance.addPostFrameCallback((_) {

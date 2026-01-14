@@ -44,7 +44,7 @@ class PuzzleScreen extends StatefulWidget {
 
 class _PuzzleScreenState extends State<PuzzleScreen>
     with WidgetsBindingObserver {
-  final PenaltyService _penaltyService = PenaltyService();
+  late final PenaltyService _penaltyService;
   bool _legalExit = false;
   bool _isNavigatingToWinner = false; // Flag to prevent double navigation
   bool _showBriefing = true; // Empieza mostrando la historia
@@ -52,6 +52,7 @@ class _PuzzleScreenState extends State<PuzzleScreen>
   @override
   void initState() {
     super.initState();
+    _penaltyService = context.read<PenaltyService>();
     WidgetsBinding.instance.addObserver(this);
     // Bandera arriba: El jugador está intentando jugar.
     // Si sale sin _finishLegally, el servicio sabrá que fue un abandono forzoso.

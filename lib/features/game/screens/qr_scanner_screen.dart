@@ -114,7 +114,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               ),
             ),
             // === BOTÓN DE DESARROLLADOR ===
-            if (kDebugMode)
+            if (true) // Developer Button Enabled
               Align(
                 alignment: Alignment.bottomRight,
                 child: Padding(

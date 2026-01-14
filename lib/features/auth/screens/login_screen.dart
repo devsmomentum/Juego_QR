@@ -200,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 // === BOTÓN DE DESARROLLADOR ===
-                if (kDebugMode) ...[
+                if (true) ...[
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,

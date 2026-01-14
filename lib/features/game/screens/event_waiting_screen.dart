@@ -189,7 +189,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen> with SingleTick
                         ),
                       ),
                       // === BOTÓN DE DESARROLLADOR ===
-                      if (kDebugMode)
+                      if (true)
                         Container(
                           margin: const EdgeInsets.only(top: 30),
                           padding: const EdgeInsets.all(12),
