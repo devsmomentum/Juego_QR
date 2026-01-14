@@ -28,6 +28,8 @@ import 'features/auth/widgets/auth_monitor.dart'; // Importar AuthMonitor
 import 'shared/widgets/game_session_monitor.dart'; // Nuevo
 import 'features/mall/providers/store_provider.dart';
 
+import 'features/game/services/game_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -80,7 +82,10 @@ class TreasureHuntApp extends StatelessWidget {
         }),
         ChangeNotifierProvider(create: (_) => EventProvider()),
         ChangeNotifierProvider(create: (_) => GameRequestProvider()),
-        ChangeNotifierProvider(create: (_) => GameProvider()),
+        ChangeNotifierProvider(create: (_) {
+           final supabase = Supabase.instance.client;
+           return GameProvider(gameService: GameService(supabase));
+        }),
         Provider(create: (_) => PenaltyService()),
         ChangeNotifierProvider(create: (_) => StoreProvider()),
         ChangeNotifierProvider(create: (_) => PowerEffectProvider()),

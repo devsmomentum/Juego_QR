@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/input_sanitizer.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final String? expectedClueId; // Optional validation
@@ -29,12 +30,29 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     for (final barcode in barcodes) {
       if (barcode.rawValue != null) {
         setState(() => _isProcessing = true);
-        final code = barcode.rawValue!;
-        debugPrint('QR Scanned: $code');
+        final rawCode = barcode.rawValue!;
+        debugPrint('QR Scanned (raw): $rawCode');
         
-        // Return validity or code
-        Navigator.pop(context, code);
-        return; // Process only first valid code
+        // Sanitizar el código para mitigar inyección y datos malformados
+        final sanitized = InputSanitizer.sanitizeQRCode(rawCode);
+        debugPrint('QR Sanitized: $sanitized');
+        
+        // Validar que el código sanitizado no esté vacío
+        if (!InputSanitizer.isValidQRCode(sanitized)) {
+          setState(() => _isProcessing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Código QR no válido'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+        
+        // Devolver el código sanitizado
+        Navigator.pop(context, sanitized);
+        return; // Procesar solo el primer código válido
       }
     }
   }

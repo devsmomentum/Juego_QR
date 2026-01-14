@@ -1,10 +1,13 @@
-import 'dart:async'; // Necesario para el Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clue.dart';
 import '../../../shared/models/player.dart';
+import '../services/game_service.dart';
 
 class GameProvider extends ChangeNotifier {
+  final GameService _gameService;
+  
   List<Clue> _clues = [];
   List<Player> _leaderboard = [];
   int _currentClueIndex = 0;
@@ -29,8 +32,6 @@ class GameProvider extends ChangeNotifier {
   Timer? _leaderboardTimer;
   RealtimeChannel? _raceStatusChannel;
   
-  final _supabase = Supabase.instance.client;
-  
   List<Clue> get clues => _clues;
   List<Player> get leaderboard => _leaderboard;
   Clue? get currentClue => _currentClueIndex < _clues.length ? _clues[_currentClueIndex] : null;
@@ -50,11 +51,9 @@ class GameProvider extends ChangeNotifier {
   
   bool get hasCompletedAllClues => totalClues > 0 && completedClues == totalClues;
   
-  GameProvider() {
-    // Constructor
-  }
+  GameProvider({required GameService gameService}) : _gameService = gameService;
 
-  /// Limpia COMPLETAMENTE el estado del juego (usado en reinicios de evento)
+  /// Limpia COMPLETAMENTE el estado del juego
   void resetState() {
     _clues = [];
     _leaderboard = [];
@@ -77,78 +76,56 @@ class GameProvider extends ChangeNotifier {
   Future<void> fetchLives(String userId) async {
     if (_currentEventId == null) return;
     try {
-      final response = await _supabase
-          .from('game_players')
-          .select('lives')
-          .eq('event_id', _currentEventId!)
-          .eq('user_id', userId)
-          .maybeSingle();
+      final lives = await _gameService.fetchLives(_currentEventId!, userId);
       
-      if (response != null && response['lives'] != null) {
-        _lives = response['lives'] as int;
-        notifyListeners();
+      if (lives != null) {
+        _lives = lives;
       } else {
-        // Si no existe registro, asumimos 3 (o creamos el registro si es necesario al unirse)
         _lives = 3;
-        notifyListeners();
       }
+      notifyListeners();
     } catch (e) {
       debugPrint('Error fetching lives: $e');
     }
   }
   
-Future<void> loseLife(String userId) async {
-  // Nota: _lives es tu variable local para actualización optimista
-  if (_lives <= 0) return;
-  
-  // Validamos que exista un evento activo para restar vidas de ESE evento
-  if (_currentEventId == null) return;
-  
-  try {
-    // 1. Optimistic Update (Feedback instantáneo visual)
-    _lives--;
-    notifyListeners();
+  Future<void> loseLife(String userId) async {
+    if (_lives <= 0) return;
+    if (_currentEventId == null) return;
     
-    // 2. Ejecutar en Supabase
-    // Usamos la función que acabamos de mejorar en SQL
-    final response = await _supabase.rpc('lose_life', params: {
-      'p_user_id': userId,
-      'p_event_id': _currentEventId,
-    });
-    
-    // 3. Sincronizar verdad (Response trae las vidas reales restantes)
-    if (response != null) {
-      _lives = response as int;
-    }
-    notifyListeners();
+    try {
+      // 1. Optimistic Update
+      _lives--;
+      notifyListeners();
+      
+      // 2. Ejecutar servicio
+      final remainingLives = await _gameService.loseLife(_currentEventId!, userId);
+      
+      // 3. Sincronizar verdad
+      _lives = remainingLives;
+      notifyListeners();
 
-  } catch (e) {
-    debugPrint('Error perdiendo vida: $e');
-    // Rollback visual si falló la conexión
-    _lives++; 
-    notifyListeners();
+    } catch (e) {
+      debugPrint('Error perdiendo vida: $e');
+      // Rollback
+      _lives++; 
+      notifyListeners();
+    }
   }
-}
+
   // --- GESTIÓN DEL RANKING EN TIEMPO REAL ---
 
-  /// Inicia la actualización automática del ranking cada 20 segundos
   void startLeaderboardUpdates() {
-    // 1. Carga inicial inmediata
     fetchLeaderboard();
-    
-    // 2. Limpiar timer anterior si existe
     stopLeaderboardUpdates();
     
-    // 3. Configurar nuevo timer (Más rápido para la carrera en vivo)
     _leaderboardTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_currentEventId != null) {
-        // fetchLeaderboard silent=true para no mostrar loading spinners
         _fetchLeaderboardInternal(silent: true);
       }
     });
   }
 
-  /// Detiene la actualización automática (llamar en dispose)
   void stopLeaderboardUpdates() {
     _leaderboardTimer?.cancel();
     _leaderboardTimer = null;
@@ -156,143 +133,57 @@ Future<void> loseLife(String userId) async {
     _raceStatusChannel = null;
   }
 
-  /// ESCUCHA EN TIEMPO REAL (Instante): Detecta cuando alguien gana
   void subscribeToRaceStatus() {
     if (_currentEventId == null) return;
     
-    // Limpiar suscripción previa
     _raceStatusChannel?.unsubscribe();
     
-    _raceStatusChannel = _supabase
-        .channel('public:race:$_currentEventId')
-        // 1. Escuchar cambios en jugadores (Progreso individual)
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'game_players',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'event_id',
-            value: _currentEventId,
-          ),
-          callback: (payload) {
-            debugPrint('Realtime: Cambio en game_players');
-            _checkVictoryInPayload(payload.newRecord);
-          },
-        )
-        // 2. Escuchar cambios en el evento (Finalización Global)
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'events',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'id',
-            value: _currentEventId,
-          ),
-          callback: (payload) {
-            final newRecord = payload.newRecord;
-            debugPrint('Realtime: Cambio en events -> Estado: ${newRecord['status']}');
-            if (newRecord['status'] == 'completed') {
-               _setRaceCompleted(true, 'Realtime Event Status');
-            }
-          },
-        )
-        .subscribe();
-  }
-
-  void _checkVictoryInPayload(Map<String, dynamic> record) {
-    if (totalClues > 0) {
-      // En la tabla física la columna es 'completed_clues_count'
-      final int completed = record['completed_clues_count'] ?? record['completed_clues'] ?? 0;
-      if (completed >= totalClues) {
-        _setRaceCompleted(true, 'Realtime Subscription');
+    _raceStatusChannel = _gameService.subscribeToRaceStatus(
+      _currentEventId!, 
+      totalClues,
+      (completed, source) {
+        _setRaceCompleted(completed, source);
       }
-    }
+    );
   }
 
-  /// Método público para cargar ranking (puede mostrar loading)
   Future<void> fetchLeaderboard({bool silent = false}) async {
     await _fetchLeaderboardInternal(silent: silent);
   }
-Future<void> _fetchLeaderboardInternal({bool silent = false}) async {
+
+  Future<void> _fetchLeaderboardInternal({bool silent = false}) async {
     if (_currentEventId == null) return;
 
     try {
-      // ✅ RESTAURADO: Consultamos la VISTA para mantener el orden del podio original
-      final List<dynamic> data = await _supabase
-          .from('event_leaderboard')
-          .select()
-          .eq('event_id', _currentEventId!)
-          .order('completed_clues', ascending: false)
-          .order('last_completion_time', ascending: true)
-          .limit(50);
-
-      _leaderboard = data.map((json) {
-        // Normalización de IDs
-        if (json['id'] == null && json['user_id'] != null) {
-          json['id'] = json['user_id'];
-        } else if (json['id'] == null && json['player_id'] != null) {
-          json['id'] = json['player_id'];
+      final data = await _gameService.getLeaderboard(_currentEventId!);
+      
+      _leaderboard = data;
+      
+      // Check for victory in leaderboard data
+      for (var player in _leaderboard) {
+        if (totalClues > 0 && player.totalXP >= totalClues) {
+           _setRaceCompleted(true, 'Leaderboard Polling');
+           break;
         }
-
-        // Busca este bloque dentro de _fetchLeaderboardInternal
-if (json['completed_clues'] != null) {
-  json['total_xp'] = json['completed_clues'];
-  
-  // DEPuración: Mira qué valores está recibiendo la app
-  debugPrint('DEBUG: Jugador ${json['name']} tiene ${json['completed_clues']} / Total: $totalClues');
-
-  if (totalClues > 0 && json['completed_clues'] >= totalClues) {
-    // Esto nos dirá exactamente por qué se dispara
-    debugPrint('!!! CARRERA FINALIZADA POR: ${json['name']} !!!');
-    _setRaceCompleted(true, 'Leaderboard Polling');
-  }
-}
-        
-        // ✅ INVISIBILIDAD: Al usar la Vista, el modelo Player leerá el 'status'
-        return Player.fromJson(json);
-      }).toList();
+      }
       
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching leaderboard: $e');
-      if (!silent) _fetchLeaderboardFallback();
-    }
-  }
-  
-  // Fallback a la lógica antigua por si acaso
-  Future<void> _fetchLeaderboardFallback() async {
-     try {
-      final response = await _supabase.functions.invoke(
-        'game-play/get-leaderboard',
-        body: {'eventId': _currentEventId},
-        method: HttpMethod.post,
-      );
-
-      if (response.status == 200) {
-        final List<dynamic> data = response.data;
-        _leaderboard = data.map((json) => Player.fromJson(json)).toList();
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('Error fallback leaderboard: $e');
     }
   }
 
   // --- FIN GESTIÓN RANKING ---
   
   Future<void> fetchClues({String? eventId, bool silent = false, String? userId}) async {
-  if (eventId != null && eventId != _currentEventId) {
-    _currentEventId = eventId;
-    
-    // Si tenemos el userId, cargamos las vidas ANTES de marcar isLoading como false
-    if (userId != null) {
-      await fetchLives(userId); 
-    } else {
-      // Si no hay ID de usuario (caso raro), no asumas 3 todavía
-      _lives = 0; 
-    }
+    if (eventId != null && eventId != _currentEventId) {
+      _currentEventId = eventId;
+      
+      if (userId != null) {
+        await fetchLives(userId); 
+      } else {
+        _lives = 0; 
+      }
       _isRaceCompleted = false; 
       _clues = []; 
       _leaderboard = [];
@@ -312,26 +203,19 @@ if (json['completed_clues'] != null) {
     try {
       if (idToUse == null) return;
 
-      // --- NUEVO: Sincronizar vidas inmediatamente si tenemos el userId ---
       if (userId != null) {
         await fetchLives(userId); 
       }
 
-      final response = await _supabase.functions.invoke(
-        'game-play/get-clues', 
-        body: {'eventId': idToUse},
-        method: HttpMethod.post,
-      );
+      final fetchedClues = await _gameService.getClues(idToUse);
       
-      if (response.status == 200) {
-        final List<dynamic> data = response.data;
-        _clues = data.map((json) => Clue.fromJson(json)).toList();
-        _hintActive = false;
-        _activeHintText = null;
-        
-        final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
-        _currentClueIndex = (index != -1) ? index : _clues.length;
-      }
+      _clues = fetchedClues;
+      _hintActive = false;
+      _activeHintText = null;
+      
+      final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
+      _currentClueIndex = (index != -1) ? index : _clues.length;
+      
     } catch (e) {
       _errorMessage = 'Error fetching clues: $e';
     } finally {
@@ -339,31 +223,27 @@ if (json['completed_clues'] != null) {
       notifyListeners();
     }
   }
+
   Future<void> startGame(String eventId) async {
-  _isLoading = true;
-  notifyListeners();
-  
-  try {
-    final response = await _supabase.functions.invoke('game-play/start-game', 
-      body: {'eventId': eventId},
-      method: HttpMethod.post
-    );
+    _isLoading = true;
+    notifyListeners();
     
-    if (response.status == 200) {
-      // 1. Cargamos pistas y VIDAS primero (fetchClues ya llama a fetchLives)
-      // Asegúrate de pasar el userId si lo tienes disponible en el contexto donde llamas startGame
+    try {
+      await _gameService.startGame(eventId);
+      
+      // 1. Cargamos pistas y VIDAS
       await fetchClues(eventId: eventId); 
       
-      // 2. SOLO DESPUÉS de cargar los datos reales, activamos el juego
+      // 2. Activamos juego
       _isGameActive = true; 
+      
+    } catch (e) {
+      debugPrint('Error starting game: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-  } catch (e) {
-    debugPrint('Error starting game: $e');
-  } finally {
-    _isLoading = false;
-    notifyListeners();
   }
-}
   
   void unlockClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
@@ -430,23 +310,14 @@ if (json['completed_clues'] != null) {
     }
 
     try {
-      final response = await _supabase.functions.invoke('game-play/complete-clue', 
-        body: {
-          'clueId': targetId, 
-          'answer': answer,
-        },
-        method: HttpMethod.post
-      );
+      final data = await _gameService.completeClue(targetId, answer);
       
-      if (response.status == 200) {
-        // Check if race was completed by this action
-        final data = response.data as Map<String, dynamic>?;
-        if (data != null && data['raceCompleted'] == true) {
+      if (data != null) { // Success
+        if (data['raceCompleted'] == true) {
           _setRaceCompleted(true, 'Clue Completion');
         }
         
         await fetchClues(silent: true); 
-        // También actualizamos el ranking si completó una pista
         fetchLeaderboard(); 
         return true;
       } else {
@@ -458,31 +329,18 @@ if (json['completed_clues'] != null) {
     }
   }
   
-  /// Check race completion status from server
   Future<void> checkRaceStatus() async {
     if (_currentEventId == null) return;
     
-    // Resetear antes de comprobar
     _isRaceCompleted = false;
 
     try {
-      final response = await _supabase.functions.invoke(
-        'game-play/check-race-status',
-        body: {'eventId': _currentEventId},
-        method: HttpMethod.post,
-      );
+      final isCompleted = await _gameService.checkRaceStatus(_currentEventId!);
       
-      if (response.status == 200) {
-        final data = response.data as Map<String, dynamic>?;
-        if (data != null) {
-          final isCompletedOnServer = data['isCompleted'] ?? false;
-          // Validar: Solo si el servidor dice que terminó Y tenemos pistas
-          if (isCompletedOnServer && totalClues > 0) {
-             _setRaceCompleted(true, 'Server Health Check');
-          } else {
-             _setRaceCompleted(false, 'Server Health Check (Falsed or 0 clues)');
-          }
-        }
+      if (isCompleted && totalClues > 0) {
+          _setRaceCompleted(true, 'Server Health Check');
+      } else {
+          _setRaceCompleted(false, 'Server Health Check (Falsed or 0 clues)');
       }
     } catch (e) {
       debugPrint('Error checking race status: $e');
@@ -497,14 +355,9 @@ if (json['completed_clues'] != null) {
     notifyListeners();
     
     try {
-      final response = await _supabase.functions.invoke('game-play/skip-clue', 
-        body: {
-          'clueId': clue.id,
-        },
-        method: HttpMethod.post
-      );
+      final success = await _gameService.skipClue(clue.id);
       
-      if (response.status == 200) {
+      if (success) {
         await fetchClues();
         return true;
       } else {
