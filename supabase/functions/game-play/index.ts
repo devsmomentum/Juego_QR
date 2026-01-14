@@ -476,6 +476,14 @@ serve(async (req) => {
     if (path === 'sabotage-rival') {
       const { rivalId } = await req.json()
 
+      // VALIDACIÓN DE SEGURIDAD: Evitar auto-sabotaje
+      if (rivalId === user.id) {
+        return new Response(
+          JSON.stringify({ error: 'Cannot sabotage yourself' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/mall_store.dart';
-import 'package:image_picker/image_picker.dart';
+import '../services/store_service.dart';
 
 class StoreProvider extends ChangeNotifier {
-  final _supabase = Supabase.instance.client;
+  final StoreService _storeService;
   
   List<MallStore> _stores = [];
   bool _isLoading = false;
   String? _errorMessage;
+
+  StoreProvider({required StoreService storeService}) : _storeService = storeService;
 
   List<MallStore> get stores => _stores;
   bool get isLoading => _isLoading;
@@ -20,13 +21,7 @@ class StoreProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _supabase
-          .from('mall_stores')
-          .select()
-          .eq('event_id', eventId)
-          .order('created_at');
-
-      _stores = (response as List).map((e) => MallStore.fromMap(e)).toList();
+      _stores = await _storeService.fetchStores(eventId);
     } catch (e) {
       debugPrint('Error fetching stores: $e');
       _errorMessage = 'Error cargando tiendas';
@@ -41,31 +36,7 @@ class StoreProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      String? imageUrl;
-
-      // 1. Upload Image if exists
-      if (imageFile != null) {
-        final fileExt = 'jpg'; // Default extension
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-        final filePath = 'store-images/$fileName';
-        
-        if (imageFile is XFile) {
-            final bytes = await imageFile.readAsBytes();
-             await _supabase.storage
-              .from('events-images')
-              .uploadBinary(filePath, bytes, fileOptions: const FileOptions(upsert: true));
-             
-             imageUrl = _supabase.storage.from('events-images').getPublicUrl(filePath);
-        }
-      }
-
-      // 2. Insert Store
-      final storeData = store.toMap();
-      if (imageUrl != null) {
-        storeData['image_url'] = imageUrl;
-      }
-
-      await _supabase.from('mall_stores').insert(storeData);
+      await _storeService.createStore(store, imageFile);
 
       // Refresh
       if (store.eventId != null) {
@@ -80,36 +51,12 @@ class StoreProvider extends ChangeNotifier {
     }
   }
   
-    Future<void> updateStore(MallStore store, dynamic newImageFile) async {
+  Future<void> updateStore(MallStore store, dynamic newImageFile) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      String? imageUrl = store.imageUrl;
-
-      if (newImageFile != null) {
-         final fileExt = 'jpg'; 
-         final fileName = '${DateTime.now().millisecondsSinceEpoch}_updated.$fileExt';
-         final filePath = 'store-images/$fileName';
-         
-          // Simple handling for now, adapt based on image picker result type
-         if (newImageFile is XFile) {
-             final bytes = await newImageFile.readAsBytes();
-             await _supabase.storage
-              .from('events-images')
-              .uploadBinary(filePath, bytes, fileOptions: const FileOptions(upsert: true));
-              
-             imageUrl = _supabase.storage.from('events-images').getPublicUrl(filePath);
-         }
-      }
-
-      final data = store.toMap();
-      data['image_url'] = imageUrl;
-
-      await _supabase
-          .from('mall_stores')
-          .update(data)
-          .eq('id', store.id);
+      await _storeService.updateStore(store, newImageFile);
 
       if (store.eventId != null) {
         await fetchStores(store.eventId!);
@@ -125,7 +72,7 @@ class StoreProvider extends ChangeNotifier {
 
   Future<void> deleteStore(String storeId, String eventId) async {
     try {
-      await _supabase.from('mall_stores').delete().eq('id', storeId);
+      await _storeService.deleteStore(storeId);
       await fetchStores(eventId); // Refresh list
     } catch (e) {
       debugPrint("Error deleting store: $e");

@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PenaltyService {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  final SupabaseClient _supabase;
+
+  PenaltyService(this._supabase);
 
   /// Retorna la fecha fin del ban si está castigado, o NULL si puede jugar.
   Future<DateTime?> attemptStartGame() async {
@@ -24,7 +27,7 @@ class PenaltyService {
         return DateTime.parse(data['ban_ends_at']); 
       }
     } catch (e) {
-      print('Error penalty check: $e');
+      debugPrint('Error penalty check: $e');
       // En caso de error de red, por seguridad del evento, podrías dejar pasar o bloquear.
       // Aquí dejamos pasar para no frustrar por mala conexión, pero idealmente se maneja el error.
       return null; 

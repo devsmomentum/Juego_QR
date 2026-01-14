@@ -30,6 +30,9 @@ import 'features/mall/providers/store_provider.dart';
 
 import 'features/game/services/game_service.dart';
 
+import 'features/mall/services/store_service.dart';
+import 'features/events/services/event_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -80,14 +83,23 @@ class TreasureHuntApp extends StatelessWidget {
             powerService: PowerService(supabaseClient: supabase),
           );
         }),
-        ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) {
+           final supabase = Supabase.instance.client;
+           return EventProvider(eventService: EventService(supabase));
+        }),
         ChangeNotifierProvider(create: (_) => GameRequestProvider()),
         ChangeNotifierProvider(create: (_) {
            final supabase = Supabase.instance.client;
            return GameProvider(gameService: GameService(supabase));
         }),
-        Provider(create: (_) => PenaltyService()),
-        ChangeNotifierProvider(create: (_) => StoreProvider()),
+        Provider(create: (_) {
+            final supabase = Supabase.instance.client;
+            return PenaltyService(supabase);
+        }),
+        ChangeNotifierProvider(create: (_) {
+            final supabase = Supabase.instance.client;
+            return StoreProvider(storeService: StoreService(supabase));
+        }),
         ChangeNotifierProvider(create: (_) => PowerEffectProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
       ],
