@@ -34,10 +34,23 @@ serve(async (req) => {
       });
     }
 
-    // Check if user is admin (simplified check for now)
-    // In production, check a 'role' column in profiles or use RLS
-    // const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', user.id).single()
-    // if (profile.role !== 'admin') throw new Error('Forbidden')
+    // --- VALIDACIÓN DE ROL ADMIN (CORRECCIÓN DE SEGURIDAD) ---
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || profile?.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Admin role required' }),
+        { 
+          status: 403, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    // --- FIN VALIDACIÓN ---
 
     const url = new URL(req.url);
     const path = url.pathname.split("/").pop();
