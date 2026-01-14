@@ -11,6 +11,8 @@ import 'features/game/providers/game_provider.dart';
 import 'features/game/services/penalty_service.dart';
 import 'features/auth/providers/player_provider.dart';
 import 'features/auth/services/auth_service.dart';
+import 'features/auth/services/inventory_service.dart';
+import 'features/auth/services/power_service.dart';
 import 'features/admin/services/admin_service.dart';
 import 'features/game/providers/game_request_provider.dart';
 import 'core/theme/app_theme.dart';
@@ -72,6 +74,8 @@ class TreasureHuntApp extends StatelessWidget {
             supabaseClient: supabase,
             authService: AuthService(supabaseClient: supabase),
             adminService: AdminService(supabaseClient: supabase),
+            inventoryService: InventoryService(supabaseClient: supabase),
+            powerService: PowerService(supabaseClient: supabase),
           );
         }),
         ChangeNotifierProvider(create: (_) => EventProvider()),

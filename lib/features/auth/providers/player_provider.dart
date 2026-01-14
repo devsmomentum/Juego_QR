@@ -6,6 +6,8 @@ import '../../../shared/models/player.dart';
 import '../../game/providers/power_effect_provider.dart';
 import '../../game/providers/game_provider.dart';
 import '../services/auth_service.dart';
+import '../services/inventory_service.dart';
+import '../services/power_service.dart';
 import '../../admin/services/admin_service.dart';
 
 enum PowerUseResult { success, reflected, error }
@@ -18,6 +20,8 @@ class PlayerProvider extends ChangeNotifier {
   // Services (DIP)
   final AuthService _authService;
   final AdminService _adminService;
+  final InventoryService _inventoryService;
+  final PowerService _powerService;
 
   // Mapa para guardar el inventario filtrado por evento
   // Estructura: { eventId: { powerId: quantity } }
@@ -34,22 +38,17 @@ class PlayerProvider extends ChangeNotifier {
   String? get banMessage => _banMessage;
 
   /// Constructor con inyección de dependencias.
-  /// 
-  /// Para uso normal (producción):
-  /// ```dart
-  /// PlayerProvider(
-  ///   supabaseClient: Supabase.instance.client,
-  ///   authService: AuthService(supabaseClient: Supabase.instance.client),
-  ///   adminService: AdminService(supabaseClient: Supabase.instance.client),
-  /// )
-  /// ```
   PlayerProvider({
     required SupabaseClient supabaseClient,
     required AuthService authService,
     required AdminService adminService,
+    required InventoryService inventoryService,
+    required PowerService powerService,
   })  : _supabase = supabaseClient,
         _authService = authService,
-        _adminService = adminService;
+        _adminService = adminService,
+        _inventoryService = inventoryService,
+        _powerService = powerService;
   
   void clearBanMessage() {
     _banMessage = null;
@@ -127,39 +126,20 @@ class PlayerProvider extends ChangeNotifier {
 
   StreamSubscription<List<Map<String, dynamic>>>? _profileSubscription;
 
+  /// Obtiene el inventario del usuario para un evento (delegado a InventoryService).
   Future<void> fetchInventory(String userId, String eventId) async {
     try {
-      // Llamamos a la nueva función SQL que retorna el campo 'slug'
-      final List<dynamic> response =
-          await _supabase.rpc('get_my_inventory_by_event', params: {
-        'p_user_id': userId,
-        'p_event_id': eventId,
-      });
+      final result = await _inventoryService.fetchInventoryByEvent(
+        userId: userId,
+        eventId: eventId,
+      );
 
-      // Procesar datos y guardarlos en el mapa de inventarios
-      final Map<String, int> eventItems = {};
-      final List<String> inventoryList = [];
+      // Guardamos la relación cantidad/item para validaciones de la tienda
+      _eventInventories[eventId] = result.eventItems;
 
-      for (var item in response) {
-        // CAMBIO CLAVE: Usamos 'slug' en lugar de 'power_id'
-        // Esto permite que coincida con los IDs de PowerItem.getShopItems() (ej: 'freeze')
-        final String itemId = item['slug'] ?? item['power_id'].toString();
-        final int qty = item['quantity'] ?? 0;
-
-        eventItems[itemId] = qty;
-
-        // Llenamos la lista plana para que la UI (InventoryScreen) pueda iterar
-        for (int i = 0; i < qty; i++) {
-          inventoryList.add(itemId);
-        }
-      }
-
-      // Guardamos la relación cantidad/item para validaciones de la tienda (máx 3)
-      _eventInventories[eventId] = eventItems;
-
-      // Actualizamos el inventario del jugador actual para que la UI se refresque
+      // Actualizamos el inventario del jugador actual
       if (_currentPlayer != null) {
-        _currentPlayer!.inventory = inventoryList;
+        _currentPlayer!.inventory = result.inventoryList;
       }
 
       notifyListeners();
@@ -167,73 +147,61 @@ class PlayerProvider extends ChangeNotifier {
       debugPrint('Error fetching event inventory: $e');
     }
   }
-  // --- LÓGICA DE TIENDA ACTUALIZADA ---
+
+  // --- LÓGICA DE TIENDA (delegada a InventoryService) ---
 
   Future<bool> purchaseItem(String itemId, String eventId, int cost,
       {bool isPower = true}) async {
     if (_currentPlayer == null) return false;
 
-    // MANEJO ESPECIAL PARA VIDAS (extra_life)
+    // MANEJO ESPECIAL PARA VIDAS
     if (itemId == 'extra_life') {
       return _purchaseLifeManual(eventId, cost);
     }
 
     try {
-      // Llamada a la función SQL: buy_item
-      await _supabase.rpc('buy_item', params: {
-        'p_user_id': _currentPlayer!.id,
-        'p_event_id': eventId,
-        'p_item_id': itemId,
-        'p_cost': cost,
-        'p_is_power': isPower,
-      });
+      final result = await _inventoryService.purchaseItem(
+        userId: _currentPlayer!.id,
+        eventId: eventId,
+        itemId: itemId,
+        cost: cost,
+        isPower: isPower,
+      );
 
-      // Si la función SQL no lanzó excepción, la compra fue exitosa
-      // Actualizamos monedas localmente para feedback inmediato
-      _currentPlayer!.coins -= cost;
-
-      // Refrescamos el inventario específico para que el contador de la tienda se actualice
-      await fetchInventory(_currentPlayer!.id, eventId);
-
-      notifyListeners();
-      return true;
+      if (result.success) {
+        _currentPlayer!.coins -= cost;
+        await fetchInventory(_currentPlayer!.id, eventId);
+        notifyListeners();
+      }
+      return result.success;
     } catch (e) {
       debugPrint("Error en compra: $e");
-      // Re-lanzamos el error para que el SnackBar en la UI lo muestre
       rethrow;
     }
   }
 
   Future<bool> _purchaseLifeManual(String eventId, int cost) async {
-    try {
-      // Validar monedas localmente primero (feedback rápido)
-      if ((_currentPlayer?.coins ?? 0) < cost) {
-        return false;
-      }
-
-      // Usar función RPC segura que bypassa RLS
-      // Esta función hace todo atómicamente: resta monedas, suma vida, registra transacción
-      final int newLives = await _supabase.rpc('buy_extra_life', params: {
-        'p_user_id': _currentPlayer!.id,
-        'p_event_id': eventId,
-        'p_cost': cost,
-      });
-
-      // Actualizar estado local con respuesta del servidor
-      _currentPlayer!.coins -= cost;
-      _currentPlayer!.lives = newLives;
-      notifyListeners();
-
-      return true;
-    } catch (e) {
-      debugPrint("Error comprando vida: $e");
+    if ((_currentPlayer?.coins ?? 0) < cost) {
       return false;
     }
+
+    final result = await _inventoryService.purchaseExtraLife(
+      userId: _currentPlayer!.id,
+      eventId: eventId,
+      cost: cost,
+    );
+
+    if (result.success) {
+      _currentPlayer!.coins -= cost;
+      if (result.newLives != null) {
+        _currentPlayer!.lives = result.newLives!;
+      }
+      notifyListeners();
+    }
+    return result.success;
   }
 
-// --- LÓGICA DE USO DE PODERES ---
-
-
+// --- LÓGICA DE USO DE PODERES (delegada a PowerService) ---
 
   Future<PowerUseResult> usePower({
     required String powerSlug,
@@ -253,184 +221,64 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     try {
-      
-      // Indicamos que estamos lanzando manualmente (para evitar auto-detectarlo como reflejo)
+      // Configurar estado de lanzamiento manual
       effectProvider.setManualCasting(true);
 
-      bool success = false;
-      dynamic response;
+      // Preparar lista de rivales para blur_screen
+      List<RivalInfo>? rivals;
+      String? eventId;
+      if (powerSlug == 'blur_screen' && gameProvider != null) {
+        eventId = gameProvider.currentEventId;
+        if (eventId != null && gameProvider.leaderboard.isEmpty) {
+          try {
+            await gameProvider.fetchLeaderboard();
+          } catch (_) {}
+        }
+        rivals = gameProvider.leaderboard
+            .where((p) => p.gamePlayerId != null && p.gamePlayerId!.isNotEmpty)
+            .map((p) => RivalInfo(p.gamePlayerId!))
+            .toList();
+      }
 
-      // 1. INVISIBILIDAD: Corregido para que el servidor lo procese
-      // Verifica que usePower siga enviando el RPC así (esto es correcto):
-      if (powerSlug == 'invisibility') {
-        response = await _supabase.rpc('use_power_mechanic', params: {
-          'p_caster_id': casterGamePlayerId,
-          'p_target_id': casterGamePlayerId,
-          'p_power_slug': 'invisibility',
-        });
-        success = _coerceRpcSuccess(response);
-      } else if (powerSlug == 'life_steal') {
-        response = await _supabase.rpc('use_power_mechanic', params: {
-          'p_caster_id': casterGamePlayerId,
-          'p_target_id': targetGamePlayerId,
-          'p_power_slug': 'life_steal',
-        });
-        success = _coerceRpcSuccess(response);
-      } else if (powerSlug == 'blur_screen') {
-        final paid =
-            await _decrementPowerBySlug('blur_screen', casterGamePlayerId);
-        if (!paid) {
-          _isProcessing = false;
+      // Ejecutar poder a través del servicio
+      final response = await _powerService.executePower(
+        casterGamePlayerId: casterGamePlayerId,
+        targetGamePlayerId: targetGamePlayerId,
+        powerSlug: powerSlug,
+        rivals: rivals,
+        eventId: eventId,
+      );
+
+      // Manejar respuesta basada en el resultado
+      switch (response.result) {
+        case PowerUseResultType.reflected:
+          // Notificar devolución solo si no tenemos return armado
+          if (powerSlug != 'return' && !effectProvider.isReturnArmed) {
+            effectProvider.notifyPowerReturned(response.returnedByName ?? 'Un rival');
+          }
+          await refreshProfile();
+          return PowerUseResult.reflected;
+
+        case PowerUseResultType.success:
+          // Manejar efectos especiales
+          if (response.stealFailed) {
+            effectProvider.notifyStealFailed();
+          }
+          if (powerSlug == 'shield') {
+            effectProvider.setShielded(true, sourceSlug: powerSlug);
+          }
+          await syncRealInventory(effectProvider: effectProvider);
+          return PowerUseResult.success;
+
+        case PowerUseResultType.error:
           return PowerUseResult.error;
-        }
-        if (gameProvider != null) {
-          await _broadcastBlurScreenToEventRivals(
-            gameProvider: gameProvider,
-            casterGamePlayerId: casterGamePlayerId,
-          );
-        }
-        success = true;
-      } else if (powerSlug == 'return') {
-        response = await _supabase.rpc('use_power_mechanic', params: {
-          'p_caster_id': casterGamePlayerId,
-          'p_target_id': casterGamePlayerId,
-          'p_power_slug': 'return',
-        });
-        success = _coerceRpcSuccess(response);
-      } else {
-        response = await _supabase.rpc('use_power_mechanic', params: {
-          'p_caster_id': casterGamePlayerId,
-          'p_target_id': targetGamePlayerId,
-          'p_power_slug': powerSlug,
-        });
-        success = _coerceRpcSuccess(response);
       }
-
-      // --- PASO 2: MANEJO DE ERRORES DEL SERVIDOR ---
-      if (response is Map && response['success'] == false) {
-        if (response['error'] == 'target_invisible') {
-          throw '¡El objetivo es invisible!';
-        }
-        _isProcessing = false;
-        return PowerUseResult.error;
-      }
-
-      // Notificación de devolución
-      // Corrección: Solo mostramos esto si NO somos nosotros los que lanzamos 'return'.
-      // Si lanzamos 'return', el feedback correcto es el Toast de éxito, no el modal de rechazo.
-      if (powerSlug != 'return' && success && response is Map && response['returned'] == true) {
-        final String name = response['returned_by_name'] ?? 'Un rival';
-        
-        // CORRECCIÓN PING-PONG:
-        // Si yo tengo "Devolución" armado (_returnArmed), NO muestro el modal de "Espejo Activado" (Fallé).
-        // ¿Por qué? Porque mi "Devolución" está a punto de activarse y mostrar el Toast de "Rebote Exitoso".
-        // Si muestro ambos, confundo al usuario.
-        if (!effectProvider.isReturnArmed) {
-           effectProvider.notifyPowerReturned(name);
-        } else {
-           debugPrint("Ping-Pong detectado: Suprimiendo 'Espejo Activado' en favor de 'Rebote Exitoso'.");
-        }
-        
-        await refreshProfile();
-        // AQUI ESTA LA MAGIA: Retornamos 'reflected' para que la UI sepa
-        return PowerUseResult.reflected; 
-      }
-
-      // Life steal fallido: objetivo sin vidas (igual se consume el ítem en servidor)
-      if (success &&
-          response is Map &&
-          response['stolen'] == false &&
-          response['reason'] == 'target_no_lives') {
-        effectProvider.notifyStealFailed();
-      }
-
-      if (success) {
-        if (powerSlug == 'shield') {
-          effectProvider.setShielded(true, sourceSlug: powerSlug);
-        }
-        await syncRealInventory(effectProvider: effectProvider);
-        return PowerUseResult.success;
-      }
-      return PowerUseResult.error;
     } catch (e) {
       debugPrint('Error usando poder: $e');
-      rethrow; // Lanzamos el error para que la UI lo atrape
+      rethrow;
     } finally {
-      // Terminamos el casting manual
       effectProvider.setManualCasting(false);
       _isProcessing = false;
-    }
-  }
-
-  bool _coerceRpcSuccess(dynamic response) {
-    if (response == null) {
-      // Muchas funciones SQL retornan void/null cuando salen bien.
-      return true;
-    }
-    if (response is bool) return response;
-    if (response is num) return response != 0;
-    if (response is String) {
-      final v = response.toLowerCase().trim();
-      return v == 'true' || v == 't' || v == '1' || v == 'ok' || v == 'success';
-    }
-    if (response is Map) {
-      final v = response['success'];
-      if (v is bool) return v;
-      if (v is num) return v != 0;
-      if (v is String) {
-        final s = v.toLowerCase().trim();
-        return s == 'true' || s == 't' || s == '1';
-      }
-      // Si no hay flag, pero el RPC devolvió un objeto, lo consideramos éxito.
-      return true;
-    }
-    if (response is List) {
-      if (response.isEmpty) return true;
-      final first = response.first;
-      if (first is Map && first.containsKey('success')) {
-        return _coerceRpcSuccess(first);
-      }
-      return true;
-    }
-
-    // Fallback: si no fue excepción, tratamos como éxito.
-    return true;
-  }
-
-  Future<bool> _decrementPowerBySlug(
-      String powerSlug, String gamePlayerId) async {
-    try {
-      final powerRes = await _supabase
-          .from('powers')
-          .select('id')
-          .eq('slug', powerSlug)
-          .maybeSingle();
-
-      if (powerRes == null || powerRes['id'] == null) return false;
-      final String powerId = powerRes['id'];
-
-      final existing = await _supabase
-          .from('player_powers')
-          .select('id, quantity')
-          .eq('game_player_id', gamePlayerId)
-          .eq('power_id', powerId)
-          .maybeSingle();
-
-      if (existing == null) return false;
-      final int currentQty = (existing['quantity'] as num?)?.toInt() ?? 0;
-      if (currentQty <= 0) return false;
-
-      final updated = await _supabase
-          .from('player_powers')
-          .update({'quantity': currentQty - 1})
-          .eq('id', existing['id'])
-          .eq('quantity', currentQty)
-          .select();
-
-      return updated.isNotEmpty;
-    } catch (e) {
-      debugPrint('_decrementPowerBySlug error: $e');
-      return false;
     }
   }
 
@@ -593,24 +441,19 @@ class PlayerProvider extends ChangeNotifier {
         });
   }
 
-  // --- LOGICA DE PODERES E INVENTARIO (BACKEND INTEGRATION) ---
+  // --- LOGICA DE INVENTARIO (delegada a InventoryService) ---
+  
   Future<void> syncRealInventory({PowerEffectProvider? effectProvider}) async {
     if (_currentPlayer == null) return;
 
     try {
       debugPrint("Sincronizando inventario para user: ${_currentPlayer!.id}");
 
-      // 1. Obtenemos el GamePlayer MÁS RECIENTE
-      // Ordenamos por joined_at descendente para asegurar que es el juego actual
-      final gamePlayerRes = await _supabase
-          .from('game_players')
-          .select('id, lives, event_id')
-          .eq('user_id', _currentPlayer!.id)
-          .order('joined_at', ascending: false) // <--- CRÍTICO
-          .limit(1)
-          .maybeSingle();
+      final result = await _inventoryService.syncRealInventory(
+        userId: _currentPlayer!.id,
+      );
 
-      if (gamePlayerRes == null) {
+      if (!result.success) {
         debugPrint("Usuario no tiene game_player activo.");
         _currentPlayer!.inventory.clear();
         _currentPlayer!.gamePlayerId = null;
@@ -619,57 +462,31 @@ class PlayerProvider extends ChangeNotifier {
         return;
       }
 
-      if (gamePlayerRes['lives'] != null) {
-        _currentPlayer!.lives = gamePlayerRes['lives'];
+      // Actualizar estado local
+      if (result.lives != null) {
+        _currentPlayer!.lives = result.lives!;
       }
-
-      final String gamePlayerId = gamePlayerRes['id'];
-      _currentPlayer!.gamePlayerId = gamePlayerId;
-      effectProvider
-          ?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
+      
+      _currentPlayer!.gamePlayerId = result.gamePlayerId;
+      
+      // Configurar PowerEffectProvider
+      effectProvider?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
       effectProvider?.configureReturnHandler((slug, casterId) async {
-        final result = await usePower(
+        final powerResult = await usePower(
           powerSlug: slug,
           targetGamePlayerId: casterId,
           effectProvider: effectProvider,
           allowReturnForward: false,
         );
-        return result != PowerUseResult.error;
+        return powerResult != PowerUseResult.error;
       });
-      // effectProvider?.configureLifeStealVictimHandler((effectId, casterId) {
-      //   return loseLife(eventId: eventId);
-      // });
-      effectProvider?.startListening(gamePlayerId);
-      debugPrint("GamePlayer encontrado: $gamePlayerId");
+      effectProvider?.startListening(result.gamePlayerId);
+      
+      debugPrint("GamePlayer encontrado: ${result.gamePlayerId}");
 
-      // 2. Traer poderes con JOIN
-      final List<dynamic> powersData = await _supabase
-          .from('player_powers')
-          .select(
-              'quantity, powers!inner(slug)') // !inner fuerza a que exista el poder
-          .eq('game_player_id', gamePlayerId)
-          .gt('quantity', 0);
-
-      debugPrint("Poderes encontrados en BD: ${powersData.length}");
-
-      List<String> realInventory = [];
-
-      for (var item in powersData) {
-        final powerDetails = item['powers'];
-        // Protección extra contra nulos
-        if (powerDetails != null && powerDetails['slug'] != null) {
-          final String pId = powerDetails['slug'];
-          final int qty = item['quantity'];
-
-          debugPrint("Agregando $qty de $pId");
-          for (var i = 0; i < qty; i++) {
-            realInventory.add(pId);
-          }
-        }
-      }
-
+      // Actualizar inventario
       _currentPlayer!.inventory.clear();
-      _currentPlayer!.inventory.addAll(realInventory);
+      _currentPlayer!.inventory.addAll(result.inventory);
       notifyListeners();
     } catch (e) {
       debugPrint('Error CRITICO syncing real inventory: $e');
@@ -835,75 +652,6 @@ class PlayerProvider extends ChangeNotifier {
     ];
     for (var slug in slugs) {
       await debugAddPower(slug);
-    }
-  }
-
-  Future<void> _broadcastBlurScreenToEventRivals({
-    required GameProvider gameProvider,
-    required String casterGamePlayerId,
-  }) async {
-    try {
-      final eventId = gameProvider.currentEventId;
-
-      // Asegurar que haya datos de rivales (mejor esfuerzo)
-      if (eventId != null && gameProvider.leaderboard.isEmpty) {
-        try {
-          await gameProvider.fetchLeaderboard();
-        } catch (_) {
-          // Ignorar: si falla, simplemente no habrá targets.
-        }
-      }
-
-      final now = DateTime.now().toUtc();
-      final duration = await _getPowerDurationFromDb(powerSlug: 'blur_screen');
-      final expiresAt = now.add(duration).toIso8601String();
-
-      final rivals = gameProvider.leaderboard
-          .where((p) => p.gamePlayerId != null && p.gamePlayerId!.isNotEmpty)
-          .map((p) => p.gamePlayerId!)
-          .where((gpId) => gpId != casterGamePlayerId)
-          .toSet()
-          .toList();
-
-      if (rivals.isEmpty) return;
-
-      final payloads = rivals
-          .map((gpId) => <String, dynamic>{
-                'target_id': gpId,
-                'caster_id': casterGamePlayerId,
-                'power_slug': 'blur_screen',
-                'expires_at': expiresAt,
-                if (eventId != null) 'event_id': eventId,
-              })
-          .toList();
-
-      await _supabase.from('active_powers').insert(payloads);
-    } catch (e) {
-      debugPrint('_broadcastBlurScreenToEventRivals error: $e');
-    }
-  }
-
-  final Map<String, Duration> _powerDurationCache = {};
-
-  Future<Duration> _getPowerDurationFromDb({required String powerSlug}) async {
-    final cached = _powerDurationCache[powerSlug];
-    if (cached != null) return cached;
-
-    try {
-      final row = await _supabase
-          .from('powers')
-          .select('duration')
-          .eq('slug', powerSlug)
-          .maybeSingle();
-
-      final seconds = (row?['duration'] as num?)?.toInt() ?? 0;
-      final duration =
-          seconds <= 0 ? Duration.zero : Duration(seconds: seconds);
-      _powerDurationCache[powerSlug] = duration;
-      return duration;
-    } catch (e) {
-      debugPrint('_getPowerDurationFromDb($powerSlug) error: $e');
-      return Duration.zero;
     }
   }
 }

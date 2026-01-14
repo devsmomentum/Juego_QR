@@ -1,0 +1,214 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Resultado de obtener inventario por evento.
+class InventoryResult {
+  /// Mapa de itemId -> cantidad
+  final Map<String, int> eventItems;
+  /// Lista plana de items para la UI
+  final List<String> inventoryList;
+
+  InventoryResult({
+    required this.eventItems,
+    required this.inventoryList,
+  });
+}
+
+/// Resultado de una compra.
+class PurchaseResult {
+  final bool success;
+  final int? newCoins;
+  final int? newLives;
+  final String? errorMessage;
+
+  PurchaseResult({
+    required this.success,
+    this.newCoins,
+    this.newLives,
+    this.errorMessage,
+  });
+
+  factory PurchaseResult.error(String message) => PurchaseResult(
+        success: false,
+        errorMessage: message,
+      );
+}
+
+/// Resultado de sincronización de inventario real.
+class SyncInventoryResult {
+  final bool success;
+  final String? gamePlayerId;
+  final int? lives;
+  final List<String> inventory;
+
+  SyncInventoryResult({
+    required this.success,
+    this.gamePlayerId,
+    this.lives,
+    required this.inventory,
+  });
+
+  factory SyncInventoryResult.empty() => SyncInventoryResult(
+        success: false,
+        inventory: [],
+      );
+}
+
+/// Servicio de inventario que encapsula la lógica de gestión de items y compras.
+/// 
+/// Implementa DIP al recibir [SupabaseClient] por constructor.
+class InventoryService {
+  final SupabaseClient _supabase;
+
+  InventoryService({required SupabaseClient supabaseClient})
+      : _supabase = supabaseClient;
+
+  /// Obtiene el inventario de un usuario para un evento específico.
+  /// 
+  /// Llama al RPC `get_my_inventory_by_event`.
+  Future<InventoryResult> fetchInventoryByEvent({
+    required String userId,
+    required String eventId,
+  }) async {
+    try {
+      final List<dynamic> response = await _supabase.rpc(
+        'get_my_inventory_by_event',
+        params: {
+          'p_user_id': userId,
+          'p_event_id': eventId,
+        },
+      );
+
+      final Map<String, int> eventItems = {};
+      final List<String> inventoryList = [];
+
+      for (var item in response) {
+        // Usamos 'slug' en lugar de 'power_id' para coincidir con PowerItem.getShopItems()
+        final String itemId = item['slug'] ?? item['power_id'].toString();
+        final int qty = item['quantity'] ?? 0;
+
+        eventItems[itemId] = qty;
+
+        for (int i = 0; i < qty; i++) {
+          inventoryList.add(itemId);
+        }
+      }
+
+      return InventoryResult(
+        eventItems: eventItems,
+        inventoryList: inventoryList,
+      );
+    } catch (e) {
+      debugPrint('InventoryService: Error fetching event inventory: $e');
+      rethrow;
+    }
+  }
+
+  /// Compra un item de la tienda.
+  /// 
+  /// Llama al RPC `buy_item`. Para vidas, usa `purchaseExtraLife()`.
+  Future<PurchaseResult> purchaseItem({
+    required String userId,
+    required String eventId,
+    required String itemId,
+    required int cost,
+    bool isPower = true,
+  }) async {
+    try {
+      await _supabase.rpc('buy_item', params: {
+        'p_user_id': userId,
+        'p_event_id': eventId,
+        'p_item_id': itemId,
+        'p_cost': cost,
+        'p_is_power': isPower,
+      });
+
+      return PurchaseResult(success: true);
+    } catch (e) {
+      debugPrint('InventoryService: Error en compra: $e');
+      rethrow;
+    }
+  }
+
+  /// Compra una vida extra.
+  /// 
+  /// Llama al RPC `buy_extra_life` que hace todo atómicamente.
+  Future<PurchaseResult> purchaseExtraLife({
+    required String userId,
+    required String eventId,
+    required int cost,
+  }) async {
+    try {
+      final int newLives = await _supabase.rpc('buy_extra_life', params: {
+        'p_user_id': userId,
+        'p_event_id': eventId,
+        'p_cost': cost,
+      });
+
+      return PurchaseResult(
+        success: true,
+        newLives: newLives,
+      );
+    } catch (e) {
+      debugPrint('InventoryService: Error comprando vida: $e');
+      return PurchaseResult.error(e.toString());
+    }
+  }
+
+  /// Sincroniza el inventario real desde la tabla `player_powers`.
+  /// 
+  /// Retorna el estado actual del game_player incluyendo vidas e inventario.
+  Future<SyncInventoryResult> syncRealInventory({
+    required String userId,
+  }) async {
+    try {
+      // 1. Obtener el GamePlayer más reciente
+      final gamePlayerRes = await _supabase
+          .from('game_players')
+          .select('id, lives, event_id')
+          .eq('user_id', userId)
+          .order('joined_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (gamePlayerRes == null) {
+        debugPrint('InventoryService: Usuario no tiene game_player activo.');
+        return SyncInventoryResult.empty();
+      }
+
+      final String gamePlayerId = gamePlayerRes['id'];
+      final int? lives = gamePlayerRes['lives'];
+
+      // 2. Traer poderes con JOIN
+      final List<dynamic> powersData = await _supabase
+          .from('player_powers')
+          .select('quantity, powers!inner(slug)')
+          .eq('game_player_id', gamePlayerId)
+          .gt('quantity', 0);
+
+      List<String> realInventory = [];
+
+      for (var item in powersData) {
+        final powerDetails = item['powers'];
+        if (powerDetails != null && powerDetails['slug'] != null) {
+          final String slug = powerDetails['slug'];
+          final int qty = item['quantity'];
+
+          for (var i = 0; i < qty; i++) {
+            realInventory.add(slug);
+          }
+        }
+      }
+
+      return SyncInventoryResult(
+        success: true,
+        gamePlayerId: gamePlayerId,
+        lives: lives,
+        inventory: realInventory,
+      );
+    } catch (e) {
+      debugPrint('InventoryService: Error syncing real inventory: $e');
+      return SyncInventoryResult.empty();
+    }
+  }
+}
