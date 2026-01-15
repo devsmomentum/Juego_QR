@@ -47,9 +47,31 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
           Provider.of<PlayerProvider>(context, listen: false);
 
       // Configuramos el handler que se dispara cuando detectamos un robo de vida
-      powerProvider.configureLifeStealVictimHandler((effectId, casterId) async {
-        final myId = playerProvider.currentPlayer?.id;
-        if (myId == null) return;
+      powerProvider.configureLifeStealVictimHandler((effectId, casterId, targetId) async {        
+        // 1. Obtener IDs locales
+        final myUserId = playerProvider.currentPlayer?.userId;
+        final myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
+
+        debugPrint("[DEBUG] 💔 LifeStealVictimHandler DISPARADO");
+        debugPrint("[DEBUG]    Effect ID: $effectId");
+        debugPrint("[DEBUG]    Caster ID: $casterId");
+        debugPrint("[DEBUG]    Target ID: $targetId");
+        debugPrint("[DEBUG]    Mi GamePlayer ID: $myGamePlayerId");
+        debugPrint("[DEBUG]    Mi User ID: $myUserId");
+
+        // 2. VALIDACIÓN CRÍTICA DE VÍCTIMA
+        // Si el target del evento no soy yo (por error de stream o broadcast), IGNORAR.
+        if (myGamePlayerId != null && targetId != myGamePlayerId) {
+           debugPrint("[DEBUG] 🚫 BLOQUEADO: Discrepancia de ID (Target: $targetId != Yo: $myGamePlayerId)");
+           return;
+        }
+
+        if (myUserId == null) {
+          debugPrint("[DEBUG] ⚠️ BLOQUEADO: myUserId es NULL");
+          return;
+        }
+
+        debugPrint("[DEBUG] ✅ Validación pasada, ejecutando resta de vida...");
 
         // Esperamos 600ms para que el número de vida baje justo cuando
         // el corazón de la animación central empieza a romperse
@@ -57,10 +79,10 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
         // Esta llamada activa la resta optimista en GameProvider (_lives--)
         // lo que obliga al ProgressHeader a redibujarse con el nuevo valor.
-        gameProvider.loseLife(myId);
+        gameProvider.loseLife(myUserId);
 
         debugPrint(
-            "Sincronización visual: Vida restada por ataque de $casterId");
+            "[DEBUG] 💀 Sincronización visual: Vida restada por ataque de $casterId");
       });
       
       // Listener para manejar cambios de bloqueo de navegación
@@ -188,7 +210,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             ),
         ],
         
-        if (activeSlug == 'life_steal')
+        // GUARDIA DEFENSIVA: Solo mostrar si YO soy el target real
+        if (activeSlug == 'life_steal' &&
+            powerProvider.listeningForId == playerProvider.currentPlayer?.gamePlayerId)
           LifeStealEffect(
             key: ValueKey(effectId),
             casterName: _resolvePlayerNameFromLeaderboard(

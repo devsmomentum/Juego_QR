@@ -13,10 +13,13 @@ class PowerEffectProvider extends ChangeNotifier {
   
   bool _isManualCasting = false; // Flag para distinguir casting manual vs automático (reflejo)
   bool _returnArmed = false;
+  
+  // FILTRO DE TIEMPO: Solo procesar eventos ocurridos después de iniciar la sesión
+  DateTime? _sessionStartTime; 
 
   Future<bool> Function(String powerSlug, String targetGamePlayerId)?
       _returnHandler;
-  Future<void> Function(String effectId, String? casterGamePlayerId)?
+  Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId)?
       _lifeStealVictimHandler;
   DefenseAction? _lastDefenseAction;
   DateTime? _lastDefenseActionAt;
@@ -87,7 +90,7 @@ class PowerEffectProvider extends ChangeNotifier {
   }
 
   void configureLifeStealVictimHandler(
-      Future<void> Function(String effectId, String? casterGamePlayerId)
+      Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId)
           handler) {
     _lifeStealVictimHandler = handler;
   }
@@ -113,6 +116,7 @@ class PowerEffectProvider extends ChangeNotifier {
     _casterSubscription?.cancel();
     _expiryTimer?.cancel();
     _listeningForId = myGamePlayerId;
+    _sessionStartTime = DateTime.now().toUtc(); // Inicializar filtro de tiempo
 
     // 1. Escuchar ataques ENTRANTES (Target = YO)
     _subscription = supabase
@@ -177,24 +181,25 @@ class PowerEffectProvider extends ChangeNotifier {
       if (isOffensive) {
          // ¡BINGO! Hemos lanzado un ataque ofensivo PERO no estábamos en modo manual.
          // Esto significa que fue un REFLEJO automático del backend.
-         final originalAttackerId = effect['target_id']?.toString();
-         
-         debugPrint("REFLEJO DETECTADO: Devolvimos $slug a $originalAttackerId");
-         
-         // IMPORTANTE: Quitamos la condición _activePowerSlug == null por si acaso
-         if (originalAttackerId != null) {
-            // Mostramos el feedback de defensa
-            debugPrint("!!! ACTIVANDO FEEDBACK DE DEFENSA !!!");
-            _returnedAgainstCasterId = originalAttackerId;
-            _returnedPowerSlug = slug;
-            _registerDefenseAction(DefenseAction.returned);
-         }
+         /* 
+            [CRÍTICO] MODIFICACIÓN LÓGICA 'RETURN':
+            Ya no deducimos "Return" basándonos en si el ataque fue automático.
+            La confirmación de "Poder Devuelto" vendrá explícitamente del RPC
+            al atacante original. 
+            
+            Mantenemos el log para debug pero NO ejecutamos _registerDefenseAction aquí.
+         */
+         debugPrint("REFLEJO DETECTADO (Stream Outgoing): $slug lanzado automáticamente.");
       }
     }
   }
 
   Future<void> _processEffects(List<Map<String, dynamic>> data) async {
     _expiryTimer?.cancel(); // Limpiar temporizadores previos
+
+    debugPrint("[DEBUG] 🔍 _processEffects llamado con ${data.length} eventos");
+    debugPrint("[DEBUG] 📅 Hora Inicio Sesión: $_sessionStartTime");
+    debugPrint("[DEBUG] 👤 Escuchando para ID: $_listeningForId");
 
     final supabase = _supabaseClient;
     if (supabase == null) {
@@ -210,7 +215,31 @@ class PowerEffectProvider extends ChangeNotifier {
     // Filtro adicional por target para evitar overlays en el atacante u oyentes stale
     final filtered = data.where((effect) {
       final targetId = effect['target_id'];
-      return _listeningForId != null && targetId == _listeningForId;
+      final createdAtStr = effect['created_at'];
+      
+      debugPrint("[DEBUG] 📦 Evento Recibido - ID: ${effect['id']} | Creado en: $createdAtStr | Target: $targetId");
+      
+      // 1. Validar que sea para mí
+      if (_listeningForId == null || targetId != _listeningForId) {
+        debugPrint("   ❌ Rechazado: Target no coincide (esperaba: $_listeningForId, recibió: $targetId)");
+        return false;
+      }
+      
+      // 2. Validar que sea reciente (evitar animaciones al entrar)
+      if (_sessionStartTime != null) {
+        if (createdAtStr != null) {
+          final createdAt = DateTime.parse(createdAtStr);
+          final sessionStart = _sessionStartTime!;
+          debugPrint("   🕐 Comparación de tiempo: Evento=$createdAt vs Sesión=$sessionStart");
+          if (createdAt.isBefore(sessionStart)) {
+             debugPrint("   ⚠️ Evento ignorado por ser ANTIGUO (${sessionStart.difference(createdAt).inSeconds}s antes)");
+             return false;
+          }
+        }
+      }
+      
+      debugPrint("   ✅ Evento ACEPTADO para procesamiento");
+      return true;
     }).toList();
 
     if (filtered.isEmpty) {
@@ -347,6 +376,13 @@ class PowerEffectProvider extends ChangeNotifier {
     _activeEffectId = latestEffect['id']?.toString();
     _activeEffectCasterId = latestEffect['caster_id']?.toString();
 
+    debugPrint("[DEBUG] 🔄 Procesando efecto aceptado:");
+    debugPrint("[DEBUG]    Slug: $latestSlug");
+    debugPrint("[DEBUG]    Effect ID: $_activeEffectId");
+    debugPrint("[DEBUG]    Caster ID: $_activeEffectCasterId");
+    debugPrint("[DEBUG]    Last Handled ID: $_lastLifeStealHandledEffectId");
+    debugPrint("[DEBUG]    Handler existe: ${_lifeStealVictimHandler != null}");
+
     if (_shieldActive) {
       _activePowerSlug = null;
       _registerDefenseAction(DefenseAction.shieldBlocked);
@@ -363,13 +399,22 @@ class PowerEffectProvider extends ChangeNotifier {
     // Aplicación real de life_steal para la víctima (RLS-safe):
     // el propio cliente víctima se descuenta a sí mismo vía PlayerProvider/RPC.
     // final effectId = _activeEffectId;
+    debugPrint("[DEBUG] 🔍 Comprobando condiciones para Life Steal:");
+    debugPrint("[DEBUG]    ¿Es life_steal? ${latestSlug == 'life_steal'}");
+    debugPrint("[DEBUG]    ¿ID nuevo? ${_activeEffectId != _lastLifeStealHandledEffectId}");
+    debugPrint("[DEBUG]    ¿Handler existe? ${_lifeStealVictimHandler != null}");
+    
     if (latestSlug == 'life_steal' &&
         _activeEffectId != _lastLifeStealHandledEffectId &&
         _lifeStealVictimHandler != null) {
       _lastLifeStealHandledEffectId = _activeEffectId;
 
+      debugPrint("[DEBUG] 🚀 LLAMANDO al LifeStealVictimHandler...");
       // Llamamos al handler que restará la vida localmente
-      _lifeStealVictimHandler!(_activeEffectId!, _activeEffectCasterId);
+      // Pasamos el targetId (que debería ser yo mismo, pero para validación estricta)
+      _lifeStealVictimHandler!(_activeEffectId!, _activeEffectCasterId, _listeningForId!);
+    } else {
+      debugPrint("[DEBUG] ⏭️ Handler NO ejecutado (condiciones no cumplidas)");
     }
     // Manejo de devolución reactiva
     if (_returnArmed && _returnHandler != null) {
