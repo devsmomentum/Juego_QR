@@ -96,7 +96,7 @@ class ConnectivityService {
 
   void _handlePingFailure() {
     _failedPings++;
-    debugPrint('ConnectivityService: Ping fallido #$_failedPings');
+    // debugPrint('ConnectivityService: Ping fallido #$_failedPings');
     
     if (_failedPings >= offlineThreshold) {
       _updateStatus(ConnectivityStatus.offline);

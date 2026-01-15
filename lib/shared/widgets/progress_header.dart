@@ -46,7 +46,14 @@ class ProgressHeader extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 25,
-                    backgroundImage: NetworkImage(player.avatarUrl),
+                    backgroundColor: Colors.white24,
+                    backgroundImage: (player.avatarUrl != null && player.avatarUrl!.startsWith('http'))
+                        ? NetworkImage(player.avatarUrl!)
+                        : null,
+                    child: (player.avatarUrl == null || !player.avatarUrl!.startsWith('http'))
+                        ? Text(player.name.isNotEmpty ? player.name[0].toUpperCase() : '?',
+                            style: const TextStyle(fontWeight: FontWeight.bold))
+                        : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
