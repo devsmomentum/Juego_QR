@@ -176,6 +176,48 @@ class Player implements ITargetable {
   
   @override
   String get avatarUrl => _avatarUrl;
+
+  Player copyWith({
+    String? userId,
+    String? name,
+    String? email,
+    String? avatarUrl,
+    String? role,
+    int? level,
+    int? experience,
+    int? totalXP,
+    int? completedCluesCount,
+    String? profession,
+    int? coins,
+    List<String>? inventory,
+    PlayerStatus? status,
+    DateTime? frozenUntil,
+    List<String>? eventsCompleted,
+    int? lives,
+    Map<String, dynamic>? stats,
+    String? gamePlayerId,
+  }) {
+    return Player(
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      avatarUrl: avatarUrl ?? _avatarUrl,
+      role: role ?? this.role,
+      level: level ?? this.level,
+      experience: experience ?? this.experience,
+      totalXP: totalXP ?? this.totalXP,
+      completedCluesCount: completedCluesCount ?? this.completedCluesCount,
+      profession: profession ?? this.profession,
+      coins: coins ?? this.coins,
+      inventory: inventory ?? this.inventory,
+      status: status ?? this.status,
+      frozenUntil: frozenUntil ?? this.frozenUntil,
+      eventsCompleted: eventsCompleted ?? this.eventsCompleted,
+      lives: lives ?? this.lives,
+      stats: stats ?? this.stats,
+      gamePlayerId: gamePlayerId ?? this.gamePlayerId,
+    );
+  }
 }
 
 enum PlayerStatus {

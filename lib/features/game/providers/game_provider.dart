@@ -95,27 +95,41 @@ class GameProvider extends ChangeNotifier {
     }
   }
   
-  Future<void> loseLife(String userId) async {
-    if (_lives <= 0) return;
-    if (_currentEventId == null) return;
+  Future<int> loseLife(String userId) async {
+    if (_lives <= 0) {
+      debugPrint('[LIVES_DEBUG] loseLife aborted: Lives is $_lives');
+      return 0; // Already 0
+    }
+    if (_currentEventId == null) {
+      debugPrint('[LIVES_DEBUG] loseLife aborted: currentEventId is null');
+      return _lives;
+    }
     
     try {
+      debugPrint('[LIVES_DEBUG] loseLife called for userId: $userId, eventId: $_currentEventId');
+      
       // 1. Optimistic Update
       _lives--;
+      debugPrint('[LIVES_DEBUG] Optimistic decrement. New local lives: $_lives');
       notifyListeners();
       
       // 2. Ejecutar servicio
+      debugPrint('[LIVES_DEBUG] Calling GameService.loseLife...');
       final remainingLives = await _gameService.loseLife(_currentEventId!, userId);
+      debugPrint('[LIVES_DEBUG] GameService returned. Server lives: $remainingLives');
       
       // 3. Sincronizar verdad
       _lives = remainingLives;
       notifyListeners();
+      return _lives;
 
     } catch (e) {
-      debugPrint('Error perdiendo vida: $e');
+      debugPrint('[LIVES_DEBUG] Error perdiendo vida: $e');
       // Rollback
       _lives++; 
+      debugPrint('[LIVES_DEBUG] Rollback. Restored lives to: $_lives');
       notifyListeners();
+      return _lives;
     }
   }
 

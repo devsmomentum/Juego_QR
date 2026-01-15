@@ -1,67 +1,113 @@
-import 'package:flutter/material.dart';
-import '../../models/clue.dart';
-import '../../../../core/theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../utils/minigame_logic_helper.dart';
+import '../../../auth/providers/player_provider.dart';
+import '../../providers/game_provider.dart';
 
-/// Widget de minijuego para ordenar letras desordenadas y formar la palabra correcta.
-/// 
-/// Recibe una [clue] que contiene la respuesta a formar y un callback [onSuccess]
-/// que se ejecuta cuando el jugador completa el desafío correctamente.
-class WordScrambleWidget extends StatefulWidget {
-  final Clue clue;
-  final VoidCallback onSuccess;
+    // ... (imports)
 
-  const WordScrambleWidget({
-    super.key,
-    required this.clue,
-    required this.onSuccess,
-  });
-
-  @override
-  State<WordScrambleWidget> createState() => _WordScrambleWidgetState();
-}
-
-class _WordScrambleWidgetState extends State<WordScrambleWidget> {
-  late List<String> _shuffledLetters;
-  String _currentWord = "";
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeGame();
-  }
-
-  void _initializeGame() {
-    final answer = widget.clue.riddleAnswer?.toUpperCase() ?? "TREASURE";
-    _shuffledLetters = answer.split('')..shuffle();
-    _currentWord = "";
-  }
-
-  void _onLetterTap(String letter) {
-    setState(() {
-      _currentWord += letter;
-      _shuffledLetters.remove(letter);
-    });
-  }
-
-  void _onReset() {
-    setState(() {
-      _initializeGame();
-    });
-  }
+  // Inside State logic
+  int _attempts = 3;
 
   void _checkAnswer() {
     if (_currentWord == widget.clue.riddleAnswer?.toUpperCase()) {
-      // ÉXITO: Llamar callback
+      // ÉXITO
       widget.onSuccess();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Incorrecto'),
-          backgroundColor: AppTheme.dangerRed,
-        ),
-      );
-      _onReset();
+      setState(() {
+        _attempts--;
+      });
+
+      if (_attempts <= 0) {
+        _loseLife("Demasiados intentos.");
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Incorrecto. Intentos restantes: $_attempts'),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+        _onReset();
+      }
     }
+  }
+
+  void _loseLife(String reason) async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    if (playerProvider.currentPlayer != null) {
+      // USAR HELPER CENTRALIZADO
+      final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+      
+      if (!mounted) return;
+      
+      final playerLives = playerProvider.currentPlayer?.lives ?? 0;
+      final gameLives = gameProvider.lives;
+
+      if (gameLives <= 0 || playerLives <= 0) {
+         _showGameOverDialog();
+      } else {
+         setState(() {
+           _attempts = 3;
+           _onReset();
+         });
+         _showTryAgainDialog(reason);
+      }
+    }
+  }
+
+  void _showTryAgainDialog(String reason) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(reason, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Reintentar"),
+          ),
+          TextButton(
+            onPressed: () {
+               Navigator.pop(context);
+               Navigator.pop(context);
+            },
+            child: const Text("Salir")
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showGameOverDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
+        content: const Text("Te has quedado sin vidas.", style: TextStyle(color: Colors.white)),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+               Navigator.pop(context);
+               Navigator.pop(context);
+            },
+            child: const Text("Salir"),
+          )
+        ],
+      ),
+    );
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
@@ -130,22 +131,23 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
     _loseLife("Te has rendido.");
   }
 
-  void _loseLife(String reason) {
+  void _loseLife(String reason) async {
     _stopTimer(); // Asegurar que el timer se detiene
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      // Usar GameProvider para gestionar vidas del evento
-      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
-        if (!mounted) return;
-        
-        if (gameProvider.lives <= 0) {
-          _showGameOverDialog();
-        } else {
-          _showTryAgainDialog(reason);
-        }
-      });
+      // USAR HELPER CENTRALIZADO
+      final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+      if (!mounted) return;
+
+      // Verificar estado FINAL
+      if (newLives <= 0) {
+        _showGameOverDialog();
+      } else {
+        _showTryAgainDialog(reason);
+      }
     }
   }
 

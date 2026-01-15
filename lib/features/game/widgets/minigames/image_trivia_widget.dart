@@ -1,35 +1,12 @@
-import 'package:flutter/material.dart';
-import '../../models/clue.dart';
-import '../../../../core/theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../utils/minigame_logic_helper.dart';
+import '../../../auth/providers/player_provider.dart';
+import '../../providers/game_provider.dart';
 
-/// Widget de minijuego de trivia visual donde el usuario debe identificar
-/// lo que muestra una imagen y escribir la respuesta correcta.
-/// 
-/// Recibe una [clue] que contiene la URL de la imagen, la pregunta y la respuesta,
-/// más un callback [onSuccess] que se ejecuta cuando el jugador acierta.
-class ImageTriviaWidget extends StatefulWidget {
-  final Clue clue;
-  final VoidCallback onSuccess;
+    // ... (imports)
 
-  const ImageTriviaWidget({
-    super.key,
-    required this.clue,
-    required this.onSuccess,
-  });
-
-  @override
-  State<ImageTriviaWidget> createState() => _ImageTriviaWidgetState();
-}
-
-class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
-  final TextEditingController _controller = TextEditingController();
-  bool _showHint = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  // Inside State logic
+  int _attempts = 3;
 
   void _checkAnswer() {
     final userAnswer = _controller.text.trim().toLowerCase();
@@ -38,16 +15,103 @@ class _ImageTriviaWidgetState extends State<ImageTriviaWidget> {
     if (userAnswer == correctAnswer ||
         (correctAnswer.isNotEmpty &&
             userAnswer.contains(correctAnswer.split(' ').first))) {
-      // ÉXITO: Llamar callback
+      // ÉXITO
       widget.onSuccess();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Incorrecto'),
-          backgroundColor: AppTheme.dangerRed,
-        ),
-      );
+      setState(() {
+        _attempts--;
+      });
+
+      if (_attempts <= 0) {
+        _loseLife("Se acabaron los intentos.");
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Incorrecto. Intentos restantes: $_attempts'),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+      }
     }
+  }
+
+  void _loseLife(String reason) async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    if (playerProvider.currentPlayer != null) {
+      // USAR HELPER CENTRALIZADO
+      final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+      
+      if (!mounted) return;
+      
+      final playerLives = playerProvider.currentPlayer?.lives ?? 0;
+      final gameLives = gameProvider.lives;
+
+      if (gameLives <= 0 || playerLives <= 0) {
+         _showGameOverDialog();
+      } else {
+         setState(() {
+           _attempts = 3;
+           _controller.clear();
+         });
+         _showTryAgainDialog(reason);
+      }
+    }
+  }
+
+  void _showTryAgainDialog(String reason) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(reason, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Reintentar"),
+          ),
+          TextButton(
+            onPressed: () {
+               Navigator.pop(context);
+               Navigator.pop(context);
+            },
+            child: const Text("Salir")
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showGameOverDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
+        content: const Text("Te has quedado sin vidas.", style: TextStyle(color: Colors.white)),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+               Navigator.pop(context);
+               Navigator.pop(context);
+            },
+            child: const Text("Salir"),
+          )
+        ],
+      ),
+    );
   }
 
   @override

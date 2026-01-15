@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -159,20 +160,23 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     }
   }
 
-  void _loseGlobalLife(String reason, {bool timeOut = false}) {
+  void _loseGlobalLife(String reason, {bool timeOut = false}) async {
     _timer?.cancel();
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
-         if (!mounted) return;
-         if (gameProvider.lives <= 0) {
-            _showGameOverDialog("Te has quedado sin vidas globales.");
-         } else {
-            _showTryAgainDialog(reason);
-         }
-      });
+      // USAR HELPER CENTRALIZADO
+      final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+      if (!mounted) return;
+
+      // Verificar estado FINAL
+      if (newLives <= 0) {
+         _showGameOverDialog("Te has quedado sin vidas globales.");
+      } else {
+         _showTryAgainDialog(reason);
+      }
     }
   }
 

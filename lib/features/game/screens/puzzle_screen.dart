@@ -25,6 +25,7 @@ import '../widgets/minigame_countdown_overlay.dart';
 
 // --- Import del Servicio de Penalización ---
 import '../services/penalty_service.dart';
+import '../utils/minigame_logic_helper.dart';
 import 'winner_celebration_screen.dart';
 import '../widgets/animated_lives_widget.dart';
 import '../widgets/loss_flash_overlay.dart';
@@ -117,14 +118,34 @@ class _PuzzleScreenState extends State<PuzzleScreen>
   }
 
   Future<void> _checkLives() async {
+    // Usamos listen: false para obtener el estado MÁS RECIENTE, no suscribirnos
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
+    // 1. Verificación preliminar con source-of-truth visual (PlayerProvider)
+    if (playerProvider.currentPlayer != null && playerProvider.currentPlayer!.lives > 0) {
+      // Si el perfil dice que tenemos vidas, CONFIAMOS EN ÉL y no bloqueamos.
+      // Solo verificamos si GameProvider está desincronizado
+      if (gameProvider.lives <= 0) {
+        debugPrint("SYNC: Forzando actualización de vidas en GameProvider...");
+        // Intentamos sincronizar pero SIN bloquear UI
+        await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
+      }
+      return; 
+    }
+
+    // 2. Si PlayerProvider dice 0 o es null, verificamos con GameProvider (Server)
     if (playerProvider.currentPlayer != null) {
       await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
-      if (gameProvider.lives <= 0) {
+      
+      // Volvemos a leer PlayerProvider por si acaso se actualizó en background
+      final freshPlayerLives = playerProvider.currentPlayer?.lives ?? 0;
+      
+      if (gameProvider.lives <= 0 && freshPlayerLives <= 0) {
         if (!mounted) return;
         _showNoLivesDialog();
+      } else {
+        debugPrint("SYNC INFO: Vidas encontradas (Game: ${gameProvider.lives}, Player: $freshPlayerLives). Juego permitido.");
       }
     }
   }
@@ -191,11 +212,16 @@ class _PuzzleScreenState extends State<PuzzleScreen>
     // TAREA 4: Bloqueo de Acceso si no hay vidas
     final gameProvider = Provider.of<GameProvider>(context);
     // Mantener rebuilds si cambia el perfil del jugador, sin usar la variable.
-    final _ = context.watch<PlayerProvider>();
+    final player = context.watch<PlayerProvider>().currentPlayer;
 
     // --- STATUS OVERLAYS (Handled Globally) ---
 
-    if (gameProvider.lives <= 0) {
+    // Corrección para evitar "flickeo" al rendirse Y errores de sincro:
+    // 1. Si _legalExit es true, estamos saliendo. No bloquear.
+    // 2. Si el PlayerProvider (Visual) dice que tenemos vidas, CONFIAMOS EN ÉL. No bloquear.
+    final hasVisualLives = player != null && player.lives > 0;
+    
+    if (gameProvider.lives <= 0 && !_legalExit && !hasVisualLives) {
       // Retornar contenedor negro con aviso
       // Nota: El diálogo _showNoLivesDialog ya se muestra en initState/checkLives,
       // pero aquí aseguramos que no se renderice el juego.
@@ -388,7 +414,7 @@ void showClueSelector(BuildContext context, Clue currentClue) {
 void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
   showDialog(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       backgroundColor: AppTheme.cardBg,
       title: const Text('¿Rendirse?', style: TextStyle(color: Colors.white)),
       content: const Text(
@@ -397,18 +423,22 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(dialogContext),
           child: const Text('Cancelar'),
         ),
         ElevatedButton(
           onPressed: () async {
-            // RENDICIÓN = SALIDA LEGAL (Aunque perdedora)
+            // RENDICIÓN = SALIDA LEGAL
             if (onLegalExit != null) {
               onLegalExit();
             }
 
-            Navigator.pop(context); // Dialog
-            Navigator.pop(context); // PuzzleScreen
+            // Usamos dialogContext para cerrar el diálogo
+            Navigator.pop(dialogContext); 
+            // Usamos context (el argumento original de la función) para cerrar el PuzzleScreen
+            if (context.mounted) {
+               Navigator.pop(context);
+            }
 
             // Deduct life logic
             final playerProvider =
@@ -417,7 +447,8 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                 Provider.of<GameProvider>(context, listen: false);
             
             if (playerProvider.currentPlayer != null) {
-               await gameProvider.loseLife(playerProvider.currentPlayer!.id);
+               // USAR HELPER CENTRALIZADO
+               await MinigameLogicHelper.executeLoseLife(context);
             }
 
             // No llamamos a skipCurrentClue(), simplemente salimos.
@@ -425,7 +456,7 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
-                      'Te has rendido. Puedes volver a intentarlo cuando estés listo.'),
+                      'Te has rendido (-1 Vida). Puedes volver a intentarlo cuando estés listo.'),
                   backgroundColor: AppTheme.warningOrange,
                   duration: Duration(seconds: 3),
                 ),
@@ -802,11 +833,9 @@ Widget _buildMinigameScaffold(
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back,
-                                  color: Colors.white, size: 20),
-                              onPressed: () => Navigator.pop(context),
-                            ),
+                            // BOTÓN DE REGRESAR ELIMINADO: 
+                            // El usuario debe rendirse o ganar para salir.
+                            const SizedBox(width: 8), // Espaciador mínimo
                             const Spacer(),
 
                             // INDICADOR DE VIDAS CON ANIMACIÓN
