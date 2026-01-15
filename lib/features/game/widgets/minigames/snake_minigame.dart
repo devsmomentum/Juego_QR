@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
@@ -220,7 +221,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
       widget.onSuccess();
   }
 
-  void _loseGlobalLife(String reason, {bool isTimeOut = false}) {
+  void _loseGlobalLife(String reason, {bool isTimeOut = false}) async {
       _isPlaying = false;
       _gameLoop?.cancel();
       _countdownTimer?.cancel();
@@ -229,15 +230,17 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
       
       if (playerProvider.currentPlayer != null) {
-          gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
-             if (!mounted) return;
-             
-             if (gameProvider.lives <= 0) {
-                _showGameOverDialog("Te has quedado sin vidas.");
-             } else {
-                _showRestartDialog(reason);
-             }
-          });
+          // USAR HELPER CENTRALIZADO
+          final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+          if (!mounted) return;
+
+          // Verificar estado FINAL
+          if (newLives <= 0) {
+             _showGameOverDialog("Te has quedado sin vidas.");
+          } else {
+             _showRestartDialog(reason);
+          }
       }
   }
 

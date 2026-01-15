@@ -59,6 +59,14 @@ class PlayerProvider extends ChangeNotifier {
   int getPowerCount(String itemId, String eventId) {
     return _eventInventories[eventId]?[itemId] ?? 0;
   }
+  
+  // --- SYNC MANUAL: Validar estado local sin fetch ---
+  void updateLocalLives(int newLives) {
+    if (_currentPlayer != null) {
+      _currentPlayer = _currentPlayer!.copyWith(lives: newLives);
+      notifyListeners();
+    }
+  }
 
   // --- AUTHENTICATION ---
 
@@ -282,26 +290,31 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshProfile() async {
+  Future<void> refreshProfile({String? eventId}) async {
     if (_currentPlayer != null) {
-      await _fetchProfile(_currentPlayer!.userId);
+      await _fetchProfile(_currentPlayer!.userId, eventId: eventId);
     }
   }
 
-  Future<void> _fetchProfile(String userId) async {
+  Future<void> _fetchProfile(String userId, {String? eventId}) async {
     try {
       // 1. Obtener perfil básico
       final profileData =
           await _supabase.from('profiles').select().eq('id', userId).single();
 
       // 2. Obtener GamePlayer y Vidas
-      final gpData = await _supabase
+      final baseQuery = _supabase
           .from('game_players')
           .select('id, lives')
-          .eq('user_id', userId)
-          .order('joined_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
+          .eq('user_id', userId);
+      
+      Map<String, dynamic>? gpData;
+      
+      if (eventId != null) {
+        gpData = await baseQuery.eq('event_id', eventId).maybeSingle();
+      } else {
+        gpData = await baseQuery.order('joined_at', ascending: false).limit(1).maybeSingle();
+      }
 
       List<String> realInventory = [];
       int actualLives = 3;
@@ -517,6 +530,7 @@ class PlayerProvider extends ChangeNotifier {
       }
 
       final int newLives = await _supabase.rpc('lose_life', params: params);
+      debugPrint("DEBUG: lose_life RPC result: newLives=$newLives");
 
       // Actualizamos estado local inmediatamente con la respuesta real del servidor
       _currentPlayer!.lives = newLives;

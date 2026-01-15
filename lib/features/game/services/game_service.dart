@@ -34,17 +34,46 @@ class GameService {
   /// Retorna el nuevo número de vidas confirmadas por el servidor.
   Future<int> loseLife(String eventId, String userId) async {
     try {
+      debugPrint('[LIVES_DEBUG] GameServiceRPC: lose_life params -> p_user_id: $userId, p_event_id: $eventId');
+      
+      // 1. Intentar por RPC
       final response = await _supabase.rpc('lose_life', params: {
         'p_user_id': userId,
         'p_event_id': eventId,
+      }).catchError((e) {
+          debugPrint('[LIVES_DEBUG] RPC Error caught: $e. Switching to Fallback.');
+          return null; 
       });
       
       if (response != null) {
+        debugPrint('[LIVES_DEBUG] GameServiceRPC: Success. Response: $response');
         return response as int;
       }
-      throw Exception('Failed to lose life: null response');
+      
+      // 2. FALLBACK: Actualización Directa (Si RPC falla o da null)
+      debugPrint('[LIVES_DEBUG] Executing DIRECT UPDATE Fallback...');
+      
+      // Obtener vidas actuales para calcular nuevo valor
+      final row = await _supabase.from('game_players')
+          .select('lives')
+          .eq('user_id', userId)
+          .eq('event_id', eventId)
+          .single();
+          
+      final int currentLives = row['lives'] as int;
+      final int newLives = currentLives > 0 ? currentLives - 1 : 0;
+      
+      // Forzar update directo
+      await _supabase.from('game_players')
+          .update({'lives': newLives})
+          .eq('user_id', userId)
+          .eq('event_id', eventId);
+          
+      debugPrint('[LIVES_DEBUG] Direct Update Success. New Lives: $newLives');
+      return newLives;
+
     } catch (e) {
-      debugPrint('Error perdiendo vida: $e');
+      debugPrint('[LIVES_DEBUG] CRITICAL ERROR deleting life (both RPC and Direct failed): $e');
       rethrow;
     }
   }
@@ -254,7 +283,7 @@ class GameService {
     try {
       final response = await _supabase
           .from('active_powers')
-          .select('id, slug, power_slug, target_id, caster_id, expires_at, created_at')
+          .select('id, power_slug, target_id, caster_id, expires_at, created_at')
           .eq('event_id', eventId)
           .gt('expires_at', DateTime.now().toUtc().toIso8601String());
 

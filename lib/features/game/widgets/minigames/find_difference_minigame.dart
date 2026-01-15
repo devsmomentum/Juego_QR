@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
@@ -109,7 +110,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     widget.onSuccess();
   }
 
-  void _handleFailure(String reason) {
+  void _handleFailure(String reason) async {
     _timer?.cancel();
     _isGameOver = true;
     
@@ -117,14 +118,17 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      gameProvider.loseLife(playerProvider.currentPlayer!.id).then((_) {
-        if (!mounted) return;
-        if (gameProvider.lives <= 0) {
-          _showGameOverDialog();
-        } else {
-          _showTryAgainDialog(reason);
-        }
-      });
+      // USAR HELPER CENTRALIZADO
+      final newLives = await MinigameLogicHelper.executeLoseLife(context);
+      
+      if (!mounted) return;
+      
+      // Verificar estado FINAL (Usando valor definitivo)
+      if (newLives <= 0) {
+         _showGameOverDialog();
+      } else {
+         _showTryAgainDialog(reason);
+      }
     }
   }
 

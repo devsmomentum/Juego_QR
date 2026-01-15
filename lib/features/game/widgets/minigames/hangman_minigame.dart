@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
+import '../../utils/minigame_logic_helper.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../providers/game_provider.dart';
@@ -121,31 +122,31 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
 
   // hangman_minigame.dart
 
-void _loseLife(String reason) {
+void _loseLife(String reason) async {
   if (!mounted) return;
   _stopTimer();
   
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
   
-  final userId = playerProvider.currentPlayer?.id;
+  final userId = playerProvider.currentPlayer?.userId;
   
   if (userId != null) {
-    // Verificación de debug para ti:
-    if (gameProvider.currentEventId == null) {
-       debugPrint("¡Cuidado! El minijuego se inició sin un Event ID en el GameProvider");
+     if (gameProvider.currentEventId == null) {
+       debugPrint("WARN: Minijuego sin Event ID");
     }
 
-    gameProvider.loseLife(userId).then((_) {
-      if (!mounted) return;
-      
-      // Ahora usamos el estado actualizado del provider
-      if (gameProvider.lives <= 0) {
-        _showGameOverDialog();
-      } else {
-        _showTryAgainDialog(reason);
-      }
-    });
+    // USAR HELPER CENTRALIZADO
+    final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+    if (!mounted) return;
+    
+    // Verificar estado FINAL (Usando valor definitivo)
+    if (newLives <= 0) {
+      _showGameOverDialog();
+    } else {
+      _showTryAgainDialog(reason);
+    }
   }
 }
 
