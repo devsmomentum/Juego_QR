@@ -266,9 +266,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
     return Scaffold(
       body: AnimatedCyberBackground(
         child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: RefreshIndicator(
+            onRefresh: _loadEvents,
+            color: AppTheme.accentGold,
+            backgroundColor: AppTheme.cardBg,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
               // Custom AppBar
               Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -362,7 +366,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
               const SizedBox(height: 20),
 
               // Scenarios Carousel
-              Expanded(
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.65, // Altura fija para el carrusel
                 child: _isLoading
                     ? const Center(
                         child: CircularProgressIndicator(
@@ -635,6 +640,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
