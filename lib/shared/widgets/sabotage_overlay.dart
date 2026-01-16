@@ -102,12 +102,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         // el corazón de la animación central empieza a romperse
         await Future.delayed(const Duration(milliseconds: 600));
 
-        // Esta llamada activa la resta optimista en GameProvider (_lives--)
-        // lo que obliga al ProgressHeader a redibujarse con el nuevo valor.
-        gameProvider.loseLife(myUserId);
-
+        // ELIMINADO: La resta de vida ya se realiza en el Backend (SQL).
+        // GameProvider se actualiza automáticamente vía Realtime (game_players stream).
+        // No llamamos a loseLife() aquí para evitar DOBLE resta (Optimista + Backend).
         debugPrint(
-            "[DEBUG] 💀 Sincronización visual: Vida restada por ataque de $casterId");
+            "[DEBUG] 💀 Visual Only: Animación de Life Steal iniciada. Esperando update de vidas por Realtime...");
       });
       
       // Listener para manejar cambios de bloqueo de navegación

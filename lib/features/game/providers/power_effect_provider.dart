@@ -24,7 +24,7 @@ class PowerEffectProvider extends ChangeNotifier {
   DefenseAction? _lastDefenseAction;
   DateTime? _lastDefenseActionAt;
 
-  String? _lastLifeStealHandledEffectId;
+  final Set<String> _processedEffectIds = {}; // IDEMPOTENCIA
   String? _returnedByPlayerName;
   String? get returnedByPlayerName => _returnedByPlayerName;
 
@@ -117,6 +117,7 @@ class PowerEffectProvider extends ChangeNotifier {
     _expiryTimer?.cancel();
     _listeningForId = myGamePlayerId;
     _sessionStartTime = DateTime.now().toUtc(); // Inicializar filtro de tiempo
+    _processedEffectIds.clear(); // Limpiar historial de procesados
 
     // 1. Escuchar ataques ENTRANTES (Target = YO)
     _subscription = supabase
@@ -258,14 +259,27 @@ class PowerEffectProvider extends ChangeNotifier {
       
       if (slug == 'life_steal' &&
           effectId != null &&
-          effectId != _lastLifeStealHandledEffectId &&
+          !_processedEffectIds.contains(effectId) &&
           _lifeStealVictimHandler != null) {
+        
+        // FILTRO DE TIEMPO ESTRICTO PARA LIFE_STEAL
+        // Aunque ya filtramos por fecha en 'filtered', hacemos doble check por seguridad
+        DateTime? created;
+        if (effect['created_at'] != null) {
+          created = DateTime.tryParse(effect['created_at']);
+        }
+        
+        if (created != null && _sessionStartTime != null && created.isBefore(_sessionStartTime!)) {
+           debugPrint("[DEBUG] ⏳ IDEMPOTENCIA: Ignorando Life Steal ANTIGUO (ID: $effectId)");
+           _processedEffectIds.add(effectId); // Marcar como visto para no re-evaluar
+           continue; 
+        }
         
         debugPrint("[DEBUG] 🩸 LIFE_STEAL detectado (pre-expiration):");
         debugPrint("[DEBUG]    Effect ID: $effectId");
         debugPrint("[DEBUG]    Caster ID: $casterId");
         
-        _lastLifeStealHandledEffectId = effectId;
+        _processedEffectIds.add(effectId);
         _activeEffectCasterId = casterId; // Guardar para referencia
         
         // Disparar el handler que activa la animación en SabotageOverlay
@@ -408,7 +422,7 @@ class PowerEffectProvider extends ChangeNotifier {
     debugPrint("[DEBUG]    Slug: $latestSlug");
     debugPrint("[DEBUG]    Effect ID: $_activeEffectId");
     debugPrint("[DEBUG]    Caster ID: $_activeEffectCasterId");
-    debugPrint("[DEBUG]    Last Handled ID: $_lastLifeStealHandledEffectId");
+    debugPrint("[DEBUG]    Processed IDs Count: ${_processedEffectIds.length}");
     debugPrint("[DEBUG]    Handler existe: ${_lifeStealVictimHandler != null}");
 
     if (_shieldActive) {
