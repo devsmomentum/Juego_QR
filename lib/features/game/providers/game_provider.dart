@@ -204,11 +204,19 @@ class GameProvider extends ChangeNotifier {
     });
   }
 
+  /// Detiene las actualizaciones automáticas del leaderboard y el race status.
+  /// ⚠️ NO cancela la suscripción de vidas (Single Responsibility Principle)
   void stopLeaderboardUpdates() {
     _leaderboardTimer?.cancel();
     _leaderboardTimer = null;
     _raceStatusChannel?.unsubscribe();
     _raceStatusChannel = null;
+  }
+
+  /// Detiene la suscripción Realtime de vidas.
+  /// Solo debe llamarse cuando el usuario sale del evento o cierra sesión.
+  void stopLivesSubscription() {
+    debugPrint('[LIVES_SYNC] 🛑 Stopping lives subscription');
     _livesSubscription?.unsubscribe();
     _livesSubscription = null;
   }
@@ -396,10 +404,16 @@ class GameProvider extends ChangeNotifier {
       if (idToUse == null) return;
 
       if (userId != null) {
+        debugPrint('═══════════════════════════════════════════');
+        debugPrint('[FETCH_CLUES] 🚀 Fetching lives for user: $userId');
         await fetchLives(userId);
         // ⚡ CRÍTICO: Suscribirse SIEMPRE que haya userId, no solo cuando cambia el evento
-        debugPrint('[FETCH_CLUES] 🔧 Activating Realtime subscription for lives');
+        debugPrint('[FETCH_CLUES] 🔧 About to activate Realtime subscription');
+        debugPrint('[FETCH_CLUES]    userId: $userId');
+        debugPrint('[FETCH_CLUES]    eventId: $idToUse');
         subscribeToLives(userId, idToUse);
+        debugPrint('[FETCH_CLUES] ✅ subscribeToLives() call completed');
+        debugPrint('═══════════════════════════════════════════');
       }
 
       final fetchedClues = await _gameService.getClues(idToUse);
@@ -688,6 +702,7 @@ class GameProvider extends ChangeNotifier {
   @override
   void dispose() {
     stopLeaderboardUpdates();
+    stopLivesSubscription(); // ✅ Ahora se cancela correctamente solo al destruir el Provider
     super.dispose();
   }
 }

@@ -69,13 +69,13 @@ class _CluesScreenState extends State<CluesScreen> {
         // ADDED: Listener para interrupción inmediata si el juego termina mientras estamos aquí
         gameProvider.addListener(_onGameProviderChange);
         
-        // Obtenemos el ID real del usuario
-        final userId = playerProvider.currentPlayer?.id;
+        // ⚠️ CRÍTICO: Usar .userId, NO .id (que devuelve gamePlayerId)
+        final userId = playerProvider.currentPlayer?.userId;
 
         // 1. PASAR EL userId ES VITAL para que se carguen las 2 vidas reales
         await gameProvider.fetchClues(
           eventId: widget.eventId, 
-          userId: userId, // ✅ Agregado
+          userId: userId, // ✅ Ahora usa el userId correcto de la tabla profiles
         );
         
         // 2. LUEGO comprobar si la carrera ya terminó en el servidor
