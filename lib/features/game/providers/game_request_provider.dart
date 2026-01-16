@@ -114,7 +114,7 @@ void clearLocalRequests() {
   Future<bool> isPlayerParticipant(String playerId, String eventId) async {
     try {
       final data = await _supabase
-          .from('event_participants')
+          .from('game_players')
           .select()
           .eq('user_id', playerId)
           .eq('event_id', eventId)

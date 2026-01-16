@@ -1,4 +1,4 @@
-# 🎮 Treasure Hunt RPG (Juego QR)
+# 🎮 Treasure Hunt RPG (Juego QR) v2.1
 
 **Real Life RPG - Búsqueda del Tesoro Interactiva**
 
@@ -6,93 +6,62 @@ Juego de rol en la vida real ("Real World RPG") que combina búsqueda de pistas 
 
 ---
 
-## 🚀 Estado Actual (v2.0)
+## 🚀 Estado Actual (v2.1)
 
-**¡Backend & Admin Activos!**
-El proyecto ha evolucionado para incluir una integración completa con **Supabase** y un panel de administración robusto.
+**¡Robustez & Escalabilidad Mejorada!**
+La versión 2.1 se centra en la estabilidad del núcleo del juego, asegurando que los usuarios puedan entrar, salir y reanudar competencias masivas sin fricción.
 
-### ✅ Nuevas Funcionalidades Clave
-1.  **Tiendas Configurables (Admin Panel)**
-    *   Creación de tiendas personalizadas para cada evento.
-    *   **Precios Dinámicos:** El admin define el costo específico de cada poder/vida por tienda.
-    *   **Control de Stock:** Selección de qué items vende cada tienda (Ej: Tienda solo de Vidas, Tienda de Sabotajes).
-    *   **Persistencia Visual:** La app móvil refleja automáticamente los precios y productos configurados.
-
-2.  **Sistema de Entrada QR Real**
-    *   **Validación de Acceso:** Para entrar a una tienda en la app, el jugador debe escanear un QR físico real.
-    *   **Scanner Integrado:** Botón "Escanear con Cámara" implementado nativamente (MobileScanner v6+).
-    *   **Seguridad:** Validación contra códigos generados por el Admin (`store:nombre_tienda`).
-
-3.  **Sistema Anti-Lag & Baneos (Optimizado)**
-    *   **Stream en Tiempo Real:** Detección instantánea de baneos/bloqueos vía WebSockets.
-    *   **Polling Inteligente:** Verificación ultraligera cada 10 segundos como respaldo (bajo consumo de datos).
-    *   **Expulsión Inmediata:** Si un jugador es baneado, la app cierra sesión y redirige al login desde cualquier pantalla.
-
-4.  **Gestión de Imágenes**
-    *   Bucket de almacenamiento: `events-images`.
-    *   Soporte para subida de logos de tiendas y banners de eventos.
+### ✅ Nuevas Mejoras (v2.1)
+1.  **Persistencia Absoluta:**
+    *   Arreglo crítico en la detección de participantes. Ahora el sistema reconoce inequívocamente a los jugadores reincidentes usando su `Auth UUID`, eliminando el error de "Acceso Denegado" al volver a entrar.
+    *   **Leaver Buster Inteligente:** El sistema de penalización se ha refinado para aplicar *solo* en minijuegos competitivos cortos, permitiendo libertad total de movimiento en el Evento Principal.
+2.  **Integridad de Datos:**
+    *   Normalización de base de datos mejorada (3NF).
+    *   Uso estricto de Claves Foráneas (`Foreign Keys`) para garantizar que no existan estados "huérfanos".
+3.  **Tiendas Configurables & QR (Preservado de v2.0):**
+    *   Precios dinámicos, control de stock y validación de entrada física mediante QR.
 
 ---
 
-## 📱 Características para Jugadores
+## ⚖️ Análisis de Escalabilidad (10,000 Usuarios)
 
-*   **Login/Registro** validado con Supabase Auth.
-*   **Inventario Real:** Sincronizado con base de datos.
-*   **Ranking en Vivo:** Tabla de posiciones global y por evento.
-*   **Sabotajes:**
-    *   ❄️ **Pantalla Congelada**: Ciegas al rival por 15s.
-    *   🛡️ **Escudo**: Protección temporal.
-    *   ↩️ **Devolución**: Rebota ataques enemigos.
-    *   👻 **Invisibilidad**: Desaparece del radar (Planned).
-*   **Geolocalización:** Indicadores Frío/Caliente para encontrar pistas.
+¿Puede este sistema soportar **10,000 jugadores simultáneos**?
 
----
+### 🟢 Arquitectura (SÍ SOPORTA)
+*   **Base de Datos (PostgreSQL):** La estructura normalizada (`game_players`, `game_requests`) está diseñada para escalar. Con los índices correctos (ya aplicados en las claves foráneas), Postgres maneja millones de filas sin problema.
+*   **Backend (Stateless):** Las *Edge Functions* de Supabase (Deno) son efímeras y escalan automáticamente con la demanda. No hay un "servidor central" que se sature.
+*   **Cliente (Flutter):** La app es ligera y reactiva, delegando el peso al servidor.
 
-## 🛠️ Panel de Administrador
+### ⚠️ Cuellos de Botella Potenciales (A CONSIDERAR)
+Para llegar a 10,000 **concurrentes** (todos jugando al mismo segundo), se deben vigilar dos puntos:
+1.  **Realtime (WebSockets):** Escuchar eventos (como "Me lanzaron un poder") consume conexiones.
+    *   *Solución:* El código ya usa filtros (`eq('target_id', myId)`). Esto es CRITICO. Si cada cliente escuchara "todo", el sistema colapsaría. Con el filtro actual, es viable, pero requerirá un Plan Pro/Enterprise de Supabase para soportar 10k conexiones de socket abiertas.
+2.  **Escrituras Simultáneas (Power Usage):** Si 5,000 personas atacan a la vez.
+    *   *Solución:* La lógica de ataque está encolada en la base de datos (`insert`). Postgres maneja bien la concurrencia, pero se podría requerir un `PgBouncer` (Connection Pooling) si las conexiones directas exceden el límite.
 
-Herramienta poderosa para los organizadores del evento (`features/admin`):
-*   **Crear Competencias:** Configurar nombre, descripción y fechas.
-*   **Gestión de Usuarios:** Banear/Desbanear jugadores al instante.
-*   **Editor de Tiendas:** Interfaz visual para subir logo, nombre, descripción y configurar inventario y precios.
-*   **Generador de QR:** Exportar QRs de pistas y tiendas para imprimir.
+**Veredicto:** La arquitectura de software **SÍ** está lista. La limitante será puramente de **infraestructura (Plan de Supabase)**, no de código.
 
 ---
 
-## 🏗️ Estructura Técnica
+## 🛠️ Estructura Técnica
 
 ```
 lib/
 ├── core/                   # Utilidades y configuración
 ├── features/
-│   ├── admin/              # PANEL ADMIN (Nuevo)
-│   │   ├── screens/        # Gestión de eventos, usuarios, tiendas
-│   │   └── widgets/        # Diálogos de edición
-│   ├── auth/               # Autenticación y PlayerProvider
-│   ├── game/               # Lógica del juego (QR, Pistas)
+│   ├── admin/              # PANEL ADMIN
+│   ├── auth/               # Autenticación
+│   ├── game/               # Lógica del juego (QR, Pistas, Penalties)
 │   └── mall/               # TIENDAS (Módulos de compra)
-│       ├── models/         # MallStore, PowerItem
-│       ├── providers/      # StoreProvider (Lógica de negocio)
-│       └── screens/        # StoreDetail, MallScreen
-├── services/               # Supabase Services
+├── services/               # Supabase Services (Data Layer)
 └── main.dart               # Entry Point
 ```
 
 ### Tecnologías
 *   **Flutter 3.x**
-*   **Supabase** (PostgreSQL, Auth, Storage, Edge Functions)
-*   **Provider** (State Management)
+*   **Supabase** (PostgreSQL, Auth, Realtime, Edge Functions)
+*   **Provider** (State Management - Clean Architecture)
 *   **Mobile Scanner** (QR Camera)
-*   **Geolocator**
-
----
-
-## 📝 Notas para el Equipo
-
-> **Importante:**
-> Al crear o editar tiendas en el Admin, asegúrense de seleccionar productos. Si no seleccionan ninguno, la tienda aparecerá vacía para el usuario.
->
-> **Testing:**
-> Para probar la entrada a tiendas sin imprimir el QR, pueden usar el botón "Simular (Pruebas)" oculto debajo del botón de la cámara, o escanear el QR desde la pantalla del Admin.
 
 ---
 

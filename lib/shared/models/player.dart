@@ -49,11 +49,16 @@ class Player implements ITargetable {
             };
 
   factory Player.fromJson(Map<String, dynamic> json) {
+    String? avatar = json['avatar_url'];
+    if (avatar != null && (avatar.contains('file:') || avatar.contains('C:/'))) {
+       avatar = null; // Sanitize local paths
+    }
+
     return Player(
-      userId: json['id'] ?? json['user_id'] ?? '',
+      userId: json['user_id'] ?? json['id'] ?? '',
       name: json['name'] ?? '',
       email: json['email'] ?? '',
-      avatarUrl: json['avatar_url'] ?? '',
+      avatarUrl: avatar ?? '',
       role: json['role'] ?? 'user',
       level: json['level'] ?? 1,
       experience: json['experience'] ?? 0,

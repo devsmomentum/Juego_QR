@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../game/screens/clues_screen.dart';
 import '../../game/screens/event_waiting_screen.dart';
 import '../../game/providers/event_provider.dart';
+import '../../game/providers/game_provider.dart';
 import '../../social/screens/inventory_screen.dart';
 import '../../social/screens/leaderboard_screen.dart';
 import '../../social/screens/profile_screen.dart';
@@ -44,6 +45,26 @@ class _HomeScreenState extends State<HomeScreen> {
       const LeaderboardScreen(),
       const ProfileScreen(),
     ];
+  }
+
+  // Cache provider to avoid context usage in dispose
+  late GameProvider _gameProviderRef;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Guardamos la referencia segura mientras el widget está activo
+    _gameProviderRef = Provider.of<GameProvider>(context, listen: false);
+  }
+
+  @override
+  void dispose() {
+    // Usamos la referencia guardada, no el context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+        _gameProviderRef.resetState();
+        debugPrint("HomeScreen disposed: Game Set Reset (Safe)");
+    });
+    super.dispose();
   }
 
   @override
