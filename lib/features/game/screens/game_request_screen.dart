@@ -374,16 +374,19 @@ class _GameRequestScreenState extends State<GameRequestScreen>
             break;
 
           case SubmitRequestResult.error:
+            final errorMsg = requestProvider.lastError ?? 'Error desconocido';
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Row(
+                content: Row(
                   children: [
-                    Icon(Icons.error, color: Colors.white),
-                    SizedBox(width: 12),
+                    const Icon(Icons.error, color: Colors.white),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Error al enviar solicitud. Verifica tu conexión e intenta de nuevo.',
-                        style: TextStyle(fontSize: 15),
+                        'Error: $errorMsg',
+                        style: const TextStyle(fontSize: 14),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -393,7 +396,7 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                duration: const Duration(seconds: 4),
+                duration: const Duration(seconds: 5),
               ),
             );
             break;

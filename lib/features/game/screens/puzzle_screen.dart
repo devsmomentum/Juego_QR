@@ -69,14 +69,27 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       context.read<ConnectivityProvider>().enterMinigame(eventId);
 
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
+      // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
       Provider.of<GameProvider>(context, listen: false)
           .addListener(_checkRaceCompletion);
       
-      // --- NUEVO: MONITOREO DE VIDAS GLOBALES ---
-      // Si las vidas llegan a 0 por ataque externo, cerrar minijuego
-      Provider.of<GameProvider>(context, listen: false)
-          .addListener(_checkGlobalLivesGameOver);
+      // MOVED: _checkGlobalLivesGameOver monitoring is now started inside _checkLives
+      // to avoid race conditions during initialization.
     });
+  }
+
+  /// Begins monitoring global lives for in-game changes.
+  /// This should only be called AFTER we have verified the user has lives to start with.
+  void _startLivesMonitoring() {
+    if (!mounted) return;
+    try {
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      // Remove first just in case to avoid duplicates
+      gameProvider.removeListener(_checkGlobalLivesGameOver);
+      gameProvider.addListener(_checkGlobalLivesGameOver);
+    } catch (e) {
+      debugPrint("Error starting lives monitoring: $e");
+    }
   }
 
   /// Monitorea si las vidas globales llegan a 0 durante el juego.
@@ -178,6 +191,9 @@ class _PuzzleScreenState extends State<PuzzleScreen>
         // Intentamos sincronizar pero SIN bloquear UI
         await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
       }
+      
+      // Safe to monitor now
+      _startLivesMonitoring();
       return; 
     }
 
@@ -191,8 +207,11 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       if (gameProvider.lives <= 0 && freshPlayerLives <= 0) {
         if (!mounted) return;
         _showNoLivesDialog();
+        // DO NOT start monitoring if we are dead.
       } else {
         debugPrint("SYNC INFO: Vidas encontradas (Game: ${gameProvider.lives}, Player: $freshPlayerLives). Juego permitido.");
+        // Lives found, start monitoring
+        _startLivesMonitoring();
       }
     }
   }

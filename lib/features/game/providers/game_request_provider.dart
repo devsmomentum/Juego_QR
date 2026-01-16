@@ -21,12 +21,16 @@ class GameRequestProvider extends ChangeNotifier {
 
   List<GameRequest> get requests => _requests;
 
+  String? _lastError;
+  String? get lastError => _lastError;
+
   /// Envía una solicitud de acceso a un evento.
   /// 
   /// Verifica primero si el usuario ya es un game_player o ya tiene una solicitud.
   /// Retorna el resultado de la operación.
   Future<SubmitRequestResult> submitRequest(Player player, String eventId) async {
     try {
+      _lastError = null; // Reset error
       // IMPORTANTE: Usar player.userId para consultas de BD, no player.id (que puede ser gamePlayerId)
       final String userId = player.userId;
       debugPrint('[REQUEST_SUBMIT] 🎯 START: userId=$userId, eventId=$eventId');
@@ -79,10 +83,12 @@ class GameRequestProvider extends ChangeNotifier {
       debugPrint('[REQUEST_SUBMIT]   - Code: ${e.code}');
       debugPrint('[REQUEST_SUBMIT]   - Message: ${e.message}');
       debugPrint('[REQUEST_SUBMIT]   - Details: ${e.details}');
+      _lastError = e.message; // Capture specific DB error
       return SubmitRequestResult.error;
     } catch (e, stackTrace) {
       debugPrint('[REQUEST_SUBMIT] ❌ ERROR: $e');
       debugPrint('[REQUEST_SUBMIT] Stack trace: $stackTrace');
+      _lastError = e.toString(); // Capture generic error
       return SubmitRequestResult.error;
     }
   }
