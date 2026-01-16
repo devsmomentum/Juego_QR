@@ -21,7 +21,7 @@ class _LifeStealEffectState extends State<LifeStealEffect>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3500), // Duración total
+      duration: const Duration(milliseconds: 4000), // Duración visual completa
     );
 
     // 1. Efecto de Flash Inicial (rápido)

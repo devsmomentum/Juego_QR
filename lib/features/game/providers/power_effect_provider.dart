@@ -247,6 +247,34 @@ class PowerEffectProvider extends ChangeNotifier {
       return;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // PROCESAMIENTO ESPECIAL PARA LIFE_STEAL (duration=0, efecto instantáneo)
+    // Debe ejecutarse ANTES del filtro de expiración porque ya habrá expirado.
+    // ═══════════════════════════════════════════════════════════════════════
+    for (final effect in filtered) {
+      final slug = await _resolveEffectSlug(effect);
+      final effectId = effect['id']?.toString();
+      final casterId = effect['caster_id']?.toString();
+      
+      if (slug == 'life_steal' &&
+          effectId != null &&
+          effectId != _lastLifeStealHandledEffectId &&
+          _lifeStealVictimHandler != null) {
+        
+        debugPrint("[DEBUG] 🩸 LIFE_STEAL detectado (pre-expiration):");
+        debugPrint("[DEBUG]    Effect ID: $effectId");
+        debugPrint("[DEBUG]    Caster ID: $casterId");
+        
+        _lastLifeStealHandledEffectId = effectId;
+        _activeEffectCasterId = casterId; // Guardar para referencia
+        
+        // Disparar el handler que activa la animación en SabotageOverlay
+        await _lifeStealVictimHandler!(effectId, casterId, _listeningForId!);
+        
+        debugPrint("[DEBUG] ✅ LifeStealVictimHandler ejecutado exitosamente");
+      }
+    }
+
     // Buscamos el efecto más reciente que aún no haya expirado
     final now = DateTime.now().toUtc();
     final validEffects = filtered.where((effect) {
@@ -396,26 +424,8 @@ class PowerEffectProvider extends ChangeNotifier {
     // Guardamos la fecha exacta para la UI
     _activePowerExpiresAt = DateTime.parse(latestEffect['expires_at']);
 
-    // Aplicación real de life_steal para la víctima (RLS-safe):
-    // el propio cliente víctima se descuenta a sí mismo vía PlayerProvider/RPC.
-    // final effectId = _activeEffectId;
-    debugPrint("[DEBUG] 🔍 Comprobando condiciones para Life Steal:");
-    debugPrint("[DEBUG]    ¿Es life_steal? ${latestSlug == 'life_steal'}");
-    debugPrint("[DEBUG]    ¿ID nuevo? ${_activeEffectId != _lastLifeStealHandledEffectId}");
-    debugPrint("[DEBUG]    ¿Handler existe? ${_lifeStealVictimHandler != null}");
-    
-    if (latestSlug == 'life_steal' &&
-        _activeEffectId != _lastLifeStealHandledEffectId &&
-        _lifeStealVictimHandler != null) {
-      _lastLifeStealHandledEffectId = _activeEffectId;
-
-      debugPrint("[DEBUG] 🚀 LLAMANDO al LifeStealVictimHandler...");
-      // Llamamos al handler que restará la vida localmente
-      // Pasamos el targetId (que debería ser yo mismo, pero para validación estricta)
-      _lifeStealVictimHandler!(_activeEffectId!, _activeEffectCasterId, _listeningForId!);
-    } else {
-      debugPrint("[DEBUG] ⏭️ Handler NO ejecutado (condiciones no cumplidas)");
-    }
+    // NOTA: life_steal ya se procesa ANTES del filtro de expiración (líneas ~250-275)
+    // para manejar su duration=0. El código aquí no lo procesa de nuevo.
     // Manejo de devolución reactiva
     if (_returnArmed && _returnHandler != null) {
       final casterId = latestEffect['caster_id'];

@@ -29,6 +29,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   Timer? _lifeStealBannerTimer;
   String? _lastLifeStealEffectId;
   
+  // Control de animación LifeSteal (desacoplado de expiración en BD)
+  bool _showLifeStealAnimation = false;
+  String? _lifeStealCasterName;
+  Timer? _lifeStealAnimationTimer;
+  
   // Control de bloqueo de navegación
   bool _isBlockingActive = false;
 
@@ -73,6 +78,26 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
         debugPrint("[DEBUG] ✅ Validación pasada, ejecutando resta de vida...");
 
+        // 3. ACTIVAR ANIMACIÓN LIFESTEAL (desacoplado de expiración BD)
+        final attackerName = _resolvePlayerNameFromLeaderboard(casterId);
+        _lifeStealAnimationTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _showLifeStealAnimation = true;
+            _lifeStealCasterName = attackerName;
+          });
+        }
+        
+        // Timer de 4 segundos para ocultar la animación
+        _lifeStealAnimationTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) {
+            setState(() {
+              _showLifeStealAnimation = false;
+              _lifeStealCasterName = null;
+            });
+          }
+        });
+
         // Esperamos 600ms para que el número de vida baje justo cuando
         // el corazón de la animación central empieza a romperse
         await Future.delayed(const Duration(milliseconds: 600));
@@ -93,6 +118,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   @override
   void dispose() {
     _lifeStealBannerTimer?.cancel();
+    _lifeStealAnimationTimer?.cancel();
     // Importante: remover listener
     // Como no guardamos la referencia al provider en una variable variable final,
     // intentar obtenerlo en dispose puede fallar si el contexto ya no es válido.
@@ -210,13 +236,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             ),
         ],
         
-        // GUARDIA DEFENSIVA: Solo mostrar si YO soy el target real
-        if (activeSlug == 'life_steal' &&
-            powerProvider.listeningForId == playerProvider.currentPlayer?.gamePlayerId)
+        // LIFESTEAL: Usa estado local (desacoplado de expiración BD)
+        if (_showLifeStealAnimation && _lifeStealCasterName != null)
           LifeStealEffect(
-            key: ValueKey(effectId),
-            casterName: _resolvePlayerNameFromLeaderboard(
-                powerProvider.activeEffectCasterId),
+            key: ValueKey(_lifeStealCasterName),
+            casterName: _lifeStealCasterName!,
           ),
 
         // blur_screen reutiliza el efecto visual de invisibility para los rivales.
