@@ -143,12 +143,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
     );
 
     final isParticipant = await requestProvider.isPlayerParticipant(
-        playerProvider.currentPlayer!.id, scenario.id);
+        playerProvider.currentPlayer!.userId, scenario.id);
 
     if (!mounted) return;
     Navigator.pop(context); // Dismiss loading
 
     if (isParticipant) {
+      // ... (code omitted for brevity in search, but logic stays same) ...
       // --- INICIO LEAVER BUSTER CHECK ---
       // 1. Verificar si está baneado antes de entrar al mapa
       final banEnd = await _penaltyService.attemptStartGame();
@@ -193,7 +194,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
 
       // Check if there is already a request
       final request = await requestProvider.getRequestForPlayer(
-          playerProvider.currentPlayer!.id, scenario.id);
+          playerProvider.currentPlayer!.userId, scenario.id);
 
       if (!mounted) return;
 
