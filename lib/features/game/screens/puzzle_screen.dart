@@ -22,9 +22,11 @@ import '../widgets/minigames/minesweeper_minigame.dart';
 import '../widgets/minigames/snake_minigame.dart';
 import '../widgets/minigames/block_fill_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
+import 'scenarios_screen.dart';
+import '../../game/providers/game_request_provider.dart';
 
 // --- Import del Servicio de Penalización ---
-import '../services/penalty_service.dart';
+import '../../mall/screens/mall_screen.dart';
 import '../utils/minigame_logic_helper.dart';
 import 'winner_celebration_screen.dart';
 import '../widgets/animated_lives_widget.dart';
@@ -43,9 +45,8 @@ class PuzzleScreen extends StatefulWidget {
   State<PuzzleScreen> createState() => _PuzzleScreenState();
 }
 
-class _PuzzleScreenState extends State<PuzzleScreen>
-    with WidgetsBindingObserver {
-  late final PenaltyService _penaltyService;
+class _PuzzleScreenState extends State<PuzzleScreen> {
+  // PenaltyService removed as requested
   bool _legalExit = false;
   bool _isNavigatingToWinner = false; // Flag to prevent double navigation
   bool _showBriefing = true; // Empieza mostrando la historia
@@ -53,15 +54,12 @@ class _PuzzleScreenState extends State<PuzzleScreen>
   @override
   void initState() {
     super.initState();
-    _penaltyService = context.read<PenaltyService>();
-    WidgetsBinding.instance.addObserver(this);
-    // Bandera arriba: El jugador está intentando jugar.
-    // Si sale sin _finishLegally, el servicio sabrá que fue un abandono forzoso.
-    _penaltyService.attemptStartGame();
-
+    // Penalty logic removed
+    
     // Verificar vidas al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLives();
+      _checkBanStatus(); // Check ban on entry
 
       // --- MARCAR ENTRADA A MINIJUEGO PARA CONNECTIVITY ---
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -69,14 +67,27 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       context.read<ConnectivityProvider>().enterMinigame(eventId);
 
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
+      // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
       Provider.of<GameProvider>(context, listen: false)
           .addListener(_checkRaceCompletion);
       
-      // --- NUEVO: MONITOREO DE VIDAS GLOBALES ---
-      // Si las vidas llegan a 0 por ataque externo, cerrar minijuego
-      Provider.of<GameProvider>(context, listen: false)
-          .addListener(_checkGlobalLivesGameOver);
+      // MOVED: _checkGlobalLivesGameOver monitoring is now started inside _checkLives
+      // to avoid race conditions during initialization.
     });
+  }
+
+  /// Begins monitoring global lives for in-game changes.
+  /// This should only be called AFTER we have verified the user has lives to start with.
+  void _startLivesMonitoring() {
+    if (!mounted) return;
+    try {
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      // Remove first just in case to avoid duplicates
+      gameProvider.removeListener(_checkGlobalLivesGameOver);
+      gameProvider.addListener(_checkGlobalLivesGameOver);
+    } catch (e) {
+      debugPrint("Error starting lives monitoring: $e");
+    }
   }
 
   /// Monitorea si las vidas globales llegan a 0 durante el juego.
@@ -164,6 +175,55 @@ class _PuzzleScreenState extends State<PuzzleScreen>
     }
   }
 
+  // Check for ban status (Per-competition kick)
+  Future<void> _checkBanStatus() async {
+     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+     final gameProvider = Provider.of<GameProvider>(context, listen: false);
+     final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+
+     final userId = playerProvider.currentPlayer?.userId;
+     final eventId = gameProvider.currentEventId;
+
+     if (userId != null && eventId != null) {
+        final status = await requestProvider.getGamePlayerStatus(userId, eventId);
+        if (status == 'banned') {
+          if (!mounted) return;
+          _handleBanKick();
+        }
+     }
+  }
+
+  void _handleBanKick() {
+     // Prevent multiple kicks
+     if (_legalExit) return; 
+     _legalExit = true; // Treat as exit to prevent loops
+
+     showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppTheme.cardBg,
+            title: const Text('⛔ Acceso Denegado', style: TextStyle(color: AppTheme.dangerRed)),
+            content: const Text(
+              'Has sido baneado de esta competencia por un administrador.',
+              style: TextStyle(color: Colors.white),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () {
+                      // Kick to Scenarios Screen (List of competitions)
+                      Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => ScenariosScreen()),
+                          (route) => false 
+                      );
+                  },
+                  child: const Text('Entendido')
+              )
+            ],
+          ),
+      );
+  }
+
   Future<void> _checkLives() async {
     // Usamos listen: false para obtener el estado MÁS RECIENTE, no suscribirnos
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -178,6 +238,9 @@ class _PuzzleScreenState extends State<PuzzleScreen>
         // Intentamos sincronizar pero SIN bloquear UI
         await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
       }
+      
+      // Safe to monitor now
+      _startLivesMonitoring();
       return; 
     }
 
@@ -191,8 +254,11 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       if (gameProvider.lives <= 0 && freshPlayerLives <= 0) {
         if (!mounted) return;
         _showNoLivesDialog();
+        // DO NOT start monitoring if we are dead.
       } else {
         debugPrint("SYNC INFO: Vidas encontradas (Game: ${gameProvider.lives}, Player: $freshPlayerLives). Juego permitido.");
+        // Lives found, start monitoring
+        _startLivesMonitoring();
       }
     }
   }
@@ -215,6 +281,15 @@ class _PuzzleScreenState extends State<PuzzleScreen>
             },
             child: const Text("Entendido"),
           ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); 
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen()));
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold),
+            child: const Text("Comprar Vidas", style: TextStyle(color: Colors.black)),
+          ),
         ],
       ),
     );
@@ -222,7 +297,7 @@ class _PuzzleScreenState extends State<PuzzleScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    // WidgetsBinding.instance.removeObserver(this); // Removed
     
     // --- MARCAR SALIDA DEL MINIJUEGO PARA CONNECTIVITY ---
     try {
@@ -244,21 +319,12 @@ class _PuzzleScreenState extends State<PuzzleScreen>
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // LEAVER BUSTER: Si minimiza (paused) y no ha salido legalmente, lo sacamos.
-    // Esto previene trampas de salir al home del móvil para buscar respuestas.
-    if (state == AppLifecycleState.paused && !_legalExit) {
-      if (mounted) {
-        Navigator.of(context).pop(); // Cierre forzoso = Penalización latente
-      }
-    }
-  }
+  // didChangeAppLifecycleState removed to disable leaver penalty
 
   // Helper para marcar salida legal (Ganar o Rendirse)
   Future<void> _finishLegally() async {
     setState(() => _legalExit = true);
-    await _penaltyService.markGameFinishedLegally();
+    // await _penaltyService.markGameFinishedLegally(); // Removed
   }
 
   @override
@@ -270,12 +336,23 @@ class _PuzzleScreenState extends State<PuzzleScreen>
 
     // --- STATUS OVERLAYS (Handled Globally) ---
 
-    // Corrección para evitar "flickeo" al rendirse Y errores de sincro:
-    // 1. Si _legalExit es true, estamos saliendo. No bloquear.
-    // 2. Si el PlayerProvider (Visual) dice que tenemos vidas, CONFIAMOS EN ÉL. No bloquear.
-    final hasVisualLives = player != null && player.lives > 0;
+    // 2. Si el PlayerProvider (Visual) dice que NO tenemos vidas, bloqueamos INMEDIATAMENTE.
+    //    Ya no confiamos ciegamente en el servidor si la UI local dice 0.
+    //    La lógica "stricter" solicitada: Si CUALQUIERA dice 0, no pasas.
+    bool forcedBlock = false;
     
-    if (gameProvider.lives <= 0 && !_legalExit && !hasVisualLives) {
+    // Check Status for realtime kick
+    if (player != null && player.status == PlayerStatus.banned) {
+       // Schedule kick if not already doing it
+       WidgetsBinding.instance.addPostFrameCallback((_) => _checkBanStatus());
+       forcedBlock = true; // Block UI
+    }
+
+    if (player != null && player.lives <= 0) {
+      forcedBlock = true;
+    }
+
+    if ((gameProvider.lives <= 0 || forcedBlock) && !_legalExit) {
       // Retornar contenedor negro con aviso
       // Nota: El diálogo _showNoLivesDialog ya se muestra en initState/checkLives,
       // pero aquí aseguramos que no se renderice el juego.
@@ -308,14 +385,17 @@ class _PuzzleScreenState extends State<PuzzleScreen>
               ),
               const SizedBox(height: 30),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen()));
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.dangerRed,
+                  backgroundColor: AppTheme.accentGold,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                 ),
                 child:
-                    const Text("Salir", style: TextStyle(color: Colors.white)),
+                    const Text("Comprar Vidas", style: TextStyle(color: Colors.black)),
               ),
             ],
           ),
