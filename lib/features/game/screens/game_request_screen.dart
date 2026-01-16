@@ -264,46 +264,146 @@ class _GameRequestScreenState extends State<GameRequestScreen>
 
     if (playerProvider.currentPlayer != null && widget.eventId != null) {
       try {
-        await requestProvider.submitRequest(
+        debugPrint('[UI] Attempting to submit request...');
+        
+        // ✅ CAPTURAR el resultado del submitRequest
+        final result = await requestProvider.submitRequest(
             playerProvider.currentPlayer!, widget.eventId!);
 
-        // Refresh data
-        final request = await requestProvider.getRequestForPlayer(
-            playerProvider.currentPlayer!.id, widget.eventId!);
-
         if (!mounted) return;
-        
-        setState(() {
-          _gameRequest = request;
-        });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '¡Solicitud enviada! Espera la aprobación del administrador.',
-                    style: TextStyle(fontSize: 15),
-                  ),
+        // ✅ MANEJAR cada caso específicamente
+        switch (result) {
+          case SubmitRequestResult.submitted:
+            // Refresh data para mostrar la nueva solicitud
+            final request = await requestProvider.getRequestForPlayer(
+                playerProvider.currentPlayer!.id, widget.eventId!);
+
+            if (!mounted) return;
+            
+            setState(() {
+              _gameRequest = request;
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '¡Solicitud enviada! Espera la aprobación del administrador.',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            backgroundColor: Colors.green.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+                backgroundColor: Colors.green.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            break;
+
+          case SubmitRequestResult.alreadyRequested:
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.info, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Ya tienes una solicitud pendiente para este evento.',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.orange.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            
+            // Refresh para mostrar la solicitud existente en la UI
+            final request = await requestProvider.getRequestForPlayer(
+                playerProvider.currentPlayer!.id, widget.eventId!);
+            if (!mounted) return;
+            setState(() {
+              _gameRequest = request;
+            });
+            break;
+
+          case SubmitRequestResult.alreadyPlayer:
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.sports_esports, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '¡Ya eres participante de este evento! Puedes empezar a jugar.',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.blue.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            
+            // Navegar directamente al juego (rescue de estado inconsistente)
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                  builder: (_) => HomeScreen(eventId: widget.eventId!)),
+            );
+            break;
+
+          case SubmitRequestResult.error:
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.error, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Error al enviar solicitud. Verifica tu conexión e intenta de nuevo.',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppTheme.dangerRed,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            break;
+        }
       } catch (e) {
+        debugPrint('[UI] Exception in _handleRequestJoin: $e');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al enviar solicitud: $e'),
+            content: Text('Error inesperado: $e'),
             backgroundColor: Colors.red,
           ),
         );

@@ -93,6 +93,7 @@ class GameProvider extends ChangeNotifier {
   // Timer y Realtime para el ranking
   Timer? _leaderboardTimer;
   RealtimeChannel? _raceStatusChannel;
+  RealtimeChannel? _livesSubscription; // Suscripción a vidas globales
   
   List<Clue> get clues => _clues;
   List<Player> get leaderboard => _leaderboard;
@@ -208,6 +209,8 @@ class GameProvider extends ChangeNotifier {
     _leaderboardTimer = null;
     _raceStatusChannel?.unsubscribe();
     _raceStatusChannel = null;
+    _livesSubscription?.unsubscribe();
+    _livesSubscription = null;
   }
 
   void subscribeToRaceStatus() {
@@ -222,6 +225,116 @@ class GameProvider extends ChangeNotifier {
         _setRaceCompleted(completed, source);
       }
     );
+  }
+
+  /// Suscribe a cambios en las vidas del jugador en tiempo real.
+  /// Cuando la tabla game_players actualice el campo 'lives', el Provider
+  /// se actualizará automáticamente sin necesidad de fetch manual.
+  /// 
+  /// ⚡ BYPASS DE FILTRO: Recibe TODOS los updates de game_players para el evento
+  /// y filtra manualmente en el callback para evitar discrepancias de tipos de ID.
+  void subscribeToLives(String userId, String eventId) {
+    if (userId.isEmpty || eventId.isEmpty) {
+      debugPrint('[LIVES_SYNC] ❌ Cannot subscribe: userId or eventId is empty');
+      return;
+    }
+
+    // Cancelar suscripción previa si existe
+    _livesSubscription?.unsubscribe();
+    
+    // Normalizar IDs para comparación robusta (trim + lowercase)
+    final String normalizedUserId = userId.toString().trim();
+    final String normalizedEventId = eventId.toString().trim();
+    
+    debugPrint('[LIVES_SYNC] 🔧 Subscribing to Realtime updates');
+    debugPrint('[LIVES_SYNC]   User ID: $normalizedUserId');
+    debugPrint('[LIVES_SYNC]   Event ID: $normalizedEventId');
+    debugPrint('[LIVES_SYNC]   Current lives: $_lives');
+    debugPrint('[LIVES_SYNC]   Channel: lives:$normalizedUserId:$normalizedEventId');
+    
+    _livesSubscription = Supabase.instance.client
+        .channel('lives:$normalizedUserId:$normalizedEventId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'game_players',
+          // ⚡ SIN FILTRO: Recibimos TODOS los updates de game_players
+          // La validación se hace manualmente en el callback
+          callback: (payload) {
+            final record = payload.newRecord;
+            final timestamp = DateTime.now().toIso8601String();
+            
+            // 🔥 AUDITORÍA COMPLETA: Log de entrada del evento
+            debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            debugPrint('[LIVES_SYNC] 🔥 REALTIME EVENT RECEIVED @ $timestamp');
+            
+            // Extraer y normalizar IDs entrantes
+            final incomingUserIdRaw = record['user_id'];
+            final incomingEventIdRaw = record['event_id'];
+            final incomingLivesRaw = record['lives'];
+            
+            // Log de tipos para debugging
+            debugPrint('[LIVES_SYNC]   📦 Raw Data Types:');
+            debugPrint('[LIVES_SYNC]      user_id: ${incomingUserIdRaw.runtimeType} = $incomingUserIdRaw');
+            debugPrint('[LIVES_SYNC]      event_id: ${incomingEventIdRaw.runtimeType} = $incomingEventIdRaw');
+            debugPrint('[LIVES_SYNC]      lives: ${incomingLivesRaw.runtimeType} = $incomingLivesRaw');
+            
+            // Normalizar IDs entrantes (manejar UUID objects y Strings)
+            final String incomingUserId = incomingUserIdRaw?.toString().trim() ?? '';
+            final String incomingEventId = incomingEventIdRaw?.toString().trim() ?? '';
+            
+            // Comparación con IDs esperados
+            debugPrint('[LIVES_SYNC]   🎯 ID Comparison:');
+            debugPrint('[LIVES_SYNC]      Expected user_id: "$normalizedUserId"');
+            debugPrint('[LIVES_SYNC]      Incoming user_id: "$incomingUserId"');
+            debugPrint('[LIVES_SYNC]      User Match: ${incomingUserId == normalizedUserId}');
+            debugPrint('[LIVES_SYNC]      Expected event_id: "$normalizedEventId"');
+            debugPrint('[LIVES_SYNC]      Incoming event_id: "$incomingEventId"');
+            debugPrint('[LIVES_SYNC]      Event Match: ${incomingEventId == normalizedEventId}');
+            
+            // Filtrado robusto: Solo procesar si ambos IDs coinciden
+            final bool userMatches = incomingUserId == normalizedUserId;
+            final bool eventMatches = incomingEventId == normalizedEventId;
+            
+            if (userMatches && eventMatches) {
+              // ✅ MATCH: Este evento es para nuestro usuario
+              final int newLives = incomingLivesRaw as int;
+              debugPrint('[LIVES_SYNC] ✅ MATCH CONFIRMED - Processing update');
+              debugPrint('[LIVES_SYNC]   Old lives: $_lives');
+              debugPrint('[LIVES_SYNC]   New lives: $newLives');
+              
+              // Solo actualizar si el valor cambió
+              if (_lives != newLives) {
+                final int oldLives = _lives;
+                _lives = newLives;
+                
+                debugPrint('[LIVES_SYNC]   📢 Lives changed: $oldLives → $newLives');
+                debugPrint('[LIVES_SYNC]   🔔 Calling notifyListeners()...');
+                
+                notifyListeners(); // 📢 Esto despierta a la UI
+                
+                debugPrint('[LIVES_SYNC]   ✅ notifyListeners() completed @ ${DateTime.now().toIso8601String()}');
+                debugPrint('[LIVES_SYNC]   💡 UI should rebuild NOW with new value: $newLives');
+              } else {
+                debugPrint('[LIVES_SYNC]   ⚠️ Value unchanged ($newLives), skipping notification');
+              }
+            } else {
+              // ⚠️ NO MATCH: Evento filtrado
+              debugPrint('[LIVES_SYNC] ⚠️ EVENT FILTERED OUT');
+              if (!userMatches) {
+                debugPrint('[LIVES_SYNC]   ❌ User ID mismatch');
+              }
+              if (!eventMatches) {
+                debugPrint('[LIVES_SYNC]   ❌ Event ID mismatch');
+              }
+            }
+            
+            debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          },
+        )
+        .subscribe();
+    
+    debugPrint('[LIVES_SYNC] ✅ Subscription activated');
   }
 
   Future<void> fetchLeaderboard({bool silent = false}) async {
@@ -283,7 +396,10 @@ class GameProvider extends ChangeNotifier {
       if (idToUse == null) return;
 
       if (userId != null) {
-        await fetchLives(userId); 
+        await fetchLives(userId);
+        // ⚡ CRÍTICO: Suscribirse SIEMPRE que haya userId, no solo cuando cambia el evento
+        debugPrint('[FETCH_CLUES] 🔧 Activating Realtime subscription for lives');
+        subscribeToLives(userId, idToUse);
       }
 
       final fetchedClues = await _gameService.getClues(idToUse);

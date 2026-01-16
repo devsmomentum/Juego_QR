@@ -869,11 +869,25 @@ Future<bool> _showConfirmDialog() async {
         // Obtenemos el proveedor de jugadores para verificar estados
         final playerProvider = Provider.of<PlayerProvider>(context);
         
-        // Filter requests for THIS event
-        final allRequests = provider.requests.where((r) => r.eventId == widget.event.id).toList();
+        // ✅ DEBUG: Log total requests en el provider
+        debugPrint('[PARTICIPANTS_TAB] 📊 Total requests in provider: ${provider.requests.length}');
+        debugPrint('[PARTICIPANTS_TAB] 🎯 Current event ID: "${widget.event.id}" (Type: ${widget.event.id.runtimeType})');
+        
+        // ✅ ROBUST FILTER: Usar toString() para comparación segura
+        final allRequests = provider.requests.where((r) {
+          final match = r.eventId.toString() == widget.event.id.toString();
+          if (!match && provider.requests.indexOf(r) < 3) { // Log primeros 3 para no saturar
+            debugPrint('[PARTICIPANTS_TAB] 🔍 Comparing: r.eventId="${r.eventId}" (${r.eventId.runtimeType}) vs widget.event.id="${widget.event.id}" => Match: $match');
+          }
+          return match;
+        }).toList();
+        
+        debugPrint('[PARTICIPANTS_TAB] ✅ Filtered requests for this event: ${allRequests.length}');
         
         var approved = allRequests.where((r) => r.isApproved).toList();
         var pending = allRequests.where((r) => r.isPending).toList();
+        
+        debugPrint('[PARTICIPANTS_TAB] 📋 Approved: ${approved.length}, Pending: ${pending.length}');
 
         // --- SEARCH FILTER ---
         if (_searchQuery.isNotEmpty) {
@@ -889,6 +903,7 @@ Future<bool> _showConfirmDialog() async {
         }
 
         if (allRequests.isEmpty) {
+          debugPrint('[PARTICIPANTS_TAB] ⚠️ No requests for this event - showing empty state');
           return const Center(child: Text("No hay participantes ni solicitudes.", style: TextStyle(color: Colors.white54)));
         }
 

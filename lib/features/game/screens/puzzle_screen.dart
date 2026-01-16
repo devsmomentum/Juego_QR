@@ -71,7 +71,54 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
       Provider.of<GameProvider>(context, listen: false)
           .addListener(_checkRaceCompletion);
+      
+      // --- NUEVO: MONITOREO DE VIDAS GLOBALES ---
+      // Si las vidas llegan a 0 por ataque externo, cerrar minijuego
+      Provider.of<GameProvider>(context, listen: false)
+          .addListener(_checkGlobalLivesGameOver);
     });
+  }
+
+  /// Monitorea si las vidas globales llegan a 0 durante el juego.
+  /// Si detecta 0 vidas (por ej. Life Steal enemigo), cierra el minijuego.
+  void _checkGlobalLivesGameOver() {
+    if (!mounted || _legalExit) return;
+    
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    
+    // Si las vidas globales llegaron a 0, forzar salida
+    if (gameProvider.lives <= 0) {
+      debugPrint('[LIVES_MONITOR] 🔴 Global lives reached 0. Forcing minigame exit.');
+      _finishLegally(); // Marcar como salida legal para evitar penalización
+      
+      if (!mounted) return;
+      
+      // Mostrar diálogo explicativo
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.cardBg,
+          title: const Text('¡Sin Vidas!', style: TextStyle(color: Colors.white)),
+          content: const Text(
+            'Te has quedado sin vidas. No puedes continuar en este minijuego.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx); // Cerrar diálogo
+                if (mounted) {
+                  Navigator.pop(context); // Cerrar minijuego
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _checkRaceCompletion() async {
@@ -187,6 +234,13 @@ class _PuzzleScreenState extends State<PuzzleScreen>
       Provider.of<GameProvider>(context, listen: false)
           .removeListener(_checkRaceCompletion);
     } catch (_) {}
+    
+    // Limpiar listener de monitoreo de vidas
+    try {
+      Provider.of<GameProvider>(context, listen: false)
+          .removeListener(_checkGlobalLivesGameOver);
+    } catch (_) {}
+    
     super.dispose();
   }
 
@@ -839,7 +893,7 @@ Widget _buildMinigameScaffold(
                             const Spacer(),
 
                             // INDICADOR DE VIDAS CON ANIMACIÓN
-                            AnimatedLivesWidget(lives: game.lives),
+                            AnimatedLivesWidget(),
                             const SizedBox(width: 10),
 
                             Container(

@@ -14,16 +14,8 @@ class ProgressHeader extends StatelessWidget {
       final player = playerProvider.currentPlayer;
       if (player == null) return const SizedBox.shrink();
 
-      // MEJORA: Solo usamos las vidas del GameProvider si el juego está 
-      // plenamente activo Y no estamos en un estado de carga.
-      final bool useGameProviderLives = gameProvider.isGameActive && 
-                                  !gameProvider.isLoading && 
-                                  gameProvider.currentEventId != null &&
-                                  gameProvider.lives > 0; // ✅ Seguridad extra
-
-      final int displayLives = useGameProviderLives 
-          ? gameProvider.lives 
-          : player.lives;
+      // ✅ SINGLE SOURCE OF TRUTH: Solo GameProvider para vidas globales
+      final int displayLives = gameProvider.lives;
         
         return Container(
           margin: const EdgeInsets.all(16),
@@ -106,8 +98,7 @@ class ProgressHeader extends StatelessWidget {
                       children: [
                         const Icon(Icons.favorite, size: 16, color: Colors.redAccent),
                         const SizedBox(width: 4),
-                        // MODIFICACIÓN: Usamos displayLives y una Key que incluya el EventID 
-                        // para forzar el refresco visual al cambiar de evento.
+                        // ✅ Reactivo: Se actualiza automáticamente con Realtime
                         Text(
                           '$displayLives',
                           key: ValueKey('lives_${gameProvider.currentEventId}_$displayLives'),

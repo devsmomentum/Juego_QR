@@ -29,8 +29,10 @@ class GameRequestProvider extends ChangeNotifier {
     try {
       // IMPORTANTE: Usar player.userId para consultas de BD, no player.id (que puede ser gamePlayerId)
       final String userId = player.userId;
+      debugPrint('[REQUEST_SUBMIT] 🎯 START: userId=$userId, eventId=$eventId');
 
       // PASO 1: Verificar si ya es un game_player para este evento
+      debugPrint('[REQUEST_SUBMIT] 🔍 Step 1: Checking if already game_player...');
       final existingPlayer = await _supabase
           .from('game_players')
           .select('id')
@@ -39,11 +41,12 @@ class GameRequestProvider extends ChangeNotifier {
           .maybeSingle();
 
       if (existingPlayer != null) {
-        debugPrint('GameRequestProvider: User is already a game_player for this event');
+        debugPrint('[REQUEST_SUBMIT] ⚠️ RESULT: User is already a game_player. Aborting.');
         return SubmitRequestResult.alreadyPlayer;
       }
 
       // PASO 2: Verificar si ya tiene una solicitud para este evento
+      debugPrint('[REQUEST_SUBMIT] 🔍 Step 2: Checking existing request...');
       final existingRequest = await _supabase
           .from('game_requests')
           .select('id, status')
@@ -52,22 +55,34 @@ class GameRequestProvider extends ChangeNotifier {
           .maybeSingle();
 
       if (existingRequest != null) {
-        debugPrint('GameRequestProvider: User already has a request for this event');
+        debugPrint('[REQUEST_SUBMIT] ⚠️ RESULT: Already has request (status: ${existingRequest['status']}). Aborting.');
         return SubmitRequestResult.alreadyRequested;
       }
 
       // PASO 3: Crear nueva solicitud
-      await _supabase.from('game_requests').insert({
+      debugPrint('[REQUEST_SUBMIT] ✏️ Step 3: Inserting new request...');
+      final insertData = {
         'user_id': userId,
         'event_id': eventId,
         'status': 'pending',
-      });
+      };
+      debugPrint('[REQUEST_SUBMIT] 📦 Insert payload: $insertData');
       
-      debugPrint('GameRequestProvider: Request submitted successfully');
+      await _supabase.from('game_requests').insert(insertData);
+      
+      debugPrint('[REQUEST_SUBMIT] ✅ SUCCESS: Request submitted successfully');
       notifyListeners();
       return SubmitRequestResult.submitted;
-    } catch (e) {
-      debugPrint('GameRequestProvider: Error submitting request: $e');
+    } on PostgrestException catch (e) {
+      // Captura específica de errores de Supabase
+      debugPrint('[REQUEST_SUBMIT] ❌ PostgrestException:');
+      debugPrint('[REQUEST_SUBMIT]   - Code: ${e.code}');
+      debugPrint('[REQUEST_SUBMIT]   - Message: ${e.message}');
+      debugPrint('[REQUEST_SUBMIT]   - Details: ${e.details}');
+      return SubmitRequestResult.error;
+    } catch (e, stackTrace) {
+      debugPrint('[REQUEST_SUBMIT] ❌ ERROR: $e');
+      debugPrint('[REQUEST_SUBMIT] Stack trace: $stackTrace');
       return SubmitRequestResult.error;
     }
   }
@@ -113,20 +128,35 @@ void clearLocalRequests() {
 
   Future<void> fetchAllRequests() async {
     try {
+      debugPrint('[FETCH_REQUESTS] 🔍 Fetching all requests...');
+      
       final data = await _supabase
           .from('game_requests')
           .select('*, profiles(name, email), events(title)')
           .order('created_at', ascending: false);
       
+      debugPrint('[FETCH_REQUESTS] 📦 Raw data received: ${(data as List).length} rows');
+      
       // Debug: Print first item to check structure
       if ((data as List).isNotEmpty) {
-        debugPrint('First request data: ${data[0]}');
+        debugPrint('[FETCH_REQUESTS] First request sample: ${data[0]}');
+      } else {
+        debugPrint('[FETCH_REQUESTS] ⚠️ WARNING: No requests found in database!');
       }
 
       _requests = (data as List).map((json) => GameRequest.fromJson(json)).toList();
+      
+      debugPrint('[FETCH_REQUESTS] ✅ Parsed requests: ${_requests.length}');
+      debugPrint('[FETCH_REQUESTS] Event IDs present: ${_requests.map((r) => r.eventId).toSet()}');
+      
       notifyListeners();
+    } on PostgrestException catch (e) {
+      debugPrint('[FETCH_REQUESTS] ❌ PostgrestException:');
+      debugPrint('[FETCH_REQUESTS]   - Code: ${e.code}');
+      debugPrint('[FETCH_REQUESTS]   - Message: ${e.message}');
+      debugPrint('[FETCH_REQUESTS]   - Details: ${e.details}');
     } catch (e) {
-      debugPrint('Error fetching requests: $e');
+      debugPrint('[FETCH_REQUESTS] ❌ Error fetching requests: $e');
     }
   }
 
