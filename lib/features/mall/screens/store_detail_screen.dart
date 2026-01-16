@@ -244,7 +244,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                                         size: 14, color: AppTheme.dangerRed),
                                     const SizedBox(width: 4),
                                     Text(
-                                      "${player?.lives ?? 0}",
+                                      "${gameProvider.lives}",
                                       style: const TextStyle(
                                           color: AppTheme.dangerRed,
                                           fontWeight: FontWeight.bold),
