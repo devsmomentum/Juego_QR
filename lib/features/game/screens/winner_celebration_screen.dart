@@ -61,7 +61,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
 
     if (gameProvider.leaderboard.isNotEmpty) {
       final index =
-          gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
+          gameProvider.leaderboard.indexWhere((p) => p.userId == playerProvider.currentPlayer?.userId);
       final newPos =
           index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
 
