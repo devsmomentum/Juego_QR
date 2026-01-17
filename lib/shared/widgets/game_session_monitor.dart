@@ -4,6 +4,7 @@ import '../../features/auth/providers/player_provider.dart';
 import '../../features/game/providers/game_provider.dart';
 import '../utils/global_keys.dart';
 import '../../features/game/screens/scenarios_screen.dart';
+import '../models/player.dart';
 
 /// Monitor que detecta si la sesión de juego actual ha sido invalidada
 /// (por ejemplo, si un admin reinicia el evento y borra la inscripción del jugador)
@@ -29,30 +30,45 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     
     final currentGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
+    final isBanned = playerProvider.currentPlayer?.status == PlayerStatus.banned;
     
     debugPrint('🕒 GameSessionMonitor: Checking session...');
     debugPrint('   - Last ID: $_lastGamePlayerId');
     debugPrint('   - Current ID: $currentGamePlayerId');
+    debugPrint('   - Is Banned: $isBanned');
 
-    // Detectar transición de TENER inscripción a NO TENERLA
+    bool shouldKick = false;
+
+    // Caso 1: Transición de TENER inscripción a NO TENERLA (Sesión invalidada)
     if (_lastGamePlayerId != null && currentGamePlayerId == null) {
-      debugPrint("🕒 GameSessionMonitor: 🚫 BAN DETECTADO. Expulsando al jugador...");
-      
-      // Si el juego estaba activo localmente, lo limpiamos
-      if (gameProvider.isGameActive || gameProvider.currentEventId != null) {
-        _handleGameReset();
-      }
+      debugPrint("🕒 GameSessionMonitor: 🚫 PÉRDIDA DE SESIÓN DETECTADA.");
+      debugPrint("   - Prev ID: $_lastGamePlayerId");
+      debugPrint("   - Curr ID: null");
+      shouldKick = true;
+    }
+
+    // Caso 2: El status cambió a BANNED (Baneo detectado por Stream)
+    if (isBanned && (gameProvider.isGameActive || gameProvider.currentEventId != null)) {
+      debugPrint("🕒 GameSessionMonitor: 🚫 STATUS BANNED DETECTADO.");
+      shouldKick = true;
+    }
+
+    if (shouldKick) {
+      debugPrint("🕒 GameSessionMonitor: ⚡ Iniciando expulsión del jugador...");
+      _handleGameReset();
     }
 
     _lastGamePlayerId = currentGamePlayerId;
   }
 
   void _handleGameReset() {
-    // 1. Limpiar estado del GameProvider
-    context.read<GameProvider>().resetState();
-    
-    // 2. Notificar al usuario y Redirigir
+    // 2. Notificar al usuario, Redirigir y Limpiar estado
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Limpiar estado del GameProvider de manera segura fuera del ciclo de build
+      if (mounted) {
+         context.read<GameProvider>().resetState();
+      }
+
       if (rootNavigatorKey.currentState != null) {
         // Volver a la pantalla de escenarios (o la raíz de la app)
         rootNavigatorKey.currentState!.pushAndRemoveUntil(

@@ -50,10 +50,19 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   bool _legalExit = false;
   bool _isNavigatingToWinner = false; // Flag to prevent double navigation
   bool _showBriefing = true; // Empieza mostrando la historia
+  
+  // Safe Provider Access
+  late GameProvider _gameProvider;
+  late ConnectivityProvider _connectivityProvider; 
+  bool _isActive = true;
 
   @override
   void initState() {
     super.initState();
+    // Cache provider for safe disposal
+    _gameProvider = Provider.of<GameProvider>(context, listen: false);
+    _connectivityProvider = Provider.of<ConnectivityProvider>(context, listen: false);
+
     // Penalty logic removed
     
     // Verificar vidas al iniciar
@@ -61,10 +70,25 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       _checkLives();
       _checkBanStatus(); // Check ban on entry
 
-      // --- MARCAR ENTRADA A MINIJUEGO PARA CONNECTIVITY ---
+      // --- SYNC PLAYER PROVIDER WITH CURRENT EVENT ---
+      // Fix for issue where PlayerProvider loads "latest" (potentially banned) event 
+      // instead of the current active event.
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final eventId = gameProvider.currentEventId ?? '';
-      context.read<ConnectivityProvider>().enterMinigame(eventId);
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final eventId = gameProvider.currentEventId;
+      
+      if (eventId != null && playerProvider.currentPlayer != null) {
+         // Sync strict: If IDs don't match, force refresh for THIS event
+         if (playerProvider.currentPlayer?.currentEventId != eventId) {
+             debugPrint("PuzzleScreen: Syncing PlayerProvider to event $eventId...");
+             playerProvider.refreshProfile(eventId: eventId);
+         }
+      }
+
+      // --- MARCAR ENTRADA A MINIJUEGO PARA CONNECTIVITY ---
+      if (eventId != null) {
+          context.read<ConnectivityProvider>().enterMinigame(eventId);
+      }
 
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
@@ -93,9 +117,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   /// Monitorea si las vidas globales llegan a 0 durante el juego.
   /// Si detecta 0 vidas (por ej. Life Steal enemigo), cierra el minijuego.
   void _checkGlobalLivesGameOver() {
-    if (!mounted || _legalExit) return;
+    if (!mounted || !_isActive || _legalExit) return;
     
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // Use stored provider or safely access context if active
+    final gameProvider = _gameProvider;
     
     // Si las vidas globales llegaron a 0, forzar salida
     if (gameProvider.lives <= 0) {
@@ -133,8 +158,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void _checkRaceCompletion() async {
-    if (!mounted || _isNavigatingToWinner) return;
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (!mounted || !_isActive || _isNavigatingToWinner) return;
+    
+    final gameProvider = _gameProvider;
+    // For PlayerProvider, we still need context or also cache it? 
+    // Usually PlayerProvider is less volatile, but to be safe we check active first.
+    // Since we returned if !_isActive, access to context should be 'safer', 
+    // but caching is best. For now we rely on _isActive check.
+    if (!context.mounted) return;
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
     // Si la carrera terminó (alguien ganó) y yo no he terminado todo
@@ -296,24 +327,28 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   @override
+  void deactivate() {
+    _isActive = false;
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     // WidgetsBinding.instance.removeObserver(this); // Removed
     
     // --- MARCAR SALIDA DEL MINIJUEGO PARA CONNECTIVITY ---
     try {
-      context.read<ConnectivityProvider>().exitMinigame();
+      _connectivityProvider.exitMinigame();
     } catch (_) {}
     
-    // Limpiar listener de fin de carrera
+    // Limpiar listener de fin de carrera usando la referencia CACHEADA
     try {
-      Provider.of<GameProvider>(context, listen: false)
-          .removeListener(_checkRaceCompletion);
+      _gameProvider.removeListener(_checkRaceCompletion);
     } catch (_) {}
     
     // Limpiar listener de monitoreo de vidas
     try {
-      Provider.of<GameProvider>(context, listen: false)
-          .removeListener(_checkGlobalLivesGameOver);
+      _gameProvider.removeListener(_checkGlobalLivesGameOver);
     } catch (_) {}
     
     super.dispose();
