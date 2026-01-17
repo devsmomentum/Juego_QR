@@ -323,20 +323,23 @@ class _GameRequestScreenState extends State<GameRequestScreen>
         
         _pollingTimer?.cancel(); // Detener polling
         
-        debugPrint('✅ GameRequestScreen: User approved, entering game');
+        debugPrint('✅ GameRequestScreen: User approved, entering game INSTANTLY');
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Tu solicitud ha sido aprobada! Entrando al juego...'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // 🚀 NAVEGACIÓN INSTANTÁNEA (Sin SnackBar, Sin Delay)
+        // Solo inicializamos el juego y nos vamos
         
-        // Navegación segura
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => HomeScreen(eventId: widget.eventId!)),
-        );
+        final gameProvider = Provider.of<GameProvider>(context, listen: false);
+        try {
+           await gameProvider.startGame(widget.eventId!);
+        } catch (e) {
+           debugPrint("Warn: Error auto-starting game (non-fatal): $e");
+        }
+        
+        if (mounted) {
+           Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => HomeScreen(eventId: widget.eventId!)),
+           );
+        }
       }
     }
   }
@@ -826,40 +829,67 @@ class _GameRequestScreenState extends State<GameRequestScreen>
 
                                 // Request Status
                                 if (_gameRequest != null) ...[
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: _gameRequest!.statusColor
-                                          .withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: _gameRequest!.statusColor,
-                                        width: 2,
+                                  // OCULTAR SI ESTÁ APROBADO (Porque nos vamos directo)
+                                  if (!_gameRequest!.isApproved)
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: _gameRequest!.statusColor
+                                            .withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: _gameRequest!.statusColor,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            _gameRequest!.isRejected
+                                                    ? Icons.cancel
+                                                    : Icons.hourglass_empty,
+                                            color: _gameRequest!.statusColor,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            'Estado: ${_gameRequest!.statusText}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  else
+                                    // Feedback visual transitorio - Centrado mejor visualmente
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 40, bottom: 20),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          SizedBox(
+                                            width: 50, 
+                                            height: 50, 
+                                            child: CircularProgressIndicator(
+                                              color: Colors.greenAccent, 
+                                              strokeWidth: 3,
+                                            )
+                                          ),
+                                          SizedBox(height: 20),
+                                          Text(
+                                            "¡Entrando al evento...", 
+                                            style: TextStyle(
+                                              color: Colors.greenAccent,
+                                              fontSize: 16,
+                                              letterSpacing: 1.1,
+                                            )
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          _gameRequest!.isApproved
-                                              ? Icons.check_circle
-                                              : _gameRequest!.isRejected
-                                                  ? Icons.cancel
-                                                  : Icons.hourglass_empty,
-                                          color: _gameRequest!.statusColor,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          'Estado: ${_gameRequest!.statusText}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
                                   const SizedBox(height: 20),
                                 ],
                               ],
@@ -870,9 +900,6 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                          // Optional: Add a subtle gradient or solid color if needed for contrast
-                          // but since the main background is already dark, transparent might work
-                          // provided there's enough space.
                           child: Column(
                             mainAxisSize: MainAxisSize.min, // Wrap content
                             children: [
@@ -930,34 +957,8 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                                   ),
                                 )
                               else if (_gameRequest!.isApproved)
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      // Navigate to the actual game
-                                      Navigator.of(context).pushReplacement(
-                                        MaterialPageRoute(
-                                            builder: (_) => HomeScreen(
-                                                eventId: widget.eventId!)),
-                                      );
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    child: const Text(
-                                      'IR AL EVENTO',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                  ),
-                                )
+                                // SI ESTA APROBADO: Espacio vacío (el loading está arriba)
+                                const SizedBox(height: 48)
                               else
                                 SizedBox(
                                   width: double.infinity,
@@ -1037,25 +1038,7 @@ class _GameRequestScreenState extends State<GameRequestScreen>
 
                               const SizedBox(height: 16),
 
-                              // Logout Button
-                              TextButton(
-                                onPressed: () {
-                                  playerProvider.logout();
-                                  Navigator.of(context)
-                                      .popUntil((route) => route.isFirst);
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                        builder: (_) => const LoginScreen()),
-                                  );
-                                },
-                                child: const Text(
-                                  'Cerrar Sesión',
-                                  style: TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
+                              const SizedBox(height: 16),
                             ],
                           ),
                         ),
