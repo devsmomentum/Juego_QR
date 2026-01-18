@@ -22,6 +22,16 @@ class _MallScreenState extends State<MallScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      
+      // SYNC PLAYER PROVIDER (Same fix as PuzzleScreen)
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      if (gameProvider.currentEventId != null && playerProvider.currentPlayer != null) {
+         if (playerProvider.currentPlayer?.currentEventId != gameProvider.currentEventId) {
+             debugPrint("MallScreen: Syncing PlayerProvider to event ${gameProvider.currentEventId}...");
+             playerProvider.refreshProfile(eventId: gameProvider.currentEventId);
+         }
+      }
+
       if (gameProvider.currentEventId != null) {
         Provider.of<StoreProvider>(context, listen: false).fetchStores(gameProvider.currentEventId!);
       }

@@ -319,10 +319,20 @@ class PlayerProvider extends ChangeNotifier {
       Map<String, dynamic>? gpData;
       
       if (targetEventId != null) {
-        // Buscar específicamente para este evento
+        // A. Buscar específicamente para este evento
+        debugPrint("PlayerProvider: Fetching profile for TARGET event: $targetEventId");
         gpData = await baseQuery.eq('event_id', targetEventId).maybeSingle();
+      } else if (_currentPlayer?.gamePlayerId != null) {
+        // B. Fallback inteligente: Usar el ID de sesión actual para mantener contexto
+        debugPrint("PlayerProvider: No target event, maintaining SESSION: ${_currentPlayer!.gamePlayerId}");
+        gpData = await _supabase
+            .from('game_players')
+            .select('id, lives, status, event_id') // No filtramos por user_id, id es PK
+            .eq('id', _currentPlayer!.gamePlayerId!)
+            .maybeSingle();
       } else {
-        // Si no hay evento específico, tomar el más reciente
+        // C. Fallback final: tomar el más reciente
+        debugPrint("PlayerProvider: No context. Fetching LATEST joined event.");
         gpData = await baseQuery.order('joined_at', ascending: false).limit(1).maybeSingle();
       }
 
@@ -336,6 +346,8 @@ class PlayerProvider extends ChangeNotifier {
         
         // Check if user is suspended/banned from THIS SPECIFIC event
         final status = gpData['status'] as String?;
+        debugPrint("[PlayerProvider] DEBUG PROFILE FETCH: Profile Status='${profileData['status']}', GamePlayer Status='$status', EventId='$fetchedEventId'");
+        
         if (status == 'suspended' || status == 'banned') {
           debugPrint('PlayerProvider: User is $status from event $fetchedEventId. Invalidating session.');
           // Don't set gamePlayerId - this will trigger GameSessionMonitor to kick the user

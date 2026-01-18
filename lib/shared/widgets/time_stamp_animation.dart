@@ -94,8 +94,12 @@ class _TimeStampAnimationState extends State<TimeStampAnimation>
     );
 
     _mainController.forward().then((_) {
-      if (widget.onComplete != null) {
-        Future.delayed(const Duration(seconds: 1), widget.onComplete);
+      if (mounted && widget.onComplete != null) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted && widget.onComplete != null) {
+             widget.onComplete!();
+          }
+        });
       }
     });
   }

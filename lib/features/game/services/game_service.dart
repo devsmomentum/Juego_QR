@@ -86,7 +86,7 @@ class GameService {
           .from('event_leaderboard')
           .select()
           .eq('event_id', eventId)
-          .order('completed_clues', ascending: false)
+          .order('completed_clues', ascending: false, nullsFirst: false)
           .order('last_completion_time', ascending: true)
           .limit(50);
 
