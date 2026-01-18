@@ -53,97 +53,112 @@ class _ReturnSuccessEffectState extends State<ReturnSuccessEffect> with SingleTi
     // Usamos SafeArea + Align para posicionarlo "al costado" (arriba a la derecha o izquierda)
     // Sin bloquear el resto de la pantalla.
     return Positioned(
-      top: 60, // Un poco abajo para no tapar headers si los hay
+      top: 64, // Un poco abajo para no tapar headers si los hay
       right: 16,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1.2, 0), // Entra desde la derecha
-          end: Offset.zero,
-        ).animate(_scale),
-        child: FadeTransition(
-          opacity: _scale,
-          child: Container(
-            width: 280, // Ancho fijo para tarjeta compacta
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.cyanAccent.withOpacity(0.6), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.cyanAccent.withOpacity(0.2),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.security, color: Colors.cyanAccent, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "¡REBOTE EXITOSO!",
-                        style: TextStyle(
-                          color: Colors.cyanAccent.shade100,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text.rich(
-                  TextSpan(
+      child: Material(
+        color: Colors.transparent,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1.2, 0), // Entra desde la derecha
+            end: Offset.zero,
+          ).animate(_scale),
+          child: FadeTransition(
+            opacity: _scale,
+            child: Container(
+              width: 280, // Ancho fijo para tarjeta compacta
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyanAccent.withOpacity(0.15),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      const TextSpan(
-                        text: "Has devuelto ",
-                      ),
-                      TextSpan(
-                        text: powerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontStyle: FontStyle.italic,
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.cyanAccent.withOpacity(0.1),
+                          shape: BoxShape.circle,
                         ),
+                        child: const Icon(Icons.security_rounded, color: Colors.cyanAccent, size: 18),
                       ),
-                      const TextSpan(
-                        text: " a ",
-                      ),
-                      TextSpan(
-                        text: widget.attackerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.redAccent,
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          "¡REBOTE EXITOSO!",
+                          style: TextStyle(
+                            color: Colors.cyanAccent,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            letterSpacing: 1.1,
+                            decoration: TextDecoration.none,
+                          ),
                         ),
-                      ),
-                      const TextSpan(
-                        text: ".",
                       ),
                     ],
                   ),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    height: 1.3,
+                  const SizedBox(height: 12),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: "Has devuelto ",
+                        ),
+                        TextSpan(
+                          text: powerName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        const TextSpan(
+                          text: " a ",
+                        ),
+                        TextSpan(
+                          text: widget.attackerName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                        const TextSpan(
+                          text: ".",
+                        ),
+                      ],
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      height: 1.4,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  "¡Sigue jugando!",
-                  style: TextStyle(
-                    color: Colors.greenAccent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 10),
+                  const Text(
+                    "¡Sigue jugando!",
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -10,7 +10,7 @@ import '../../../shared/widgets/progress_header.dart';
 import '../widgets/race_track_widget.dart';
 import 'qr_scanner_screen.dart';
 import 'geolocation_screen.dart';
-import '../../mall/screens/shop_screen.dart';
+import '../../mall/screens/mall_screen.dart';
 import 'puzzle_screen.dart';
 import '../../game/models/clue.dart'; // Import para usar tipo Clue
 import 'clue_finder_screen.dart'; // Import nuevo
@@ -207,7 +207,7 @@ class _CluesScreenState extends State<CluesScreen> {
       case 'npcInteraction':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const ShopScreen()),
+          MaterialPageRoute(builder: (_) => const MallScreen()),
         );
         break;
       case 'minigame':

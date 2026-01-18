@@ -194,8 +194,8 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         widget.child, // El juego base siempre debajo
 
         // Capas de sabotaje (se activan según el slug recibido de la DB)
-        if (activeSlug == 'black_screen') const BlindEffect(),
-        if (activeSlug == 'freeze') const FreezeEffect(),
+        if (activeSlug == 'black_screen') BlindEffect(expiresAt: powerProvider.activePowerExpiresAt),
+        if (activeSlug == 'freeze') FreezeEffect(expiresAt: powerProvider.activePowerExpiresAt),
         if (defenseAction == DefenseAction.returned) ...[
           if (powerProvider.returnedByPlayerName != null)
              ReturnRejectionEffect(
@@ -221,11 +221,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
         // blur_screen reutiliza el efecto visual de invisibility para los rivales.
         if (activeSlug == 'blur_screen')
-          const BlurScreenEffect(), 
+          BlurScreenEffect(expiresAt: powerProvider.activePowerExpiresAt), 
 
         // --- ESTADOS BENEFICIOSOS (BUFFS) ---
         if (isPlayerInvisible || activeSlug == 'invisibility')
-          const InvisibilityEffect(),
+          InvisibilityEffect(expiresAt: powerProvider.activePowerExpiresAt),
 
         if (defenseAction == DefenseAction.shieldBlocked)
           _DefenseFeedbackToast(action: defenseAction),
@@ -265,7 +265,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
                         child: Text(
                           _lifeStealBannerText!,
                           style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            decoration: TextDecoration.none,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -350,26 +354,32 @@ class _DefenseFeedbackToast extends StatelessWidget {
             child: child,
           ),
         ),
-        child: Container(
-          key: ValueKey(action),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white24),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 8,
-                offset: Offset(0, 4),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            key: ValueKey(action),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white24, width: 1.2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black54,
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                letterSpacing: 0.5,
+                decoration: TextDecoration.none,
               ),
-            ],
-          ),
-          child: Text(
-            message,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
             ),
           ),
         ),

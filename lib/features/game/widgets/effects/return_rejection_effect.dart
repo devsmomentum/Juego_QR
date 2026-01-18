@@ -39,101 +39,155 @@ class _ReturnRejectionEffectState extends State<ReturnRejectionEffect> with Sing
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Center(
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          width: size.width * 0.85,
-          padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.cyanAccent, width: 3), // Cyan para efecto espejo
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.cyanAccent.withOpacity(0.5),
-                  blurRadius: 30,
-                  spreadRadius: 5),
-              BoxShadow(
-                  color: Colors.purpleAccent.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 0)),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Icono de Espejo / Reflejo
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                   const Icon(Icons.shield, color: Colors.cyanAccent, size: 90),
-                   Icon(Icons.u_turn_left, color: Colors.black.withOpacity(0.8), size: 50),
+    return Material(
+      color: Colors.transparent,
+      child: Center(
+        child: ScaleTransition(
+          scale: _scale,
+          child: RotationTransition(
+            turns: Tween<double>(begin: -0.05, end: 0.0).animate(_controller),
+            child: Container(
+              width: size.width * 0.75,
+              height: size.width * 1.1, // Aspecto de carta
+              decoration: BoxDecoration(
+                color: Colors.blue.shade800,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.6),
+                    blurRadius: 25,
+                    spreadRadius: 5,
+                    offset: const Offset(0, 10),
+                  ),
+                  BoxShadow(
+                    color: Colors.cyanAccent.withOpacity(0.3),
+                    blurRadius: 40,
+                  )
                 ],
               ),
-              const SizedBox(height: 20),
-              const Text(
-                "¡ESPEJO ACTIVADO!",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.cyanAccent,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  shadows: [
-                    Shadow(color: Colors.blue, blurRadius: 10, offset: Offset(0,0))
-                  ]
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Divider(color: Colors.white24, indent: 40, endIndent: 40),
-              ),
-              const Text(
-                "Tu hechizo rebotó contra:",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white70, fontSize: 16),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                widget.returnedBy?.toUpperCase() ?? "UN RIVAL",
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.purpleAccent, blurRadius: 15)
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.5))
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
-                    SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        "¡AHORA SUFRES TU PROPIO EFECTO!",
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold),
+              child: Stack(
+                children: [
+                  // Diseño interno de la carta (estilo UNO)
+                  Positioned.fill(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade900,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Icono de Reverso Grande Central
+                            Transform.rotate(
+                              angle: 0.5,
+                              child: const Icon(
+                                Icons.sync_rounded,
+                                color: Colors.white,
+                                size: 120,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              "REVERSO",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                fontStyle: FontStyle.italic,
+                                letterSpacing: 2,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  
+                  // Iconos pequeños en las esquinas
+                  const Positioned(
+                    top: 20,
+                    left: 20,
+                    child: Icon(Icons.sync_rounded, color: Colors.white, size: 30),
+                  ),
+                  Positioned(
+                    bottom: 20,
+                    right: 20,
+                    child: Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.rotationZ(3.14159),
+                      child: const Icon(Icons.sync_rounded, color: Colors.white, size: 30),
+                    ),
+                  ),
+
+                  // Overlay de información del rival
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 60),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            "DEVOLUCIÓN DE:",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          Text(
+                            widget.returnedBy?.toUpperCase() ?? "UN RIVAL",
+                            style: const TextStyle(
+                              color: Colors.cyanAccent,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Banner de alerta inferior
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(10),
+                          bottomRight: Radius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        "¡SUFRES TU PODER!",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
