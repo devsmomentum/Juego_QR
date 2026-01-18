@@ -641,7 +641,21 @@ Future<bool> _showConfirmDialog() async {
     );
   }
 
+  bool get _isEventActive {
+    final now = DateTime.now();
+    // Comparar fecha actual con fecha del evento. 
+    // Si event.date es UTC (de supabase), convertimos now a utc para comparar, o viceversa.
+    // Usualmente DateTime.parse devuelve la zona horaria del string (UTC si tiene Z).
+    final eventDate = widget.event.date.isUtc ? widget.event.date : widget.event.date.toUtc();
+    final nowUtc = now.toUtc();
+    
+    return widget.event.isActive || nowUtc.isAfter(eventDate);
+  }
+
   Widget? _getFAB() {
+    // Si el evento está activo, no permitimos agregar nada (pistas ni tiendas)
+    if (_isEventActive) return null;
+
     if (_tabController.index == 2) {
       return FloatingActionButton(
         backgroundColor: AppTheme.primaryPurple,
@@ -691,7 +705,7 @@ Future<bool> _showConfirmDialog() async {
           children: [
             // Image Section
             GestureDetector(
-              onTap: _pickImage,
+              onTap: _isEventActive ? null : _pickImage,
               child: Container(
                 height: 200,
                 width: double.infinity,
@@ -725,7 +739,8 @@ Future<bool> _showConfirmDialog() async {
             // Fields
             TextFormField(
               initialValue: _title,
-              style: const TextStyle(color: Colors.white),
+              readOnly: _isEventActive,
+              style: TextStyle(color: _isEventActive ? Colors.white70 : Colors.white),
               decoration: inputDecoration.copyWith(labelText: 'Título'),
               validator: (v) => v!.isEmpty ? 'Requerido' : null,
               onSaved: (v) => _title = v!,
@@ -733,8 +748,9 @@ Future<bool> _showConfirmDialog() async {
             const SizedBox(height: 16),
             TextFormField(
               initialValue: _description,
+              readOnly: _isEventActive,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: _isEventActive ? Colors.white70 : Colors.white),
               decoration: inputDecoration.copyWith(labelText: 'Descripción'),
               validator: (v) => v!.isEmpty ? 'Requerido' : null,
               onSaved: (v) => _description = v!,
@@ -746,7 +762,8 @@ Future<bool> _showConfirmDialog() async {
                 Expanded(
                   child: TextFormField(
                     initialValue: _pin,
-                    style: const TextStyle(color: Colors.white),
+                    readOnly: _isEventActive,
+                    style: TextStyle(color: _isEventActive ? Colors.white70 : Colors.white),
                     decoration: inputDecoration.copyWith(labelText: 'PIN (6 dígitos)'),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
@@ -785,7 +802,8 @@ Future<bool> _showConfirmDialog() async {
                 Expanded(
                   child: TextFormField(
                     initialValue: _maxParticipants.toString(),
-                    style: const TextStyle(color: Colors.white),
+                    readOnly: _isEventActive,
+                    style: TextStyle(color: _isEventActive ? Colors.white70 : Colors.white),
                     decoration: inputDecoration.copyWith(labelText: 'Max. Jugadores'),
                     keyboardType: TextInputType.number,
                     onSaved: (v) => _maxParticipants = int.parse(v!),
@@ -796,7 +814,8 @@ Future<bool> _showConfirmDialog() async {
             const SizedBox(height: 16),
             TextFormField(
               initialValue: _clue,
-              style: const TextStyle(color: Colors.white),
+              readOnly: _isEventActive,
+              style: TextStyle(color: _isEventActive ? Colors.white70 : Colors.white),
               decoration: inputDecoration.copyWith(labelText: 'Pista de Victoria / Final'),
               onSaved: (v) => _clue = v!,
             ),
@@ -806,13 +825,15 @@ Future<bool> _showConfirmDialog() async {
                 Expanded(
                   child: TextFormField(
                     controller: _locationController,
-                    style: const TextStyle(color: Colors.white),
+                    readOnly: _isEventActive,
+                    style: TextStyle(color: _isEventActive ? Colors.white70 : Colors.white),
                     decoration: inputDecoration.copyWith(labelText: 'Nombre de Ubicación'),
                     validator: (v) => v!.isEmpty ? 'Requerido' : null,
                     onSaved: (v) => _locationName = v!,
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (!_isEventActive)
                 Container(
                   height: 56,
                   width: 56,
@@ -833,7 +854,7 @@ Future<bool> _showConfirmDialog() async {
             
             // --- DATE & TIME PICKER ---
             InkWell(
-              onTap: () async {
+              onTap: _isEventActive ? null : () async {
                 // 1. Pick Date
                 final pickedDate = await showDatePicker(
                   context: context,
@@ -911,11 +932,13 @@ Future<bool> _showConfirmDialog() async {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: _saveChanges,
-                icon: const Icon(Icons.save),
-                label: const Text("Guardar Cambios"),
+                onPressed: _isEventActive ? null : _saveChanges, 
+                icon: Icon(_isEventActive ? Icons.lock : Icons.save),
+                label: Text(_isEventActive 
+                  ? "Evento En Curso (Solo Lectura)" 
+                  : "Guardar Cambios"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryPurple,
+                  backgroundColor: _isEventActive ? Colors.grey : AppTheme.primaryPurple,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -1135,6 +1158,7 @@ Future<bool> _showConfirmDialog() async {
                          _showQRDialog(qrData, clue.title, "Pista: ${clue.puzzleType.label}", hint: clue.hint);
                       },
                     ),
+                    if (!_isEventActive)
                     IconButton(
                       icon: const Icon(Icons.edit, color: AppTheme.accentGold),
                       onPressed: () async {
@@ -1269,10 +1293,28 @@ void _showRestartConfirmDialog() {
                       : null,
                   ),
                 title: Text(store.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text(
-                  "${store.description}\nProductos: ${store.products.length}",
-                  style: const TextStyle(color: Colors.white70),
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(store.description, style: const TextStyle(color: Colors.white70), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: store.products.map((p) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black26, 
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Text(
+                          "${p.icon} ${p.name} (\$${p.cost})",
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 11),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
                 ),
                 isThreeLine: true,
                 trailing: Row(
@@ -1287,14 +1329,16 @@ void _showRestartConfirmDialog() {
                               store.name,
                               hint: "Escanear para entrar",
                             )),
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: AppTheme.accentGold),
-                      onPressed: () => _showAddStoreDialog(store: store),
-                    ),
-                    IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _confirmDeleteStore(store),
+                    if (!_isEventActive) ...[
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: AppTheme.accentGold),
+                        onPressed: () => _showAddStoreDialog(store: store),
                       ),
+                      IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _confirmDeleteStore(store),
+                        ),
+                    ],
                   ],
                 ),
               ),
