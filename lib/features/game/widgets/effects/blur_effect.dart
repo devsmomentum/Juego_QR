@@ -1,8 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'effect_timer.dart';
 
 class BlurScreenEffect extends StatefulWidget {
-  const BlurScreenEffect({super.key});
+  final DateTime? expiresAt;
+  const BlurScreenEffect({super.key, this.expiresAt});
 
   @override
   State<BlurScreenEffect> createState() => _BlurScreenEffectState();
@@ -36,29 +38,42 @@ class _BlurScreenEffectState extends State<BlurScreenEffect>
   Widget build(BuildContext context) {
     return IgnorePointer(
       ignoring: true,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          final double blur = 3 + (_controller.value * 3);
-          return BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.white.withOpacity(_opacity.value),
-                  ],
-                  radius: 1.2,
+      child: Stack(
+        children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final double blur = 3 + (_controller.value * 3);
+              return BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withOpacity(_opacity.value),
+                      ],
+                      radius: 1.2,
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(_opacity.value),
+                      width: 1.2,
+                    ),
+                  ),
                 ),
-                border: Border.all(
-                  color: Colors.white.withOpacity(_opacity.value),
-                  width: 1.2,
-                ),
+              );
+            },
+          ),
+          if (widget.expiresAt != null)
+            Positioned(
+              bottom: 100,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: EffectTimer(expiresAt: widget.expiresAt!),
               ),
             ),
-          );
-        },
+        ],
       ),
     );
   }

@@ -49,10 +49,9 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  Future<void> _purchaseItem(BuildContext context, PowerItem item) async {
+  Future<void> _purchaseItem(BuildContext context, PowerItem item, int quantity) async {
     if (_isLoading) return;
 
-    // 1. Bloquear inmediatamente para evitar doble click / race condition
     setState(() => _isLoading = true);
 
     try {
@@ -63,102 +62,74 @@ class _ShopScreenState extends State<ShopScreen> {
 
       if (eventId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Error: Debes estar en un evento para comprar.')),
+          const SnackBar(content: Text('Error: Debes estar en un evento para comprar.')),
         );
         return;
       }
 
-      // Determinar si es un poder (p_is_power en SQL)
-      // Excluimos utilidades y vidas de la lógica de la tabla player_powers
-      final bool isPower =
-          item.type != PowerType.utility && item.id != 'extra_life';
+      final bool isPower = item.type != PowerType.utility && item.id != 'extra_life';
+      final int totalCost = item.cost * quantity;
 
-      // Límite de 3 unidades por evento (poderes)
-      if (isPower) {
-        final int count = playerProvider.getPowerCount(item.id, eventId);
-        if (count >= 3) {
-          await _showQuickFeedback(
-            icon: item.icon,
-            title: 'Límite alcanzado',
-            message: 'Máximo 3 por evento ($count/3).',
-            accentColor: AppTheme.dangerRed,
-          );
-          return;
-        }
-      }
-
-      // Verificar límite de vidas
-      if (item.id == 'extra_life') {
-        if (playerProvider.currentPlayer != null) {
-          // Actualizar vidas antes de verificar
-          await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
-        }
-
-        if (gameProvider.lives >= 3) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('¡Ya tienes el máximo de vidas (3)!'),
-              backgroundColor: AppTheme.dangerRed,
-            ),
-          );
-          return;
-        }
-      }
-
-      // Validar visualmente antes de llamar al backend
-      if ((playerProvider.currentPlayer?.coins ?? 0) < item.cost) {
+      // Validar monedas totales
+      if ((playerProvider.currentPlayer?.coins ?? 0) < totalCost) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No tienes suficientes monedas'),
+            content: Text('No tienes suficientes monedas para esta cantidad'),
             backgroundColor: AppTheme.dangerRed,
           ),
         );
         return;
       }
 
-      // Proceder con la compra
-      final success = await playerProvider
-          .purchaseItem(item.id, eventId, item.cost, isPower: isPower);
+      bool overallSuccess = true;
+      int purchasedCount = 0;
+
+      // Bucle para comprar la cantidad seleccionada
+      for (int i = 0; i < quantity; i++) {
+        final success = await playerProvider.purchaseItem(
+          item.id, 
+          eventId, 
+          item.cost, 
+          isPower: isPower
+        );
+        
+        if (success) {
+          purchasedCount++;
+        } else {
+          overallSuccess = false;
+          break;
+        }
+      }
 
       if (!mounted) return;
 
-      if (success) {
+      if (purchasedCount > 0) {
         await _showQuickFeedback(
           icon: item.icon,
-          title: '¡Compra Exitosa!',
-          message: 'Has obtenido: ${item.name}',
+          title: purchasedCount > 1 ? '¡Compras Exitosas!' : '¡Compra Exitosa!',
+          message: 'Has obtenido $purchasedCount x ${item.name}',
           accentColor: AppTheme.successGreen,
         );
 
-        // Refrescar inventario para actualizar contador (máx 3)
-        if (isPower && playerProvider.currentPlayer != null) {
-          await playerProvider.fetchInventory(
-              playerProvider.currentPlayer!.userId, eventId);
+        // Refrescar inventario
+        if (playerProvider.currentPlayer != null) {
+          await playerProvider.fetchInventory(playerProvider.currentPlayer!.userId, eventId);
+          if (item.id == 'extra_life') {
+            await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
+          }
         }
+      }
 
-        // Actualizar vidas si se compró una vida
-        if (item.id == 'extra_life' && playerProvider.currentPlayer != null) {
-          await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
-        }
-      } else {
+      if (!overallSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Error al realizar la compra. Intenta de nuevo.'),
-            backgroundColor: AppTheme.dangerRed,
+            content: Text('Algunas compras fallaron o alcanzaste un límite.'),
+            backgroundColor: AppTheme.warningOrange,
           ),
         );
       }
     } catch (e) {
       debugPrint('Error purchasing item: $e');
-      if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ocurrió un error inesperado.'),
-            backgroundColor: AppTheme.dangerRed,
-          ),
-        );
-      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -294,7 +265,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 // Shop items
                 Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: shopItems.length,
                     itemBuilder: (context, index) {
                       final item = shopItems[index];
@@ -302,12 +273,13 @@ class _ShopScreenState extends State<ShopScreen> {
                           item.id != 'extra_life';
                       final int? ownedCount = (eventId != null && isPower)
                           ? playerProvider.getPowerCount(item.id, eventId)
-                          : null;
+                          : (item.id == 'extra_life' ? (player?.lives ?? 0) : null);
+
                       return ShopItemCard(
                         item: item,
                         ownedCount: ownedCount,
                         maxPerEvent: 3,
-                        onPurchase: () => _purchaseItem(context, item),
+                        onPurchase: (qty) => _purchaseItem(context, item, qty),
                       );
                     },
                   ),

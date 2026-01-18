@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../auth/providers/player_provider.dart';
 import '../models/mall_store.dart';
 import '../../../core/theme/app_theme.dart';
 import 'store_detail_screen.dart';
-import '../../game/providers/game_provider.dart';
 import '../providers/store_provider.dart';
-import '../../game/screens/qr_scanner_screen.dart';
+import '../../game/providers/game_provider.dart';
 
 class MallScreen extends StatefulWidget {
   const MallScreen({super.key});
@@ -16,24 +14,14 @@ class MallScreen extends StatefulWidget {
 }
 
 class _MallScreenState extends State<MallScreen> {
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      
-      // SYNC PLAYER PROVIDER (Same fix as PuzzleScreen)
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      if (gameProvider.currentEventId != null && playerProvider.currentPlayer != null) {
-         if (playerProvider.currentPlayer?.currentEventId != gameProvider.currentEventId) {
-             debugPrint("MallScreen: Syncing PlayerProvider to event ${gameProvider.currentEventId}...");
-             playerProvider.refreshProfile(eventId: gameProvider.currentEventId);
-         }
-      }
-
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       if (gameProvider.currentEventId != null) {
-        Provider.of<StoreProvider>(context, listen: false).fetchStores(gameProvider.currentEventId!);
+        storeProvider.fetchStores(gameProvider.currentEventId!);
       }
     });
   }
@@ -43,63 +31,37 @@ class _MallScreenState extends State<MallScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
-        title: Text("Entrar a ${store.name}", style: const TextStyle(color: Colors.white)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "Entrar a ${store.name}",
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Para entrar debes escanear el código QR ubicado en la tienda física.", style: TextStyle(color: Colors.white70)),
-            const SizedBox(height: 20),
-            const Icon(Icons.qr_code_scanner, size: 80, color: Colors.white),
-            const SizedBox(height: 20),
-             // Debug info (optional, helps user verify generated codes)
-             // Text("Data esperada: ${store.qrCodeData}", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+            const Text(
+              "Para entrar debes escanear el código QR ubicado en la tienda física.",
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 24),
+            const Icon(Icons.qr_code_scanner, size: 60, color: AppTheme.accentGold),
           ],
         ),
         actions: [
           TextButton(
-             onPressed: () => Navigator.pop(context, false),
-             child: const Text("Cancelar", style: TextStyle(color: Colors.white60))
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("CANCELAR", style: TextStyle(color: Colors.white60)),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-               ElevatedButton.icon(
-                onPressed: () async {
-                   final scannedCode = await Navigator.push<String>(
-                     context, 
-                     MaterialPageRoute(builder: (_) => const QRScannerScreen())
-                   );
-                   
-                   if (scannedCode != null && context.mounted) {
-                      if (scannedCode == store.qrCodeData) {
-                         Navigator.pop(context, true); // Éxito
-                      } else {
-                         ScaffoldMessenger.of(context).showSnackBar(
-                           const SnackBar(
-                             content: Text('❌ Código QR incorrecto. Intenta nuevamente.'), 
-                             backgroundColor: Colors.red
-                           )
-                         );
-                      }
-                   }
-                }, 
-                icon: const Icon(Icons.camera_alt),
-                label: const Text("Escanear con Cámara"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold, 
-                  foregroundColor: Colors.black
-                ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () => Navigator.pop(context, true), 
-                child: const Text("Simular (Pruebas)"),
-              ),
-            ],
-          )
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryPurple,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text("SIMULAR ESCANEO"),
+          ),
         ],
-      )
+      ),
     );
 
     if (result == true && context.mounted) {
@@ -112,9 +74,12 @@ class _MallScreenState extends State<MallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final storeProvider = Provider.of<StoreProvider>(context);
+    final stores = storeProvider.stores;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Centro Comercial"),
+        title: const Text("Centro Comercial Millenium"),
         backgroundColor: AppTheme.darkBg,
       ),
       body: Container(
@@ -155,28 +120,11 @@ class _MallScreenState extends State<MallScreen> {
              ),
 
              Expanded(
-               child: Consumer<StoreProvider>(
-                 builder: (context, provider, child) {
-                   if (provider.isLoading) {
-                     return const Center(child: CircularProgressIndicator());
-                   }
-                   
-                   final stores = provider.stores;
-                   
-                   if (stores.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.store_mall_directory, size: 80, color: Colors.white24),
-                            SizedBox(height: 16),
-                            Text("No hay tiendas disponibles en este evento", style: TextStyle(color: Colors.white54)),
-                          ],
-                        ),
-                      );
-                   }
-
-                   return ListView.builder(
+               child: storeProvider.isLoading 
+                 ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGold))
+                 : stores.isEmpty
+                   ? _buildEmptyState()
+                   : ListView.builder(
                      padding: const EdgeInsets.all(16),
                      itemCount: stores.length,
                      itemBuilder: (context, index) {
@@ -194,23 +142,15 @@ class _MallScreenState extends State<MallScreen> {
                                // Imagen de Tienda (Cover)
                                ClipRRect(
                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                                 child: (store.imageUrl.isNotEmpty && store.imageUrl.startsWith('http'))
+                                 child: store.imageUrl.isNotEmpty 
                                    ? Image.network(
                                        store.imageUrl,
                                        height: 120,
                                        width: double.infinity,
                                        fit: BoxFit.cover,
-                                       errorBuilder: (_,__,___) => Container(
-                                         height: 120, 
-                                         color: Colors.grey[800],
-                                         child: const Center(child: Icon(Icons.store, size: 50, color: Colors.white24))
-                                       ),
+                                       errorBuilder: (_,__,___) => _buildImagePlaceholder(),
                                      )
-                                   : Container(
-                                       height: 120,
-                                       color: Colors.grey[800],
-                                       child: const Center(child: Icon(Icons.store, size: 50, color: Colors.white24)),
-                                     ),
+                                   : _buildImagePlaceholder(),
                                ),
                                
                                Padding(
@@ -247,12 +187,34 @@ class _MallScreenState extends State<MallScreen> {
                          ),
                        );
                      },
-                   );
-                 },
-               ),
+                   ),
              )
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      height: 120, 
+      color: Colors.grey[800],
+      child: const Center(child: Icon(Icons.store, size: 50, color: Colors.white24))
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.store_outlined, size: 64, color: Colors.white.withOpacity(0.2)),
+          const SizedBox(height: 16),
+          const Text(
+            "No hay tiendas disponibles para este evento",
+            style: TextStyle(color: Colors.white54),
+          ),
+        ],
       ),
     );
   }
