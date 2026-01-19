@@ -647,6 +647,11 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
 void _showSuccessDialog(BuildContext context, Clue clue) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+  
+  // [FIX] Capturar Navigator ANTES de cualquier operación async
+  // Esto garantiza que podamos navegar incluso si el context padre cambia
+  final navigator = Navigator.of(context);
+  final rootOverlay = Overlay.of(context);
 
   showDialog(
     context: context,
@@ -673,8 +678,9 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     success = false;
   }
 
-  if (context.mounted) {
-    Navigator.pop(context);
+  // [FIX] Cerrar spinner usando navigator capturado
+  if (navigator.mounted) {
+    navigator.pop();
   }
 
   if (success) {
@@ -690,7 +696,6 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       int playerPosition = 0; // Default 0
       final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
 
-      // Wait for leaderboard if needed? (Cant await easily here without bigger refactor, better safegaurd default)
       if (gameProvider.leaderboard.isNotEmpty) {
         final index =
             gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
@@ -700,12 +705,9 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
         playerPosition = 999; // Safe default
       }
 
-      // Navigate to winner celebration screen
-      if (context.mounted) {
-        // Get event ID from the current clue
-        // We need to pass the event ID - assuming we can get it from somewhere
-        // For now, navigate with position and completed clues
-        Navigator.of(context).pushAndRemoveUntil(
+      // Navigate to winner celebration screen using captured navigator
+      if (navigator.mounted) {
+        navigator.pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => WinnerCelebrationScreen(
               eventId: gameProvider.currentEventId ?? '',
@@ -713,10 +715,10 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
               totalCluesCompleted: gameProvider.completedClues,
             ),
           ),
-          (route) => route.isFirst, // Remove all routes except first
+          (route) => route.isFirst,
         );
       }
-      return; // Don't show normal success dialog
+      return;
     }
   } else {
     if (context.mounted) {
@@ -730,9 +732,15 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     return;
   }
 
-  if (!context.mounted) return;
+  // [FIX] Verificar navigator en vez de context para robustez
+  if (!navigator.mounted) {
+    debugPrint('WARN: Navigator not mounted before TimeStampAnimation');
+    return;
+  }
 
   // 1. Mostrar la Animación del Sello Temporal
+  // [FIX] Usar Completer para asegurar que onComplete se ejecute una sola vez
+  bool sealCompleted = false;
   await showGeneralDialog(
     context: context,
     barrierDismissible: false,
@@ -740,16 +748,19 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       backgroundColor: Colors.black.withOpacity(0.85),
       body: TimeStampAnimation(
         index: ((clue.sequenceIndex - 1) % 9) + 1,
-        onComplete: () => Navigator.pop(dialogContext),
+        onComplete: () {
+          if (!sealCompleted && dialogContext.mounted) {
+            sealCompleted = true;
+            Navigator.pop(dialogContext);
+          }
+        },
       ),
     ),
   );
 
-  // Verificar contexto después de animación
-  if (!context.mounted) {
-    debugPrint('WARN: Context not mounted after TimeStampAnimation');
-    return;
-  }
+  // [FIX] ELIMINADO: Early return por context.mounted
+  // El diálogo de celebración DEBE mostrarse siempre después del sello
+  // Usamos navigator capturado en vez de context
 
   // 2. Determinar si hay siguiente pista
   final clues = gameProvider.clues;
@@ -758,12 +769,17 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   if (currentIdx != -1 && currentIdx + 1 < clues.length) {
     nextClue = clues[currentIdx + 1];
   }
-  // Mostrar "siguiente misión" si hay más pistas después de esta
   final showNextStep = nextClue != null;
 
-  // 3. Mostrar el panel de celebración - siempre se muestra después del sello
+  // 3. Mostrar el panel de celebración - OBLIGATORIO después del sello
+  // [FIX] Usar navigator capturado para garantizar visualización
+  if (!navigator.mounted) {
+    debugPrint('WARN: Navigator not mounted for SuccessCelebrationDialog');
+    return;
+  }
+
   await showDialog(
-    context: context,
+    context: navigator.context,
     barrierDismissible: false,
     builder: (dialogContext) => SuccessCelebrationDialog(
       clue: clue,
@@ -772,8 +788,8 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       onMapReturn: () {
         Navigator.of(dialogContext).pop();
         Future.delayed(const Duration(milliseconds: 100), () {
-          if (context.mounted) {
-            Navigator.of(context).pop();
+          if (navigator.mounted) {
+            navigator.pop();
           }
         });
       },

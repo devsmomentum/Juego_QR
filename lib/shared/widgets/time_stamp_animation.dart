@@ -22,6 +22,9 @@ class _TimeStampAnimationState extends State<TimeStampAnimation>
   late AnimationController _rotationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;
+  
+  // [FIX] Flag para evitar doble ejecución de onComplete
+  bool _hasTriggeredComplete = false;
 
   final List<TimeStampData> _stamps = [
     TimeStampData(
@@ -70,6 +73,13 @@ class _TimeStampAnimationState extends State<TimeStampAnimation>
       gradient: [const Color(0xFF8B5CF6), const Color(0xFF6366F1)],
     ),
   ];
+  
+  // [FIX] Método centralizado para disparar onComplete una sola vez
+  void _triggerComplete() {
+    if (_hasTriggeredComplete || !mounted) return;
+    _hasTriggeredComplete = true;
+    widget.onComplete?.call();
+  }
 
   @override
   void initState() {
@@ -94,13 +104,8 @@ class _TimeStampAnimationState extends State<TimeStampAnimation>
     );
 
     _mainController.forward().then((_) {
-      if (mounted && widget.onComplete != null) {
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted && widget.onComplete != null) {
-             widget.onComplete!();
-          }
-        });
-      }
+      // [FIX] Reducido de 1s a 800ms para respuesta más rápida
+      Future.delayed(const Duration(milliseconds: 800), _triggerComplete);
     });
   }
 
@@ -238,9 +243,9 @@ class _TimeStampAnimationState extends State<TimeStampAnimation>
               ),
             ),
             const SizedBox(height: 60),
-            // Botón de Saltar
+            // Botón de Saltar - [FIX] Usa método centralizado
             TextButton(
-              onPressed: widget.onComplete,
+              onPressed: _triggerComplete,
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white24,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
