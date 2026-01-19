@@ -73,6 +73,16 @@ class PowerService {
     String? eventId,
   }) async {
     try {
+      // [FIX] GUARDIA DE AUTO-ATAQUE: Poderes ofensivos no pueden targetear al caster
+      const selfTargetingPowers = {'invisibility', 'shield', 'return'};
+      final isOffensivePower = !selfTargetingPowers.contains(powerSlug);
+      final isSelfTargeting = casterGamePlayerId == targetGamePlayerId;
+      
+      if (isOffensivePower && isSelfTargeting) {
+        debugPrint('PowerService: ⛔ Self-attack prohibited for offensive power: $powerSlug');
+        return PowerUseResponse.error('self_targeting_prohibited');
+      }
+      
       dynamic response;
       bool success = false;
 
