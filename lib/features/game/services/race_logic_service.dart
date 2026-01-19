@@ -38,14 +38,19 @@ class RaceLogicService {
     Player? me = myIndex != -1 ? leaderboard[myIndex] : null;
 
     // 2. Sort leaderboard explicitly by progress (completed_clues_count)
+    // [FIX] Usar mismos criterios que game_service.dart (Ranking):
+    //       1. completed_clues DESC
+    //       2. last_completion_time ASC (quien terminó primero gana)
     final sortedPlayers = List<Player>.from(leaderboard);
     sortedPlayers.sort((a, b) {
       // Primary: Completed Clues (Descending)
       final progressCompare = b.completedCluesCount.compareTo(a.completedCluesCount);
       if (progressCompare != 0) return progressCompare;
       
-      // Secondary: Name (for stability)
-      return a.name.compareTo(b.name);
+      // Secondary: Last Completion Time (Ascending - menor = terminó primero = líder)
+      final aTime = a.lastCompletionTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.lastCompletionTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aTime.compareTo(bTime);
     });
     
     // Re-find me in sorted list

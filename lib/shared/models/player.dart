@@ -17,6 +17,7 @@ class Player implements ITargetable {
   List<String> inventory;
   PlayerStatus status;
   DateTime? frozenUntil;
+  DateTime? lastCompletionTime; // [FIX] Para desempate en ranking
   List<String>? eventsCompleted;
   int lives;
   Map<String, dynamic> stats;
@@ -36,6 +37,7 @@ class Player implements ITargetable {
     List<String>? inventory,
     this.status = PlayerStatus.active,
     this.frozenUntil,
+    this.lastCompletionTime,
     this.eventsCompleted,
     this.lives = 3,
     Map<String, dynamic>? stats,
@@ -75,6 +77,10 @@ class Player implements ITargetable {
       status: _parseStatus(json['status']),
       frozenUntil: json['frozen_until'] != null
           ? DateTime.parse(json['frozen_until'])
+          : null,
+      // [FIX] Parsear last_completion_time para desempate en Race Tracker
+      lastCompletionTime: json['last_completion_time'] != null
+          ? DateTime.tryParse(json['last_completion_time'])
           : null,
       stats: {
         'speed': json['stat_speed'] ?? 0,
@@ -199,6 +205,7 @@ class Player implements ITargetable {
     List<String>? inventory,
     PlayerStatus? status,
     DateTime? frozenUntil,
+    DateTime? lastCompletionTime,
     List<String>? eventsCompleted,
     int? lives,
     Map<String, dynamic>? stats,
@@ -220,6 +227,7 @@ class Player implements ITargetable {
       inventory: inventory ?? this.inventory,
       status: status ?? this.status,
       frozenUntil: frozenUntil ?? this.frozenUntil,
+      lastCompletionTime: lastCompletionTime ?? this.lastCompletionTime,
       eventsCompleted: eventsCompleted ?? this.eventsCompleted,
       lives: lives ?? this.lives,
       stats: stats ?? this.stats,
