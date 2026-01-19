@@ -13,9 +13,10 @@ class InvisibilityEffect extends StatelessWidget {
       primary.withOpacity(0.16),
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: IgnorePointer(
+    // [FIX] IgnorePointer debe envolver TODO el widget para que los toques pasen
+    return IgnorePointer(
+      child: Material(
+        color: Colors.transparent,
         child: Stack(
           children: [
             Container(color: overlay),
@@ -53,7 +54,7 @@ class InvisibilityEffect extends StatelessWidget {
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.2,
-                              decoration: TextDecoration.none, // Quita subrayado amarillo
+                              decoration: TextDecoration.none,
                             ),
                           ),
                         ],

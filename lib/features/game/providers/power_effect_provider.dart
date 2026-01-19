@@ -112,12 +112,18 @@ class PowerEffectProvider extends ChangeNotifier {
       return;
     }
 
+    // [FIX 3] Evitar reinicio destructivo si ya escuchamos al mismo ID
+    if (myGamePlayerId == _listeningForId && _subscription != null) {
+      debugPrint('PowerEffectProvider: Ya escuchando para $myGamePlayerId, omitiendo reinicio.');
+      return;
+    }
+
     _subscription?.cancel();
     _casterSubscription?.cancel();
     _expiryTimer?.cancel();
     _listeningForId = myGamePlayerId;
-    _sessionStartTime = DateTime.now().toUtc(); // Inicializar filtro de tiempo
-    _processedEffectIds.clear(); // Limpiar historial de procesados
+    _sessionStartTime = DateTime.now().toUtc();
+    _processedEffectIds.clear();
 
     // 1. Escuchar ataques ENTRANTES (Target = YO)
     _subscription = supabase
@@ -180,16 +186,7 @@ class PowerEffectProvider extends ChangeNotifier {
       debugPrint("DEBUG OUTGOING: ¿Es ofensivo? $isOffensive");
         
       if (isOffensive) {
-         // ¡BINGO! Hemos lanzado un ataque ofensivo PERO no estábamos en modo manual.
-         // Esto significa que fue un REFLEJO automático del backend.
-         /* 
-            [CRÍTICO] MODIFICACIÓN LÓGICA 'RETURN':
-            Ya no deducimos "Return" basándonos en si el ataque fue automático.
-            La confirmación de "Poder Devuelto" vendrá explícitamente del RPC
-            al atacante original. 
-            
-            Mantenemos el log para debug pero NO ejecutamos _registerDefenseAction aquí.
-         */
+
          debugPrint("REFLEJO DETECTADO (Stream Outgoing): $slug lanzado automáticamente.");
       }
     }
@@ -198,18 +195,22 @@ class PowerEffectProvider extends ChangeNotifier {
   Future<void> _processEffects(List<Map<String, dynamic>> data) async {
     _expiryTimer?.cancel(); // Limpiar temporizadores previos
 
-    debugPrint("[DEBUG] 🔍 _processEffects llamado con ${data.length} eventos");
-    debugPrint("[DEBUG] 📅 Hora Inicio Sesión: $_sessionStartTime");
-    debugPrint("[DEBUG] 👤 Escuchando para ID: $_listeningForId");
-
     final supabase = _supabaseClient;
     if (supabase == null) {
       _clearEffect();
       return;
     }
 
+    // [FIX 2] Proteger buffs propios durante snapshots vacíos del stream
     if (data.isEmpty) {
-      _clearEffect();
+      final isSelfBuff = _activePowerSlug == 'invisibility' ||
+          _activePowerSlug == 'shield' ||
+          _activePowerSlug == 'return';
+      if (!isSelfBuff) {
+        _clearEffect();
+      } else {
+        debugPrint('[DEBUG] 🛡️ Stream vacío pero preservando buff propio: $_activePowerSlug');
+      }
       return;
     }
 
@@ -231,9 +232,12 @@ class PowerEffectProvider extends ChangeNotifier {
         if (createdAtStr != null) {
           final createdAt = DateTime.parse(createdAtStr);
           final sessionStart = _sessionStartTime!;
-          debugPrint("   🕐 Comparación de tiempo: Evento=$createdAt vs Sesión=$sessionStart");
-          if (createdAt.isBefore(sessionStart)) {
-             debugPrint("   ⚠️ Evento ignorado por ser ANTIGUO (${sessionStart.difference(createdAt).inSeconds}s antes)");
+          // [FIX 1] Tolerancia de 5 segundos para absorber latencia de red
+          const tolerance = Duration(seconds: 5);
+          final adjustedSessionStart = sessionStart.subtract(tolerance);
+          debugPrint("   🕐 Comparación de tiempo: Evento=$createdAt vs Sesión=$sessionStart (tolerancia: 5s)");
+          if (createdAt.isBefore(adjustedSessionStart)) {
+             debugPrint("   ⚠️ Evento ignorado por ser ANTIGUO (${adjustedSessionStart.difference(createdAt).inSeconds}s antes del margen)");
              return false;
           }
         }
@@ -243,8 +247,16 @@ class PowerEffectProvider extends ChangeNotifier {
       return true;
     }).toList();
 
+    // [FIX] Proteger buffs propios también cuando filtered está vacío
     if (filtered.isEmpty) {
-      _clearEffect();
+      final isSelfBuff = _activePowerSlug == 'invisibility' ||
+          _activePowerSlug == 'shield' ||
+          _activePowerSlug == 'return';
+      if (!isSelfBuff) {
+        _clearEffect();
+      } else {
+        debugPrint('[DEBUG] 🛡️ Filtered vacío pero preservando buff propio: $_activePowerSlug');
+      }
       return;
     }
 
@@ -257,32 +269,21 @@ class PowerEffectProvider extends ChangeNotifier {
       final effectId = effect['id']?.toString();
       final casterId = effect['caster_id']?.toString();
       
+      // Life Steal: procesar antes del filtro de expiración (duration=0)
+      // El filtro de tiempo ya se aplicó en 'filtered' (L231-243)
       if (slug == 'life_steal' &&
           effectId != null &&
           !_processedEffectIds.contains(effectId) &&
           _lifeStealVictimHandler != null) {
-        
-        // FILTRO DE TIEMPO ESTRICTO PARA LIFE_STEAL
-        // Aunque ya filtramos por fecha en 'filtered', hacemos doble check por seguridad
-        DateTime? created;
-        if (effect['created_at'] != null) {
-          created = DateTime.tryParse(effect['created_at']);
-        }
-        
-        if (created != null && _sessionStartTime != null && created.isBefore(_sessionStartTime!)) {
-           debugPrint("[DEBUG] ⏳ IDEMPOTENCIA: Ignorando Life Steal ANTIGUO (ID: $effectId)");
-           _processedEffectIds.add(effectId); // Marcar como visto para no re-evaluar
-           continue; 
-        }
         
         debugPrint("[DEBUG] 🩸 LIFE_STEAL detectado (pre-expiration):");
         debugPrint("[DEBUG]    Effect ID: $effectId");
         debugPrint("[DEBUG]    Caster ID: $casterId");
         
         _processedEffectIds.add(effectId);
-        _activeEffectCasterId = casterId; // Guardar para referencia
+        _activeEffectCasterId = casterId;
         
-        // Disparar el handler que activa la animación en SabotageOverlay
+        // Disparar handler que activa la animación en SabotageOverlay
         await _lifeStealVictimHandler!(effectId, casterId, _listeningForId!);
         
         debugPrint("[DEBUG] ✅ LifeStealVictimHandler ejecutado exitosamente");
@@ -296,8 +297,16 @@ class PowerEffectProvider extends ChangeNotifier {
       return expiresAt.isAfter(now);
     }).toList();
 
+    // [FIX] Proteger buffs propios cuando todos los efectos han expirado
     if (validEffects.isEmpty) {
-      _clearEffect();
+      final isSelfBuff = _activePowerSlug == 'invisibility' ||
+          _activePowerSlug == 'shield' ||
+          _activePowerSlug == 'return';
+      if (!isSelfBuff) {
+        _clearEffect();
+      } else {
+        debugPrint('[DEBUG] 🛡️ ValidEffects vacío pero preservando buff propio: $_activePowerSlug');
+      }
       return;
     }
 
@@ -387,7 +396,7 @@ class PowerEffectProvider extends ChangeNotifier {
         // 2) Insertar efecto reflejado
         try {
           final nowUtc = DateTime.now().toUtc();
-          final duration = await _getPowerDurationFromDb(powerSlug: offensiveSlug!);
+          final duration = await _getPowerDurationFromDb(powerSlug: offensiveSlug);
           final expiresAt = nowUtc.add(duration).toIso8601String();
           final payload = <String, dynamic>{
             'target_id': casterId,
