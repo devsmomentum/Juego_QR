@@ -148,6 +148,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
 
   void _handleCellTap(int r, int c) {
     if (_isGameOver) return;
+    if (_grid[r][c].isRevealed) return; // FIX: No interactuar si ya está revelada
     if (_grid[r][c].isFlagged) return; // No abrir si tiene bandera
 
     if (_isFirstMove) {
