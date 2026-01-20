@@ -8,6 +8,7 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../widgets/clue_card.dart';
 import '../../../shared/widgets/progress_header.dart';
 import '../widgets/race_track_widget.dart';
+import '../widgets/no_lives_widget.dart';
 import 'qr_scanner_screen.dart';
 import 'geolocation_screen.dart';
 import '../../mall/screens/mall_screen.dart';
@@ -374,6 +375,23 @@ class _CluesScreenState extends State<CluesScreen> {
 
                                 // C. Si es la pista ACTUAL (La misión activa)
                                 if (isCurrent) {
+                                  // VERIFICAR VIDAS: Si no tiene vidas, mostrar pantalla de bloqueo
+                                  final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                                  final gameProvider = Provider.of<GameProvider>(context, listen: false);
+                                  
+                                  if ((player?.lives ?? 0) <= 0 || gameProvider.lives <= 0) {
+                                     Navigator.push(
+                                        context, 
+                                        MaterialPageRoute(
+                                          builder: (_) => const Scaffold(
+                                            backgroundColor: Colors.black,
+                                            body: NoLivesWidget()
+                                          )
+                                        )
+                                     );
+                                     return;
+                                  }
+
                                   // 1. Verificamos si ya fue escaneada/encontrada
                                   if (!_scannedClues.contains(clue.id)) {
                                     // 2. Si NO fue encontrada -> Ir a pantalla de Frio/Caliente

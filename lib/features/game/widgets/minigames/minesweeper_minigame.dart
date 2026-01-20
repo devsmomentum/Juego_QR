@@ -7,7 +7,8 @@ import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../game_over_dialog.dart';
+import 'game_over_overlay.dart';
+import '../../../mall/screens/shop_screen.dart';
 
 class MinesweeperMinigame extends StatefulWidget {
   final Clue clue;
@@ -40,6 +41,23 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
   // Stats
   int _flagsAvailable = totalMines;
   int _shields = 3; // Intentos Locales (Escudos)
+
+  // Overlay State
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _showShopButton = showShop;
+    });
+  }
 
   @override
   void initState() {
@@ -232,61 +250,37 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
 
   void _loseGlobalLife(String reason, {bool timeOut = false}) async {
     _timer?.cancel(); // Detener timer inmediatamente
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      // USAR HELPER CENTRALIZADO
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
 
       if (!mounted) return;
 
-      // Verificar estado FINAL
       if (newLives <= 0) {
-        _showGameOverDialog("Te has quedado sin vidas globales.");
+        _showOverlayState(
+          title: "GAME OVER", 
+          message: "Te has quedado sin vidas globales.",
+          retry: false,
+          showShop: true
+        );
       } else {
-        // Si le quedan vidas, reiniciamos el nivel tras una pausa
-        Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) _showRestartDialog(reason);
+        // Pausa breve antes de mostrar el overlay de fallo
+        Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+               _showOverlayState(
+                  title: "¡EXPLOSIÓN!", 
+                  message: "$reason\nHas perdido 1 vida.",
+                  retry: true,
+                  showShop: false
+               );
+            }
         });
       }
     }
   }
 
-  void _showRestartDialog(String title) {
-      showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: Text(title, style: const TextStyle(color: AppTheme.dangerRed)),
-        content: const Text("Has perdido 1 vida. Inténtalo de nuevo. Se generará un nuevo campo.", style: TextStyle(color: Colors.white)),
-        actions: [
-           TextButton(
-            onPressed: () {
-               Navigator.pop(context);
-               _startNewGame(); 
-            },
-            child: const Text("Reintentar"),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => GameOverDialog(
-        reason: message.isNotEmpty ? message : "Has perdido. ¡Inténtalo de nuevo!",
-        onExit: () {
-          Navigator.pop(context); 
-          Navigator.pop(context); 
-        },
-      ),
-    );
-  }
+  // DIALOGS REMOVED
 
   @override
   Widget build(BuildContext context) {
@@ -294,125 +288,167 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
     final seconds = (_secondsRemaining % 60).toString().padLeft(2, '0');
     final isLowTime = _secondsRemaining <= 10;
 
-    return Column(
-      children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {},
+      child: Stack(
+        children: [
+          // GAME CONTENT
+          Column(
             children: [
-                // Flag Counter
-                 Container(
-                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                 decoration: BoxDecoration(
-                   color: Colors.black54,
-                   borderRadius: BorderRadius.circular(8),
-                   border: Border.all(color: AppTheme.primaryPurple),
-                 ),
-                 child: Row(
-                    children: [
-                      const Icon(Icons.flag, color: AppTheme.dangerRed, size: 20),
-                      const SizedBox(width: 8),
-                      Text("$_flagsAvailable", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                    ],
-                 ),
-               ),
-               
-               // ESCUDOS (Nuevo)
-               Container(
-                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                 decoration: BoxDecoration(
-                   color: Colors.black54,
-                   borderRadius: BorderRadius.circular(8),
-                   border: Border.all(color: Colors.blueAccent),
-                 ),
-                 child: Row(
-                    children: [
-                      const Icon(Icons.shield, color: Colors.blueAccent, size: 20),
-                      const SizedBox(width: 8),
-                      Text("$_shields", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                    ],
-                 ),
-               ),
-                
-               // Timer
-               Container(
-                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                 decoration: BoxDecoration(
-                   color: isLowTime ? AppTheme.dangerRed : Colors.black54,
-                   borderRadius: BorderRadius.circular(8),
-                 ),
-                 child: Row(
-                    children: [
-                      const Icon(Icons.timer, color: Colors.white, size: 20),
-                      const SizedBox(width: 8),
-                      Text("$minutes:$seconds", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                    ],
-                 ),
-               ),
-            ],
-          ),
-        ),
-        
-        // Vidas Globales (Solo visualización)
-        Consumer<GameProvider>(
-            builder: (context, game, _) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(3, (index) {
-                  return Icon(
-                      index < game.lives ? Icons.favorite : Icons.favorite_border,
-                      color: AppTheme.dangerRed,
-                      size: 24,
-                  );
-                  }),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                      // Flag Counter
+                       Container(
+                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                       decoration: BoxDecoration(
+                         color: Colors.black54,
+                         borderRadius: BorderRadius.circular(8),
+                         border: Border.all(color: AppTheme.primaryPurple),
+                       ),
+                       child: Row(
+                          children: [
+                            const Icon(Icons.flag, color: AppTheme.dangerRed, size: 20),
+                            const SizedBox(width: 8),
+                            Text("$_flagsAvailable", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                          ],
+                       ),
+                     ),
+                     
+                     // ESCUDOS (Nuevo)
+                     Container(
+                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                       decoration: BoxDecoration(
+                         color: Colors.black54,
+                         borderRadius: BorderRadius.circular(8),
+                         border: Border.all(color: Colors.blueAccent),
+                       ),
+                       child: Row(
+                          children: [
+                            const Icon(Icons.shield, color: Colors.blueAccent, size: 20),
+                            const SizedBox(width: 8),
+                            Text("$_shields", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                          ],
+                       ),
+                     ),
+                      
+                     // Timer
+                     Container(
+                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                       decoration: BoxDecoration(
+                         color: isLowTime ? AppTheme.dangerRed : Colors.black54,
+                         borderRadius: BorderRadius.circular(8),
+                       ),
+                       child: Row(
+                          children: [
+                            const Icon(Icons.timer, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Text("$minutes:$seconds", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                          ],
+                       ),
+                     ),
+                  ],
+                ),
               ),
-            );
-            },
-        ),
-
-        const Text("Toca para abrir. Mantén para marcar 🚩", style: TextStyle(color: Colors.white54, fontSize: 12)),
-        const SizedBox(height: 10),
-
-        // GRID
-        Expanded(
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(8), 
-                  border: Border.all(color: Colors.grey[700]!, width: 4),
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320, maxHeight: 320),
-                child: AspectRatio(
-                  aspectRatio: 1, // Square grid
-                  child: GridView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: rows * cols,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      crossAxisSpacing: 2,
-                      mainAxisSpacing: 2,
+              
+              // Vidas Globales (Solo visualización)
+              Consumer<GameProvider>(
+                  builder: (context, game, _) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(3, (index) {
+                        return Icon(
+                            index < game.lives ? Icons.favorite : Icons.favorite_border,
+                            color: AppTheme.dangerRed,
+                            size: 24,
+                        );
+                        }),
                     ),
-                    itemBuilder: (context, index) {
-                      final r = index ~/ cols;
-                      final c = index % cols;
-                      return _buildCell(r, c);
-                    },
+                  );
+                  },
+              ),
+
+              const Text("Toca para abrir. Mantén para marcar 🚩", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const SizedBox(height: 10),
+
+              // GRID
+              Expanded(
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: Colors.grey[900],
+                        borderRadius: BorderRadius.circular(8), 
+                        border: Border.all(color: Colors.grey[700]!, width: 4),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 320, maxHeight: 320),
+                      child: AspectRatio(
+                        aspectRatio: 1, // Square grid
+                        child: GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: rows * cols,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: cols,
+                            crossAxisSpacing: 2,
+                            mainAxisSpacing: 2,
+                          ),
+                          itemBuilder: (context, index) {
+                            final r = index ~/ cols;
+                            final c = index % cols;
+                            return _buildCell(r, c);
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              
+              const SizedBox(height: 20),
+            ],
           ),
-        ),
-        
-        const SizedBox(height: 20),
-      ],
+
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                });
+                _startNewGame();
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                );
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
     );
   }
   

@@ -170,6 +170,14 @@ class GameProvider extends ChangeNotifier {
       debugPrint('Error fetching lives: $e');
     }
   }
+
+  // Sync lives manually (e.g. from PlayerProvider purchase)
+  void syncLives(int newLives) {
+    if (_lives != newLives) {
+      _lives = newLives;
+      notifyListeners();
+    }
+  }
   
   Future<int> loseLife(String userId) async {
     if (_lives <= 0) {

@@ -7,6 +7,9 @@ import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
+import 'game_over_overlay.dart';
+import '../../../mall/screens/shop_screen.dart';
+
 class SlidingPuzzleMinigame extends StatefulWidget {
   final Clue clue;
   final VoidCallback onSuccess;
@@ -30,6 +33,23 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   late Timer _timer;
   int _secondsRemaining = 120; // 2 minutos
   bool _isGameOver = false;
+
+  // Overlay State
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _showShopButton = showShop;
+    });
+  }
   
   @override
   void initState() {
@@ -139,89 +159,32 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
 
   void _loseLife(String reason) async {
     _stopTimer(); // Asegurar que el timer se detiene
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      // USAR HELPER CENTRALIZADO
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
 
       if (!mounted) return;
 
-      // Verificar estado FINAL
       if (newLives <= 0) {
-        _showGameOverDialog();
+        _showOverlayState(
+          title: "GAME OVER", 
+          message: "Te has quedado sin vidas.",
+          retry: false,
+          showShop: true
+        );
       } else {
-        _showTryAgainDialog(reason);
+        _showOverlayState(
+          title: "¡FALLASTE!", 
+          message: "$reason",
+          retry: true,
+          showShop: false
+        );
       }
     }
   }
 
-  void _showTryAgainDialog(String reason) {
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(reason, style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 10),
-            Text("Has perdido 1 vida ❤️\nTe quedan ${gameProvider.lives}", 
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Close Dialog
-              setState(() {
-                _isGameOver = false;
-                _secondsRemaining = 120;
-                _initializePuzzle();
-                _startTimer();
-              });
-            },
-            child: const Text("Reintentar"),
-          ),
-          TextButton(
-            onPressed: () {
-                Navigator.pop(context); // Dialog
-                Navigator.pop(context); // Screen
-            },
-             child: const Text("Salir")
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed, fontSize: 24, fontWeight: FontWeight.bold)),
-        content: const Text("Te has quedado sin vidas. Ve a la Tienda a comprar más.", style: TextStyle(color: Colors.white)),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-               Navigator.pop(context); // Dialog
-               Navigator.pop(context); // Screen
-               // Aquí se podría navegar a la tienda automáticamente
-            },
-            child: const Text("Salir"),
-          )
-        ],
-      ),
-    );
-  }
+  // DIALOGS REMOVED
 
   @override
   void dispose() {
@@ -231,133 +194,176 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
 
   @override
   Widget build(BuildContext context) {
-    final player = Provider.of<PlayerProvider>(context).currentPlayer;
-    
-    return Column(
-      children: [
-        // Status Bar
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {},
+      child: Stack(
+        children: [
+          // GAME CONTENT
+          Column(
             children: [
-              // Vidas
-              Consumer<GameProvider>(
-                builder: (context, game, _) {
-                  return Row(
-                    children: [
-                      const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                      const SizedBox(width: 5),
-                      Text("x${game.lives}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    ],
-                  );
-                }
-              ),
-              // Timer
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _secondsRemaining < 30 ? AppTheme.dangerRed.withOpacity(0.2) : Colors.white10,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _secondsRemaining < 30 ? AppTheme.dangerRed : Colors.white24)
-                ),
+              // Status Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.timer, size: 16, color: _secondsRemaining < 30 ? AppTheme.dangerRed : Colors.white),
-                    const SizedBox(width: 5),
-                    Text(
-                      "${_secondsRemaining ~/ 60}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
-                      style: TextStyle(
-                        color: _secondsRemaining < 30 ? AppTheme.dangerRed : Colors.white, 
-                        fontWeight: FontWeight.bold
-                      )
+                    // Vidas
+                    Consumer<GameProvider>(
+                      builder: (context, game, _) {
+                        return Row(
+                          children: [
+                            const Icon(Icons.favorite, color: AppTheme.dangerRed),
+                            const SizedBox(width: 5),
+                            Text("x${game.lives}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                          ],
+                        );
+                      }
+                    ),
+                    // Timer
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _secondsRemaining < 30 ? AppTheme.dangerRed.withOpacity(0.2) : Colors.white10,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _secondsRemaining < 30 ? AppTheme.dangerRed : Colors.white24)
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.timer, size: 16, color: _secondsRemaining < 30 ? AppTheme.dangerRed : Colors.white),
+                          const SizedBox(width: 5),
+                          Text(
+                            "${_secondsRemaining ~/ 60}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
+                            style: TextStyle(
+                              color: _secondsRemaining < 30 ? AppTheme.dangerRed : Colors.white, 
+                              fontWeight: FontWeight.bold
+                            )
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
+
+              Expanded(
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Container(
+                      margin: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)
+                        ]
+                      ),
+                      child: GridView.builder(
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: gridSize,
+                          crossAxisSpacing: 4,
+                          mainAxisSpacing: 4,
+                        ),
+                        itemCount: tiles.length,
+                        itemBuilder: (context, index) {
+                          final number = tiles[index];
+                          if (number == 0) return const SizedBox.shrink(); // Espacio vacío
+
+                          return GestureDetector(
+                            onTap: () => _onTileTap(index),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryPurple,
+                                borderRadius: BorderRadius.circular(8),
+                                gradient: const LinearGradient(
+                                  colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                   BoxShadow(color: Colors.black.withOpacity(0.2), offset: const Offset(2,2))
+                                ]
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "$number",
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Controles Inferiores
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _showOverlay ? null : _handleGiveUp, // Disable if overlay is up
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.cardBg,
+                      foregroundColor: AppTheme.dangerRed,
+                      side: const BorderSide(color: AppTheme.dangerRed),
+                    ),
+                    icon: const Icon(Icons.flag_outlined),
+                    label: const Text("RENDIRSE"),
+                  ),
+                ),
+              )
             ],
           ),
-        ),
 
-        Expanded(
-          child: Center(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                margin: const EdgeInsets.all(20),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBg,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)
-                  ]
-                ),
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: gridSize,
-                    crossAxisSpacing: 4,
-                    mainAxisSpacing: 4,
-                  ),
-                  itemCount: tiles.length,
-                  itemBuilder: (context, index) {
-                    final number = tiles[index];
-                    if (number == 0) return const SizedBox.shrink(); // Espacio vacío
-
-                    return GestureDetector(
-                      onTap: () => _onTileTap(index),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryPurple,
-                          borderRadius: BorderRadius.circular(8),
-                          gradient: const LinearGradient(
-                            colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                             BoxShadow(color: Colors.black.withOpacity(0.2), offset: const Offset(2,2))
-                          ]
-                        ),
-                        child: Center(
-                          child: Text(
-                            "$number",
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                  _isGameOver = false;
+                  _secondsRemaining = 120;
+                  _initializePuzzle();
+                  _startTimer();
+                });
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                );
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
             ),
-          ),
-        ),
-        
-        // Controles Inferiores
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: _handleGiveUp,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.cardBg,
-                foregroundColor: AppTheme.dangerRed,
-                side: const BorderSide(color: AppTheme.dangerRed),
-              ),
-              icon: const Icon(Icons.flag_outlined),
-              label: const Text("RENDIRSE"),
-            ),
-          ),
-        )
-      ],
+        ],
+      ),
     );
   }
 }

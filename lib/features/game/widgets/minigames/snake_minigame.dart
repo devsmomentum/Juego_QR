@@ -6,7 +6,9 @@ import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
+import 'game_over_overlay.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../mall/screens/shop_screen.dart';
 
 class SnakeMinigame extends StatefulWidget {
   final Clue clue;
@@ -28,6 +30,23 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   // Config
   static const int rows = 20;
   static const int cols = 20;
+
+  // Overlay State
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _showShopButton = showShop;
+    });
+  }
   static const int winScore = 10;
   
   // Game State
@@ -239,75 +258,33 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
   void _loseGlobalLife(String reason, {bool isTimeOut = false}) async {
       _isPlaying = false;
+      _isGameOver = true;
       _gameLoop?.cancel();
       _countdownTimer?.cancel();
       
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
       
       if (playerProvider.currentPlayer != null) {
-          // USAR HELPER CENTRALIZADO
           final newLives = await MinigameLogicHelper.executeLoseLife(context);
 
           if (!mounted) return;
 
-          // Verificar estado FINAL
           if (newLives <= 0) {
-             _showGameOverDialog("Te has quedado sin vidas.");
+             _showOverlayState(
+                title: "GAME OVER", 
+                message: "Te has quedado sin vidas.",
+                retry: false,
+                showShop: true
+             );
           } else {
-             _showRestartDialog(reason);
+             _showOverlayState(
+                title: "¡FALLASTE!", 
+                message: "$reason",
+                retry: true,
+                showShop: false
+             );
           }
       }
-  }
-
-  void _showRestartDialog(String title) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: Text(title, style: const TextStyle(color: AppTheme.dangerRed)),
-        content: const Text("Inténtalo de nuevo.", style: TextStyle(color: Colors.white)),
-        actions: [
-           TextButton(
-            onPressed: () {
-               Navigator.pop(context);
-               _startNewGame(); 
-            },
-            child: const Text("Reintentar"),
-          ),
-          TextButton(
-            onPressed: () {
-               Navigator.pop(context);
-              Navigator.pop(context
-              ); 
-            },
-            child: const Text("Salir"),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-               Navigator.pop(context); 
-               Navigator.pop(context); 
-            },
-            child: const Text("Salir"),
-          ),
-        ],
-      ),
-    );
   }
 
   void _onChangeDirection(Direction newDir) {
@@ -324,174 +301,215 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
     final seconds = (_secondsRemaining % 60).toString().padLeft(2, '0');
     final isLowTime = _secondsRemaining <= 10;
     
-    return Column(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {},
+      child: Stack(
         children: [
-            // Header Info
-            // Header Info reducido
-            Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Row(
-                    children: [
-                        // Score
-                        Expanded(
-                          child: Container(
-                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                               decoration: BoxDecoration(
-                                 color: Colors.black45,
-                                 borderRadius: BorderRadius.circular(15),
-                                 border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
-                               ),
-                               child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text("🍎", style: TextStyle(fontSize: 16)),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      "$_score / $winScore", 
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)
-                                    ),
-                                  ],
-                               ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Intentos
-                        Container(
-                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                             child: Row(
-                                 mainAxisSize: MainAxisSize.min,
-                                 children: List.generate(3, (index) {
-                                   return Icon(
-                                       index < _crashAllowance ? Icons.flash_on : Icons.flash_off,
-                                       color: index < _crashAllowance ? AppTheme.accentGold : Colors.white24,
-                                       size: 18,
-                                   );
-                                 }),
-                             ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Timer
-                        Expanded(
-                          child: Container(
-                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                               decoration: BoxDecoration(
-                                 color: isLowTime ? AppTheme.dangerRed.withOpacity(0.2) : Colors.black45,
-                                 borderRadius: BorderRadius.circular(15),
-                                 border: Border.all(color: isLowTime ? AppTheme.dangerRed : Colors.white12),
-                               ),
-                               child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.timer_outlined, color: isLowTime ? AppTheme.dangerRed : Colors.white70, size: 16),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      "$minutes:$seconds", 
-                                      style: TextStyle(
-                                        color: isLowTime ? AppTheme.dangerRed : Colors.white, 
-                                        fontWeight: FontWeight.bold, 
-                                        fontSize: 14
-                                      )
-                                    ),
-                                  ],
-                               ),
-                          ),
-                        ),
-                    ],
-                ),
-            ),
-             
-            const SizedBox(height: 10),
-
-            Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Center(
-                      child: GestureDetector(
-                          onPanEnd: (details) {
-                              final velocity = details.velocity.pixelsPerSecond;
-                              if (velocity.distance < 100) return; 
-
-                              if (velocity.dx.abs() > velocity.dy.abs()) {
-                                  if (velocity.dx > 0) _onChangeDirection(Direction.right);
-                                  else _onChangeDirection(Direction.left);
-                              } else {
-                                  if (velocity.dy > 0) _onChangeDirection(Direction.down);
-                                  else _onChangeDirection(Direction.up);
-                              }
-                          },
-                          child: AspectRatio(
-                              aspectRatio: cols / rows,
-                              child: Container(
-                                  decoration: BoxDecoration(
-                                      color: const Color(0xFF121212),
-                                      border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.4), width: 3),
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.15), blurRadius: 30, spreadRadius: 5)
-                                      ]
-                                  ),
-                                  child: LayoutBuilder(
-                                      builder: (context, constraints) {
-                                          final cellSize = constraints.maxWidth / cols;
-                                          return Stack(
-                                              clipBehavior: Clip.none,
-                                              children: [
-                                                  CustomPaint(
-                                                    size: Size(constraints.maxWidth, constraints.maxHeight),
-                                                    painter: GridPainter(rows, cols, Colors.white.withOpacity(0.04)),
-                                                  ),
-                                                  
-                                                  if (_food != null)
-                                                      Positioned(
-                                                          left: _food!.x * cellSize,
-                                                          top: _food!.y * cellSize,
-                                                          child: SizedBox(
-                                                              width: cellSize,
-                                                              height: cellSize,
-                                                              child: Center(
-                                                                child: Text("🍎", style: TextStyle(fontSize: cellSize * 1.0)),
-                                                              ),
-                                                          ),
-                                                      ),
-                                                  
-                                                  ..._snake.asMap().entries.map((entry) {
-                                                      final index = entry.key;
-                                                      final part = entry.value;
-                                                      final isHead = index == 0;
-                                                      
-                                                      return Positioned(
-                                                          left: part.x * cellSize,
-                                                          top: part.y * cellSize,
-                                                          child: Container(
-                                                              width: cellSize,
-                                                              height: cellSize,
-                                                              margin: const EdgeInsets.all(0.5),
-                                                              decoration: BoxDecoration(
-                                                                  color: isHead ? AppTheme.successGreen : Colors.greenAccent[700],
-                                                                  borderRadius: BorderRadius.circular(isHead ? 4 : 2),
-                                                              ),
-                                                              child: isHead ? _buildHeadEyes(cellSize) : null,
-                                                          ),
-                                                      );
-                                                  }),
-
-                                                  if (_showingPreStart)
-                                                    _buildPreStartOverlay(cellSize),
-                                              ],
-                                          );
-                                      },
-                                  ),
+          // 1. GAME CONTENT (Wrapped in Column as before)
+          Column(
+              children: [
+                  // Header Info reducido
+                  Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Row(
+                          children: [
+                              // Score
+                              Expanded(
+                                child: Container(
+                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                     decoration: BoxDecoration(
+                                       color: Colors.black45,
+                                       borderRadius: BorderRadius.circular(15),
+                                       border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+                                     ),
+                                     child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text("🍎", style: TextStyle(fontSize: 16)),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            "$_score / $winScore", 
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)
+                                          ),
+                                        ],
+                                     ),
+                                ),
                               ),
-                          ),
+                              const SizedBox(width: 8),
+                              // Intentos
+                              Container(
+                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                   child: Row(
+                                       mainAxisSize: MainAxisSize.min,
+                                       children: List.generate(3, (index) {
+                                         return Icon(
+                                             index < _crashAllowance ? Icons.flash_on : Icons.flash_off,
+                                             color: index < _crashAllowance ? AppTheme.accentGold : Colors.white24,
+                                             size: 18,
+                                         );
+                                       }),
+                                   ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Timer
+                              Expanded(
+                                child: Container(
+                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                     decoration: BoxDecoration(
+                                       color: isLowTime ? AppTheme.dangerRed.withOpacity(0.2) : Colors.black45,
+                                       borderRadius: BorderRadius.circular(15),
+                                       border: Border.all(color: isLowTime ? AppTheme.dangerRed : Colors.white12),
+                                     ),
+                                     child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.timer_outlined, color: isLowTime ? AppTheme.dangerRed : Colors.white70, size: 16),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            "$minutes:$seconds", 
+                                            style: TextStyle(
+                                              color: isLowTime ? AppTheme.dangerRed : Colors.white, 
+                                              fontWeight: FontWeight.bold, 
+                                              fontSize: 14
+                                            )
+                                          ),
+                                        ],
+                                     ),
+                                ),
+                              ),
+                          ],
                       ),
                   ),
-                ),
+                   
+                  const SizedBox(height: 10),
+
+                  Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Center(
+                            child: GestureDetector(
+                                onPanEnd: (details) {
+                                    final velocity = details.velocity.pixelsPerSecond;
+                                    if (velocity.distance < 100) return; 
+
+                                    if (velocity.dx.abs() > velocity.dy.abs()) {
+                                        if (velocity.dx > 0) _onChangeDirection(Direction.right);
+                                        else _onChangeDirection(Direction.left);
+                                    } else {
+                                        if (velocity.dy > 0) _onChangeDirection(Direction.down);
+                                        else _onChangeDirection(Direction.up);
+                                    }
+                                },
+                                child: AspectRatio(
+                                    aspectRatio: cols / rows,
+                                    child: Container(
+                                        decoration: BoxDecoration(
+                                            color: const Color(0xFF121212),
+                                            border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.4), width: 3),
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.15), blurRadius: 30, spreadRadius: 5)
+                                            ]
+                                        ),
+                                        child: LayoutBuilder(
+                                            builder: (context, constraints) {
+                                                final cellSize = constraints.maxWidth / cols;
+                                                return Stack(
+                                                    clipBehavior: Clip.none,
+                                                    children: [
+                                                        CustomPaint(
+                                                          size: Size(constraints.maxWidth, constraints.maxHeight),
+                                                          painter: GridPainter(rows, cols, Colors.white.withOpacity(0.04)),
+                                                        ),
+                                                        
+                                                        if (_food != null)
+                                                            Positioned(
+                                                                left: _food!.x * cellSize,
+                                                                top: _food!.y * cellSize,
+                                                                child: SizedBox(
+                                                                    width: cellSize,
+                                                                    height: cellSize,
+                                                                    child: Center(
+                                                                      child: Text("🍎", style: TextStyle(fontSize: cellSize * 1.0)),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        
+                                                        ..._snake.asMap().entries.map((entry) {
+                                                            final index = entry.key;
+                                                            final part = entry.value;
+                                                            final isHead = index == 0;
+                                                            
+                                                            return Positioned(
+                                                                left: part.x * cellSize,
+                                                                top: part.y * cellSize,
+                                                                child: Container(
+                                                                    width: cellSize,
+                                                                    height: cellSize,
+                                                                    margin: const EdgeInsets.all(0.5),
+                                                                    decoration: BoxDecoration(
+                                                                        color: isHead ? AppTheme.successGreen : Colors.greenAccent[700],
+                                                                        borderRadius: BorderRadius.circular(isHead ? 4 : 2),
+                                                                    ),
+                                                                    child: isHead ? _buildHeadEyes(cellSize) : null,
+                                                                ),
+                                                            );
+                                                        }),
+
+                                                        if (_showingPreStart)
+                                                          _buildPreStartOverlay(cellSize),
+                                                    ],
+                                                );
+                                            },
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                      ),
+                  ),
+                  
+                  // CONTROLES D-PAD COMPACTOS
+                  if (!_showOverlay) _buildDPad(),
+                  const SizedBox(height: 10),
+              ],
+          ),
+
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                });
+                _startNewGame();
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                );
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
             ),
-            
-            // CONTROLES D-PAD COMPACTOS
-            _buildDPad(),
-            const SizedBox(height: 10),
         ],
+      ),
     );
   }
 

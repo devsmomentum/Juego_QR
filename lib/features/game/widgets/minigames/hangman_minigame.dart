@@ -7,6 +7,9 @@ import '../../../auth/providers/player_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../providers/game_provider.dart';
 
+import 'game_over_overlay.dart';
+import '../../../mall/screens/shop_screen.dart';
+
 class HangmanMinigame extends StatefulWidget {
   final Clue clue;
   final VoidCallback onSuccess;
@@ -34,6 +37,25 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
   // Timer
   Timer? _timer;
   int _secondsRemaining = 120;
+
+  // Overlay State
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _isVictory = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool victory = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _isVictory = victory;
+      _showShopButton = showShop;
+    });
+  }
 
   @override
   void initState() {
@@ -133,338 +155,333 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
 
   // hangman_minigame.dart
 
-void _loseLife(String reason) async {
-  if (!mounted) return;
-  _stopTimer();
-  
-  final gameProvider = Provider.of<GameProvider>(context, listen: false);
-  final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-  
-  final userId = playerProvider.currentPlayer?.userId;
-  
-  if (userId != null) {
-     if (gameProvider.currentEventId == null) {
-       debugPrint("WARN: Minijuego sin Event ID");
-    }
-
-    // USAR HELPER CENTRALIZADO
-    final newLives = await MinigameLogicHelper.executeLoseLife(context);
-
+  void _loseLife(String reason) async {
     if (!mounted) return;
+    _stopTimer();
+    setState(() => _isGameOver = true);
     
-    // Verificar estado FINAL (Usando valor definitivo)
-    if (newLives <= 0) {
-      _showGameOverDialog();
-    } else {
-      _showTryAgainDialog(reason);
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    final userId = playerProvider.currentPlayer?.userId;
+    
+    if (userId != null) {
+       if (gameProvider.currentEventId == null) {
+         debugPrint("WARN: Minijuego sin Event ID");
+      }
+
+      final newLives = await MinigameLogicHelper.executeLoseLife(context);
+
+      if (!mounted) return;
+      
+      if (newLives <= 0) {
+        _showOverlayState(
+          title: "GAME OVER", 
+          message: "Te has quedado sin vidas.",
+          retry: false,
+          showShop: true
+        );
+      } else {
+        _showOverlayState(
+          title: "¡FALLASTE!", 
+          message: "$reason",
+          retry: true,
+          showShop: false
+        );
+      }
     }
   }
-}
 
-  void _showTryAgainDialog(String reason) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(reason, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
-            const SizedBox(height: 10),
-            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Close Dialog
-              setState(() {
-                _initializeGame();
-              });
-            },
-            child: const Text("Reintentar"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Dialog
-              Navigator.pop(context); // Screen
-            },
-            child: const Text("Salir"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed, fontSize: 24, fontWeight: FontWeight.bold)),
-        content: const Text("Te has quedado sin vidas. Ve a la Tienda a comprar más.", style: TextStyle(color: Colors.white)),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Dialog
-              Navigator.pop(context); // Screen
-            },
-            child: const Text("Salir"),
-          )
-        ],
-      ),
-    );
-  }
+  // DIALOGS REMOVED
 
   @override
   Widget build(BuildContext context) {
-    final player = Provider.of<PlayerProvider>(context).currentPlayer;
+    // final player = Provider.of<PlayerProvider>(context).currentPlayer; // unused in build
 
-    // Usamos SingleChildScrollView para permitir scroll si el contenido es muy alto
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {},
+      child: Stack(
         children: [
-          // Status Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // GAME CONTENT
+          SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Column(
               children: [
-                // Vidas
-                Consumer<GameProvider>(
-                  builder: (context, game, _) {
-                    return Row(
-                      children: [
-                        const Icon(Icons.favorite, color: AppTheme.dangerRed, size: 24),
-                        const SizedBox(width: 5),
-                        Text("x${game.lives}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
-                    );
-                  }
-                ),
-                
-                // Timer
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _secondsRemaining <= 10 ? AppTheme.dangerRed.withOpacity(0.2) : Colors.white10,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _secondsRemaining <= 10 ? AppTheme.dangerRed : Colors.white24)
-                  ),
+                // Status Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.timer, size: 18, color: _secondsRemaining <= 10 ? AppTheme.dangerRed : Colors.white),
-                      const SizedBox(width: 5),
-                      Text(
-                        "$_secondsRemaining s",
-                        style: TextStyle(
-                          color: _secondsRemaining <= 10 ? AppTheme.dangerRed : Colors.white, 
-                          fontWeight: FontWeight.bold, 
-                          fontSize: 14
+                      // Vidas
+                      Consumer<GameProvider>(
+                        builder: (context, game, _) {
+                          return Row(
+                            children: [
+                              const Icon(Icons.favorite, color: AppTheme.dangerRed, size: 24),
+                              const SizedBox(width: 5),
+                              Text("x${game.lives}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                            ],
+                          );
+                        }
+                      ),
+                      
+                      // Timer
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _secondsRemaining <= 10 ? AppTheme.dangerRed.withOpacity(0.2) : Colors.white10,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _secondsRemaining <= 10 ? AppTheme.dangerRed : Colors.white24)
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.timer, size: 18, color: _secondsRemaining <= 10 ? AppTheme.dangerRed : Colors.white),
+                            const SizedBox(width: 5),
+                            Text(
+                              "$_secondsRemaining s",
+                              style: TextStyle(
+                                color: _secondsRemaining <= 10 ? AppTheme.dangerRed : Colors.white, 
+                                fontWeight: FontWeight.bold, 
+                                fontSize: 14
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Intentos
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _wrongAttempts >= _maxAttempts - 1 ? AppTheme.dangerRed : Colors.white24)
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, size: 18, color: AppTheme.warningOrange),
+                            const SizedBox(width: 5),
+                            Text(
+                              "$_wrongAttempts/$_maxAttempts",
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+            
+                const Text(
+                  "AHORCADO",
+                  style: TextStyle(color: AppTheme.accentGold, fontSize: 20, fontWeight: FontWeight.bold),
+                ),
 
-                // Intentos
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _wrongAttempts >= _maxAttempts - 1 ? AppTheme.dangerRed : Colors.white24)
+                // Pista
+                if (widget.clue.riddleQuestion != null && widget.clue.riddleQuestion!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentGold.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.lightbulb_outline, color: AppTheme.accentGold, size: 18),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              "Pista: ${widget.clue.riddleQuestion}",
+                              style: const TextStyle(color: Colors.white, fontStyle: FontStyle.italic, fontSize: 14),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Row(
+                
+                // Área de Dibujo y Palabra
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBg.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.warning_amber_rounded, size: 18, color: AppTheme.warningOrange),
-                      const SizedBox(width: 5),
-                      Text(
-                        "$_wrongAttempts/$_maxAttempts",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      // Dibujo del Ahorcado
+                      SizedBox(
+                        height: 150,
+                        width: 150,
+                        child: CustomPaint(
+                          painter: HangmanPainter(_wrongAttempts),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Palabra Oculta (Ultra-Compact Word-Aware)
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: _word.split(' ').map((word) {
+                          return Wrap(
+                            spacing: 2, // Tiny spacing
+                            runSpacing: 4,
+                            children: word.split('').map((char) {
+                              final isGuessed = _guessedLetters.contains(char);
+                              return Container(
+                                width: 24, // Ultra narrow (was 28)
+                                height: 34, // Slightly shorter
+                                decoration: BoxDecoration(
+                                  border: Border(bottom: BorderSide(
+                                    color: isGuessed ? AppTheme.accentGold : Colors.white54,
+                                    width: 2,
+                                  )),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    isGuessed ? char : '',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18, // Reduced font
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          );
+                        }).toList(),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-      
-          const Text(
-            "AHORCADO",
-            style: TextStyle(color: AppTheme.accentGold, fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-
-          // Pista
-          if (widget.clue.riddleQuestion != null && widget.clue.riddleQuestion!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppTheme.accentGold.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.lightbulb_outline, color: AppTheme.accentGold, size: 18),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        "Pista: ${widget.clue.riddleQuestion}",
-                        style: const TextStyle(color: Colors.white, fontStyle: FontStyle.italic, fontSize: 14),
-                        textAlign: TextAlign.center,
-                      ),
+            
+                // Teclado
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: GridView.builder(
+                    shrinkWrap: true, // Allow it to take necessary size
+                    physics: const NeverScrollableScrollPhysics(), // Scroll handled by parent
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      childAspectRatio: 0.85,
+                      crossAxisSpacing: 5,
+                      mainAxisSpacing: 5,
                     ),
-                  ],
-                ),
-              ),
-            ),
-          
-          // Área de Dibujo y Palabra
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.cardBg.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Dibujo del Ahorcado
-                SizedBox(
-                  height: 150,
-                  width: 150,
-                  child: CustomPaint(
-                    painter: HangmanPainter(_wrongAttempts),
-                  ),
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Palabra Oculta (Ultra-Compact Word-Aware)
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: _word.split(' ').map((word) {
-                    return Wrap(
-                      spacing: 2, // Tiny spacing
-                      runSpacing: 4,
-                      children: word.split('').map((char) {
-                        final isGuessed = _guessedLetters.contains(char);
-                        return Container(
-                          width: 24, // Ultra narrow (was 28)
-                          height: 34, // Slightly shorter
+                    itemCount: 26,
+                    itemBuilder: (context, index) {
+                      final letter = String.fromCharCode(65 + index);
+                      final isGuessed = _guessedLetters.contains(letter);
+                      final isCorrect = _word.contains(letter);
+                      
+                      Color bgColor = Colors.white10;
+                      Color textColor = Colors.white;
+                      
+                      if (isGuessed) {
+                        if (isCorrect) {
+                          bgColor = AppTheme.successGreen;
+                          textColor = Colors.black;
+                        } else {
+                          bgColor = Colors.black38;
+                          textColor = Colors.grey;
+                        }
+                      }
+            
+                      return GestureDetector(
+                        onTap: isGuessed ? null : () => _onLetterGuess(letter),
+                        child: Container(
                           decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(
-                              color: isGuessed ? AppTheme.accentGold : Colors.white54,
-                              width: 2,
-                            )),
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isGuessed ? Colors.transparent : Colors.white24,
+                            ),
                           ),
                           child: Center(
                             child: Text(
-                              isGuessed ? char : '',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18, // Reduced font
+                              letter,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                        );
-                      }).toList(),
-                    );
-                  }).toList(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+            
+                // Botón Rendirse
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 45,
+                    child: ElevatedButton.icon(
+                      onPressed: _showOverlay ? null : _handleGiveUp, // Disable if overlay is up
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.cardBg,
+                        foregroundColor: AppTheme.dangerRed,
+                        side: const BorderSide(color: AppTheme.dangerRed),
+                      ),
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text("RENDIRSE"),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-      
-          // Teclado
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: GridView.builder(
-              shrinkWrap: true, // Allow it to take necessary size
-              physics: const NeverScrollableScrollPhysics(), // Scroll handled by parent
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: 0.85,
-                crossAxisSpacing: 5,
-                mainAxisSpacing: 5,
-              ),
-              itemCount: 26,
-              itemBuilder: (context, index) {
-                final letter = String.fromCharCode(65 + index);
-                final isGuessed = _guessedLetters.contains(letter);
-                final isCorrect = _word.contains(letter);
-                
-                Color bgColor = Colors.white10;
-                Color textColor = Colors.white;
-                
-                if (isGuessed) {
-                  if (isCorrect) {
-                    bgColor = AppTheme.successGreen;
-                    textColor = Colors.black;
-                  } else {
-                    bgColor = Colors.black38;
-                    textColor = Colors.grey;
-                  }
-                }
-      
-                return GestureDetector(
-                  onTap: isGuessed ? null : () => _onLetterGuess(letter),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isGuessed ? Colors.transparent : Colors.white24,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        letter,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
+
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              isVictory: _isVictory,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                  _initializeGame();
+                });
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
                 );
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
               },
             ),
-          ),
-          
-          const SizedBox(height: 20),
-      
-          // Botón Rendirse
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 45,
-              child: ElevatedButton.icon(
-                onPressed: _handleGiveUp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.cardBg,
-                  foregroundColor: AppTheme.dangerRed,
-                  side: const BorderSide(color: AppTheme.dangerRed),
-                ),
-                icon: const Icon(Icons.flag_outlined),
-                label: const Text("RENDIRSE"),
-              ),
-            ),
-          ),
         ],
       ),
     );

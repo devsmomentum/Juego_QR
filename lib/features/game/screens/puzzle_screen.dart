@@ -34,7 +34,9 @@ import '../widgets/loss_flash_overlay.dart';
 import '../widgets/success_celebration_dialog.dart';
 import '../../../shared/widgets/time_stamp_animation.dart';
 import '../widgets/mission_briefing_overlay.dart';
+import '../widgets/mission_briefing_overlay.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../widgets/no_lives_widget.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -284,7 +286,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       
       if (gameProvider.lives <= 0 && freshPlayerLives <= 0) {
         if (!mounted) return;
-        _showNoLivesDialog();
+        // _showNoLivesDialog();
         // DO NOT start monitoring if we are dead.
       } else {
         debugPrint("SYNC INFO: Vidas encontradas (Game: ${gameProvider.lives}, Player: $freshPlayerLives). Juego permitido.");
@@ -294,37 +296,37 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
   }
 
-  void _showNoLivesDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¡Sin vidas!", style: TextStyle(color: Colors.white)),
-        content: const Text(
-            "Te has quedado sin vidas. Necesitas comprar más en la tienda para continuar jugando.",
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close screen
-            },
-            child: const Text("Entendido"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); 
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen()));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold),
-            child: const Text("Comprar Vidas", style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
-  }
+  // void _showNoLivesDialog() {
+  //   showDialog(
+  //     context: context,
+  //     barrierDismissible: false,
+  //     builder: (context) => AlertDialog(
+  //       backgroundColor: AppTheme.cardBg,
+  //       title: const Text("¡Sin vidas!", style: TextStyle(color: Colors.white)),
+  //       content: const Text(
+  //           "Te has quedado sin vidas. Necesitas comprar más en la tienda para continuar jugando.",
+  //           style: TextStyle(color: Colors.white70)),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () {
+  //             Navigator.pop(context); // Close dialog
+  //             Navigator.pop(context); // Close screen
+  //           },
+  //           child: const Text("Entendido"),
+  //         ),
+  //         ElevatedButton(
+  //           onPressed: () {
+  //             Navigator.pop(context); 
+  //             Navigator.pop(context);
+  //             Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen()));
+  //           },
+  //           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold),
+  //           child: const Text("Comprar Vidas", style: TextStyle(color: Colors.black)),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   @override
   void deactivate() {
@@ -391,51 +393,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       // Retornar contenedor negro con aviso
       // Nota: El diálogo _showNoLivesDialog ya se muestra en initState/checkLives,
       // pero aquí aseguramos que no se renderice el juego.
-      return Container(
-        color: Colors.black,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.heart_broken,
-                  color: AppTheme.dangerRed, size: 64),
-              const SizedBox(height: 20),
-              const Text(
-                "¡SIN VIDAS!",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "No puedes jugar sin vidas.",
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-              const SizedBox(height: 30),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen()));
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                ),
-                child:
-                    const Text("Comprar Vidas", style: TextStyle(color: Colors.black)),
-              ),
-            ],
-          ),
-        ),
-      );
+    if ((gameProvider.lives <= 0 || forcedBlock) && !_legalExit) {
+      // Usar el widget reutilizable que contiene el diseño exacto solicitado
+      return const NoLivesWidget();
+    }
     }
 
     Widget gameWidget;

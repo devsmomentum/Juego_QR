@@ -75,7 +75,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       if (successCount > 0) {
         // Actualizar vidas si es necesario
         if (item.id == 'extra_life') {
-          await gameProvider.fetchLives(playerProvider.currentPlayer!.userId);
+          // Usar syncLives para actualización inmediata sin red adicional
+          // El PlayerProvider ya tiene el valor correcto tras la compra exitosa
+          final newLives = playerProvider.currentPlayer?.lives ?? 3;
+          gameProvider.syncLives(newLives); 
         }
 
         if (!mounted) return;
@@ -147,25 +150,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           ),
                           Row(
                             children: [
-                              // Vidas
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.dangerRed.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(color: AppTheme.dangerRed.withOpacity(0.5))
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.favorite, size: 14, color: AppTheme.dangerRed),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      "${player?.lives ?? 0}",
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
-                              ),
+
                               const SizedBox(width: 8),
                               // Monedas
                               Container(
@@ -211,7 +196,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                             final bool isPower = item.type != PowerType.utility && item.id != 'extra_life';
                             final int? ownedCount = (eventId != null && isPower)
                                 ? playerProvider.getPowerCount(item.id, eventId)
-                                : (item.id == 'extra_life' ? (player?.lives ?? 0) : null);
+                                : (item.id == 'extra_life' ? gameProvider.lives : null);
 
                             return ShopItemCard(
                               item: item,

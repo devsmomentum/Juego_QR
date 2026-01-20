@@ -8,7 +8,8 @@ import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import 'package:audioplayers/audioplayers.dart';
-import '../game_over_dialog.dart';
+import 'game_over_overlay.dart';
+import '../../../mall/screens/shop_screen.dart';
 
 class TetrisMinigame extends StatefulWidget {
   final Clue clue;
@@ -38,11 +39,28 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
   // Estado del juego
   Timer? _timer;
   int _score = 0;
-  int _targetScore = 1500; // Puntos para ganar
+  int _targetScore = 1000; // Puntos para ganar
   bool _isGameOver = false;
   bool _isPaused = false;
   int _level = 1;
   int _linesCleared = 0;
+
+  // Overlay State
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _showShopButton = showShop;
+    });
+  }
   
   // Audio
   late AudioPlayer _audioPlayer;
@@ -344,72 +362,33 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
   
   void _loseLife(String reason) async {
     _timer?.cancel();
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    _stopMusic();
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      // USAR HELPER CENTRALIZADO
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
       
       if (!mounted) return;
       
-      // Verificar estado FINAL
       if (newLives <= 0) {
-        _showGameOverDialog();
+        _showOverlayState(
+          title: "GAME OVER", 
+          message: "Te has quedado sin vidas.",
+          retry: false,
+          showShop: true
+        );
       } else {
-        _showTryAgainDialog(reason);
+        _showOverlayState(
+          title: "¡FALLASTE!", 
+          message: "$reason",
+          retry: true,
+          showShop: false
+        );
       }
     }
   }
 
-  void _showTryAgainDialog(String reason) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(reason, style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 10),
-            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _startGame();
-            },
-            child: const Text("Reintentar"),
-          ),
-          TextButton(
-            onPressed: () {
-                Navigator.pop(context); // Dialog
-                Navigator.pop(context); // Screen
-            },
-             child: const Text("Salir")
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => GameOverDialog(
-        reason: "Te has quedado sin vidas. Ve a la Tienda a comprar más.",
-        onExit: () {
-          Navigator.pop(context); // Dialog
-          Navigator.pop(context); // Screen
-        },
-      ),
-    );
-  }
+  // DIALOGS REMOVED
 
   @override
   void dispose() {
@@ -422,150 +401,192 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
   Widget build(BuildContext context) {
     final player = Provider.of<PlayerProvider>(context).currentPlayer;
 
-    return Column(
-      children: [
-        // Status Bar
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {},
+      child: Stack(
+        children: [
+          // GAME CONTENT
+          Column(
             children: [
-              // Vidas
-              Row(
-                children: [
-                   IconButton(
-                    icon: Icon(_isMusicPlaying ? Icons.music_note : Icons.music_off, color: Colors.white54),
-                    onPressed: () => _isMusicPlaying ? _stopMusic() : _playMusic(),
-                  ),
-                  const SizedBox(width: 5),
-                  const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                  const SizedBox(width: 5),
-                  Text("x${player?.lives ?? 0}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
+              // Status Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Vidas
+                    Row(
+                      children: [
+                         IconButton(
+                          icon: Icon(_isMusicPlaying ? Icons.music_note : Icons.music_off, color: Colors.white54),
+                          onPressed: () => _isMusicPlaying ? _stopMusic() : _playMusic(),
+                        ),
+                        const SizedBox(width: 5),
+                        const Icon(Icons.favorite, color: AppTheme.dangerRed),
+                        const SizedBox(width: 5),
+                        Text("x${player?.lives ?? 0}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    // Score & Target
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text("Puntos: $_score / $_targetScore", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        Text("Nivel: $_level", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              // Score & Target
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text("Puntos: $_score / $_targetScore", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text("Nivel: $_level", style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
+          
+              const Text(
+                "TETRIS CHALLENGE",
+                style: TextStyle(color: AppTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
               ),
-            ],
-          ),
-        ),
-
-        const Text(
-          "TETRIS CHALLENGE",
-          style: TextStyle(color: AppTheme.accentGold, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 5),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            widget.clue.riddleQuestion ?? "Consigue los puntos para ganar",
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // Game Board & Next Piece Sidebar
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Main Board
+              const SizedBox(height: 5),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  widget.clue.riddleQuestion ?? "Consigue los puntos para ganar",
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 10),
+          
+              // Game Board & Next Piece Sidebar
               Expanded(
-                flex: 3,
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: columns / rows,
-                    child: Container(
-                      margin: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        border: Border.all(color: Colors.white24, width: 2),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.1), blurRadius: 20)
-                        ]
-                      ),
-                      child: Column(
-                        children: List.generate(rows, (y) {
-                          return Expanded(
-                            child: Row(
-                              children: List.generate(columns, (x) {
-                                Color? color = board[y][x];
-                                
-                                bool isCurrentPiece = false;
-                                for (var p in currentPiece) {
-                                  if (currentPiecePosition.y + p.y == y && currentPiecePosition.x + p.x == x) {
-                                    color = currentPieceColor;
-                                    isCurrentPiece = true;
-                                    break;
-                                  }
-                                }
-
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Main Board
+                    Expanded(
+                      flex: 3,
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: columns / rows,
+                          child: Container(
+                            margin: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              border: Border.all(color: Colors.white24, width: 2),
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(color: AppTheme.primaryPurple.withOpacity(0.1), blurRadius: 20)
+                              ]
+                            ),
+                            child: Column(
+                              children: List.generate(rows, (y) {
                                 return Expanded(
-                                  child: Container(
-                                    margin: const EdgeInsets.all(0.5),
-                                    decoration: BoxDecoration(
-                                      color: color ?? Colors.white.withOpacity(0.02),
-                                      borderRadius: BorderRadius.circular(1),
-                                      border: isCurrentPiece || color != null 
-                                        ? Border.all(color: Colors.white.withOpacity(0.3), width: 0.5) 
-                                        : null,
-                                    ),
+                                  child: Row(
+                                    children: List.generate(columns, (x) {
+                                      Color? color = board[y][x];
+                                      
+                                      bool isCurrentPiece = false;
+                                      for (var p in currentPiece) {
+                                        if (currentPiecePosition.y + p.y == y && currentPiecePosition.x + p.x == x) {
+                                          color = currentPieceColor;
+                                          isCurrentPiece = true;
+                                          break;
+                                        }
+                                      }
+          
+                                      return Expanded(
+                                        child: Container(
+                                          margin: const EdgeInsets.all(0.5),
+                                          decoration: BoxDecoration(
+                                            color: color ?? Colors.white.withOpacity(0.02),
+                                            borderRadius: BorderRadius.circular(1),
+                                            border: isCurrentPiece || color != null 
+                                              ? Border.all(color: Colors.white.withOpacity(0.3), width: 0.5) 
+                                              : null,
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                   ),
                                 );
                               }),
                             ),
-                          );
-                        }),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    
+                    // Right Sidebar (Next Piece)
+                    Expanded(
+                      flex: 1,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 20, right: 10),
+                        child: Column(
+                          children: [
+                            const Text("SIGUIENTE", style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 10),
+                            _buildNextPiecePreview(),
+                            const Spacer(),
+                            // Score info
+                            _buildMiniStat("LVL", "$_level"),
+                            const SizedBox(height: 10),
+                            _buildMiniStat("LINES", "$_linesCleared"),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              
-              // Right Sidebar (Next Piece)
-              Expanded(
-                flex: 1,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 20, right: 10),
-                  child: Column(
-                    children: [
-                      const Text("SIGUIENTE", style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 10),
-                      _buildNextPiecePreview(),
-                      const Spacer(),
-                      // Score info
-                      _buildMiniStat("LVL", "$_level"),
-                      const SizedBox(height: 10),
-                      _buildMiniStat("LINES", "$_linesCleared"),
-                    ],
-                  ),
+          
+              // Controls
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20, top: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildControlBtn(Icons.arrow_back, _moveLeft),
+                    _buildControlBtn(Icons.rotate_right, _rotate, color: AppTheme.accentGold),
+                    _buildControlBtn(Icons.arrow_downward, _moveDown), // Soft drop
+                    _buildControlBtn(Icons.arrow_forward, _moveRight),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
 
-        // Controls
-        Padding(
-          padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20, top: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildControlBtn(Icons.arrow_back, _moveLeft),
-              _buildControlBtn(Icons.rotate_right, _rotate, color: AppTheme.accentGold),
-              _buildControlBtn(Icons.arrow_downward, _moveDown), // Soft drop
-              _buildControlBtn(Icons.arrow_forward, _moveRight),
-            ],
-          ),
-        ),
-      ],
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                });
+                _startGame();
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                );
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
     );
   }
 

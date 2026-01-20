@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import 'store_detail_screen.dart';
 import '../providers/store_provider.dart';
 import '../../game/providers/game_provider.dart';
+import '../../auth/providers/player_provider.dart'; // Added Import
 
 class MallScreen extends StatefulWidget {
   const MallScreen({super.key});
@@ -17,11 +18,22 @@ class _MallScreenState extends State<MallScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
-      if (gameProvider.currentEventId != null) {
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      
+      // 1. Refresh basic profile (coins, lives)
+      await playerProvider.refreshProfile();
+
+      // 2. Fetch specific event inventory (power counts for shop validation)
+      // This populates the _eventInventories map used by getPowerCount
+      if (gameProvider.currentEventId != null && playerProvider.currentPlayer != null) {
         storeProvider.fetchStores(gameProvider.currentEventId!);
+        playerProvider.fetchInventory(
+          playerProvider.currentPlayer!.userId, 
+          gameProvider.currentEventId!
+        );
       }
     });
   }

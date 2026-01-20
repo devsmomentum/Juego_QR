@@ -7,6 +7,8 @@ import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../providers/game_provider.dart';
+import 'game_over_overlay.dart';
+import '../../../mall/screens/shop_screen.dart';
 
 class FlagsMinigame extends StatefulWidget {
   final Clue clue;
@@ -169,225 +171,239 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     }
   }
 
+  // State for overlay
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _isVictory = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool victory = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _isVictory = victory;
+      _showShopButton = showShop;
+    });
+  }
+
   void _loseGlobalLife(String reason, {bool timeOut = false}) async {
     _timer?.cancel();
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
+    // Stop interaction immediately
+    setState(() => _isGameOver = true);
+
     if (playerProvider.currentPlayer != null) {
-      // USAR HELPER CENTRALIZADO
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
 
       if (!mounted) return;
 
-      // Verificar estado FINAL
       if (newLives <= 0) {
-         _showGameOverDialog("Te has quedado sin vidas globales.");
+         _showOverlayState(
+            title: "GAME OVER", 
+            message: "Te has quedado sin vidas globales.\n$reason",
+            retry: false,
+            showShop: true
+         );
       } else {
-         _showTryAgainDialog(reason);
+         _showOverlayState(
+            title: "¡FALLASTE!", 
+            message: "$reason\nHas perdido 1 vida.",
+            retry: true,
+            showShop: false
+         );
       }
     }
   }
 
-  void _showTryAgainDialog(String reason) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¡Fallaste!", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(reason, style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 10),
-            const Text("Has perdido 1 vida ❤️", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _startNewGame();
-            },
-            child: const Text("Reintentar"),
-          ),
-          TextButton(
-            onPressed: () {
-               Navigator.pop(context); // Dialog
-               Navigator.pop(context); // Screen
-            },
-            child: const Text("Salir"),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("GAME OVER", style: TextStyle(color: AppTheme.dangerRed)),
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-               Navigator.pop(context); // Dialog
-               Navigator.pop(context); // Screen
-            },
-            child: const Text("Salir"),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _winGame() {
-    _timer?.cancel();
-    setState(() => _isGameOver = true);
-    widget.onSuccess();
-  }
+  // Old dialog methods removed in favor of _showOverlayState
 
   List<String> _generateOptions() {
     if (_currentOptions != null) return _currentOptions!;
 
-    final currentCountry = _shuffledQuestions[_currentQuestionIndex];
+    final correctAnswer = _shuffledQuestions[_currentQuestionIndex]['name']!;
     final random = Random();
-    
-    var options = _allCountries
-        .where((c) => c['name'] != currentCountry['name'])
-        .map((c) => c['name']!)
-        .toList();
-    
-    options.shuffle(random);
-    var finalOptions = options.take(2).toList();
-    finalOptions.add(currentCountry['name']!);
-    finalOptions.shuffle(random);
-    
-    _currentOptions = finalOptions; 
-    return finalOptions;
+    final options = <String>{correctAnswer};
+
+    while (options.length < 4) {
+      final randomCountry = _allCountries[random.nextInt(_allCountries.length)]['name']!;
+      options.add(randomCountry);
+    }
+
+    _currentOptions = options.toList()..shuffle();
+    return _currentOptions!;
+  }
+
+  void _winGame() {
+    _timer?.cancel();
+    setState(() { 
+      _isGameOver = true;
+    });
+    // For victory, we might still want to call onSuccess directly, 
+    // or show a victory overlay first. Use logic helper's standard if preferred, 
+    // but here we just follow previous logic:
+    widget.onSuccess();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isGameOver && _score >= _targetScore) {
-        return const Center(child: CircularProgressIndicator()); 
-    }
-    
-    final minutes = (_secondsRemaining / 60).floor().toString().padLeft(2, '0');
-    final seconds = (_secondsRemaining % 60).toString().padLeft(2, '0');
-    final isLowTime = _secondsRemaining <= 10;
-
-    final currentCountry = _shuffledQuestions[_currentQuestionIndex];
-    final currentOptions = _generateOptions();
-
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // HEADER: TIMER & INTENTOS LOCALES
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isLowTime ? AppTheme.dangerRed.withOpacity(0.2) : Colors.black45,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isLowTime ? AppTheme.dangerRed : AppTheme.accentGold),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+    // 2. Implementación del Bloqueo de INTERFAZ (UI Hardening)
+    return PopScope(
+      canPop: false, // Prevent back button
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        // Optional: Show toast "Completa o sal del juego usando los botones"
+      },
+      child: Stack(
+        children: [
+          // GAME CONTENT
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.timer, color: isLowTime ? AppTheme.dangerRed : AppTheme.accentGold, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    "$minutes:$seconds",
-                    style: TextStyle(
-                      color: isLowTime ? AppTheme.dangerRed : Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
+                  // HEADER: TIMER & INTENTOS LOCALES
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: (_secondsRemaining <= 10) ? AppTheme.dangerRed.withOpacity(0.2) : Colors.black45,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: (_secondsRemaining <= 10) ? AppTheme.dangerRed : AppTheme.accentGold),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.timer, color: (_secondsRemaining <= 10) ? AppTheme.dangerRed : AppTheme.accentGold, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "${(_secondsRemaining / 60).floor().toString().padLeft(2, '0')}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
+                          style: TextStyle(
+                            color: (_secondsRemaining <= 10) ? AppTheme.dangerRed : Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    "¿DE QUÉ PAÍS ES ESTA BANDERA?",
+                    style: TextStyle(color: AppTheme.primaryPurple, fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Aciertos: $_score / $_targetScore",
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(width: 20),
+                      // Intentos Locales (Visual)
+                      Row(
+                        children: List.generate(3, (index) {
+                          return Icon(
+                            index < _localAttempts ? Icons.favorite : Icons.favorite_border,
+                            color: AppTheme.secondaryPink,
+                            size: 20,
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Bandera
+                  if (_shuffledQuestions.isNotEmpty && _currentQuestionIndex < _shuffledQuestions.length)
+                    Container(
+                      height: 150,
+                      width: 250,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
+                        ],
+                        image: DecorationImage(
+                          fit: BoxFit.cover,
+                          image: NetworkImage("https://flagcdn.com/w640/${_shuffledQuestions[_currentQuestionIndex]['code']}.png"),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 40),
+
+                  // Opciones
+                  if (!_showOverlay) // Hide options if overlay is ON to prevent interaction (AbsorbPointer handles it, but cleaner UI)
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: _generateOptions().map((option) {
+                        return ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryPurple,
+                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () => _handleOptionSelected(option),
+                          child: Text(
+                            option,
+                            style: const TextStyle(fontSize: 16, color: Colors.white),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  // Espacio extra
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
-            
-            const SizedBox(height: 20),
+          ),
 
-            const Text(
-              "¿DE QUÉ PAÍS ES ESTA BANDERA?",
-              style: TextStyle(color: AppTheme.primaryPurple, fontSize: 16, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 5),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "Aciertos: $_score / $_targetScore",
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(width: 20),
-                // Intentos Locales (Visual)
-                Row(
-                  children: List.generate(3, (index) {
-                    return Icon(
-                      index < _localAttempts ? Icons.favorite : Icons.favorite_border,
-                      color: AppTheme.secondaryPink,
-                      size: 20,
-                    );
-                  }),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Bandera
-            Container(
-              height: 150,
-              width: 250,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
-                ],
-                image: DecorationImage(
-                  fit: BoxFit.cover,
-                  image: NetworkImage("https://flagcdn.com/w640/${currentCountry['code']}.png"),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Opciones
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
-              children: currentOptions.map((option) {
-                return ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryPurple,
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () => _handleOptionSelected(option),
-                  child: Text(
-                    option,
-                    style: const TextStyle(fontSize: 16, color: Colors.white),
-                  ),
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              isVictory: _isVictory,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                });
+                _startNewGame();
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
                 );
-              }).toList(),
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
             ),
-            // Espacio extra para evitar que el overlay del footer tape las opciones
-            const SizedBox(height: 100),
-          ],
-        ),
+        ],
       ),
     );
   }

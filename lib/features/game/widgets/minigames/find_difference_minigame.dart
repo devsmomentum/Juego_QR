@@ -7,7 +7,8 @@ import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../game_over_dialog.dart';
+import 'game_over_overlay.dart';
+import '../../../mall/screens/shop_screen.dart';
 
 class FindDifferenceMinigame extends StatefulWidget {
   final Clue clue;
@@ -37,6 +38,23 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
   int _secondsRemaining = 40;
   bool _isGameOver = false;
   int _localAttempts = 3;
+
+  // Overlay State
+  bool _showOverlay = false;
+  String _overlayTitle = "";
+  String _overlayMessage = "";
+  bool _canRetry = false;
+  bool _showShopButton = false;
+
+  void _showOverlayState({required String title, required String message, bool retry = false, bool showShop = false}) {
+    setState(() {
+      _showOverlay = true;
+      _overlayTitle = title;
+      _overlayMessage = message;
+      _canRetry = retry;
+      _showShopButton = showShop;
+    });
+  }
 
   @override
   void initState() {
@@ -123,133 +141,150 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     _timer?.cancel();
     _isGameOver = true;
     
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     
     if (playerProvider.currentPlayer != null) {
-      // USAR HELPER CENTRALIZADO
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
       
       if (!mounted) return;
       
-      // Verificar estado FINAL (Usando valor definitivo)
       if (newLives <= 0) {
-         _showGameOverDialog();
+         _showOverlayState(
+            title: "GAME OVER", 
+            message: "Te has quedado sin vidas.",
+            retry: false,
+            showShop: true
+         );
       } else {
-         _showTryAgainDialog(reason);
+         _showOverlayState(
+            title: "¡FALLASTE!", 
+            message: "$reason",
+            retry: true,
+            showShop: false
+         );
       }
     }
   }
 
-  void _showTryAgainDialog(String reason) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text("INTENTO FALLIDO", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Text(reason, style: const TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _secondsRemaining = 40;
-                _localAttempts = 3;
-                _isGameOver = false;
-                _generateGame();
-                _startTimer();
-              });
-            },
-            child: const Text("REINTENTAR", style: TextStyle(color: AppTheme.accentGold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showGameOverDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => GameOverDialog(
-        reason: "No has encontrado las diferencias a tiempo.",
-        onExit: () => Navigator.popUntil(context, (route) => route.isFirst),
-      ),
-    );
-  }
+  // DIALOGS REMOVED
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {},
+      child: Stack(
         children: [
-          // Header Minimalista
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // GAME CONTENT
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Column(
+              children: [
+                // Header Minimalista
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("ANOMALÍA DETECTADA", style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold)),
-                    Text(
-                      "Encuentra el icono que sobra y toca ese cuadro", 
-                      style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("ANOMALÍA DETECTADA", style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                          Text(
+                            "Encuentra el icono que sobra y toca ese cuadro", 
+                            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Text(
+                        "00:$_secondsRemaining",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Text(
-                  "00:$_secondsRemaining",
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 30),
+                
+                const SizedBox(height: 30),
 
-          // Paneles compactos
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Column(
-                  children: [
-                    _buildCompactPanel(isTop: true, maxHeight: constraints.maxHeight * 0.45),
-                    const SizedBox(height: 16),
-                    _buildCompactPanel(isTop: false, maxHeight: constraints.maxHeight * 0.45),
-                  ],
-                );
-              },
+                // Paneles compactos
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Column(
+                        children: [
+                          _buildCompactPanel(isTop: true, maxHeight: constraints.maxHeight * 0.45),
+                          const SizedBox(height: 16),
+                          _buildCompactPanel(isTop: false, maxHeight: constraints.maxHeight * 0.45),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+                
+                // Intentos sutiles
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(3, (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: index < _localAttempts ? AppTheme.accentGold : Colors.white10,
+                    ),
+                  )),
+                ),
+              ],
             ),
           ),
 
-          const SizedBox(height: 20),
-          
-          // Intentos sutiles
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (index) => Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: index < _localAttempts ? AppTheme.accentGold : Colors.white10,
-              ),
-            )),
-          ),
+          // OVERLAY
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              onRetry: _canRetry ? () {
+                setState(() {
+                  _showOverlay = false;
+                  _secondsRemaining = 40;
+                  _localAttempts = 3;
+                  _isGameOver = false;
+                  _generateGame();
+                  _startTimer();
+                });
+              } : null,
+              onGoToShop: _showShopButton ? () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                );
+                // Check lives upon return
+                if (!context.mounted) return;
+                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                if ((player?.lives ?? 0) > 0) {
+                  setState(() {
+                    _canRetry = true;
+                    _showShopButton = false;
+                    _overlayTitle = "¡VIDAS OBTENIDAS!";
+                    _overlayMessage = "Puedes continuar jugando.";
+                  });
+                }
+              } : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
+            ),
         ],
       ),
     );
