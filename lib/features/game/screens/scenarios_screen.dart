@@ -339,11 +339,42 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                              builder: (_) => const LoginScreen()),
-                        ),
+                        icon: const Icon(Icons.logout, color: Colors.white),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: AppTheme.cardBg,
+                              title: const Text('Cerrar Sesión',
+                                  style: TextStyle(color: Colors.white)),
+                              content: const Text(
+                                '¿Estás seguro que deseas cerrar sesión?',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancelar',
+                                      style: TextStyle(color: Colors.white54)),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    Navigator.pop(ctx); // Close dialog
+                                    // Logout logic
+                                    await Provider.of<PlayerProvider>(context,
+                                            listen: false)
+                                        .logout();
+                                    
+                                    // Navigator handled by AuthMonitor
+                                  },
+                                  child: const Text('Salir',
+                                      style:
+                                          TextStyle(color: AppTheme.dangerRed)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 16),

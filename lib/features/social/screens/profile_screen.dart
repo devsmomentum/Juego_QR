@@ -42,9 +42,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 IconButton(
                   icon: const Icon(Icons.logout, color: AppTheme.dangerRed),
                   onPressed: () {
-                    playerProvider.logout();
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: AppTheme.cardBg,
+                        title: const Text('Cerrar Sesión',
+                            style: TextStyle(color: Colors.white)),
+                        content: const Text(
+                          '¿Estás seguro que deseas cerrar sesión?',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancelar',
+                                style: TextStyle(color: Colors.white54)),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(ctx); // Close dialog
+                              playerProvider.logout();
+                              // AuthMonitor will handle navigation
+                            },
+                            child: const Text('Salir',
+                                style: TextStyle(color: AppTheme.dangerRed)),
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),

@@ -40,6 +40,12 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
     bool shouldKick = false;
 
     // Caso 1: Transición de TENER inscripción a NO TENERLA (Sesión invalidada)
+    // PERO solo si el usuario sigue logueado. Si se deslogueó, el AuthMonitor maneja la salida.
+    if (playerProvider.currentPlayer == null) {
+      _lastGamePlayerId = null;
+      return;
+    }
+
     if (_lastGamePlayerId != null && currentGamePlayerId == null) {
       debugPrint("🕒 GameSessionMonitor: 🚫 PÉRDIDA DE SESIÓN DETECTADA.");
       debugPrint("   - Prev ID: $_lastGamePlayerId");
