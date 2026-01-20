@@ -18,6 +18,7 @@ import 'clue_finder_screen.dart'; // Import nuevo
 import 'winner_celebration_screen.dart'; // Import for celebration screen
 import 'story_intro_screen.dart'; // Import for story introduction
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../shared/widgets/exit_protection_wrapper.dart'; // Protection
 
 class CluesScreen extends StatefulWidget {
   // 1. Recibimos el ID del evento obligatorio
@@ -241,8 +242,9 @@ class _CluesScreenState extends State<CluesScreen> {
   Widget build(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context);
     
-    return Scaffold(
-      backgroundColor: Colors.transparent,
+    return ExitProtectionWrapper(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
       body: AnimatedCyberBackground(
         child: Column(
           children: [
@@ -421,7 +423,7 @@ class _CluesScreenState extends State<CluesScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   // --- NUEVO DIÁLOGO DE DESBLOQUEO ---
