@@ -67,97 +67,103 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
     });
 
     try {
+      // Show loading immediately
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
 
-    // Solo verificamos permisos si NO estamos en Windows
-    bool shouldCheckLocation = true;
-    try {
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        shouldCheckLocation = false;
+      // Solo verificamos permisos si NO estamos en Windows
+      bool shouldCheckLocation = true;
+      try {
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          shouldCheckLocation = false;
+        }
+      } catch (e) {
+        shouldCheckLocation = true; 
       }
-    } catch (e) {
-      shouldCheckLocation = true; 
-    }
 
-    if (shouldCheckLocation) {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      if (shouldCheckLocation) {
+        LocationPermission permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied) {
+            Navigator.pop(context); // Pop loading
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content:
+                        Text('Se requieren permisos de ubicación para participar')),
+              );
+            }
+            return;
+          }
+        }
+
+        if (permission == LocationPermission.deniedForever) {
+          Navigator.pop(context); // Pop loading
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content:
-                      Text('Se requieren permisos de ubicación para participar')),
+                  content: Text(
+                      'Los permisos de ubicación están denegados permanentemente. Habilítalos en la configuración.')),
             );
           }
           return;
         }
+
+        // Check for Fake GPS
+        try {
+          final position = await Geolocator.getCurrentPosition(timeLimit: const Duration(seconds: 5));
+          if (position.isMocked) {
+            Navigator.pop(context); // Pop loading
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: AppTheme.cardBg,
+                  title: const Text('⛔ Ubicación Falsa', style: TextStyle(color: Colors.red)),
+                  content: const Text(
+                    'Se ha detectado el uso de una aplicación de ubicación falsa.\n\nDesactívala para poder jugar.',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido'))
+                  ],
+                ),
+              );
+            }
+            return;
+          }
+        } catch (e) {
+          // Ignore location errors here, let the game handle it later if needed or retry
+        }
       }
 
-      if (permission == LocationPermission.deniedForever) {
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+
+      if (playerProvider.currentPlayer == null) {
+        Navigator.pop(context); // Pop loading
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text(
-                    'Los permisos de ubicación están denegados permanentemente. Habilítalos en la configuración.')),
+              content: Text('Error: Sesión no válida. Por favor reloguea.'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
         return;
       }
 
-      // Check for Fake GPS
-      try {
-        final position = await Geolocator.getCurrentPosition(timeLimit: const Duration(seconds: 5));
-        if (position.isMocked) {
-          if (mounted) {
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: AppTheme.cardBg,
-                title: const Text('⛔ Ubicación Falsa', style: TextStyle(color: Colors.red)),
-                content: const Text(
-                  'Se ha detectado el uso de una aplicación de ubicación falsa.\n\nDesactívala para poder jugar.',
-                  style: TextStyle(color: Colors.white),
-                ),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido'))
-                ],
-              ),
-            );
-          }
-          return;
-        }
-      } catch (e) {
-        // Ignore location errors here, let the game handle it later if needed or retry
-      }
-    }
+      // IMPORTANTE: Usar userId para consultas de BD, no player.id (que puede ser gamePlayerId)
+      final String userId = playerProvider.currentPlayer!.userId;
 
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      // Loading already shown at start
 
-    if (playerProvider.currentPlayer == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error: Sesión no válida. Por favor reloguea.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
-    // IMPORTANTE: Usar userId para consultas de BD, no player.id (que puede ser gamePlayerId)
-    final String userId = playerProvider.currentPlayer!.userId;
-
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
 
     try {
       // === GATEKEEPER: Verificar estado del usuario para ESTE evento específico ===
