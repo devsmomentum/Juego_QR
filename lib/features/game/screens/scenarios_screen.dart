@@ -31,6 +31,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
   late PageController _pageController;
   int _currentPage = 0;
   bool _isLoading = true;
+  bool _isProcessing = false; // Prevents double taps
+
   @override
   void initState() {
     super.initState();
@@ -59,7 +61,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
   }
 
   Future<void> _onScenarioSelected(Scenario scenario) async {
-    
+    if (_isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+
     // Solo verificamos permisos si NO estamos en Windows
     bool shouldCheckLocation = true;
     try {
@@ -278,6 +286,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
+      }
+    }
+  } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
       }
     }
   }
