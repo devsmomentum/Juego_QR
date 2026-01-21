@@ -8,7 +8,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../providers/game_provider.dart';
 
 import 'game_over_overlay.dart';
-import '../../../mall/screens/shop_screen.dart';
+import 'game_over_overlay.dart';
+import '../../../mall/screens/mall_screen.dart';
 
 class HangmanMinigame extends StatefulWidget {
   final Clue clue;
@@ -178,7 +179,7 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
       if (newLives <= 0) {
         _showOverlayState(
           title: "GAME OVER", 
-          message: "Te has quedado sin vidas. La palabra era: $_word", // Reveal only on total defeat
+          message: "Te has quedado sin vidas. No puedes continuar en este minijuego.",
           retry: false,
           showShop: true
         );
@@ -310,8 +311,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                 
                 // Área de Dibujo y Palabra
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Reduced vertical margin
-                  padding: const EdgeInsets.all(12), // Reduced padding
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), // Minimal vertical margin
+                  padding: const EdgeInsets.all(8), // Minimal padding
                   decoration: BoxDecoration(
                     color: AppTheme.cardBg.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(16),
@@ -321,8 +322,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                     children: [
                       // Dibujo del Ahorcado
                       SizedBox(
-                        height: 120, // Reduced height significantly (was 180)
-                        width: 120,
+                        height: 140, 
+                        width: 180, // Explicit width to prevent stretching distortion if parent is wide
                         child: CustomPaint(
                           painter: HangmanPainter(_wrongAttempts),
                         ),
@@ -377,9 +378,9 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 7,
-                      childAspectRatio: 0.9, // Taller buttons
-                      crossAxisSpacing: 4,
-                      mainAxisSpacing: 4,
+                      childAspectRatio: 1.15, // Flatter buttons to save vertical space
+                      crossAxisSpacing: 3,
+                      mainAxisSpacing: 3,
                     ),
                     itemCount: 26,
                     itemBuilder: (context, index) {
@@ -428,24 +429,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                 
                 const SizedBox(height: 10),
             
-                // Botón Rendirse
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 45,
-                    child: ElevatedButton.icon(
-                      onPressed: _showOverlay ? null : _handleGiveUp, // Disable if overlay is up
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.cardBg,
-                        foregroundColor: AppTheme.dangerRed,
-                        side: const BorderSide(color: AppTheme.dangerRed),
-                      ),
-                      icon: const Icon(Icons.flag_outlined),
-                      label: const Text("RENDIRSE"),
-                    ),
-                  ),
-                ),
+                // Botón Rendirse eliminado según solicitud
+                const SizedBox(height: 20), // Spacing for bottom safety
               ],
             ),
           ),
@@ -462,22 +447,11 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                   _initializeGame();
                 });
               } : null,
-              onGoToShop: _showShopButton ? () async {
-                await Navigator.push(
+              onGoToShop: _showShopButton ? () {
+                Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                  MaterialPageRoute(builder: (_) => const MallScreen()),
                 );
-                // Check lives upon return
-                if (!context.mounted) return;
-                final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
-                if ((player?.lives ?? 0) > 0) {
-                  setState(() {
-                    _canRetry = true;
-                    _showShopButton = false;
-                    _overlayTitle = "¡VIDAS OBTENIDAS!";
-                    _overlayMessage = "Puedes continuar jugando.";
-                  });
-                }
               } : null,
               onExit: () {
                 Navigator.pop(context);
@@ -500,13 +474,13 @@ class HangmanPainter extends CustomPainter {
     final gallowsPaint = Paint()
       ..color = Colors.white54
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0 // Thicker
+      ..strokeWidth = 5.0 // Thicker
       ..strokeCap = StrokeCap.round;
 
     final bodyPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
+      ..strokeWidth = 4.0 // Thicker
       ..strokeCap = StrokeCap.round;
 
     final double w = size.width;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../models/power_item.dart';
@@ -20,6 +21,14 @@ class _ShopScreenState extends State<ShopScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final supabase = Supabase.instance.client;
+        final data = await supabase.from('powers').select().limit(1);
+        debugPrint("🔍 DB POWERS SCHEMA: $data");
+      } catch (e) {
+        debugPrint("🔍 DB ERROR: $e");
+      }
+
       final playerProvider = context.read<PlayerProvider>();
       final gameProvider = context.read<GameProvider>();
       final player = playerProvider.currentPlayer;

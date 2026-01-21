@@ -132,30 +132,31 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       if (!mounted) return;
       
       // Mostrar diálogo explicativo
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppTheme.cardBg,
-          title: const Text('¡Sin Vidas!', style: TextStyle(color: Colors.white)),
-          content: const Text(
-            'Te has quedado sin vidas. No puedes continuar en este minijuego.',
-            style: TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx); // Cerrar diálogo
-                if (mounted) {
-                  Navigator.pop(context); // Cerrar minijuego
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
+      // Mostrar diálogo explicativo
+      // showDialog(
+      //   context: context,
+      //   barrierDismissible: false,
+      //   builder: (ctx) => AlertDialog(
+      //     backgroundColor: AppTheme.cardBg,
+      //     title: const Text('¡Sin Vidas!', style: TextStyle(color: Colors.white)),
+      //     content: const Text(
+      //       'Te has quedado sin vidas. No puedes continuar en este minijuego.',
+      //       style: TextStyle(color: Colors.white70),
+      //     ),
+      //     actions: [
+      //       ElevatedButton(
+      //         onPressed: () {
+      //           Navigator.pop(ctx); // Cerrar diálogo
+      //           if (mounted) {
+      //             Navigator.pop(context); // Cerrar minijuego
+      //           }
+      //         },
+      //         style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+      //         child: const Text('Entendido'),
+      //       ),
+      //     ],
+      //   ),
+      // );
     }
   }
 
