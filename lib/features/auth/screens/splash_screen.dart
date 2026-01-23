@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math' as math;
+import 'dart:async';
 import 'login_screen.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -15,6 +16,7 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _pulseController;
+  late AnimationController _shimmerTitleController;
 
   final List<String> _loadingPhrases = [
     "Calibrando brújula...",
@@ -39,6 +41,12 @@ class _SplashScreenState extends State<SplashScreen>
     // Controlador para el efecto de pulso (radar)
     _pulseController = AnimationController(
       duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+
+    // Controlador para el brillo del texto
+    _shimmerTitleController = AnimationController(
+      duration: const Duration(milliseconds: 2500),
       vsync: this,
     )..repeat();
 
@@ -71,6 +79,7 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _controller.dispose();
     _pulseController.dispose();
+    _shimmerTitleController.dispose();
     super.dispose();
   }
 
@@ -144,15 +153,36 @@ class _SplashScreenState extends State<SplashScreen>
                 const SizedBox(height: 40),
 
                 // Título
-                const Text(
-                  'MAPHUNTER',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 4,
-                    fontFamily: 'sans-serif',
-                  ),
+                AnimatedBuilder(
+                  animation: _shimmerTitleController,
+                  builder: (context, child) {
+                    return ShaderMask(
+                      shaderCallback: (bounds) {
+                        return LinearGradient(
+                          colors: const [
+                            Colors.white,
+                            AppTheme.accentGold,
+                            Colors.white,
+                            AppTheme.accentGold,
+                            Colors.white,
+                          ],
+                          stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+                          begin: Alignment(-1.0 + (_shimmerTitleController.value * 2.0), -0.5),
+                          end: Alignment(1.0 + (_shimmerTitleController.value * 2.0), 0.5),
+                          tileMode: TileMode.clamp,
+                        ).createShader(bounds);
+                      },
+                      child: _GlitchText(
+                        text: 'MAPHUNTER',
+                        style: const TextStyle(
+                          fontSize: 38,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    );
+                  },
                 ),
 
                 const Text(
@@ -232,4 +262,112 @@ class RadarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(RadarPainter oldDelegate) => true;
+}
+
+class _GlitchText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+
+  const _GlitchText({required this.text, required this.style});
+
+  @override
+  State<_GlitchText> createState() => _GlitchTextState();
+}
+
+class _GlitchTextState extends State<_GlitchText> with SingleTickerProviderStateMixin {
+  late AnimationController _glitchController;
+  late String _displayText;
+  final String _chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*';
+  Timer? _decodeTimer;
+  int _decodeIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayText = '';
+    // Start Decoding
+    _startDecoding();
+
+    // Glitch Animation
+    _glitchController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 2000)
+    )..repeat();
+  }
+
+  void _startDecoding() {
+    _decodeTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (_decodeIndex >= widget.text.length) {
+        timer.cancel();
+        setState(() => _displayText = widget.text);
+        return;
+      }
+
+      setState(() {
+        _displayText = String.fromCharCodes(Iterable.generate(widget.text.length, (index) {
+          if (index < _decodeIndex) return widget.text.codeUnitAt(index);
+          return _chars.codeUnitAt(math.Random().nextInt(_chars.length));
+        }));
+        _decodeIndex++;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _glitchController.dispose();
+    _decodeTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _glitchController,
+      builder: (context, child) {
+        final double glitchValue = _glitchController.value;
+        // Glitch trigger occasionally
+        final bool isGlitching = glitchValue > 0.90 && glitchValue < 0.95;
+        
+        double offsetX = 0;
+        double offsetY = 0;
+        
+        if (isGlitching) {
+          offsetX = (math.Random().nextDouble() - 0.5) * 5;
+          offsetY = (math.Random().nextDouble() - 0.5) * 5;
+        }
+
+        return Stack(
+          children: [
+             // Red Channel
+            if (isGlitching)
+              Transform.translate(
+                offset: Offset(offsetX + 2, offsetY),
+                child: Text(
+                  _displayText,
+                  style: widget.style.copyWith(color: Colors.red.withOpacity(0.8)),
+                ),
+              ),
+            // Blue Channel
+            if (isGlitching)
+              Transform.translate(
+                offset: Offset(offsetX - 2, offsetY),
+                child: Text(
+                  _displayText,
+                  style: widget.style.copyWith(color: Colors.blue.withOpacity(0.8)),
+                ),
+              ),
+            // Main Text
+            Transform.translate(
+              offset: Offset(offsetX, offsetY),
+              child: Text(
+                _displayText,
+                style: widget.style,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
