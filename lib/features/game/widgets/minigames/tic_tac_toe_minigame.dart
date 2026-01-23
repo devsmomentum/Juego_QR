@@ -199,7 +199,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
 
      if (_checkWin('O')) {
        _stopTimer();
-       _loseLife("¡La IA te ha ganado!");
+       _loseLife("¡La vieja te ha ganado!");
      } else if (!board.contains('')) {
        _stopTimer();
        _handleDraw();

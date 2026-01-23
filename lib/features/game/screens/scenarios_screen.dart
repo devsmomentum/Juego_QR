@@ -525,40 +525,42 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                             color: AppTheme.accentGold, size: 28),
                                       ),
                                       const SizedBox(width: 10),
-                                      AnimatedBuilder(
-                                        animation: _glitchController,
-                                        builder: (context, child) {
-                                          // Glitch logic: if value > 0.95, offset randomly
-                                          double offsetX = 0;
-                                          double offsetY = 0;
-                                          Color color = AppTheme.accentGold;
-                                          
-                                          if (_glitchController.value > 0.90) {
-                                            offsetX = (DateTime.now().millisecondsSinceEpoch % 3) - 1.5;
-                                            offsetY = (DateTime.now().millisecondsSinceEpoch % 2) - 1.0;
-                                            // Occasionally change color
-                                            if (_glitchController.value > 0.98) {
-                                                color = Colors.cyanAccent;
+                                      Expanded(
+                                        child: AnimatedBuilder(
+                                          animation: _glitchController,
+                                          builder: (context, child) {
+                                            // Glitch logic: if value > 0.95, offset randomly
+                                            double offsetX = 0;
+                                            double offsetY = 0;
+                                            Color color = AppTheme.accentGold;
+                                            
+                                            if (_glitchController.value > 0.90) {
+                                              offsetX = (DateTime.now().millisecondsSinceEpoch % 3) - 1.5;
+                                              offsetY = (DateTime.now().millisecondsSinceEpoch % 2) - 1.0;
+                                              // Occasionally change color
+                                              if (_glitchController.value > 0.98) {
+                                                  color = Colors.cyanAccent;
+                                              }
                                             }
-                                          }
-                                          
-                                          return Transform.translate(
-                                            offset: Offset(offsetX, offsetY),
-                                            child: Text(
-                                              "Misión de Exploración",
-                                              style: TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.w900,
-                                                color: color,
-                                                letterSpacing: 0.5,
-                                                shadows: _glitchController.value > 0.90 ? [
-                                                    const Shadow(color: Colors.red, offset: Offset(-2, 0)),
-                                                    const Shadow(color: Colors.blue, offset: Offset(2, 0)),
-                                                ] : [],
+                                            
+                                            return Transform.translate(
+                                              offset: Offset(offsetX, offsetY),
+                                              child: Text(
+                                                "Misión de Exploración",
+                                                style: TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: color,
+                                                  letterSpacing: 0.5,
+                                                  shadows: _glitchController.value > 0.90 ? [
+                                                      const Shadow(color: Colors.red, offset: Offset(-2, 0)),
+                                                      const Shadow(color: Colors.blue, offset: Offset(2, 0)),
+                                                  ] : [],
+                                                ),
                                               ),
-                                            ),
-                                          );
-                                        },
+                                            );
+                                          },
+                                        ),
                                       ),
                                     ],
                                   ),
