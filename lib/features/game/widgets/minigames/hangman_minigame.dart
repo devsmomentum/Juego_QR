@@ -185,8 +185,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
         );
       } else {
         _showOverlayState(
-          title: "¡FALLASTE!", 
-          message: "$reason",
+          title: "AHORCADO", 
+          message: "",
           retry: true,
           showShop: false
         );
