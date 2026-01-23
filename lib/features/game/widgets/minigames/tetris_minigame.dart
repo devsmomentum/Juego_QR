@@ -455,7 +455,7 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
                     children: [
                       // Main Board (Maximized)
                       Expanded(
-                        flex: 6, // Increased flex
+                        flex: 5, // Reduced flex to give more space to sidebar
                         child: Center(
                           child: LayoutBuilder(
                             builder: (context, constraints) {
@@ -541,7 +541,7 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
                       
                       // Right Sidebar (Integrated)
                       Expanded(
-                        flex: 1,
+                        flex: 2, // Increased flex for wider score area
                         child: Padding(
                           padding: const EdgeInsets.only(top: 10, right: 10, left: 10),
                           child: Column(
@@ -557,13 +557,16 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
                                 ),
                                 child: Column(
                                   children: [
-                                    const Text("META", style: TextStyle(color: AppTheme.accentGold, fontSize: 8, fontWeight: FontWeight.bold)),
+                                    const FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text("META", style: TextStyle(color: AppTheme.accentGold, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    ),
                                     const SizedBox(height: 4),
                                     FittedBox(
                                       fit: BoxFit.scaleDown,
                                       child: Text(
                                         "$_score / $_targetScore", 
-                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                   ],
