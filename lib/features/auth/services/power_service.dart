@@ -60,11 +60,13 @@ class PowerService {
   /// Llama al RPC `use_power_mechanic` para la mayoría de poderes.
   /// Para `blur_screen`, usa lógica de broadcast especial.
   /// 
-  /// [casterGamePlayerId] - ID del jugador que lanza el poder
-  /// [targetGamePlayerId] - ID del objetivo
-  /// [powerSlug] - Identificador del poder
-  /// [rivals] - Lista de rivales (solo para blur_screen)
-  /// [eventId] - ID del evento actual (solo para blur_screen)
+  /// [casterGamePlayerId] - ID del jugador que lanza el poder (GamePlayer ID).
+  /// [targetGamePlayerId] - ID del objetivo (GamePlayer ID).
+  /// [powerSlug] - Identificador único del poder (ej: 'freeze', 'shield').
+  /// [rivals] - Lista de rivales (solo requerido para poderes de área como 'blur_screen').
+  /// [eventId] - ID del evento actual.
+  /// 
+  /// Retorna un [PowerUseResponse] indicando éxito, error o si fue reflejado.
   Future<PowerUseResponse> executePower({
     required String casterGamePlayerId,
     required String targetGamePlayerId,
@@ -309,5 +311,22 @@ class PowerService {
       return true;
     }
     return true;
+  }
+
+  /// Obtiene la configuración de duración (segundos) de todos los poderes.
+  /// 
+  /// Utilizado por la tienda para mostrar descripciones dinámicas ("Dura 15s")
+  /// y por el `PlayerProvider` para caché local.
+  /// 
+  /// Retorna una lista de mapas con claves `slug` y `duration`.
+  /// Lanza excepción si la consulta a Supabase falla.
+  Future<List<Map<String, dynamic>>> getPowerConfigs() async {
+    try {
+      final response = await _supabase.from('powers').select('slug, duration');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('PowerService: Error fetching power configs: $e');
+      rethrow;
+    }
   }
 }

@@ -1,9 +1,28 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'dart:math'; // For shuffling
+import '../../models/clue.dart';
+import '../../providers/game_provider.dart';
+import '../../../auth/providers/player_provider.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../utils/minigame_logic_helper.dart';
 import 'game_over_overlay.dart';
 import '../../../mall/screens/shop_screen.dart';
 
-// ... (imports)
+class WordScrambleWidget extends StatefulWidget {
+  final Clue clue;
+  final VoidCallback onSuccess;
 
-// Inside State logic
+  const WordScrambleWidget({super.key, required this.clue, required this.onSuccess});
+
+  @override
+  State<WordScrambleWidget> createState() => _WordScrambleWidgetState();
+}
+
+class _WordScrambleWidgetState extends State<WordScrambleWidget> {
+  // State logic
+  String _currentWord = "";
+  List<String> _shuffledLetters = [];
   int _attempts = 3;
 
   // Overlay State
@@ -12,6 +31,32 @@ import '../../../mall/screens/shop_screen.dart';
   String _overlayMessage = "";
   bool _canRetry = false;
   bool _showShopButton = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _onReset();
+  }
+
+  void _onReset() {
+    final answer = widget.clue.riddleAnswer?.toUpperCase() ?? "FLUTTER";
+    _currentWord = "";
+    
+    // Create pool of letters (answer + some random noise if needed, but simple scramble is safer)
+    List<String> letters = answer.split('');
+    letters.shuffle(Random());
+    _shuffledLetters = letters;
+    
+    setState(() {});
+  }
+
+  void _onLetterTap(String letter) {
+    if (_showOverlay) return;
+    setState(() {
+      _currentWord += letter;
+      _shuffledLetters.remove(letter); // Remove ONE instance of the letter
+    });
+  }
 
   void _showOverlayState({required String title, required String message, bool retry = false, bool showShop = false}) {
     setState(() {

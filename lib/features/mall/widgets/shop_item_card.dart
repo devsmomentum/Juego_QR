@@ -45,7 +45,7 @@ class _ShopItemCardState extends State<ShopItemCard> {
     
     // Color acento dinámico según el tipo
     final Color accentColor = isLife ? AppTheme.dangerRed : AppTheme.primaryPurple;
-    final Color glowColor = isLife ? Colors.redAccent.withOpacity(0.5) : Colors.cyanAccent.withOpacity(0.3);
+  
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),

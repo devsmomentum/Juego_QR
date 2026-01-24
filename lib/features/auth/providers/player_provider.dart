@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../mall/models/power_item.dart';
 import '../../../shared/models/player.dart';
 import '../../game/providers/power_effect_provider.dart';
 import '../../game/providers/game_provider.dart';
@@ -31,10 +32,13 @@ class PlayerProvider extends ChangeNotifier {
   bool _isLoggingOut = false;
   bool _isDisposed = false; // Flag para evitar notifyListeners tras dispose
   StreamSubscription? _gamePlayersSubscription; // Nueva suscripción por stream para baneos de competencia
-
+  
+  List<PowerItem> _shopItems = PowerItem.getShopItems();
+  
   Player? get currentPlayer => _currentPlayer;
   List<Player> get allPlayers => _allPlayers;
   bool get isLoggedIn => _currentPlayer != null;
+  List<PowerItem> get shopItems => _shopItems;
 
   String? _banMessage;
   String? get banMessage => _banMessage;
@@ -67,6 +71,40 @@ class PlayerProvider extends ChangeNotifier {
     if (_currentPlayer != null) {
       _currentPlayer = _currentPlayer!.copyWith(lives: newLives);
       notifyListeners();
+    }
+  }
+
+  /// Carga la configuración de items de la tienda desde el servicio
+  Future<void> loadShopItems() async {
+    try {
+      final configs = await _powerService.getPowerConfigs();
+      
+      _shopItems = _shopItems.map((item) {
+          // Buscar configuración en DB
+          final matches = configs.where((d) => d['slug'] == item.id);
+          final config = matches.isNotEmpty ? matches.first : null;
+
+          if (config != null) {
+            final int duration = (config['duration'] as num?)?.toInt() ?? 0;
+            
+            // Actualizar descripción dinámica si tiene duración > 0
+            String newDesc = item.description;
+            if (duration > 0) {
+              // Reemplazar patrones como "25s", "30s" por el valor real
+              newDesc = newDesc.replaceAll(RegExp(r'\b\d+\s*s\b'), '${duration}s');
+            }
+
+            return item.copyWith(
+              durationSeconds: duration,
+              description: newDesc,
+            );
+          }
+          return item;
+        }).toList();
+        
+        notifyListeners();
+    } catch (e) {
+      debugPrint("PlayerProvider: Error loading shop items: $e");
     }
   }
 

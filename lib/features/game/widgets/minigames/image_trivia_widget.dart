@@ -1,7 +1,12 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../models/clue.dart';
+import '../../providers/game_provider.dart';
+import '../../../auth/providers/player_provider.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../utils/minigame_logic_helper.dart';
 import 'game_over_overlay.dart';
 import '../../../mall/screens/shop_screen.dart';
-
-// ... (imports)
 
 class ImageTriviaWidget extends StatefulWidget {
   final Clue clue;

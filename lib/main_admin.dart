@@ -16,6 +16,8 @@ import 'core/theme/app_theme.dart';
 
 import 'features/game/providers/event_provider.dart'; 
 import 'features/admin/screens/auth_save.dart';
+import 'features/game/services/game_service.dart';
+import 'features/events/services/event_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +80,10 @@ class TreasureHuntAdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => GameProvider()),
+        ChangeNotifierProvider(create: (_) {
+          final supabase = Supabase.instance.client;
+          return GameProvider(gameService: GameService(supabase));
+        }),
         ChangeNotifierProvider(create: (_) {
           final supabase = Supabase.instance.client;
           return PlayerProvider(
@@ -90,7 +95,10 @@ class TreasureHuntAdminApp extends StatelessWidget {
           );
         }),
         ChangeNotifierProvider(create: (_) => GameRequestProvider()),
-        ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) {
+          final supabase = Supabase.instance.client;
+          return EventProvider(eventService: EventService(supabase));
+        }),
       ],
       child: MaterialApp(
         title: 'MapHunter Admin',

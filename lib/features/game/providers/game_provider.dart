@@ -63,6 +63,14 @@ class UserEventStatusResult {
 }
 
 
+/// Provider principal que gestiona el estado global del juego.
+///
+/// Responsabilidades:
+/// - Gestión de Pistas (Clues) y progreso del jugador.
+/// - Control de Vidas (Lives) y sincronización con el servidor.
+/// - Ranking en tiempo real (Leaderboard).
+/// - Estado de la carrera (Race Status) para detectar ganadores.
+/// - Gestión de efectos visuales globales (Congelamiento, etc.).
 class GameProvider extends ChangeNotifier {
   final GameService _gameService;
   
@@ -155,6 +163,11 @@ class GameProvider extends ChangeNotifier {
 
   // --- GESTIÓN DE VIDAS ---
 
+  /// Obtiene el número actual de vidas del jugador desde el servidor.
+  ///
+  /// [userId] Identificador único del usuario (UUID de `profiles`).
+  /// Actualiza la variable `_lives` y notifica a los listeners.
+  /// Lanza excepción si hay error de red en `GameService`.
   Future<void> fetchLives(String userId) async {
     if (_currentEventId == null) return;
     try {
@@ -179,6 +192,14 @@ class GameProvider extends ChangeNotifier {
     }
   }
   
+  /// Ejecuta la pérdida de una vida (Optimistic UI).
+  ///
+  /// 1. Reduce la vida localmente de inmediato para feedback instantáneo.
+  /// 2. Llama al servicio para persistir el cambio en Supabase.
+  /// 3. Si falla, hace rollback (restaura la vida).
+  ///
+  /// [userId] ID del usuario que pierde la vida.
+  /// Retorna el número de vidas restantes confirmadas por el servidor.
   Future<int> loseLife(String userId) async {
     if (_lives <= 0) {
       debugPrint('[LIVES_DEBUG] loseLife aborted: Lives is $_lives');
@@ -219,6 +240,10 @@ class GameProvider extends ChangeNotifier {
 
   // --- GESTIÓN DEL RANKING EN TIEMPO REAL ---
 
+  /// Inicia el polling periódico del Leaderboard (cada 5 segundos).
+  ///
+  /// Llama a `fetchLeaderboard` inicialmente y luego lo programa.
+  /// Útil para mantener la tabla de posiciones actualizada sin Realtime excesivo.
   void startLeaderboardUpdates() {
     fetchLeaderboard();
     stopLeaderboardUpdates();

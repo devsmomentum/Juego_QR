@@ -2,6 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Provider encargado de escuchar y gestionar los efectos de poderes en tiempo real.
+///
+/// Funciona escuchando la tabla `active_powers` de Supabase.
+///
+/// Responsabilidades:
+/// - Detectar ataques dirigidos al jugador (`startListening`).
+/// - Gestionar la duración y expiración de los efectos visuales.
+/// - Lógica de defensa (Escudos y Reflejo/Return).
+/// - Coordinar efectos especiales como Life Steal.
 class PowerEffectProvider extends ChangeNotifier {
   StreamSubscription? _subscription;
   StreamSubscription? _casterSubscription; // Nueva suscripción para detectar reflejos salientes
@@ -67,6 +76,11 @@ class PowerEffectProvider extends ChangeNotifier {
     _isManualCasting = value;
   }
 
+  /// Activa o desactiva el estado de "Escudo".
+  ///
+  /// Si [value] es true, cualquier ataque entrante será ignorado inmediatamente
+  /// y se registrará una acción de defensa `shieldBlocked`.
+  /// Si se activa, limpia cualquier efecto negativo vigente.
   void setShielded(bool value, {String? sourceSlug}) {
     final shouldEnable = value || _isShieldSlug(sourceSlug);
     _shieldActive = shouldEnable;
@@ -79,6 +93,10 @@ class PowerEffectProvider extends ChangeNotifier {
     }
   }
 
+  /// Prepara el estado para devolver el próximo ataque (Mecánica "Return").
+  ///
+  /// El próximo efecto ofensivo recibido no se aplicará, sino que se "rebotará"
+  /// al atacante usando el `_returnHandler`.
   void armReturn() {
     _returnArmed = true;
   }
@@ -95,7 +113,12 @@ class PowerEffectProvider extends ChangeNotifier {
     _lifeStealVictimHandler = handler;
   }
 
-  // Iniciar la escucha de ataques dirigidos a este jugador específico
+  /// Inicia la suscripción a Supabase Realtime para detectar ataques.
+  ///
+  /// Escucha inserts en `active_powers` donde `target_id` es [myGamePlayerId].
+  /// También escucha ataques salientes para detectar si fueron reflejados.
+  ///
+  /// [myGamePlayerId] ID de la sesión de juego del usuario actual (no el UUID de perfil).
   void startListening(String? myGamePlayerId) {
     final supabase = _supabaseClient;
     if (supabase == null) {

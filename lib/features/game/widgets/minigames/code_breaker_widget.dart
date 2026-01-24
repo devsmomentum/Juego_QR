@@ -1,4 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:math';
+import '../../models/clue.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../utils/minigame_logic_helper.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../providers/game_provider.dart';
@@ -93,7 +97,24 @@ class _CodeBreakerWidgetState extends State<CodeBreakerWidget> {
     }
   }
 
-  // DIALOGS REMOVED
+
+  void _onDigitPress(String digit) {
+    if (_enteredCode.length < 4) {
+      setState(() {
+        _enteredCode += digit;
+        _isError = false;
+      });
+    }
+  }
+
+  void _onDelete() {
+    if (_enteredCode.isNotEmpty) {
+      setState(() {
+        _enteredCode = _enteredCode.substring(0, _enteredCode.length - 1);
+        _isError = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
