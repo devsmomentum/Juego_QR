@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../strategies/power_strategy_factory.dart';
 
 /// Provider encargado de escuchar y gestionar los efectos de poderes en tiempo real.
 ///
@@ -54,6 +55,10 @@ class PowerEffectProvider extends ChangeNotifier {
   String? _activeEffectCasterId;
   DateTime? _activePowerExpiresAt; // Nueva variable
 
+  // Variables temporales para pasar contexto a la estrategia durante onActivate
+  String? _pendingEffectId;
+  String? _pendingCasterId;
+
   DateTime? get activePowerExpiresAt => _activePowerExpiresAt; // Nuevo getter
 
   String? get activePowerSlug => _activePowerSlug;
@@ -61,6 +66,32 @@ class PowerEffectProvider extends ChangeNotifier {
   String? get activeEffectCasterId => _activeEffectCasterId;
   DefenseAction? get lastDefenseAction => _lastDefenseAction;
   DateTime? get lastDefenseActionAt => _lastDefenseActionAt;
+
+  // Getters para Estrategias
+  String? get pendingEffectId => _pendingEffectId;
+  String? get pendingCasterId => _pendingCasterId;
+  Future<void> Function(String, String?, String)? get lifeStealVictimHandler => _lifeStealVictimHandler;
+
+  void setPendingEffectContext(String? effectId, String? casterId) {
+    _pendingEffectId = effectId;
+    _pendingCasterId = casterId;
+  }
+
+  void markEffectAsProcessed(String id) {
+    _processedEffectIds.add(id);
+  }
+
+  bool isEffectProcessed(String id) {
+    return _processedEffectIds.contains(id);
+  }
+
+  void setShieldState(bool value) {
+    _shieldActive = value;
+  }
+
+  void setActiveEffectCasterId(String? id) {
+    _activeEffectCasterId = id;
+  }
 
   SupabaseClient? get _supabaseClient {
     try {
@@ -83,13 +114,22 @@ class PowerEffectProvider extends ChangeNotifier {
   /// Si se activa, limpia cualquier efecto negativo vigente.
   void setShielded(bool value, {String? sourceSlug}) {
     final shouldEnable = value || _isShieldSlug(sourceSlug);
-    _shieldActive = shouldEnable;
-
-    // Si activamos el escudo, limpiamos cualquier efecto activo.
-    if (_shieldActive) {
-      _clearEffect();
+    
+    final strategy = PowerStrategyFactory.get('shield');
+    if (strategy != null) {
+      if (shouldEnable) {
+        strategy.onActivate(this);
+      } else {
+        strategy.onDeactivate(this);
+      }
     } else {
-      notifyListeners();
+        // Fallback or error if strategy not found (unlikely)
+        _shieldActive = shouldEnable;
+        if (_shieldActive) {
+           _clearEffect();
+        } else {
+           notifyListeners();
+        }
     }
   }
 
@@ -294,23 +334,16 @@ class PowerEffectProvider extends ChangeNotifier {
       
       // Life Steal: procesar antes del filtro de expiración (duration=0)
       // El filtro de tiempo ya se aplicó en 'filtered' (L231-243)
-      if (slug == 'life_steal' &&
-          effectId != null &&
-          !_processedEffectIds.contains(effectId) &&
-          _lifeStealVictimHandler != null) {
-        
-        debugPrint("[DEBUG] 🩸 LIFE_STEAL detectado (pre-expiration):");
-        debugPrint("[DEBUG]    Effect ID: $effectId");
-        debugPrint("[DEBUG]    Caster ID: $casterId");
-        
-        _processedEffectIds.add(effectId);
-        _activeEffectCasterId = casterId;
-        
-        // Disparar handler que activa la animación en SabotageOverlay
-        await _lifeStealVictimHandler!(effectId, casterId, _listeningForId!);
-        
-        debugPrint("[DEBUG] ✅ LifeStealVictimHandler ejecutado exitosamente");
+      if (slug == 'life_steal') {
+          // Delegar en estrategia (Strategy Pattern)
+          setPendingEffectContext(effectId, casterId);
+          final strategy = PowerStrategyFactory.get('life_steal');
+          strategy?.onActivate(this);
+          // Limpieza opcional del contexto pendiente
+          setPendingEffectContext(null, null);
       }
+
+
     }
 
     // Buscamos el efecto más reciente que aún no haya expirado
