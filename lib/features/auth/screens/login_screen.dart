@@ -539,13 +539,50 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               return null;
                             },
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 30),
+                          // Login button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.primaryGradient,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryPurple.withOpacity(0.4),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton(
+                                onPressed: _handleLogin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'INICIAR SESIÓN',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
                           Align(
-                            alignment: Alignment.centerRight,
+                            alignment: Alignment.center,
                             child: TextButton(
                               onPressed: _showForgotPasswordDialog,
                               child: const Text(
-                                '¿Olvidaste tu contraseña?',
+                                '¿Olvidaste tu contraseña? Recupérala',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 14,
@@ -553,44 +590,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               ),
                             ),
                           ),
-                    const SizedBox(height: 20),
-
-                    // Login button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryPurple.withOpacity(0.4),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'INICIAR SESIÓN',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 20),
 
                     // Register link
