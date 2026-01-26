@@ -389,6 +389,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         longitude: longitude,
         date: event.date,
         isCompleted: event.winnerId != null && event.winnerId!.isNotEmpty,
+        type: event.type,
       );
     }).toList();
 
