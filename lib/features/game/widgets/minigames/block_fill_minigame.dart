@@ -33,7 +33,7 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
   late int _playerCol;
   
   Timer? _timer;
-  int _secondsRemaining = 120; // 2 minutos
+  int _secondsRemaining = 20; // 20 segundos
   bool _isGameOver = false;
 
   // Overlay State
@@ -84,11 +84,10 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
   }
 
   void _startNewGame({bool resetTimer = true}) {
-    // Generar laberinto MÁS SIMPLE (menos paredes)
-    // 0 = Vacío, 2 = Inicio
+    // Generar laberinto con un solo bloque central como obstáculo
     _grid = List.generate(rows, (_) => List.filled(cols, 0));
     
-    // Solo 1 pared para facilitar
+    // Un solo bloque central como pared
     _grid[2][2] = -1;
     
     // Inicio
@@ -97,7 +96,7 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
     _grid[_playerRow][_playerCol] = 2; // Visitado inicial
 
     if (resetTimer) {
-      _secondsRemaining = 120;
+      _secondsRemaining = 20;
     }
     _isGameOver = false;
     _startTimer();
@@ -136,10 +135,59 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
     });
   }
 
-  void _undoMove() {
-      // Reinicia nivel pero mantiene el tiempo
-      _startNewGame(resetTimer: false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nivel reiniciado (Tiempo corre)")));
+  void _undoMove() async {
+    if (_isGameOver) return;
+    
+    // Preguntar confirmación o avisar que cuesta una vida
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("¿Reiniciar Nivel?", style: TextStyle(color: Colors.white)),
+        content: const Text("Reiniciar el nivel te costará 1 VIDA. ¿Deseas continuar?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("CANCELAR", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
+            child: const Text("REINICIAR (-1 ❤️)", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      _timer?.cancel();
+      _isGameOver = true;
+      
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      if (playerProvider.currentPlayer != null) {
+        final newLives = await MinigameLogicHelper.executeLoseLife(context);
+        
+        if (!mounted) return;
+        
+        if (newLives <= 0) {
+          _showOverlayState(
+            title: "GAME OVER", 
+            message: "Te has quedado sin vidas al reiniciar.",
+            retry: false,
+            showShop: true
+          );
+        } else {
+          // Reiniciar nivel con el tiempo completo
+          _startNewGame(resetTimer: true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Nivel reiniciado. -1 Vida"),
+              backgroundColor: Colors.orange,
+            )
+          );
+        }
+      }
+    }
   }
 
   void _checkWin() {
