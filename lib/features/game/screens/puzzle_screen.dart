@@ -403,8 +403,12 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
 
     Widget gameWidget;
+    // Cast seguro solicitado
+    final onlineClue = widget.clue is OnlineClue ? widget.clue as OnlineClue : widget.clue;
+    // Nota: Si pasamos PhysicalClue, usará el fallback de los getters virtuales.
+    
     // Pasamos _finishLegally a TODOS los hijos para que avisen antes de cerrar o ganar
-    switch (widget.clue.puzzleType) {
+    switch (onlineClue.puzzleType) {
       case PuzzleType.slidingPuzzle:
         gameWidget =
             SlidingPuzzleWrapper(clue: widget.clue, onFinish: _finishLegally);
@@ -446,10 +450,12 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         gameWidget =
             ImageTriviaWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
-      case PuzzleType.wordScramble:
+       case PuzzleType.wordScramble:
         gameWidget =
             WordScrambleWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
+      default:
+        gameWidget = const Center(child: Text("Minijuego no implementado"));
     }
 
 

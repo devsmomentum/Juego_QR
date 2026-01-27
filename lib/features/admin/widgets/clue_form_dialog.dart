@@ -144,25 +144,79 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
 
     try {
       final isEdit = widget.clue != null;
-      final newClue = Clue(
-        id: isEdit ? widget.clue!.id : '', // En create, ID generado por DB
-        title: _titleController.text,
-        description: _descriptionController.text,
-        hint: _hintController.text,
-        type: isEdit ? widget.clue!.type : ClueType.minigame,
-        latitude: _latitude,
-        longitude: _longitude,
-        qrCode: isEdit ? widget.clue!.qrCode : null,
-        minigameUrl: isEdit ? widget.clue!.minigameUrl : null,
-        xpReward: int.tryParse(_xpController.text) ?? 50,
-        coinReward: int.tryParse(_coinController.text) ?? 10,
-        puzzleType: _selectedType,
-        riddleQuestion: _questionController.text,
-        riddleAnswer: _answerController.text,
-        isLocked: isEdit ? widget.clue!.isLocked : true,
-        isCompleted: isEdit ? widget.clue!.isCompleted : false,
-        sequenceIndex: isEdit ? widget.clue!.sequenceIndex : 0,
-      );
+      Clue newClue;
+      
+      if (_selectedType != PuzzleType.slidingPuzzle || 
+          (isEdit && widget.clue is OnlineClue) || 
+          (!isEdit && _selectedType != PuzzleType.slidingPuzzle)) { 
+          // Logic refinement: Determine if we are creating an Online Clue or Physical Clue
+          // Ideally based on a dropdown for ClueType, but here mixed with PuzzleType directly.
+          // Assuming for now if it's minigame related or default flow in Admin:
+          // The form seems to lack a ClueType selector explicitly, it assumes Minigame?
+          // Looking at line 152: `type: isEdit ? widget.clue!.type : ClueType.minigame`
+          // So default is minigame.
+          
+          // However, we want to support Physical too.
+          // If we are editing, we preserve type.
+          // If creating, we need to know. 
+          // The current form seems biased towards Minigames (PuzzleType selector).
+          // But it has Lat/Long inputs...
+          
+          final type = isEdit ? widget.clue!.type : ClueType.minigame; 
+          // WARNING: If the form is used for Physical Clues, we need to handle that.
+          // For now, let's respect the existing type or default to Minigame as per previous code.
+          
+          if (type == ClueType.minigame) {
+             newClue = OnlineClue(
+              id: isEdit ? widget.clue!.id : '',
+              title: _titleController.text,
+              description: _descriptionController.text,
+              hint: _hintController.text,
+              type: type,
+              xpReward: int.tryParse(_xpController.text) ?? 50,
+              coinReward: int.tryParse(_coinController.text) ?? 10,
+              puzzleType: _selectedType,
+              riddleQuestion: _questionController.text,
+              riddleAnswer: _answerController.text,
+              minigameUrl: isEdit && widget.clue is OnlineClue ? (widget.clue as OnlineClue).minigameUrl : null,
+              isLocked: isEdit ? widget.clue!.isLocked : true,
+              isCompleted: isEdit ? widget.clue!.isCompleted : false,
+              sequenceIndex: isEdit ? widget.clue!.sequenceIndex : 0,
+            );
+          } else {
+             newClue = PhysicalClue(
+              id: isEdit ? widget.clue!.id : '',
+              title: _titleController.text,
+              description: _descriptionController.text,
+              hint: _hintController.text,
+              type: type,
+              xpReward: int.tryParse(_xpController.text) ?? 50,
+              coinReward: int.tryParse(_coinController.text) ?? 10,
+              latitude: _latitude,
+              longitude: _longitude,
+              qrCode: isEdit && widget.clue is PhysicalClue ? (widget.clue as PhysicalClue).qrCode : null,
+              isLocked: isEdit ? widget.clue!.isLocked : true,
+              isCompleted: isEdit ? widget.clue!.isCompleted : false,
+              sequenceIndex: isEdit ? widget.clue!.sequenceIndex : 0,
+            );
+          }
+      } else {
+         // Fallback default
+         newClue = OnlineClue(
+              id: isEdit ? widget.clue!.id : '',
+              title: _titleController.text,
+              description: _descriptionController.text,
+              hint: _hintController.text,
+              type: ClueType.minigame,
+              xpReward: int.tryParse(_xpController.text) ?? 50,
+              coinReward: int.tryParse(_coinController.text) ?? 10,
+              puzzleType: _selectedType,
+              riddleQuestion: _questionController.text,
+              riddleAnswer: _answerController.text,
+              isLocked: true,
+              isCompleted: false,
+         );
+      }
 
       final provider = Provider.of<EventProvider>(context, listen: false);
       if (isEdit) {

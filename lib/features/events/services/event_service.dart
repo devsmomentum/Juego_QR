@@ -250,13 +250,13 @@ class EventService {
       final response = await _supabase.from('clues').update({
         'title': clue.title,
         'description': clue.description,
-        'puzzle_type': clue.puzzleType.toString().split('.').last,
-        'riddle_question': clue.riddleQuestion,
-        'riddle_answer': clue.riddleAnswer,
+        'puzzle_type': (clue is OnlineClue) ? (clue as OnlineClue).puzzleType.toString().split('.').last : null,
+        'riddle_question': (clue is OnlineClue) ? (clue as OnlineClue).riddleQuestion : null,
+        'riddle_answer': (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
         'xp_reward': clue.xpReward,
         'coin_reward': clue.coinReward,
-        'latitude': clue.latitude,
-        'longitude': clue.longitude,
+        'latitude': (clue is PhysicalClue) ? (clue as PhysicalClue).latitude : null,
+        'longitude': (clue is PhysicalClue) ? (clue as PhysicalClue).longitude : null,
         'hint': clue.hint,
         'sequence_index': clue.sequenceIndex,
       }).eq('id', clue.id).select();
@@ -291,14 +291,14 @@ class EventService {
         'description': clue.description,
         'hint': clue.hint,
         'type': clue.type.toString().split('.').last,
-        'puzzle_type': clue.puzzleType.toString().split('.').last,
-        'riddle_question': clue.riddleQuestion,
-        'riddle_answer': clue.riddleAnswer,
+        'puzzle_type': (clue is OnlineClue) ? (clue as OnlineClue).puzzleType.toString().split('.').last : null,
+        'riddle_question': (clue is OnlineClue) ? (clue as OnlineClue).riddleQuestion : null,
+        'riddle_answer': (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
         'xp_reward': clue.xpReward,
         'coin_reward': clue.coinReward,
-        'sequence_index': nextOrder,
-        'latitude': clue.latitude,
-        'longitude': clue.longitude,
+        'sequence_index': clue.sequenceIndex > 0 ? clue.sequenceIndex : nextOrder, // Use provided index if valid
+        'latitude': (clue is PhysicalClue) ? (clue as PhysicalClue).latitude : null,
+        'longitude': (clue is PhysicalClue) ? (clue as PhysicalClue).longitude : null,
       }).select();
       
       debugPrint('✅ Add Response: $response');

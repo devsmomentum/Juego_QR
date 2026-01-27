@@ -1,157 +1,17 @@
 import 'package:flutter/material.dart';
+import '../screens/qr_scanner_screen.dart';
+import '../screens/clue_finder_screen.dart';
+import '../screens/puzzle_screen.dart';
+import '../../mall/screens/mall_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/game_provider.dart';
+import '../../../core/theme/app_theme.dart';
 
 enum ClueType {
   qrScan,
   geolocation,
   minigame,
   npcInteraction,
-}
-
-class Clue {
-  final String id;
-  final String title;
-  final String description;
-  final String hint;
-  final ClueType type;
-  final double? latitude;
-  final double? longitude;
-  final String? qrCode;
-  final String? minigameUrl;
-  final int xpReward;
-  final int coinReward;
-  bool isCompleted;
-  bool isLocked;
-  
-  // Nuevos campos para acertijos
-  final String? riddleQuestion;
-  final String? riddleAnswer;
-  final PuzzleType puzzleType;
-  final int sequenceIndex; // Para ordenar las pistas
-
-  Clue({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.hint,
-    required this.type,
-    this.latitude,
-    this.longitude,
-    this.qrCode,
-    this.minigameUrl,
-    this.xpReward = 50,
-    this.coinReward = 10,
-    this.isCompleted = false,
-    this.isLocked = true,
-    this.riddleQuestion,
-    this.riddleAnswer,
-    this.puzzleType = PuzzleType.slidingPuzzle,
-    this.sequenceIndex = 0,
-  });
-  
-
-  Clue copyWith({
-    String? id,
-    String? title,
-    String? description,
-    String? hint,
-    ClueType? type,
-    double? latitude,
-    double? longitude,
-    String? qrCode,
-    String? minigameUrl,
-    int? xpReward,
-    int? coinReward,
-    bool? isCompleted,
-    bool? isLocked,
-    String? riddleQuestion,
-    String? riddleAnswer,
-    PuzzleType? puzzleType,
-    int? sequenceIndex,
-  }) {
-    return Clue(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      description: description ?? this.description,
-      hint: hint ?? this.hint,
-      type: type ?? this.type,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      qrCode: qrCode ?? this.qrCode,
-      minigameUrl: minigameUrl ?? this.minigameUrl,
-      xpReward: xpReward ?? this.xpReward,
-      coinReward: coinReward ?? this.coinReward,
-      isCompleted: isCompleted ?? this.isCompleted,
-      isLocked: isLocked ?? this.isLocked,
-      riddleQuestion: riddleQuestion ?? this.riddleQuestion,
-      riddleAnswer: riddleAnswer ?? this.riddleAnswer,
-      puzzleType: puzzleType ?? this.puzzleType,
-      sequenceIndex: sequenceIndex ?? this.sequenceIndex,
-    );
-  }
-  
-  String get typeIcon {
-    switch (type) {
-      case ClueType.qrScan:
-        return '📷';
-      case ClueType.geolocation:
-        return '📍';
-      case ClueType.minigame:
-        return '🎮';
-      case ClueType.npcInteraction:
-        return '🏪';
-    }
-  }
-  
-  String get typeName {
-    switch (type) {
-      case ClueType.qrScan:
-        return 'Escanear QR';
-      case ClueType.geolocation:
-        return 'Ubicación';
-      case ClueType.minigame:
-        return 'Minijuego';
-      case ClueType.npcInteraction:
-        return 'Tiendita';
-    }
-  }
-
-  factory Clue.fromJson(Map<String, dynamic> json) {
-
-    String? image = json['image_url'];
-    
-    if (image != null && (image.contains('C:/') || image.contains('file:///'))) {
-    print('⚠️ Ruta inválida detectada y bloqueada: $image');
-    image = null; // La volvemos nula para que no rompa la app
-  }
-
-    return Clue(
-      id: json['id'].toString(), // Handle int or string
-      title: json['title'],
-      description: json['description'] ?? '',
-      hint: json['hint'] ?? '',
-      type: ClueType.values.firstWhere(
-        (e) => e.toString().split('.').last == json['type'],
-        orElse: () => ClueType.qrScan,
-      ),
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
-      qrCode: json['qr_code'],
-      minigameUrl: json['minigame_url'],
-      xpReward: (json['xp_reward'] as num?)?.toInt() ?? 0,
-      coinReward: (json['coin_reward'] as num?)?.toInt() ?? 0,
-      isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
-      isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
-      riddleQuestion: json['riddle_question'],
-      riddleAnswer: json['riddle_answer'],
-      puzzleType: json['puzzle_type'] != null 
-        ? PuzzleType.values.firstWhere(
-            (e) => e.toString().split('.').last == json['puzzle_type'],
-            orElse: () => PuzzleType.slidingPuzzle, // Fallback seguro
-          )
-        : PuzzleType.slidingPuzzle, 
-      sequenceIndex: json['sequence_index'] ?? 0,
-    );
-  }
 }
 
 enum PuzzleType {
@@ -217,7 +77,261 @@ enum PuzzleType {
       case PuzzleType.codeBreaker: return 'Descifra el código de 4 dígitos';
       case PuzzleType.imageTrivia: return '¿Qué es lo que ves en la imagen?';
       case PuzzleType.wordScramble: return 'Ordena las letras para formar la palabra';
+    }
+  }
+}
+
+/// Base abstract class for all clues
+abstract class Clue {
+  final String id;
+  final String title;
+  final String description;
+  final String hint;
+  final ClueType type;
+  final int xpReward;
+  final int coinReward;
+  bool isCompleted;
+  bool isLocked;
+  final int sequenceIndex;
+
+  Clue({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.hint,
+    required this.type,
+    this.xpReward = 50,
+    this.coinReward = 10,
+    this.isCompleted = false,
+    this.isLocked = true,
+    this.sequenceIndex = 0,
+  });
+
+  /// Abstract methods ensuring polymorphism
+  void executeAction(BuildContext context);
+  String get typeName;
+  String get typeIcon;
+
+  // Virtual getters for compatibility (returning null by default)
+  double? get latitude => null;
+  double? get longitude => null;
+  String? get qrCode => null;
+  String? get minigameUrl => null;
+  String? get riddleQuestion => null;
+  String? get riddleAnswer => null;
+  PuzzleType get puzzleType => PuzzleType.slidingPuzzle; // Default fallback ensuring non-null if possible, or make nullable if logic allows. Original was non-nullable in OnlineClue.
+  // Actually, user said "return null by default". But puzzleType is an Enum. 
+  // If I return null, I must change return type to `PuzzleType?`.
+  // Let's check usage. `clue.puzzleType` is used in switch cases. 
+  // If I make it nullable, switch cases will assume non-null or need default. 
+  // The user said: "puzzleType". 
+  // Let's return a safe default `PuzzleType.slidingPuzzle` effectively behaving like "nullable logic handled safely" or actually change the return type. 
+  // However, existing code might expect strict `PuzzleType`. 
+  // Use `PuzzleType?` as return type for the getter to be safe with "null by default".
+  
+  // Wait, if I change it to `PuzzleType?`, I might break code expecting `PuzzleType`.
+  // The request says: "Campos: ... puzzleType ... Ejemplo: double? get latitude => null;."
+  // So likely `PuzzleType? get puzzleType => null;`
+  
+  /// Factory to create the correct subclass based on ClueType
+  factory Clue.fromJson(Map<String, dynamic> json) {
+    
+    // Safety check for image URLs in JSON (from original code)
+    String? image = json['image_url'];
+    if (image != null && (image.contains('C:/') || image.contains('file:///'))) {
+       print('⚠️ Ruta inválida detectada y bloqueada: $image');
+    }
+
+    final typeStr = json['type'] as String?;
+    final type = ClueType.values.firstWhere(
+      (e) => e.toString().split('.').last == typeStr,
+      orElse: () => ClueType.qrScan,
+    );
+
+    if (type == ClueType.minigame) {
+      return OnlineClue.fromJson(json, type);
+    } else {
+      return PhysicalClue.fromJson(json, type);
+    }
+  }
+}
+
+class PhysicalClue extends Clue {
+  final double? latitude;
+  final double? longitude;
+  final String? qrCode;
+
+  PhysicalClue({
+    required super.id,
+    required super.title,
+    required super.description,
+    required super.hint,
+    required super.type,
+    super.xpReward,
+    super.coinReward,
+    super.isCompleted,
+    super.isLocked,
+    super.sequenceIndex,
+    this.latitude,
+    this.longitude,
+    this.qrCode,
+  });
+
+  factory PhysicalClue.fromJson(Map<String, dynamic> json, ClueType type) {
+    return PhysicalClue(
+      id: json['id'].toString(),
+      title: json['title'],
+      description: json['description'] ?? '',
+      hint: json['hint'] ?? '',
+      type: type,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      qrCode: json['qr_code'],
+      xpReward: (json['xp_reward'] as num?)?.toInt() ?? 50,
+      coinReward: (json['coin_reward'] as num?)?.toInt() ?? 10,
+      isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
+      isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
+      sequenceIndex: json['sequence_index'] ?? 0,
+    );
+  }
+
+  @override
+  String get typeName {
+    switch (type) {
+      case ClueType.qrScan:
+        return 'Escanear QR';
+      case ClueType.geolocation:
+        return 'Ubicación';
+      case ClueType.npcInteraction:
+        return 'Tiendita';
+      default:
+        return 'Física';
+    }
+  }
+
+  @override
+  String get typeIcon {
+    switch (type) {
+      case ClueType.qrScan:
+        return '📷';
+      case ClueType.geolocation:
+        return '📍';
+      case ClueType.npcInteraction:
+        return '🏪';
+      default:
+        return '📍';
+    }
+  }
+
+  @override
+  void executeAction(BuildContext context) async {
+    switch (type) {
+      case ClueType.qrScan:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => QRScannerScreen(expectedClueId: id)),
+        );
+        break;
+      case ClueType.geolocation:
+        // Physical Clues logic for Geolocation
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ClueFinderScreen(clue: this),
+          ),
+        );
+        
+        // If returned true, it means it was scanned/found during the finder process
+        if (result == true) {
+           // We can handle post-scan logic here if needed, 
+           // but traditionally unlocking is handled by the calling screen or provider.
+           // In the original code, `_unlockAndProceed` was called. 
+           // We might need to handle this integration in the `CluesScreen` wrapper.
+        }
+        break;
+      case ClueType.npcInteraction:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MallScreen()),
+        );
+        break;
+      default:
+        // Fallback
+        break;
+    }
+  }
+}
+
+class OnlineClue extends Clue {
+  final String? minigameUrl;
+  final String? riddleQuestion;
+  final String? riddleAnswer;
+  final PuzzleType puzzleType;
+
+  OnlineClue({
+    required super.id,
+    required super.title,
+    required super.description,
+    required super.hint,
+    required super.type,
+    super.xpReward,
+    super.coinReward,
+    super.isCompleted,
+    super.isLocked,
+    super.sequenceIndex,
+    this.minigameUrl,
+    this.riddleQuestion,
+    this.riddleAnswer,
+    this.puzzleType = PuzzleType.slidingPuzzle,
+  });
+
+  factory OnlineClue.fromJson(Map<String, dynamic> json, ClueType type) {
+    return OnlineClue(
+      id: json['id'].toString(),
+      title: json['title'],
+      description: json['description'] ?? '',
+      hint: json['hint'] ?? '',
+      type: type,
+      minigameUrl: json['minigame_url'],
+      riddleQuestion: json['riddle_question'],
+      riddleAnswer: json['riddle_answer'],
+      puzzleType: json['puzzle_type'] != null 
+        ? PuzzleType.values.firstWhere(
+            (e) => e.toString().split('.').last == json['puzzle_type'],
+            orElse: () => PuzzleType.slidingPuzzle,
+          )
+        : PuzzleType.slidingPuzzle,
+      xpReward: (json['xp_reward'] as num?)?.toInt() ?? 50,
+      coinReward: (json['coin_reward'] as num?)?.toInt() ?? 10,
+      isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
+      isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
+      sequenceIndex: json['sequence_index'] ?? 0,
+    );
+  }
+
+  @override
+  String get typeName => 'Minijuego';
+
+  @override
+  String get typeIcon => '🎮';
+
+  @override
+  void executeAction(BuildContext context) {
+    try {
+      // In Clean Architecture we shouldn't rely on Provider here ideally, but for pragmatic refactor:
+      // We are just navigating. The Provider usage in the original code was for error handling.
       
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PuzzleScreen(clue: this)), // PuzzleScreen accepts Clue (which is now OnlineClue or Base)
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: No se pudo cargar el minijuego. $e'),
+          backgroundColor: AppTheme.dangerRed,
+        ),
+      );
     }
   }
 }

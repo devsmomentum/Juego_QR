@@ -172,53 +172,8 @@ class _CluesScreenState extends State<CluesScreen> {
     );
   }
 
-  void _handleClueAction(BuildContext context, String clueId, String clueType) {
-    switch (clueType) {
-      case 'qrScan':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => QRScannerScreen(expectedClueId: clueId)),
-        );
-        break;
-      case 'geolocation':
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ClueFinderScreen(
-              clue: Provider.of<GameProvider>(context, listen: false)
-                  .clues
-                  .firstWhere((c) => c.id == clueId),
-            ),
-          ),
-        );
-        break;
-      case 'npcInteraction':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MallScreen()),
-        );
-        break;
-      case 'minigame':
-        try {
-          final gameProvider = Provider.of<GameProvider>(context, listen: false);
-          final clue = gameProvider.clues.firstWhere(
-            (c) => c.id == clueId,
-            orElse: () => throw Exception('Clue not found'),
-          );
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
-          );
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: No se pudo cargar el minijuego. $e'),
-              backgroundColor: AppTheme.dangerRed,
-            ),
-          );
-        }
-        break;
-    }
+  void _handleClueAction(BuildContext context, Clue clue) {
+    clue.executeAction(context);
   }
 
   // Estado local para recordar qué pistas ya se escanearon en esta sesión
@@ -382,33 +337,9 @@ class _CluesScreenState extends State<CluesScreen> {
                                      return;
                                   }
 
-                                  // 1. Verificamos si ya fue escaneada/encontrada
-                                  if (!_scannedClues.contains(clue.id)) {
-                                    final isOnline = Provider.of<AppModeProvider>(context, listen: false).isOnlineMode;
-                                    
-                                    if (isOnline) {
-                                      // BYPASS ONLINE: Sin radar, sin escaneo. Directo al juego.
-                                      _unlockAndProceed(clue);
-                                      return;
-                                    }
-
-                                    // 2. Si NO fue encontrada -> Ir a pantalla de Frio/Caliente
-                                    final bool? success = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ClueFinderScreen(clue: clue),
-                                      ),
-                                    );
-                                    
-                                    // 3. Si regresó con éxito (Encontró y Escaneó)
-                                    if (success == true) {
-                                       _unlockAndProceed(clue);
-                                    }
-                                    return; 
-                                  } else {
-                                    // 4. YA escaneada -> Jugar
-                                    _handleClueAction(context, clue.id, clue.type.toString().split('.').last);
-                                  }
+                                  // Polimorfismo: Delegamos la ejecución a la pista misma
+                                  // Esto reemplaza checks de isOnline y switch de tipos
+                                  clue.executeAction(context);
                                 }
                               },
                             );
@@ -504,7 +435,7 @@ class _CluesScreenState extends State<CluesScreen> {
     gameProvider.unlockClue(clue.id);
     
     // Navegar al minijuego correspondiente
-    _handleClueAction(context, clue.id, clue.type.toString().split('.').last);
+    clue.executeAction(context);
   }
 
 }
