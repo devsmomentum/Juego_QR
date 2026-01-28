@@ -31,21 +31,29 @@ class GameAccessService {
   
   /// Checks all conditions (Location, FakeGPS, Auth, Session, Participation) 
   /// and returns a decision on what to do next.
+  /// 
+  /// For ONLINE events, location validation is completely bypassed.
+  /// For ON-SITE events, full location/GPS checks are performed.
   Future<GameAccessResult> checkAccess({
-    required BuildContext context, // Start using context only for Providers lookup if needed, or pass providers
+    required BuildContext context,
     required Scenario scenario,
     required PlayerProvider playerProvider,
     required GameRequestProvider requestProvider,
   }) async {
     
-    // 1. Location Checks (Platform specific)
-    bool shouldCheckLocation = true;
-    try {
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        shouldCheckLocation = false;
+    // 1. Location Checks - ONLY for on-site (presencial) events
+    final bool isOnlineEvent = scenario.type == 'online';
+    bool shouldCheckLocation = !isOnlineEvent; // Skip entirely for online events
+    
+    // Additionally skip for desktop platforms (development)
+    if (shouldCheckLocation) {
+      try {
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          shouldCheckLocation = false;
+        }
+      } catch (e) {
+        // On web or unknown platform, keep the original decision
       }
-    } catch (e) {
-      shouldCheckLocation = true; 
     }
 
     if (shouldCheckLocation) {

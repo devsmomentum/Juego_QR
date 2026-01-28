@@ -9,7 +9,7 @@ import '../../game/models/clue.dart'; // For PuzzleType enum
 import '../../game/providers/event_provider.dart';
 import '../../mall/providers/store_provider.dart';
 import '../../mall/models/mall_store.dart';
-import '../services/event_factory_service.dart';
+import '../services/event_domain_service.dart';
 
 
 class EventCreationProvider extends ChangeNotifier {
@@ -131,7 +131,7 @@ class EventCreationProvider extends ChangeNotifier {
   }
   
   void generateRandomPin() {
-    _pin = EventFactoryService.generatePin(isOnline: _eventType == 'online');
+    _pin = EventDomainService.generatePin(isOnline: _eventType == 'online');
     checkFormValidity();
     notifyListeners();
   }
@@ -363,31 +363,28 @@ class EventCreationProvider extends ChangeNotifier {
     notifyListeners();
 
     String? createdEventId;
-    String finalPin = _pin;
 
     try {
-      // Auto-generate PIN for Online Mode
-      if (_eventType == 'online') {
-         // Use Factory
-         finalPin = EventFactoryService.generatePin(isOnline: true);
-         _pin = finalPin; // Update state so UI might show it if needed
-      }
-
-      final newEvent = GameEvent(
+      // Delegate event construction to domain service
+      final newEvent = EventDomainService.createConfiguredEvent(
         id: _eventId,
         title: _title,
         description: _description,
-        locationName: _eventType == 'online' ? 'Online' : (_locationName ?? 'Unknown'),
-        latitude: _eventType == 'online' ? 0.0 : _latitude!,
-        longitude: _eventType == 'online' ? 0.0 : _longitude!,
+        locationName: _locationName,
+        latitude: _latitude,
+        longitude: _longitude,
         date: _selectedDate,
-        createdByAdminId: 'admin_1',
-        imageUrl: _selectedImage!.name,
         clue: _clue,
         maxParticipants: _maxParticipants,
-        pin: finalPin,
-        type: _eventType,
+        pin: _pin,
+        eventType: _eventType,
+        imageFileName: _selectedImage!.name,
       );
+
+      // Update PIN state for UI feedback (domain service may have auto-generated it)
+      if (_eventType == 'online') {
+        _pin = newEvent.pin;
+      }
 
       // 1. Create Event
       createdEventId = await eventProvider.createEvent(newEvent, _selectedImage);
@@ -396,7 +393,7 @@ class EventCreationProvider extends ChangeNotifier {
       if (createdEventId != null && _clueForms.isNotEmpty) {
         // Sanitize Clues for Online Mode
         if (_eventType == 'online') {
-            EventFactoryService.sanitizeCluesForOnline(_clueForms);
+            EventDomainService.sanitizeCluesForOnline(_clueForms);
         }
 
         await eventProvider.createCluesBatch(createdEventId, _clueForms);
@@ -405,9 +402,9 @@ class EventCreationProvider extends ChangeNotifier {
       // 3. Create Stores
       if (createdEventId != null) {
         if (_eventType == 'online') {
-            // Default Online Store via Factory
+            // Default Online Store via Domain Service
             try {
-               final defaultStore = EventFactoryService.createDefaultOnlineStore(createdEventId);
+               final defaultStore = EventDomainService.createDefaultOnlineStore(createdEventId);
                // We pass null for imageFile as we don't have one selected
                await storeProvider.createStore(defaultStore, null);
             } catch (e) {
@@ -440,7 +437,7 @@ class EventCreationProvider extends ChangeNotifier {
       }
 
       String successMessage = _eventType == 'online' 
-          ? 'Competencia Online creada. PIN: $finalPin' 
+          ? 'Competencia Online creada. PIN: ${newEvent.pin}' 
           : 'Competencia creada con éxito';
       
       onSuccess(successMessage);
