@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../mall/models/power_item.dart';
 import '../../../shared/models/player.dart';
+import '../../../shared/interfaces/i_resettable.dart';
 import '../../game/providers/power_effect_provider.dart';
 import '../../game/providers/game_provider.dart';
 import '../services/auth_service.dart';
@@ -21,7 +22,7 @@ enum PowerUseResult { success, reflected, error }
 /// - This provider focuses on: Auth, Profile, Avatar, Session management
 /// 
 /// Public API remains unchanged for backward compatibility.
-class PlayerProvider extends ChangeNotifier {
+class PlayerProvider extends ChangeNotifier implements IResettable {
   Player? _currentPlayer;
   List<Player> _allPlayers = [];
   final SupabaseClient _supabase;
@@ -193,22 +194,47 @@ class PlayerProvider extends ChangeNotifier {
     if (_isLoggingOut) return;
     _isLoggingOut = true;
 
-    _pollingTimer?.cancel();
-    await _profileSubscription?.cancel();
-    _profileSubscription = null;
-    
-    await _gamePlayersSubscription?.cancel();
-    _gamePlayersSubscription = null;
-
+    // Use centralized AuthService logout which triggers callbacks
     await _authService.logout();
-    _currentPlayer = null;
+    
+    // Note: Local reset() will be called via callback registered in main.dart
+    // But we keep basic cleanup locally for safety if not registered
     
     if (clearBanMessage) {
       _banMessage = null;
     }
     
-    notifyListeners();
     _isLoggingOut = false;
+  }
+
+  /// Global Reset: Clears all user session data
+  /// Implementación de IResettable
+  @override
+  void resetState() {
+    _pollingTimer?.cancel();
+    _profileSubscription?.cancel();
+    _profileSubscription = null;
+    _gamePlayersSubscription?.cancel();
+    _gamePlayersSubscription = null;
+
+    _currentPlayer = null;
+    _eventInventories.clear();
+    // _banMessage is optional to clear depending on UX, usually yes on logout
+    // But we might want to show WHY they were logged out. 
+    // For now, clear it.
+    _banMessage = null;
+    
+    notifyListeners();
+  }
+
+  /// Clears the current player's inventory list explicitly.
+  /// Used to prevent ghost data when switching events.
+  void clearCurrentInventory() {
+    if (_currentPlayer != null) {
+      _currentPlayer!.inventory = [];
+      debugPrint('PlayerProvider: Inventory cleared for context switch.');
+      notifyListeners();
+    }
   }
 
   // ============================================================

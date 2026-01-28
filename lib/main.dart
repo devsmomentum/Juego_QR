@@ -89,25 +89,42 @@ class TreasureHuntApp extends StatelessWidget {
         Provider<MockPaymentRepository>(create: (_) => MockPaymentRepository()),
         Provider<GameStreamService>(create: (_) => GameStreamService()),
         
+        // --- Shared AuthService (Single Source of Truth) ---
+        Provider<AuthService>(create: (_) => AuthService(supabaseClient: Supabase.instance.client)),
+
         // --- Existing Providers ---
         ChangeNotifierProvider(create: (context) {
           final supabase = Supabase.instance.client;
-          return PlayerProvider(
+          final authService = Provider.of<AuthService>(context, listen: false); // Use shared instance
+          
+          final provider = PlayerProvider(
             supabaseClient: supabase,
-            authService: AuthService(supabaseClient: supabase),
+            authService: authService,
             adminService: Provider.of<AdminService>(context, listen: false),
             inventoryService: InventoryService(supabaseClient: supabase),
             powerService: PowerService(supabaseClient: supabase),
           );
+          
+          // Register cleanup for logout
+          authService.onLogout(() async => provider.resetState());
+          
+          return provider;
         }),
         ChangeNotifierProvider(create: (_) {
            final supabase = Supabase.instance.client;
            return EventProvider(eventService: EventService(supabase));
         }),
         ChangeNotifierProvider(create: (_) => GameRequestProvider()),
-        ChangeNotifierProvider(create: (_) {
+        ChangeNotifierProvider(create: (context) {
            final supabase = Supabase.instance.client;
-           return GameProvider(gameService: GameService(supabase));
+           final authService = Provider.of<AuthService>(context, listen: false);
+           
+           final provider = GameProvider(gameService: GameService(supabase));
+           
+           // Register cleanup for logout
+           authService.onLogout(() async => provider.resetState());
+           
+           return provider;
         }),
         Provider(create: (_) {
             final supabase = Supabase.instance.client;
@@ -124,9 +141,16 @@ class TreasureHuntApp extends StatelessWidget {
         // --- NEW: SRP-Segregated Providers ---
         ChangeNotifierProvider(create: (context) {
           final supabase = Supabase.instance.client;
-          return PlayerInventoryProvider(
+          final authService = Provider.of<AuthService>(context, listen: false);
+          
+          final provider = PlayerInventoryProvider(
             inventoryService: InventoryService(supabaseClient: supabase),
           );
+          
+          // Register cleanup for logout
+          authService.onLogout(() async => provider.resetState());
+          
+          return provider;
         }),
         ChangeNotifierProvider(create: (context) {
           final livesRepo = Provider.of<SupabaseLivesRepository>(context, listen: false);

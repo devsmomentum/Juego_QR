@@ -10,6 +10,7 @@ import '../models/scenario.dart';
 import '../providers/event_provider.dart'; 
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../../auth/providers/player_inventory_provider.dart'; // NEW
 import '../../../core/providers/app_mode_provider.dart';
 import '../providers/game_request_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -142,6 +143,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
       final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      final inventoryProvider = Provider.of<PlayerInventoryProvider>(context, listen: false); // NEW
 
       final accessService = GameAccessService();
 
@@ -184,6 +186,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               }
 
               if (success) {
+                // CLEANUP: Prevent Inventory Leak
+                if (gameProvider.currentEventId != scenario.id) {
+                   debugPrint('🚫 Event Switch: Cleaning up old state for ${scenario.id}...');
+                   inventoryProvider.resetEventState(); // Clean inventory lists (Provider)
+                   playerProvider.clearCurrentInventory(); // Clean active inventory (Player model)
+                }
+
                 await gameProvider.fetchClues(eventId: scenario.id);
                 if (mounted) {
                   Navigator.push(

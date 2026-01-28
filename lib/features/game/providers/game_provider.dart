@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clue.dart';
 import '../../../shared/models/player.dart';
+import '../../../shared/interfaces/i_resettable.dart';
 import '../services/game_service.dart';
 import '../models/power_effect.dart';
 
@@ -71,7 +72,7 @@ class UserEventStatusResult {
 /// - Ranking en tiempo real (Leaderboard).
 /// - Estado de la carrera (Race Status) para detectar ganadores.
 /// - Gestión de efectos visuales globales (Congelamiento, etc.).
-class GameProvider extends ChangeNotifier {
+class GameProvider extends ChangeNotifier implements IResettable {
   final GameService _gameService;
   
   List<Clue> _clues = [];
@@ -143,8 +144,11 @@ class GameProvider extends ChangeNotifier {
   
   GameProvider({required GameService gameService}) : _gameService = gameService;
 
-  /// Limpia COMPLETAMENTE el estado del juego
+  /// Limpia COMPLETAMENTE el estado del juego (Global Reset)
+  /// Implementación de IResettable
+  @override
   void resetState() {
+    print('GameProvider: Executing resetState()...');
     _clues = [];
     _leaderboard = [];
     _currentClueIndex = 0;
@@ -152,12 +156,16 @@ class GameProvider extends ChangeNotifier {
     _isLoading = false;
     _currentEventId = null;
     _errorMessage = null;
-    _lives = 3;
+    _lives = 0;
     _isRaceCompleted = false;
     _hintActive = false;
     _activeHintText = null;
+    _targetPlayerId = null;
+    _activePowerEffects = [];
+    _isFrozen = false;
     
     stopLeaderboardUpdates();
+    stopLivesSubscription();
     notifyListeners();
   }
 

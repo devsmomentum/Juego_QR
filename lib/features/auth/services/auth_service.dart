@@ -8,9 +8,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// de depender de variables globales.
 class AuthService {
   final SupabaseClient _supabase;
+  final List<Future<void> Function()> _logoutCallbacks = [];
 
   AuthService({required SupabaseClient supabaseClient})
       : _supabase = supabaseClient;
+
+  /// Registra un callback que se ejecutará al cerrar sesión.
+  void onLogout(Future<void> Function() callback) {
+    _logoutCallbacks.add(callback);
+  }
 
   /// Inicia sesión con email y password.
   /// 
@@ -83,8 +89,20 @@ class AuthService {
     }
   }
 
-  /// Cierra la sesión del usuario actual.
+  /// Cierra la sesión del usuario actual y ejecuta los callbacks de limpieza.
   Future<void> logout() async {
+    debugPrint('AuthService: Executing Global Logout...');
+    
+    // 1. Ejecutar limpieza de providers
+    for (final callback in _logoutCallbacks) {
+      try {
+        await callback();
+      } catch (e) {
+        debugPrint('AuthService: Error in logout callback: $e');
+      }
+    }
+    
+    // 2. Cerrar sesión en Supabase
     await _supabase.auth.signOut();
   }
 

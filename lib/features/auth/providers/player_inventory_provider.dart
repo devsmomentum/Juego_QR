@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/inventory_service.dart';
+import '../../../shared/interfaces/i_resettable.dart';
 
 /// Provider for player inventory management.
 /// 
 /// Extracted from PlayerProvider to follow SRP.
 /// Handles powers, consumables, and purchase operations.
-class PlayerInventoryProvider extends ChangeNotifier {
+class PlayerInventoryProvider extends ChangeNotifier implements IResettable {
   final InventoryService _inventoryService;
 
   // Inventory state
@@ -256,12 +257,26 @@ class PlayerInventoryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clear inventory state.
-  void clear() {
+  /// Reset inventory state (Global Reset).
+  /// Implementación de IResettable
+  @override
+  void resetState() {
     _inventory = [];
     _powerCounts = {};
     _eventInventories.clear();
     _currentUserId = null;
+    _currentEventId = null;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  /// Clears inventory data but keeps user session.
+  /// Used when switching events.
+  void resetEventState() {
+    _inventory = [];
+    _powerCounts = {};
+    // Do NOT clear _eventInventories as they are cached for other events
+    // Just clear current view
     _currentEventId = null;
     _errorMessage = null;
     notifyListeners();
