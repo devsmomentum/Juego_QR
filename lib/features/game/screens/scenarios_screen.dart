@@ -663,52 +663,19 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
 
                         // Description Text
                         // Description Text with Enhanced Style
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: AppTheme.accentGold.withOpacity(0.3),
-                              width: 1,
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+                          child: Text(
+                            '¡Embárcate en una emocionante búsqueda del tesoro resolviendo pistas intrigantes para descubrir el gran premio oculto!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              height: 1.5,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0.5,
+                              fontStyle: FontStyle.italic,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.accentGold.withOpacity(0.1),
-                                blurRadius: 10,
-                                spreadRadius: -2,
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.accentGold.withOpacity(0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.auto_awesome,
-                                  color: AppTheme.accentGold,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: const Text(
-                                  '¡Embárcate en una emocionante búsqueda del tesoro resolviendo pistas intrigantes para descubrir el gran premio oculto.',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    height: 1.4,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
 
