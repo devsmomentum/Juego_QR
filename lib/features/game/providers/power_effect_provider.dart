@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../strategies/power_strategy_factory.dart';
+import '../../mall/models/power_item.dart';
 
 /// Provider encargado de escuchar y gestionar los efectos de poderes en tiempo real.
 ///
@@ -61,7 +62,41 @@ class PowerEffectProvider extends ChangeNotifier {
   // Public API for Concurrent Effects
   bool isEffectActive(String slug) => _activeEffects.containsKey(slug);
   
+  bool isPowerActive(PowerType type) {
+    switch (type) {
+      case PowerType.blind:
+        return isEffectActive('black_screen');
+      case PowerType.freeze:
+        return isEffectActive('freeze');
+      case PowerType.blur:
+        return isEffectActive('blur_screen');
+      case PowerType.lifeSteal:
+        return isEffectActive('life_steal');
+      case PowerType.stealth:
+        return isEffectActive('invisibility');
+      default:
+        return false;
+    }
+  }
+  
   DateTime? getPowerExpiration(String slug) => _activeEffects[slug]?.expiresAt;
+  
+  DateTime? getPowerExpirationByType(PowerType type) {
+    switch (type) {
+      case PowerType.blind:
+        return getPowerExpiration('black_screen');
+      case PowerType.freeze:
+        return getPowerExpiration('freeze');
+      case PowerType.blur:
+        return getPowerExpiration('blur_screen');
+      case PowerType.lifeSteal:
+        return getPowerExpiration('life_steal');
+      case PowerType.stealth:
+        return getPowerExpiration('invisibility');
+      default:
+        return null;
+    }
+  }
   
   // Variables temporales para pasar contexto a la estrategia durante onActivate
   String? _pendingEffectId;

@@ -5,6 +5,7 @@ import '../../features/game/providers/game_provider.dart';
 import '../../features/game/providers/power_effect_provider.dart';
 import '../../features/game/widgets/effects/blind_effect.dart';
 import '../../features/game/widgets/effects/freeze_effect.dart';
+
 import '../../features/game/widgets/effects/blur_effect.dart';
 import '../../features/game/widgets/effects/life_steal_effect.dart';
 import '../../features/game/widgets/effects/return_success_effect.dart';
@@ -13,6 +14,7 @@ import '../../features/game/widgets/effects/invisibility_effect.dart';
 import '../../features/game/widgets/effects/steal_failed_effect.dart';
 import '../models/player.dart';
 import '../../features/auth/providers/player_provider.dart';
+import '../../features/mall/models/power_item.dart'; // Required for PowerType
 
 import '../utils/global_keys.dart'; // Importar para navegación
 
@@ -312,6 +314,10 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         if (isFreeze) 
             FreezeEffect(expiresAt: powerProvider.getPowerExpiration('freeze')),
             
+        // blur_screen reutiliza el efecto visual de invisibility para los rivales.
+         if (isBlur)
+           BlurScreenEffect(expiresAt: powerProvider.getPowerExpirationByType(PowerType.blur) ?? DateTime.now().add(const Duration(seconds: 5))), 
+
         if (defenseAction == DefenseAction.returned) ...[
           if (powerProvider.returnedByPlayerName != null)
              ReturnRejectionEffect(
@@ -333,9 +339,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             casterName: _lifeStealCasterName!,
           ),
 
-        // blur_screen reutiliza el efecto visual de invisibility para los rivales.
-        if (isBlur)
-          BlurScreenEffect(expiresAt: powerProvider.getPowerExpiration('blur_screen')), 
+
 
         // --- ESTADOS BENEFICIOSOS (BUFFS) ---
         if (isPlayerInvisible || isInvisible)

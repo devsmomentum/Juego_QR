@@ -6,6 +6,7 @@ enum PowerType {
   utility, // Utilidad (Pista, Radar)
   blind, // Específico para pantalla negra
   freeze, // Específico para congelar
+  blur, // Específico para difuminar pantalla
   shield, // Específico para escudo
   lifeSteal, // Específico para robar vida
   stealth, // Específico para invisibilidad
@@ -19,6 +20,7 @@ extension PowerTypeClassification on PowerType {
       case PowerType.debuff:
       case PowerType.blind:
       case PowerType.freeze:
+      case PowerType.blur:
       case PowerType.lifeSteal:
         return true;
       default:
@@ -106,7 +108,7 @@ class PowerItem {
         id: 'blur_screen',
         name: 'Pantalla Borrosa',
         description: 'Aplica un efecto borroso sobre la pantalla de todos los rivales.',
-        type: PowerType.debuff,
+        type: PowerType.blur,
         cost: 110,
         icon: '🌫️',
         color: Colors.blueGrey,
