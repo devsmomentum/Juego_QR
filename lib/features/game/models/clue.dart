@@ -108,6 +108,11 @@ abstract class Clue {
   String get typeName;
   String get typeIcon;
 
+  /// Strategy Pattern: Each clue type knows how to check its own unlock requirements.
+  /// OnlineClue returns true immediately (no physical checks needed).
+  /// PhysicalClue returns false (requires GPS/QR validation by the service).
+  Future<bool> checkUnlockRequirements();
+
   // Virtual getters for compatibility (returning null by default)
   double? get latitude => null;
   double? get longitude => null;
@@ -205,8 +210,14 @@ class PhysicalClue extends Clue {
         return '📍';
     }
   }
-  
-  // REMOVED: executeAction
+
+  /// PhysicalClue requires GPS proximity or QR scan - returns false to trigger unlock dialog.
+  @override
+  Future<bool> checkUnlockRequirements() async {
+    // Physical clues require location/QR validation which is handled by the unlock dialog.
+    // Return false to indicate the clue is NOT auto-unlocked.
+    return false;
+  }
 }
 
 class OnlineClue extends Clue {
@@ -262,5 +273,10 @@ class OnlineClue extends Clue {
   @override
   String get typeIcon => '🎮';
 
-  // REMOVED: executeAction
+  /// OnlineClue has no physical unlock requirements - always returns true.
+  @override
+  Future<bool> checkUnlockRequirements() async {
+    // Online clues have no GPS/QR requirements - always unlocked
+    return true;
+  }
 }

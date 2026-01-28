@@ -3,7 +3,7 @@ import 'dart:ui'; // Para FontFeature
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/repositories/game_repository.dart'; // DIP: Repository instead of Supabase
 import '../../auth/providers/player_provider.dart';
 import '../providers/game_request_provider.dart';
 import '../providers/game_provider.dart';
@@ -34,8 +34,9 @@ class _GameRequestScreenState extends State<GameRequestScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  RealtimeChannel? _subscriptionRequest;
-  RealtimeChannel? _subscriptionPlayer;
+  GameRepository? _gameRepository; // DIP: Using repository instead of direct channels
+  String? _requestChannelId;
+  String? _playerChannelId;
   Timer? _pollingTimer;
 
   
@@ -83,49 +84,28 @@ class _GameRequestScreenState extends State<GameRequestScreen>
 
     if (userId == null || eventId == null) return;
 
-    final supabase = Supabase.instance.client;
+    // DIP: Using GameRepository for realtime subscriptions
+    _gameRepository = GameRepository();
 
     // 1. Escuchar cambios en la solicitud (status update)
-    _subscriptionRequest = supabase
-        .channel('game_requests_updates_$userId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all, // Escuchar INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'game_requests',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
-          callback: (payload) {
-             debugPrint('[REALTIME] Request Change Detected: ${payload.eventType}');
-             // Siempre verificar estado, sin importar el tipo de cambio
-             _checkApprovalStatus();
-          },
-        )
-        .subscribe();
+    _requestChannelId = _gameRepository!.subscribeToGameRequests(
+      userId: userId,
+      onRequestChange: (payload) {
+        debugPrint('[REALTIME] Request Change Detected: ${payload.eventType}');
+        // Siempre verificar estado, sin importar el tipo de cambio
+        _checkApprovalStatus();
+      },
+    );
         
     // 2. Escuchar INSERCIONES en game_players (Aprobación definitiva)
-    _subscriptionPlayer = supabase
-        .channel('game_players_inserts_$userId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'game_players',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
-          callback: (payload) {
-             debugPrint('[REALTIME] Player Insert Detected!');
-             final newRecord = payload.newRecord;
-             if (newRecord['event_id'] == eventId) {
-                _checkApprovalStatus();
-             }
-          },
-        )
-        .subscribe();
+    _playerChannelId = _gameRepository!.subscribeToGamePlayerInserts(
+      userId: userId,
+      eventId: eventId,
+      onPlayerInsert: (payload) {
+        debugPrint('[REALTIME] Player Insert Detected!');
+        _checkApprovalStatus();
+      },
+    );
   }
 
   Future<void> _loadInitialData() async {
@@ -352,8 +332,7 @@ class _GameRequestScreenState extends State<GameRequestScreen>
   @override
   void dispose() {
     _pollingTimer?.cancel();
-    _subscriptionRequest?.unsubscribe();
-    _subscriptionPlayer?.unsubscribe();
+    _gameRepository?.dispose(); // DIP: Cleanup via repository
     _animationController.dispose();
     super.dispose();
   }

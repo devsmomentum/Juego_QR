@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/game_provider.dart';
-import '../../auth/providers/player_provider.dart'; // IMPORT AGREGADO
-import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
+import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../widgets/clue_card.dart';
@@ -381,15 +380,16 @@ class _CluesScreenState extends State<CluesScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 onPressed: () async {
-                  // --- ONLINE MODE BYPASS ---
-                  final isOnline = Provider.of<AppModeProvider>(context, listen: false).isOnlineMode;
+                  // --- STRATEGY PATTERN: Clue knows its own unlock requirements ---
+                  final isAutoUnlocked = await clue.checkUnlockRequirements();
                   
-                  if (isOnline) {
+                  if (isAutoUnlocked) {
                      Navigator.pop(context); // Cerrar diálogo
-                     _unlockAndProceed(clue); // Desbloqueo directo
+                     _unlockAndProceed(clue); // Desbloqueo directo (Online mode)
                      return;
                   }
 
+                  // Physical clue: requires QR scan
                   Navigator.pop(context); // Cerrar diálogo
                   final scannedCode = await Navigator.push(
                     context,
