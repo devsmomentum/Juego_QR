@@ -295,12 +295,15 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     try {
+      final eventId = _currentPlayer!.currentEventId;
       debugPrint('[DEBUG] 🔄 syncRealInventory START');
       debugPrint('[DEBUG]    userId: ${_currentPlayer!.userId}');
+      debugPrint('[DEBUG]    eventId: $eventId');
       debugPrint('[DEBUG]    effectProvider is null? ${effectProvider == null}');
 
       final result = await _inventoryService.syncRealInventory(
         userId: _currentPlayer!.userId,
+        eventId: eventId,
       );
 
       debugPrint('[DEBUG] 📦 syncRealInventory result:');

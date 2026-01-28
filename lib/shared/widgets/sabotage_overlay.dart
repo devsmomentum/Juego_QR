@@ -38,6 +38,12 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   // Control de bloqueo de navegación
   bool _isBlockingActive = false;
 
+  // Cached provider references to avoid context access in callbacks
+  PowerEffectProvider? _powerProviderRef;
+  PlayerProvider? _playerProviderRef;
+  GameProvider? _gameProviderRef;
+  String? _lastKnownGamePlayerId;
+
   @override
   void initState() {
     super.initState();
@@ -48,93 +54,132 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
       debugPrint('[DEBUG] 🎭 SabotageOverlay.initState() - PostFrameCallback START');
       
-      final powerProvider =
-          Provider.of<PowerEffectProvider>(context, listen: false);
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final playerProvider =
-          Provider.of<PlayerProvider>(context, listen: false);
+      // Cache provider references
+      _powerProviderRef = Provider.of<PowerEffectProvider>(context, listen: false);
+      _gameProviderRef = Provider.of<GameProvider>(context, listen: false);
+      _playerProviderRef = Provider.of<PlayerProvider>(context, listen: false);
 
-      debugPrint('[DEBUG]    powerProvider.listeningForId: ${powerProvider.listeningForId}');
-      debugPrint('[DEBUG]    playerProvider.gamePlayerId: ${playerProvider.currentPlayer?.gamePlayerId}');
+      debugPrint('[DEBUG]    powerProvider.listeningForId: ${_powerProviderRef?.listeningForId}');
+      debugPrint('[DEBUG]    playerProvider.gamePlayerId: ${_playerProviderRef?.currentPlayer?.gamePlayerId}');
 
-      // Configuramos el handler que se dispara cuando detectamos un robo de vida
-      debugPrint('[DEBUG] 🔧 Configuring LifeStealVictimHandler...');
-      powerProvider.configureLifeStealVictimHandler((effectId, casterId, targetId) async {        
-        // 1. Obtener IDs locales
-        final myUserId = playerProvider.currentPlayer?.userId;
-        final myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
-
-        debugPrint("[DEBUG] 💔 LifeStealVictimHandler DISPARADO");
-        debugPrint("[DEBUG]    Effect ID: $effectId");
-        debugPrint("[DEBUG]    Caster ID: $casterId");
-        debugPrint("[DEBUG]    Target ID: $targetId");
-        debugPrint("[DEBUG]    Mi GamePlayer ID: $myGamePlayerId");
-        debugPrint("[DEBUG]    Mi User ID: $myUserId");
-
-        // 2. VALIDACIÓN CRÍTICA DE VÍCTIMA
-        // Si el target del evento no soy yo (por error de stream o broadcast), IGNORAR.
-        if (myGamePlayerId != null && targetId != myGamePlayerId) {
-           debugPrint("[DEBUG] 🚫 BLOQUEADO: Discrepancia de ID (Target: $targetId != Yo: $myGamePlayerId)");
-           return;
-        }
-
-        if (myUserId == null) {
-          debugPrint("[DEBUG] ⚠️ BLOQUEADO: myUserId es NULL");
-          return;
-        }
-
-        debugPrint("[DEBUG] ✅ Validación pasada, ejecutando resta de vida...");
-
-        // 3. ACTIVAR ANIMACIÓN LIFESTEAL (desacoplado de expiración BD)
-        final attackerName = _resolvePlayerNameFromLeaderboard(casterId);
-        _lifeStealAnimationTimer?.cancel();
-        if (mounted) {
-          setState(() {
-            _showLifeStealAnimation = true;
-            _lifeStealCasterName = attackerName;
-          });
-        }
-        
-        // Timer de 4 segundos para ocultar la animación
-        _lifeStealAnimationTimer = Timer(const Duration(seconds: 4), () {
-          if (mounted) {
-            setState(() {
-              _showLifeStealAnimation = false;
-              _lifeStealCasterName = null;
-            });
-          }
-        });
-
-        // Esperamos 600ms para que el número de vida baje justo cuando
-        // el corazón de la animación central empieza a romperse
-        await Future.delayed(const Duration(milliseconds: 600));
-
-        // ELIMINADO: La resta de vida ya se realiza en el Backend (SQL).
-        // GameProvider se actualiza automáticamente vía Realtime (game_players stream).
-        // No llamamos a loseLife() aquí para evitar DOBLE resta (Optimista + Backend).
-        debugPrint(
-            "[DEBUG] 💀 Visual Only: Animación de Life Steal iniciada. Esperando update de vidas por Realtime...");
-      });
+      // Configurar el handler y listener
+      _configureLifeStealHandler();
+      _tryStartListening();
       
       // Listener para manejar cambios de bloqueo de navegación
-      powerProvider.addListener(_handlePowerChanges);
+      _powerProviderRef?.addListener(_handlePowerChanges);
+      
+      // CRITICAL: Listener para detectar cuando gamePlayerId cambia
+      _playerProviderRef?.addListener(_onPlayerChanged);
     });
+  }
+
+  void _onPlayerChanged() {
+    if (!mounted) return;
+    final newGamePlayerId = _playerProviderRef?.currentPlayer?.gamePlayerId;
+    
+    // Solo reconfigurar si el ID cambió a un valor válido
+    if (newGamePlayerId != null && 
+        newGamePlayerId.isNotEmpty && 
+        newGamePlayerId != _lastKnownGamePlayerId) {
+      debugPrint('[DEBUG] 🔄 SabotageOverlay: gamePlayerId CHANGED: $_lastKnownGamePlayerId -> $newGamePlayerId');
+      _lastKnownGamePlayerId = newGamePlayerId;
+      _tryStartListening();
+    }
+  }
+
+  void _configureLifeStealHandler() {
+    final powerProvider = _powerProviderRef;
+    final playerProvider = _playerProviderRef;
+    if (powerProvider == null || playerProvider == null) return;
+
+    debugPrint('[DEBUG] 🔧 Configuring LifeStealVictimHandler...');
+    powerProvider.configureLifeStealVictimHandler((effectId, casterId, targetId) async {        
+      // 1. Obtener IDs locales (usar referencia cacheada)
+      final myUserId = playerProvider.currentPlayer?.userId;
+      final myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
+
+      debugPrint("[DEBUG] 💔 LifeStealVictimHandler DISPARADO");
+      debugPrint("[DEBUG]    Effect ID: $effectId");
+      debugPrint("[DEBUG]    Caster ID: $casterId");
+      debugPrint("[DEBUG]    Target ID: $targetId");
+      debugPrint("[DEBUG]    Mi GamePlayer ID: $myGamePlayerId");
+      debugPrint("[DEBUG]    Mi User ID: $myUserId");
+
+      // 2. VALIDACIÓN CRÍTICA DE VÍCTIMA
+      if (myGamePlayerId != null && targetId != myGamePlayerId) {
+         debugPrint("[DEBUG] 🚫 BLOQUEADO: Discrepancia de ID (Target: $targetId != Yo: $myGamePlayerId)");
+         return;
+      }
+
+      if (myUserId == null) {
+        debugPrint("[DEBUG] ⚠️ BLOQUEADO: myUserId es NULL");
+        return;
+      }
+
+      debugPrint("[DEBUG] ✅ Validación pasada, ejecutando resta de vida...");
+
+      // 3. ACTIVAR ANIMACIÓN LIFESTEAL
+      final attackerName = _resolvePlayerNameFromLeaderboard(casterId);
+      _lifeStealAnimationTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _showLifeStealAnimation = true;
+          _lifeStealCasterName = attackerName;
+        });
+      }
+      
+      _lifeStealAnimationTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() {
+            _showLifeStealAnimation = false;
+            _lifeStealCasterName = null;
+          });
+        }
+      });
+
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      debugPrint(
+          "[DEBUG] 💀 Visual Only: Animación de Life Steal iniciada. Esperando update de vidas por Realtime...");
+    });
+  }
+
+  void _tryStartListening() {
+    final powerProvider = _powerProviderRef;
+    final playerProvider = _playerProviderRef;
+    if (powerProvider == null || playerProvider == null) return;
+
+    final currentGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
+    if (currentGamePlayerId != null && currentGamePlayerId.isNotEmpty) {
+      debugPrint('[DEBUG] 🔄 SabotageOverlay: Iniciando listener con gamePlayerId: $currentGamePlayerId');
+      _lastKnownGamePlayerId = currentGamePlayerId;
+      powerProvider.startListening(currentGamePlayerId, forceRestart: true);
+    } else {
+      debugPrint('[DEBUG] ⚠️ SabotageOverlay: gamePlayerId aún es NULL, esperando cambio...');
+    }
   }
 
   @override
   void dispose() {
     _lifeStealBannerTimer?.cancel();
     _lifeStealAnimationTimer?.cancel();
-    // CRITICAL FIX: No acceder a context en dispose()
-    // El listener se limpiará automáticamente cuando el provider sea destruido
-    // o usamos una referencia guardada si la tuviéramos.
-    // Por ahora, lo dejamos sin remover explícitamente ya que causa el error.
+    
+    // Remove listeners using cached references (safe, no context access)
+    _powerProviderRef?.removeListener(_handlePowerChanges);
+    _playerProviderRef?.removeListener(_onPlayerChanged);
+    
     super.dispose();
   }
   
   void _handlePowerChanges() {
     if (!mounted) return;
-    final powerProvider = Provider.of<PowerEffectProvider>(context, listen: false);
+    
+    // Use cached refs instead of context access
+    final powerProvider = _powerProviderRef;
+    final gameProvider = _gameProviderRef;
+    if (powerProvider == null || gameProvider == null) return;
+    
     final activeSlug = powerProvider.activePowerSlug;
     
     // Lista de efectos que deben congelar la navegación
@@ -142,7 +187,6 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     
     // Actualizar estado de congelamiento en GameProvider
     // AHORA: Tanto freeze como black_screen pausan los minijuegos
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final shouldPauseGame = activeSlug == 'freeze' || activeSlug == 'black_screen';
     
     if (shouldPauseGame && !gameProvider.isFrozen) {
@@ -186,7 +230,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   String _resolvePlayerNameFromLeaderboard(String? casterGamePlayerId) {
     if (casterGamePlayerId == null || casterGamePlayerId.isEmpty)
       return 'Un rival';
-    final gameProvider = context.read<GameProvider>();
+    
+    // Use cached ref instead of context.read
+    final gameProvider = _gameProviderRef;
+    if (gameProvider == null) return 'Un rival';
+    
     final match = gameProvider.leaderboard.whereType<Player>().firstWhere(
           (p) =>
               p.gamePlayerId == casterGamePlayerId ||

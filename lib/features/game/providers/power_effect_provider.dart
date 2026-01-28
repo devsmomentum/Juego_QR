@@ -159,11 +159,15 @@ class PowerEffectProvider extends ChangeNotifier {
   /// También escucha ataques salientes para detectar si fueron reflejados.
   ///
   /// [myGamePlayerId] ID de la sesión de juego del usuario actual (no el UUID de perfil).
-  void startListening(String? myGamePlayerId) {
+  /// [forceRestart] Si es true, reinicia la suscripción aunque el ID sea el mismo
+  ///                (útil cuando se reconfiguran handlers).
+  void startListening(String? myGamePlayerId, {bool forceRestart = false}) {
     debugPrint('[DEBUG] 📡 PowerEffectProvider.startListening() CALLED');
     debugPrint('[DEBUG]    myGamePlayerId: $myGamePlayerId');
     debugPrint('[DEBUG]    current _listeningForId: $_listeningForId');
     debugPrint('[DEBUG]    _subscription is null? ${_subscription == null}');
+    debugPrint('[DEBUG]    forceRestart: $forceRestart');
+    debugPrint('[DEBUG]    _lifeStealVictimHandler is null? ${_lifeStealVictimHandler == null}');
     
     final supabase = _supabaseClient;
     if (supabase == null) {
@@ -183,7 +187,8 @@ class PowerEffectProvider extends ChangeNotifier {
     }
 
     // [FIX 3] Evitar reinicio destructivo si ya escuchamos al mismo ID
-    if (myGamePlayerId == _listeningForId && _subscription != null) {
+    // EXCEPTO si forceRestart es true (handlers recién configurados)
+    if (myGamePlayerId == _listeningForId && _subscription != null && !forceRestart) {
       debugPrint('[DEBUG] ⏭️ Already listening for $myGamePlayerId, skipping restart.');
       return;
     }

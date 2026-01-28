@@ -158,18 +158,36 @@ class InventoryService {
   /// Sincroniza el inventario real desde la tabla `player_powers`.
   /// 
   /// Retorna el estado actual del game_player incluyendo vidas e inventario.
+  /// Si se proporciona [eventId], filtra por ese evento específico.
+  /// Si no, retorna el game_player más reciente.
   Future<SyncInventoryResult> syncRealInventory({
     required String userId,
+    String? eventId,
   }) async {
     try {
-      // 1. Obtener el GamePlayer más reciente
-      final gamePlayerRes = await _supabase
-          .from('game_players')
-          .select('id, lives, event_id')
-          .eq('user_id', userId)
-          .order('joined_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      // 1. Obtener el GamePlayer - filtrado por evento si se proporciona
+      Map<String, dynamic>? gamePlayerRes;
+      
+      if (eventId != null && eventId.isNotEmpty) {
+        // Filtrar por evento específico
+        debugPrint('[DEBUG] InventoryService: Filtrando por eventId: $eventId');
+        gamePlayerRes = await _supabase
+            .from('game_players')
+            .select('id, lives, event_id')
+            .eq('user_id', userId)
+            .eq('event_id', eventId)
+            .maybeSingle();
+      } else {
+        // Fallback: obtener el más reciente
+        debugPrint('[DEBUG] InventoryService: Sin eventId, obteniendo más reciente');
+        gamePlayerRes = await _supabase
+            .from('game_players')
+            .select('id, lives, event_id')
+            .eq('user_id', userId)
+            .order('joined_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      }
 
       if (gamePlayerRes == null) {
         debugPrint('InventoryService: Usuario no tiene game_player activo.');
@@ -178,6 +196,7 @@ class InventoryService {
 
       final String gamePlayerId = gamePlayerRes['id'];
       final int? lives = gamePlayerRes['lives'];
+      debugPrint('[DEBUG] InventoryService: Found gamePlayerId=$gamePlayerId for eventId=$eventId');
 
       // 2. Traer poderes con JOIN
       final List<dynamic> powersData = await _supabase
