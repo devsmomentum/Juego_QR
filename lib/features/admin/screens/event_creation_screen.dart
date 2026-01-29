@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
@@ -363,15 +364,21 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   Positioned.fill(
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
-                                      child: Image.file(
-                                        File(provider.selectedImage!.path),
-                                        fit: BoxFit.cover,
-                                        opacity: const AlwaysStoppedAnimation(0.5),
-                                        errorBuilder: (context, error, stackTrace) {
-                                          debugPrint("Error loading image: $error");
-                                          return const Center(child: Icon(Icons.broken_image, color: Colors.red));
-                                        },
-                                      ),
+                                      child: kIsWeb
+                                          ? Image.network(
+                                              provider.selectedImage!.path,
+                                              fit: BoxFit.cover,
+                                              opacity: const AlwaysStoppedAnimation(0.5),
+                                            )
+                                          : Image.file(
+                                              File(provider.selectedImage!.path),
+                                              fit: BoxFit.cover,
+                                              opacity: const AlwaysStoppedAnimation(0.5),
+                                              errorBuilder: (context, error, stackTrace) {
+                                                debugPrint("Error loading image: $error");
+                                                return const Center(child: Icon(Icons.broken_image, color: Colors.red));
+                                              },
+                                            ),
                                     ),
                                   ),
                                 Center(
