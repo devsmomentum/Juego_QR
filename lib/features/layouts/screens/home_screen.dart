@@ -46,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       InventoryScreen(eventId: widget.eventId),
       const LeaderboardScreen(),
-      const ProfileScreen(),
     ];
   }
 
@@ -138,11 +137,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(Icons.leaderboard_outlined),
                   activeIcon: Icon(Icons.leaderboard, size: 28),
                   label: 'Ranking',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person, size: 28),
-                  label: 'Perfil',
                 ),
               ],
             ),

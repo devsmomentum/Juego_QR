@@ -145,8 +145,8 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
             // Euclidean distance
             final double dist = sqrt(pow(tapX - centerX, 2) + pow(tapY - centerY, 2));
             
-            // Threshold: 35px radius (generous but precise enough)
-            if (dist < 45.0) {
+            // Threshold: 28px radius (more precise to avoid random click wins)
+            if (dist < 28.0) {
                _winGame();
                return; 
             }
