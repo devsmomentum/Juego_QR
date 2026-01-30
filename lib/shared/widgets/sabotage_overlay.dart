@@ -40,6 +40,12 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   
   // Control de bloqueo de navegación
   bool _isBlockingActive = false;
+  
+  // EVENT DRIVEN STATE
+  StreamSubscription<PowerFeedbackEvent>? _feedbackSubscription;
+  DefenseAction? _localDefenseAction;
+  Timer? _localDefenseActionTimer;
+  bool _showShieldBreakAnimation = false;
 
   // Cached provider references to avoid context access in callbacks
   PowerEffectProvider? _powerProviderRef;
@@ -66,8 +72,12 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       debugPrint('[DEBUG]    playerProvider.gamePlayerId: ${_playerProviderRef?.currentPlayer?.gamePlayerId}');
 
       // Configurar el handler y listener
-      _configureLifeStealHandler();
+      // _configureLifeStealHandler(); // REMOVED: Event Driven now
       _tryStartListening();
+      
+      // Listener para Stream de Feedback
+      _feedbackSubscription?.cancel();
+      _feedbackSubscription = _powerProviderRef?.feedbackStream.listen(_handleFeedback);
       
       // Listener para manejar cambios de bloqueo de navegación
       _powerProviderRef?.addListener(_handlePowerChanges);
@@ -91,61 +101,68 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     }
   }
 
-  void _configureLifeStealHandler() {
-    final powerProvider = _powerProviderRef;
-    final playerProvider = _playerProviderRef;
-    if (powerProvider == null || playerProvider == null) return;
-
-    debugPrint('[DEBUG] 🔧 Configuring LifeStealVictimHandler...');
-    powerProvider.configureLifeStealVictimHandler((effectId, casterId, targetId) async {        
-      // 1. Obtener IDs locales (usar referencia cacheada)
-      final myUserId = playerProvider.currentPlayer?.userId;
-      final myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
-
-      debugPrint("[DEBUG] 💔 LifeStealVictimHandler DISPARADO");
-      debugPrint("[DEBUG]    Effect ID: $effectId");
-      debugPrint("[DEBUG]    Caster ID: $casterId");
-      debugPrint("[DEBUG]    Target ID: $targetId");
-      debugPrint("[DEBUG]    Mi GamePlayer ID: $myGamePlayerId");
-      debugPrint("[DEBUG]    Mi User ID: $myUserId");
-
-      // 2. VALIDACIÓN CRÍTICA DE VÍCTIMA
-      if (myGamePlayerId != null && targetId != myGamePlayerId) {
-         debugPrint("[DEBUG] 🚫 BLOQUEADO: Discrepancia de ID (Target: $targetId != Yo: $myGamePlayerId)");
-         return;
-      }
-
-      if (myUserId == null) {
-        debugPrint("[DEBUG] ⚠️ BLOQUEADO: myUserId es NULL");
-        return;
-      }
-
-      debugPrint("[DEBUG] ✅ Validación pasada, ejecutando resta de vida...");
-
-      // 3. ACTIVAR ANIMACIÓN LIFESTEAL
-      final attackerName = _resolvePlayerNameFromLeaderboard(casterId);
-      _lifeStealAnimationTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _showLifeStealAnimation = true;
-          _lifeStealCasterName = attackerName;
-        });
-      }
+  void _handleFeedback(PowerFeedbackEvent event) {
+      if (!mounted) return;
       
-      _lifeStealAnimationTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) {
-          setState(() {
-            _showLifeStealAnimation = false;
-            _lifeStealCasterName = null;
-          });
-        }
+      debugPrint('[OVERLAY] 📨 Feedback Event Received: ${event.type}');
+      
+      switch (event.type) {
+        case PowerFeedbackType.lifeStolen:
+            final attackerName = _resolvePlayerNameFromLeaderboard(event.relatedPlayerName);
+            _lifeStealAnimationTimer?.cancel();
+            setState(() {
+              _showLifeStealAnimation = true;
+              _lifeStealCasterName = attackerName;
+            });
+            
+            _showLifeStealBanner('¡$attackerName te ha quitado una vida!');
+            
+            _lifeStealAnimationTimer = Timer(const Duration(seconds: 4), () {
+              if (mounted) {
+                setState(() {
+                  _showLifeStealAnimation = false;
+                  _lifeStealCasterName = null;
+                });
+              }
+            });
+            // Haptic
+            // HapticFeedback.heavyImpact(); // Opcional si ya se hace en strategy
+            break;
+            
+        case PowerFeedbackType.shieldBroken:
+            _triggerLocalDefenseAction(DefenseAction.shieldBroken);
+            setState(() {
+               _showShieldBreakAnimation = true;
+            });
+            // La animación de escudo roto se maneja con el widget ShieldBreakEffect que tiene onComplete?
+            // O simplemente lo mostramos por un tiempo.
+            // El widget existente tiene su propio controller y onComplete.
+            break;
+            
+        case PowerFeedbackType.attackBlocked:
+             _triggerLocalDefenseAction(DefenseAction.attackBlockedByEnemy);
+             break;
+             
+        case PowerFeedbackType.defenseSuccess:
+             // Generic success
+             break;
+      }
+  }
+
+  void _triggerLocalDefenseAction(DefenseAction action) {
+      _localDefenseActionTimer?.cancel();
+      setState(() {
+          _localDefenseAction = action;
       });
-
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      debugPrint(
-          "[DEBUG] 💀 Visual Only: Animación de Life Steal iniciada. Esperando update de vidas por Realtime...");
-    });
+      
+      _localDefenseActionTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+              setState(() {
+                  _localDefenseAction = null;
+                  _showShieldBreakAnimation = false; 
+              });
+          }
+      });
   }
 
   void _tryStartListening() {
@@ -167,6 +184,8 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   void dispose() {
     _lifeStealBannerTimer?.cancel();
     _lifeStealAnimationTimer?.cancel();
+    _feedbackSubscription?.cancel();
+    _localDefenseActionTimer?.cancel();
     
     // Remove listeners using cached references (safe, no context access)
     _powerProviderRef?.removeListener(_handlePowerChanges);
@@ -253,7 +272,8 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   @override
   Widget build(BuildContext context) {
     final powerProvider = Provider.of<PowerEffectProvider>(context);
-    final defenseAction = powerProvider.lastDefenseAction;
+    // Usamos _localDefenseAction en lugar de activeDefenseAction del provider
+    final defenseAction = _localDefenseAction;
     final playerProvider = Provider.of<PlayerProvider>(context);
     // Detectamos si el usuario actual es invisible según el PlayerProvider
     final isPlayerInvisible =
@@ -264,32 +284,20 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     final isFreeze = powerProvider.isEffectActive('freeze');
     final isBlur = powerProvider.isEffectActive('blur_screen');
     final isInvisible = powerProvider.isEffectActive('invisibility');
-
-    // Banner life_steal (Point B): sólo banner, no bloquea interacción.
-    // Life steal is transient (no duration in map), logic remains with activeEffectId change detection for banners
-    final activeSlug = powerProvider.activePowerSlug; // Still use this for transient/latest detection if needed
+    
+    // RESTORED: Variables needed for legacy Blur check
+    final activeSlug = powerProvider.activePowerSlug;
     final effectId = powerProvider.activeEffectId;
-    final isNewLifeSteal =
-        activeSlug == 'life_steal' && effectId != _lastLifeStealEffectId;
-
-    if (isNewLifeSteal) {
-      _lastLifeStealEffectId = effectId;
-      final attackerName =
-          _resolvePlayerNameFromLeaderboard(powerProvider.activeEffectCasterId);
-
-      // Opcional: El banner superior que ya tenías como backup
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _showLifeStealBanner('¡$attackerName te ha quitado una vida!');
-      });
-    }
 
     // Banner blur_screen: Notificar quién te saboteó con visión borrosa
-    // Check if blur is active AND it's a new effect ID (to avoid spam)
-    // We iterate active effects to find the blur ID? _activeEffects map stores effectId.
-    // Simplifying: Check if isBlur is true and if we haven't notified for this specific running instance?
-    // Map approach:
-    // We can rely on 'activePowerSlug' being the *latest* added effect for notification triggers.
+    // Mantenemos la lógica de estado persistente para BLUR ya que tiene duración
+    // Pero la notificación podría moverse a evento también. Por ahora lo dejamos como estaba.
+    // O mejor, eliminamos la lógica compleja de detección de cambio de ID si es posible.
+    // El request pedía "Elimina comprobaciones de activePowerSlug".
+    // Blur es un efecto de duración, así que 'isBlur' (line 265) sigue siendo válido para el efecto visual.
+    // La notificación "XXX te nubló la vista" debería ser un evento, pero no tenemos evento 'blurApplied' todavía en el provider.
+    // Dejaremos Blur como está por ahora, limpiando solo LifeSteal.
+    
     final isNewBlur =
         activeSlug == 'blur_screen' && effectId != _lastBlurEffectId;
 
@@ -350,9 +358,13 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             defenseAction == DefenseAction.attackBlockedByEnemy)
           _DefenseFeedbackToast(action: defenseAction),
 
-        if (defenseAction == DefenseAction.shieldBroken) ...[
-             const ShieldBreakEffect(),
-             _DefenseFeedbackToast(action: defenseAction), // Optional text feedback
+        if (_showShieldBreakAnimation) ...[
+             ShieldBreakEffect(
+               onComplete: () {
+                  // Opcional: resetear estado si queremos, pero el timer lo hará.
+               },
+             ),
+             _DefenseFeedbackToast(action: defenseAction),
         ],
 
         if (defenseAction == DefenseAction.stealFailed)

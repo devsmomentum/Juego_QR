@@ -4,6 +4,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../strategies/power_strategy_factory.dart';
 import '../../mall/models/power_item.dart';
 
+enum PowerFeedbackType { lifeStolen, shieldBroken, attackBlocked, defenseSuccess }
+
+class PowerFeedbackEvent {
+  final PowerFeedbackType type;
+  final String message;
+  final String? relatedPlayerName;
+  
+  PowerFeedbackEvent(this.type, {this.message = '', this.relatedPlayerName});
+}
+
 /// Provider encargado de escuchar y gestionar los efectos de poderes en tiempo real.
 ///
 /// Funciona escuchando la tabla `active_powers` de Supabase.
@@ -50,6 +60,15 @@ class PowerEffectProvider extends ChangeNotifier {
 
   final Map<String, String> _powerIdToSlugCache = {};
   final Map<String, Duration> _powerSlugToDurationCache = {};
+  
+  // CACHE DE ID ESCUDO (Para evitar lookups en tiempo real durante combate)
+  String? _cachedShieldPowerId;
+
+  // STREAM DE FEEDBACK (Event-Driven Architecture)
+  final StreamController<PowerFeedbackEvent> _feedbackStreamController = 
+      StreamController<PowerFeedbackEvent>.broadcast();
+  
+  Stream<PowerFeedbackEvent> get feedbackStream => _feedbackStreamController.stream;
 
   // STATE FOR CONCURRENT EFFECTS
   final Map<String, _ActiveEffect> _activeEffects = {};
@@ -177,6 +196,18 @@ class PowerEffectProvider extends ChangeNotifier {
     // y la UI pueda mostrar el badge del escudo activo
     try {
       final duration = await _getPowerDurationFromDb(powerSlug: 'shield');
+      
+      // Cachear ID del escudo para feedback rápido
+      if (_cachedShieldPowerId == null) {
+         try {
+           final pRes = await _supabaseClient?.from('powers').select('id').eq('slug', 'shield').maybeSingle();
+           _cachedShieldPowerId = pRes?['id']?.toString();
+           debugPrint('🛡️ Shield ID Cached: $_cachedShieldPowerId');
+         } catch(e) {
+           debugPrint('🛡️ FAILED to cache Shield ID: $e');
+         }
+      }
+
       final expiresAt = DateTime.now().toUtc().add(duration);
       applyEffect(
         slug: 'shield',
@@ -400,6 +431,13 @@ class PowerEffectProvider extends ChangeNotifier {
           final strategy = PowerStrategyFactory.get('life_steal');
           strategy?.onActivate(this);
           setPendingEffectContext(null, null);
+          
+          // EVENTO DE FEEDBACK INMEDIATO (No depende de _activeEffects)
+          // Resolvemos nombre si es posible, o mandamos ID
+           _feedbackStreamController.add(PowerFeedbackEvent(
+              PowerFeedbackType.lifeStolen,
+              relatedPlayerName: casterId, // SabotageOverlay resolverá el nombre
+          ));
       }
     }
     // -------------------------------------
@@ -467,6 +505,9 @@ class PowerEffectProvider extends ChangeNotifier {
            
            // 3. Feedback
            _registerDefenseAction(DefenseAction.shieldBroken);
+           _feedbackStreamController.add(PowerFeedbackEvent(
+               PowerFeedbackType.shieldBroken
+           ));
            
            // 3. Consume the attack (Delete from DB so it doesn't re-trigger)
            final effectId = effect['id']?.toString();
@@ -493,6 +534,9 @@ class PowerEffectProvider extends ChangeNotifier {
        // --- HANDLE INCOMING FEEDBACK (As Attacker) ---
        if (slug == 'shield_feedback') {
            _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
+           _feedbackStreamController.add(PowerFeedbackEvent(
+              PowerFeedbackType.attackBlocked
+           ));
            // We can remove it locally or let it expire (short duration)
            // ideally we remove it so it doesn't re-trigger?
            // The timer logic in applyEffect will invoke _removeEffect eventually.
@@ -630,32 +674,28 @@ class PowerEffectProvider extends ChangeNotifier {
      final supabase = _supabaseClient;
      if (supabase == null) return;
      
+     // USAR ID CACHEADO O FAIL LOUDLY
+     final powerId = _cachedShieldPowerId;
+     
+     if (powerId == null) {
+       debugPrint('🛑 CRITICAL ERROR: Cannot send Shield Feedback - Missing Power ID!');
+       debugPrint('   Ensure armShield() was called or DB has slug "shield".');
+       return;
+     }
+
      try {
        // Insert a short-lived effect for feedback
        final duration = const Duration(seconds: 3);
        final expiresAt = DateTime.now().toUtc().add(duration).toIso8601String();
        
-       // Need a power_id for foreign key constraints?
-       // Ideally specific power 'shield_feedback' exists in DB.
-       // If not, we might need to use a fallback or ensure it exists.
-       // Assuming we can use 'shield' power_id but with different slug?
-       // Or better: Use 'shield' power_id but add metadata?
-       // The table constraints usually require valid power_id.
-       // Let's resolve 'shield' power_id.
-       
-       final powerRes = await supabase.from('powers').select('id').eq('slug', 'shield').maybeSingle();
-       final powerId = powerRes?['id'];
-       
-       if (powerId != null) {
-          await supabase.from('active_powers').insert({
-            'target_id': targetId, // Attacker is now target of feedback
-            'caster_id': _listeningForId, // Me
-            'power_id': powerId,
-            'power_slug': 'shield_feedback', // Special slug
-            'expires_at': expiresAt,
-          });
-          debugPrint('[SHIELD] 📨 Feedback sent to attacker $targetId');
-       }
+       await supabase.from('active_powers').insert({
+          'target_id': targetId, // Attacker is now target of feedback
+          'caster_id': _listeningForId, // Me
+          'power_id': powerId,
+          'power_slug': 'shield_feedback', // Special slug
+          'expires_at': expiresAt,
+       });
+       debugPrint('[SHIELD] 📨 Feedback sent to attacker $targetId (using power_id: $powerId)');
      } catch (e) {
        debugPrint('[SHIELD] ⚠️ Failed to send feedback: $e');
      }
@@ -666,7 +706,8 @@ class PowerEffectProvider extends ChangeNotifier {
     _subscription?.cancel();
     _casterSubscription?.cancel();
     _defenseFeedbackTimer?.cancel();
-    _clearAllEffects(); // Cancel all active timers
+    _clearAllEffects();
+    _feedbackStreamController.close(); // Cleanup Stream
     super.dispose();
   }
 }
