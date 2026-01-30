@@ -6,6 +6,10 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import 'profile_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../../shared/widgets/glitch_text.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/services/pago_a_pago_service.dart';
+import '../../../core/models/pago_a_pago_models.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -15,6 +19,14 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
+  final TextEditingController _amountController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -404,39 +416,160 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _showRechargeDialog() {
+    _amountController.clear();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.add_circle, color: AppTheme.accentGold),
-            const SizedBox(width: 12),
-            const Text(
-              'Recargar Tréboles',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: AppTheme.cardBg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
             ),
-          ],
-        ),
-        content: const Text(
-          'La funcionalidad de recarga estará disponible próximamente. Podrás comprar tréboles para usar en el juego.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Entendido',
-              style: TextStyle(color: AppTheme.accentGold),
+            title: Row(
+              children: [
+                Icon(Icons.add_circle, color: AppTheme.accentGold),
+                const SizedBox(width: 12),
+                const Text(
+                  'Comprar Tréboles',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
-          ),
-        ],
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                   const Text(
+                    'Ingresa la cantidad de tréboles que deseas comprar. (1 🍀 = 1\$)',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Cantidad',
+                      labelStyle: const TextStyle(color: Colors.white60),
+                      prefixIcon: const Icon(Icons.star, color: Colors.white60),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: const BorderSide(color: AppTheme.accentGold),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  if (_isLoading)
+                   const Padding(
+                     padding: EdgeInsets.only(top: 20.0),
+                     child: CircularProgressIndicator(color: AppTheme.accentGold),
+                   ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isLoading ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                onPressed: _isLoading ? null : () async {
+                  final amount = double.tryParse(_amountController.text);
+                  if (amount == null || amount <= 0) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Ingresa un monto válido > 0')),
+                    );
+                    return;
+                  }
+
+                  setState(() => _isLoading = true);
+                  
+                  // Iniciar proceso de pago
+                  await _initiatePayment(context, amount);
+
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    Navigator.pop(ctx);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentGold,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Pagar'),
+              ),
+            ],
+          );
+        }
       ),
     );
+  }
+
+  Future<void> _initiatePayment(BuildContext context, double amount) async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final user = playerProvider.currentPlayer;
+    
+    if (user == null) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: No hay usuario autenticado.')),
+      );
+      return;
+    }
+
+    // Instanciar servicio
+    // TODO: Usar dotenv para la API KEY real
+    final apiKey = dotenv.env['PAGO_PAGO_API_KEY'] ?? 'TEST_KEY';
+    final service = PagoAPagoService(apiKey: apiKey);
+
+    // Crear request
+    final request = PaymentOrderRequest(
+      amount: amount, 
+      currency: 'VES', 
+      email: user.email,
+      phone: user.phone ?? '0000000000',
+      dni: user.cedula ?? 'V00000000',
+      motive: 'Recarga de $amount Tréboles - MapHunter',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
+      typeOrder: 'EXTERNAL',
+      convertFromUsd: true,
+      extraData: {
+        'user_id': user.userId,
+      },
+    );
+
+    final response = await service.createPaymentOrder(request);
+
+    if (!mounted) return;
+
+    if (response.success && response.paymentUrl != null) {
+      final url = Uri.parse(response.paymentUrl!);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(
+             content: const Text('Abriendo pasarela de pago...'),
+             backgroundColor: AppTheme.successGreen,
+           ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('No se pudo abrir el link: ${response.paymentUrl}')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(
+           content: Text('Error al crear orden: ${response.message}'),
+           backgroundColor: AppTheme.dangerRed,
+         ),
+      );
+    }
   }
 
   void _showWithdrawDialog() {
