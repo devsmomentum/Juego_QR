@@ -193,8 +193,32 @@ class EventService {
   // Obtener eventos
   Future<List<GameEvent>> fetchEvents() async {
     try {
+      // 1. Fetch all events
       final response = await _supabase.from('events').select();
-      return (response as List).map((data) => _mapJsonToEvent(data)).toList();
+      final List<dynamic> eventsData = response as List;
+
+      // 2. Fetch participant counts for these events
+      // Optimized: one query to get counts for all active events
+      final participantCounts = await _supabase
+          .from('game_players')
+          .select('event_id')
+          .neq('status', 'spectator'); 
+          // Count everyone who is NOT a spectator. 
+          // This includes active, inGame, finished, etc.
+
+      final Map<String, int> countsMap = {};
+      for (var row in participantCounts) {
+        final eid = row['event_id'] as String;
+        countsMap[eid] = (countsMap[eid] ?? 0) + 1;
+      }
+
+      return eventsData.map((data) {
+        final String id = data['id'];
+        final int count = countsMap[id] ?? 0;
+        final map = Map<String, dynamic>.from(data);
+        map['current_participants'] = count;
+        return _mapJsonToEvent(map);
+      }).toList();
     } catch (e) {
       debugPrint('Error obteniendo eventos: $e');
       rethrow;
@@ -222,6 +246,7 @@ class EventService {
       pin: (data['pin'] ?? '') as String,
       winnerId: data['winner_id'] as String?, 
       type: data['type'] ?? 'on_site',
+      currentParticipants: (data['current_participants'] as num?)?.toInt() ?? 0,
     );
   }
 

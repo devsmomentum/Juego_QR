@@ -6,11 +6,14 @@ import '../../game/screens/clues_screen.dart';
 import '../../game/screens/event_waiting_screen.dart';
 import '../../game/providers/event_provider.dart';
 import '../../game/providers/game_provider.dart';
+import '../../game/providers/spectator_feed_provider.dart'; // NEW
+import '../../game/screens/live_feed_screen.dart'; // NEW
 import '../../social/screens/inventory_screen.dart';
 import '../../social/screens/leaderboard_screen.dart';
 import '../../social/screens/profile_screen.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
 import '../../game/providers/power_effect_provider.dart';
+import '../../game/screens/spectator_mode_screen.dart'; // ADDED
 
 class HomeScreen extends StatefulWidget {
   final String eventId; 
@@ -35,19 +38,40 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
       final effectProvider = Provider.of<PowerEffectProvider>(context, listen: false);
-      playerProvider.syncRealInventory(effectProvider: effectProvider);
+      
+      // Spectators don't need inventory sync
+      if (playerProvider.currentPlayer?.role != 'spectator') {
+        playerProvider.syncRealInventory(effectProvider: effectProvider);
+      }
       
       // Sincronizar contexto del evento actual
       playerProvider.setCurrentEventContext(widget.eventId);
     });
-    _screens = [
-      CluesScreen(
-        eventId: widget.eventId,
-      ),
-      InventoryScreen(eventId: widget.eventId),
-      const LeaderboardScreen(),
-      const ProfileScreen(),
-    ];
+
+    final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+    final isSpectator = player?.role == 'spectator';
+
+    if (isSpectator) {
+      // REDIRECCIÓN: Si es espectador, no debe estar en HomeScreen
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => SpectatorModeScreen(eventId: widget.eventId),
+            ),
+          );
+        }
+      });
+      // Placeholder mientras redirige
+      _screens = [const Scaffold(body: Center(child: CircularProgressIndicator()))];
+    } else {
+      _screens = [
+        CluesScreen(eventId: widget.eventId),
+        InventoryScreen(eventId: widget.eventId),
+        const LeaderboardScreen(),
+        const ProfileScreen(),
+      ];
+    }
   }
 
   // Cache provider to avoid context usage in dispose
@@ -93,8 +117,9 @@ class _HomeScreenState extends State<HomeScreen> {
       // Fallback
     }
     
-    return SabotageOverlay(
-      child: Scaffold(
+    final isSpectator = player?.role == 'spectator';
+
+    Widget content = Scaffold(
         body: _screens[_currentIndex],
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
@@ -123,23 +148,29 @@ class _HomeScreenState extends State<HomeScreen> {
               unselectedItemColor: Colors.white54,
               showUnselectedLabels: true,
               elevation: 0,
-              items: const [
-                BottomNavigationBarItem(
+              items: [
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.map),
                   activeIcon: Icon(Icons.map, size: 28),
                   label: 'Pistas',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.inventory_2_outlined),
-                  activeIcon: Icon(Icons.inventory_2, size: 28),
-                  label: 'Inventario',
+                  icon: Icon(isSpectator ? Icons.rss_feed : Icons.inventory_2_outlined),
+                  activeIcon: Icon(isSpectator ? Icons.rss_feed : Icons.inventory_2, size: 28),
+                  label: isSpectator ? 'En Vivo' : 'Inventario',
                 ),
-                BottomNavigationBarItem(
+                if (isSpectator)
+                  const BottomNavigationBarItem(
+                    icon: Icon(Icons.flash_on),
+                    activeIcon: Icon(Icons.flash_on, size: 28),
+                    label: 'Sabotajes',
+                  ),
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.leaderboard_outlined),
                   activeIcon: Icon(Icons.leaderboard, size: 28),
                   label: 'Ranking',
                 ),
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.person_outline),
                   activeIcon: Icon(Icons.person, size: 28),
                   label: 'Perfil',
@@ -148,7 +179,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
+      );
+
+    if (isSpectator) {
+      content = ChangeNotifierProvider(
+        create: (_) => SpectatorFeedProvider(widget.eventId),
+        child: content,
+      );
+    }
+
+    return SabotageOverlay(
+      child: content,
     );
   }
 }

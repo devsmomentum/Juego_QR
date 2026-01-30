@@ -369,37 +369,34 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // TAREA 4: Bloqueo de Acceso si no hay vidas
     final gameProvider = Provider.of<GameProvider>(context);
-    // Mantener rebuilds si cambia el perfil del jugador, sin usar la variable.
     final player = context.watch<PlayerProvider>().currentPlayer;
+    final isSpectator = player?.role == 'spectator';
 
     // --- STATUS OVERLAYS (Handled Globally) ---
+    if (isSpectator) {
+      // Spectators bypass lives check but see read-only UI
+    } else {
+      // 2. Si el PlayerProvider (Visual) dice que NO tenemos vidas, bloqueamos INMEDIATAMENTE.
+      //    Ya no confiamos ciegamente en el servidor si la UI local dice 0.
+      //    La lógica "stricter" solicitada: Si CUALQUIERA dice 0, no pasas.
+      bool forcedBlock = false;
+      
+      // Check Status for realtime kick
+      if (player != null && player.status == PlayerStatus.banned) {
+         // Schedule kick if not already doing it
+         WidgetsBinding.instance.addPostFrameCallback((_) => _checkBanStatus());
+         forcedBlock = true; // Block UI
+      }
 
-    // 2. Si el PlayerProvider (Visual) dice que NO tenemos vidas, bloqueamos INMEDIATAMENTE.
-    //    Ya no confiamos ciegamente en el servidor si la UI local dice 0.
-    //    La lógica "stricter" solicitada: Si CUALQUIERA dice 0, no pasas.
-    bool forcedBlock = false;
-    
-    // Check Status for realtime kick
-    if (player != null && player.status == PlayerStatus.banned) {
-       // Schedule kick if not already doing it
-       WidgetsBinding.instance.addPostFrameCallback((_) => _checkBanStatus());
-       forcedBlock = true; // Block UI
-    }
+      if (player != null && player.lives <= 0) {
+        forcedBlock = true;
+      }
 
-    if (player != null && player.lives <= 0) {
-      forcedBlock = true;
-    }
-
-    if ((gameProvider.lives <= 0 || forcedBlock) && !_legalExit) {
-      // Retornar contenedor negro con aviso
-      // Nota: El diálogo _showNoLivesDialog ya se muestra en initState/checkLives,
-      // pero aquí aseguramos que no se renderice el juego.
-    if ((gameProvider.lives <= 0 || forcedBlock) && !_legalExit) {
-      // Usar el widget reutilizable que contiene el diseño exacto solicitado
-      return const NoLivesWidget();
-    }
+      if ((gameProvider.lives <= 0 || forcedBlock) && !_legalExit) {
+        // Usar el widget reutilizable que contiene el diseño exacto solicitado
+        return const NoLivesWidget();
+      }
     }
 
     Widget gameWidget;
@@ -462,14 +459,27 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
     // WRAPPER DE SEGURIDAD: Evitar salir sin penalización
     return PopScope(
-      canPop: _legalExit,
+      canPop: _legalExit || isSpectator,
       onPopInvoked: (didPop) async {
-        if (didPop || _legalExit) return;
+        if (didPop || _legalExit || isSpectator) return;
         
         // Si intenta salir con Back, mostramos el diálogo de rendición (que cobra vida)
         showSkipDialog(context, _finishLegally);
       },
-      child: gameWidget,
+      child: Stack(
+        children: [
+          IgnorePointer(
+            ignoring: isSpectator, // Bloquea interacción con el juego
+            child: gameWidget,
+          ),
+          if (isSpectator)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.1), // Sutil oscurecimiento
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1050,51 +1060,73 @@ Widget _buildMinigameScaffold(
                 children: [
                   Column(
                     children: [
-                      // AppBar Personalizado
+                       // AppBar Personalizado
                       Padding(
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           children: [
-                            // BOTÓN DE REGRESAR ELIMINADO: 
-                            // El usuario debe rendirse o ganar para salir.
-                            const SizedBox(width: 8), // Espaciador mínimo
+                            if (player?.role == 'spectator')
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                onPressed: () => Navigator.pop(context),
+                              ),
                             const Spacer(),
 
-                            // INDICADOR DE VIDAS CON ANIMACIÓN
-                            AnimatedLivesWidget(),
-                            const SizedBox(width: 10),
+                            if (player?.role != 'spectator') ...[
+                              // INDICADOR DE VIDAS CON ANIMACIÓN
+                              AnimatedLivesWidget(),
+                              const SizedBox(width: 10),
 
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.accentGold.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(color: AppTheme.accentGold),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accentGold.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: AppTheme.accentGold),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.star,
+                                        color: AppTheme.accentGold, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '+${clue.xpReward} XP',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.star,
-                                      color: AppTheme.accentGold, size: 12),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '+${clue.xpReward} XP',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 10),
-                                  ),
-                                ],
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.flag,
+                                    color: AppTheme.dangerRed, size: 20),
+                                tooltip: 'Rendirse',
+                                onPressed: () =>
+                                    showSkipDialog(context, onFinish),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.flag,
-                                  color: AppTheme.dangerRed, size: 20),
-                              tooltip: 'Rendirse',
-                              onPressed: () =>
-                                  showSkipDialog(context, onFinish),
-                            ),
+                            ] else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.blueAccent),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.visibility, color: Colors.blueAccent, size: 14),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'MODO ESPECTADOR',
+                                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),

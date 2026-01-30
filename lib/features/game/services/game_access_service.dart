@@ -149,14 +149,27 @@ class GameAccessService {
       final playerStatus = participantData['status'] as String?;
 
       if (isGamePlayer) {
-        // User is ALREADY a participant
+        // User is ALREADY in the event
         if (playerStatus == 'suspended' || playerStatus == 'banned') {
            return GameAccessResult(AccessResultType.suspended, message: 'Has sido suspendido de esta competencia por un administrador.');
         }
+
+        if (playerStatus == 'spectator') {
+          return GameAccessResult.spectator(message: 'Continuando como espectador');
+        }
         
-        // Allowed to enter (check Avatar next logic is UI flow, but access is granted)
+        // Allowed to enter as a player
         return GameAccessResult.player(data: {'isParticipant': true});
       } else {
+        // --- LIMITE DE PARTICIPANTES ---
+        // Verificamos el conteo real en DB para evitar inconsistencias si el usuario no ha refrescado la pantalla
+        final realCount = await requestProvider.getParticipantCount(scenario.id);
+        if (realCount >= scenario.maxPlayers) {
+          return GameAccessResult.spectator(
+            message: 'El máximo de jugadores (${scenario.maxPlayers}) ya fue alcanzado. Entrando como espectador.'
+          );
+        }
+
         // User is NOT a participant yet
         final request = await requestProvider.getRequestForPlayer(userId, scenario.id);
         

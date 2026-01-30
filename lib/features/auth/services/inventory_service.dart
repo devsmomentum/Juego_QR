@@ -125,7 +125,70 @@ class InventoryService {
 
       return PurchaseResult(success: true);
     } catch (e) {
-      debugPrint('InventoryService: Error en compra: $e');
+      debugPrint('InventoryService: Error en compra (RPC): $e');
+      rethrow;
+    }
+  }
+
+  /// Compra manual para espectadores (bypass RPC buy_item que pide status active)
+  Future<PurchaseResult> purchaseItemAsSpectator({
+    required String userId,
+    required String eventId,
+    required String itemId,
+    required int cost,
+  }) async {
+    try {
+      // 1. Obtener GamePlayer ID del espectador
+      final gp = await _supabase
+          .from('game_players')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+      
+      if (gp == null) throw 'No estás inscrito en este evento (Espectador)';
+      final String gpId = gp['id'];
+
+      // 2. Obtener Power ID desde el slug
+      final power = await _supabase
+          .from('powers')
+          .select('id')
+          .eq('slug', itemId)
+          .single();
+      final String powerId = power['id'];
+
+      // 3. Verificar monedas (doble check)
+      final profile = await _supabase.from('profiles').select('coins').eq('id', userId).single();
+      final int currentCoins = (profile['coins'] as num?)?.toInt() ?? 0;
+      if (currentCoins < cost) throw 'No tienes suficientes monedas';
+
+      // 4. Descontar monedas
+      await _supabase.from('profiles').update({'coins': currentCoins - cost}).eq('id', userId);
+
+      // 5. Añadir poder al inventario
+      final existingPower = await _supabase
+          .from('player_powers')
+          .select('id, quantity')
+          .eq('game_player_id', gpId)
+          .eq('power_id', powerId)
+          .maybeSingle();
+
+      if (existingPower != null) {
+        await _supabase
+            .from('player_powers')
+            .update({'quantity': (existingPower['quantity'] ?? 0) + 1})
+            .eq('id', existingPower['id']);
+      } else {
+        await _supabase.from('player_powers').insert({
+          'game_player_id': gpId,
+          'power_id': powerId,
+          'quantity': 1,
+        });
+      }
+
+      return PurchaseResult(success: true, newCoins: currentCoins - cost);
+    } catch (e) {
+      debugPrint('InventoryService: Error en compra manual de espectador: $e');
       rethrow;
     }
   }

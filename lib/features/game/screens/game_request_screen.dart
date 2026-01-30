@@ -13,6 +13,7 @@ import '../models/game_request.dart';
 import '../models/event.dart'; // Import GameEvent
 import '../../layouts/screens/home_screen.dart';
 import './scenarios_screen.dart';
+import './spectator_mode_screen.dart';
 import '../../auth/screens/avatar_selection_screen.dart';
 
 class GameRequestScreen extends StatefulWidget {
@@ -44,6 +45,8 @@ class _GameRequestScreenState extends State<GameRequestScreen>
 
   bool _isLoading = true;
   bool _isSubmitting = false; // Estado para el botón de envío
+  int _participantCount = 0; // NEW: Participant count
+  int _maxParticipants = 30; // UPDATED: Dynamic limit
 
   @override
   void initState() {
@@ -142,9 +145,22 @@ class _GameRequestScreenState extends State<GameRequestScreen>
               return; 
            }
 
-          setState(() {
+           // 🔥 FETCH PARTICIPANT COUNT
+           final count = await requestProvider.getParticipantCount(eventId);
+           
+           // FETCH MAX PARTICIPANTS
+           final eventProvider = Provider.of<EventProvider>(context, listen: false);
+           int maxP = 30;
+           try {
+             final event = eventProvider.events.firstWhere((e) => e.id == eventId);
+             maxP = event.maxParticipants;
+           } catch (_) {}
+
+           setState(() {
             _gameRequest = request;
             _isLoading = false;
+            _participantCount = count;
+            _maxParticipants = maxP;
           });
         }
       } catch (e) {
@@ -348,9 +364,17 @@ class _GameRequestScreenState extends State<GameRequestScreen>
       try {
         debugPrint('[UI] Attempting to submit request...');
         
+        // Obtenemos el límite real del evento
+        final eventProvider = Provider.of<EventProvider>(context, listen: false);
+        int maxPlayers = 30; // Default fallback
+        try {
+          final event = eventProvider.events.firstWhere((e) => e.id == widget.eventId);
+          maxPlayers = event.maxParticipants;
+        } catch (_) {}
+
         // ✅ CAPTURAR el resultado del submitRequest
         final result = await requestProvider.submitRequest(
-            playerProvider.currentPlayer!, widget.eventId!);
+            playerProvider.currentPlayer!, widget.eventId!, maxPlayers);
 
         if (!mounted) return;
 
@@ -453,6 +477,46 @@ class _GameRequestScreenState extends State<GameRequestScreen>
               MaterialPageRoute(
                   builder: (_) => HomeScreen(eventId: widget.eventId!)),
             );
+            break;
+
+          case SubmitRequestResult.eventFull:
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.people_alt, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '¡Evento lleno! El límite es de $maxPlayers participantes. Puedes entrar como espectador.',
+                        style: const TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+                action: SnackBarAction(
+                  label: 'ENTRAR',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    Provider.of<PlayerProvider>(context, listen: false).setSpectatorRole(true);
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => SpectatorModeScreen(eventId: widget.eventId!),
+                      ),
+                    );
+                  },
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                duration: const Duration(seconds: 8),
+              ),
+            );
+            // Refresh count
+            final newCount = await requestProvider.getParticipantCount(widget.eventId!);
+            if (mounted) setState(() => _participantCount = newCount);
             break;
 
           case SubmitRequestResult.error:
@@ -805,21 +869,53 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                                         size: 30,
                                       ),
                                       const SizedBox(height: 8),
-                                      Text(
-                                        '¿Te gustaría participar en este juego?',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Manda una solicitud para poder unirte. El administrador revisará tu solicitud antes de iniciar el juego.',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall,
-                                        textAlign: TextAlign.center,
-                                      ),
+                                      if (_participantCount >= _maxParticipants) ...[
+                                        const Text(
+                                          '¡EVENTO LLENO!',
+                                          style: TextStyle(
+                                            color: Colors.redAccent,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 20,
+                                            letterSpacing: 1.5,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Participantes: $_participantCount / $_maxParticipants',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        const Text(
+                                          'Se ha alcanzado el límite máximo. Puedes unirte en modo espectador para observar el progreso.',
+                                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ] else ...[
+                                        Text(
+                                          '¿Te gustaría participar en este juego?',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Participantes: $_participantCount / $_maxParticipants',
+                                          style: const TextStyle(color: Colors.white54, fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Manda una solicitud para poder unirte. El administrador revisará tu solicitud antes de iniciar el juego.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -981,7 +1077,7 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                                     ),
                                   ),
                                 ),
-
+                              
                               // === BOTÓN DE DESARROLLADOR ===
                               if (kDebugMode &&
                                   _gameRequest != null &&

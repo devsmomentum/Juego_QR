@@ -100,6 +100,24 @@ class ProgressHeader extends StatelessWidget {
                             color: Colors.white70,
                           ),
                         ),
+                        if (player.role == 'spectator')
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blueAccent.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(color: Colors.blueAccent, width: 1),
+                            ),
+                            child: const Text(
+                              'MODO ESPECTADOR',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueAccent,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
