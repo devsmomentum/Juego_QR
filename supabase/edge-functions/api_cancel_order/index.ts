@@ -29,15 +29,17 @@ serve(async (req) => {
         const { order_id } = await req.json()
 
         // 1. Get API Key
-        const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')
-        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_API_URL') || 'https://api.pagoapago.com/v1/cancel'
+        const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')!
+        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_CANCEL_URL')!
+
+        console.log(`Cancelling order ${order_id} via Pago a Pago`)
 
         // 2. Cancel on Provider
         const response = await fetch(PAGO_PAGO_URL, {
-            method: 'POST',
+            method: 'PUT', // Documentation specifies PUT
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${pagoApiKey}`
+                'pago_pago_api': pagoApiKey
             },
             body: JSON.stringify({ order_id })
         })

@@ -17,26 +17,44 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
+        // 1. Validate Source
+        const webhookSource = req.headers.get('x-webhook-source')
+        if (webhookSource !== 'pagoapago-payment-processor') {
+            console.error("Invalid Webhook Source:", webhookSource)
+            return new Response("Unauthorized", { status: 401 })
+        }
+
         const body = await req.json()
         console.log("Webhook received:", JSON.stringify(body))
 
-        // Validar estructura básica del webhook de Pago a Pago
-        // Asumimos que el body trae: { success: true, data: { order_id: "...", status: "...", extra_data: { user_id: "..." } } }
-        // OJO: Ajustar según la estructura REAL de la respuesta de Pago a Pago.
-        // Basado en lo investigado:
-        // Podría ser algo como: { order_id: "...", status: "PAID", ... }
+        // Extract event and data based on documentation/screenshots
+        const event = body.event
+        const data = body.data || {}
+        const extraData = data.extra_data || {}
 
-        // Extracción segura de datos
-        const orderId = body.id || body.order_id || body.data?.order_id
-        const status = body.status || body.data?.status
-        const extraData = body.extra_data || body.data?.extra_data || {}
+        // Safe extraction variables
+        const orderId = data.order_id
         const userId = extraData.user_id
+        // Map event to a status string for our DB
+        let status = 'PENDING'
 
-        if (!orderId || !status) {
-            throw new Error("Invalid payload: Missing order_id or status")
+        if (event === 'payment.completed' || event === 'payment.paid') {
+            status = 'PAID'
+        } else if (event === 'payment.failed' || event === 'payment.error') {
+            status = 'FAILED'
+        } else if (event === 'payment.cancelled') {
+            status = 'CANCELLED'
+        } else if (event === 'payment.expired') {
+            status = 'EXPIRED'
+        } else {
+            status = event || 'UNKNOWN'
         }
 
-        console.log(`Processing Order: ${orderId}, Status: ${status}, User: ${userId}`)
+        if (!orderId) {
+            throw new Error("Invalid payload: Missing order_id")
+        }
+
+        console.log(`Processing Event: ${event}, Order: ${orderId}, Status: ${status}, User: ${userId}`)
 
         // Verificar si ya existe la transacción
         const { data: existingTx } = await supabaseClient
@@ -52,8 +70,8 @@ serve(async (req) => {
                     order_id: orderId,
                     user_id: userId,
                     status: status,
-                    amount: body.amount || body.data?.amount || 0,
-                    currency: body.currency || body.data?.currency || 'VES',
+                    amount: data.amount || 0,
+                    currency: data.currency || 'VES',
                     provider_data: body
                 })
             } else {
@@ -68,12 +86,16 @@ serve(async (req) => {
         }
 
         // Si el estado es COMPLETADO/PAGADO, dar los tréboles
-        // Asumimos status == 'PAID' o 'COMPLETED' (Ajustar según documentación real)
-        if (status.toUpperCase() === 'PAID' || status.toUpperCase() === 'COMPLETED') {
+        if (status === 'PAID') {
             if (userId) {
-                // Obtener el monto para calcular tréboles (1:1 según regla)
-                const amount = body.amount || body.data?.amount || 0
-                const cloversToAdd = Math.floor(Number(amount)) // Redondear hacia abajo
+                // Obtener el monto para calcular tréboles (1:1 con USD, no con VES)
+                // Usamos 'clovers_amount' de extra_data si existe (lo enviamos desde api_pay_orders)
+                const cloversAmount = extraData.clovers_amount ? Number(extraData.clovers_amount) : 0
+                const fallbackAmount = data.amount || 0
+
+                const cloversToAdd = Math.floor(cloversAmount > 0 ? cloversAmount : Number(fallbackAmount))
+
+                console.log(`Crediting clovers: Source=${cloversAmount > 0 ? 'extra_data(USD)' : 'fallback(VES)'}, Amount=${cloversToAdd}`)
 
                 if (cloversToAdd > 0) {
                     // Usar RPC o player_stats si existe, o actualizar profiles directamente

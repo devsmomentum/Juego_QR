@@ -68,3 +68,49 @@ class PaymentOrderResponse {
     );
   }
 }
+
+class WithdrawalRequest {
+  final double amount;
+  final String bank;
+  final String dni;
+  final String? phone;
+  final String? cta;
+
+  WithdrawalRequest({
+    required this.amount,
+    required this.bank,
+    required this.dni,
+    this.phone,
+    this.cta,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'amount': amount,
+      'bank': bank,
+      'dni': dni,
+      if (phone != null) 'phone': phone,
+      if (cta != null) 'cta': cta,
+    };
+  }
+}
+
+class WithdrawalResponse {
+  final bool success;
+  final String message;
+  final Map<String, dynamic>? data;
+
+  WithdrawalResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+
+  factory WithdrawalResponse.fromJson(Map<String, dynamic> json) {
+    return WithdrawalResponse(
+      success: json['success'] ?? false,
+      message: json['message'] ?? (json['error'] ?? 'Unknown error'),
+      data: json['data'],
+    );
+  }
+}

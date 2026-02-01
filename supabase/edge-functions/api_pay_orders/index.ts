@@ -38,19 +38,29 @@ serve(async (req) => {
         }
 
         // 3. Prepare Payload for Pago a Pago
-        // NOTE: This URL is a PLACEHOLDER. Replace with actual Pago a Pago API Endpoint.
-        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_API_URL') || 'https://api.pagoapago.com/v1/process'
+        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_API_URL')!
+
+        // Debug API Key (Safety Check)
+        console.log(`[DEBUG] API Key Check: Length=${pagoApiKey.length}, StartsWith=${pagoApiKey.substring(0, 4)}***`)
+
+        // Calculate expiration (e.g., 30 minutes from now)
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
 
         const payload = {
             amount: amount,
             currency: currency || 'VES',
-            motive: motive,
+            motive: motive || "Recharge Wallet",
             email: email || user.email,
             phone: phone,
             dni: dni,
-            callback_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/pago-a-pago-webhook`,
+            type_order: "EXTERNAL",
+            expires_at: expiresAt,
+            alias: `RECHARGE-${user.id.substring(0, 8)}-${Date.now()}`,
+            convert_from_usd: true, // Assuming input amount is in USD (Treboles)
+            url_redirect: "io.supabase.treasurehunt://payment-return",
             extra_data: {
-                user_id: user.id
+                user_id: user.id,
+                clovers_amount: amount // Pass original Tréboles amount to webhook
             }
         }
 
@@ -61,7 +71,7 @@ serve(async (req) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${pagoApiKey}` // Or however they authenticate
+                'pago_pago_api': pagoApiKey // Custom header required by provider
             },
             body: JSON.stringify(payload)
         })
