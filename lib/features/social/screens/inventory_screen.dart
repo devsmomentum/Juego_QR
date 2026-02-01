@@ -510,6 +510,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
       // Si fue reflejado, NO mostramos mensaje de éxito ni error.
       // El "Toast" de retorno (ReturnSuccessEffect) ya se encargará de informar al usuario.
       debugPrint("Feedback de ataque suprimido por reflejo (Return).");
+    } else if (result == PowerUseResult.blocked) {
+       // El feedback visual ("¡ATAQUE BLOQUEADO!") ya es manejado por SabotageOverlay
+       // via effectProvider.notifyAttackBlocked(), así que solo evitamos el mensaje de error.
+       debugPrint("InventoryScreen: Ataque bloqueado, suprimiendo error genérico.");
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

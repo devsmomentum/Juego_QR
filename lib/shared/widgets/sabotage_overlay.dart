@@ -12,7 +12,8 @@ import '../../features/game/widgets/effects/return_success_effect.dart';
 import '../../features/game/widgets/effects/return_rejection_effect.dart';
 import '../../features/game/widgets/effects/invisibility_effect.dart';
 import '../../features/game/widgets/effects/steal_failed_effect.dart';
-import '../../features/game/widgets/effects/shield_break_effect.dart'; // NEW IMPORT
+import '../../features/game/widgets/effects/shield_break_effect.dart'; // Defender (Broken)
+import '../../features/game/widgets/effects/shield_breaking_effect.dart'; // Attacker (Blocked)
 import '../models/player.dart';
 import '../../features/auth/providers/player_provider.dart';
 import '../../features/mall/models/power_item.dart'; // Required for PowerType
@@ -46,6 +47,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   DefenseAction? _localDefenseAction;
   Timer? _localDefenseActionTimer;
   bool _showShieldBreakAnimation = false;
+  bool _showAttackBlockedAnimation = false;
 
   // Cached provider references to avoid context access in callbacks
   PowerEffectProvider? _powerProviderRef;
@@ -141,6 +143,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             
         case PowerFeedbackType.attackBlocked:
              _triggerLocalDefenseAction(DefenseAction.attackBlockedByEnemy);
+             setState(() {
+               _showAttackBlockedAnimation = true;
+             });
              break;
              
         case PowerFeedbackType.defenseSuccess:
@@ -164,6 +169,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
               setState(() {
                   _localDefenseAction = null;
                   _showShieldBreakAnimation = false; 
+                  _showAttackBlockedAnimation = false;
               });
           }
       });
@@ -367,6 +373,14 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
                onComplete: () {
                   // Opcional: resetear estado si queremos, pero el timer lo hará.
                },
+             ),
+             _DefenseFeedbackToast(action: defenseAction),
+        ],
+
+        if (_showAttackBlockedAnimation) ...[
+             ShieldBreakingEffect(
+                title: '¡ATAQUE BLOQUEADO!',
+                subtitle: 'El objetivo tenía un escudo activo',
              ),
              _DefenseFeedbackToast(action: defenseAction),
         ],

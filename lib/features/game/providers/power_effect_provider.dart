@@ -623,6 +623,14 @@ class PowerEffectProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void notifyAttackBlocked() {
+    _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
+    _feedbackStreamController.add(PowerFeedbackEvent(
+      PowerFeedbackType.attackBlocked,
+    ));
+    notifyListeners();
+  }
+
   void notifyStealFailed() {
     _registerDefenseAction(DefenseAction.stealFailed);
   }

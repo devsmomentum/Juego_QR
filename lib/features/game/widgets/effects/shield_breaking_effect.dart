@@ -5,8 +5,15 @@ import 'package:flutter/material.dart';
 /// Muestra un destello azul/cyan que se expande y fragmenta.
 class ShieldBreakingEffect extends StatefulWidget {
   final VoidCallback? onComplete;
+  final String? title;
+  final String? subtitle;
   
-  const ShieldBreakingEffect({super.key, this.onComplete});
+  const ShieldBreakingEffect({
+    super.key, 
+    this.onComplete,
+    this.title,
+    this.subtitle,
+  });
 
   @override
   State<ShieldBreakingEffect> createState() => _ShieldBreakingEffectState();
@@ -43,7 +50,7 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
     super.dispose();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _controller,
@@ -128,10 +135,10 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
                 right: 0,
                 child: Opacity(
                   opacity: _opacityAnimation.value,
-                  child: const Text(
-                    '¡ESCUDO ROTO!',
+                  child: Text(
+                    widget.title ?? '¡ESCUDO ROTO!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -157,10 +164,10 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
                 right: 0,
                 child: Opacity(
                   opacity: _opacityAnimation.value,
-                  child: const Text(
-                    'Tu protección ha sido consumida',
+                  child: Text(
+                    widget.subtitle ?? 'Tu protección ha sido consumida',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,

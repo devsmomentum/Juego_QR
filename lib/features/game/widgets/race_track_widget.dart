@@ -317,6 +317,8 @@ class RaceTrackWidget extends StatelessWidget {
             backgroundColor: AppTheme.dangerRed,
           ),
         );
+      } else if (result == PowerUseResult.blocked) {
+        // Handled by SabotageOverlay via PowerEffectProvider.notifyAttackBlocked()
       } else if (success) {
         final suppressed = effectProvider.lastDefenseAction == DefenseAction.stealFailed;
         if (!suppressed) {
@@ -599,10 +601,14 @@ class _LiveIndicatorState extends State<_LiveIndicator>
 class _PowerExecutedDialog extends StatefulWidget {
   final bool isAttack;
   final String targetName;
+  final String? customTitle;
+  final Color? customColor;
   
   const _PowerExecutedDialog({
     required this.isAttack,
     required this.targetName,
+    this.customTitle,
+    this.customColor,
   });
 
   @override
@@ -673,9 +679,9 @@ class _PowerExecutedDialogState extends State<_PowerExecutedDialog>
                   Material(
                     color: Colors.transparent,
                     child: Text(
-                      widget.isAttack ? '¡ATAQUE ENVIADO!' : '¡PODER ACTIVADO!',
-                      style: const TextStyle(
-                        color: AppTheme.accentGold,
+                      widget.customTitle ?? (widget.isAttack ? '¡ATAQUE ENVIADO!' : '¡PODER ACTIVADO!'),
+                      style: TextStyle(
+                        color: widget.customColor ?? AppTheme.accentGold,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2,

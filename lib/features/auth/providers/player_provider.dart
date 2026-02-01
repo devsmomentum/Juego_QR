@@ -12,7 +12,7 @@ import '../services/inventory_service.dart';
 import '../services/power_service.dart';
 import '../../admin/services/admin_service.dart';
 
-enum PowerUseResult { success, reflected, error }
+enum PowerUseResult { success, reflected, error, blocked }
 
   /// Core Player Provider - Handles player identity, session, and coordination.
 /// 
@@ -511,6 +511,14 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         rivals: rivals,
         eventId: eventId,
       );
+      
+      if (response.blockedByShield) {
+        // [SHIELD FEEDBACK] The attack was executed but blocked.
+        effectProvider.notifyAttackBlocked();
+        // We might want to refresh profile to sync ammo usage.
+        await syncRealInventory(effectProvider: effectProvider);
+        return PowerUseResult.blocked;
+      }
 
       switch (response.result) {
         case PowerUseResultType.reflected:

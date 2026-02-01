@@ -11,6 +11,7 @@ class PowerUseResponse {
   final String? returnedByName;
   final bool stealFailed;
   final String? stealFailReason;
+  final bool blockedByShield;
   final String? errorMessage;
 
   PowerUseResponse({
@@ -19,11 +20,17 @@ class PowerUseResponse {
     this.returnedByName,
     this.stealFailed = false,
     this.stealFailReason,
+    this.blockedByShield = false,
     this.errorMessage,
   });
 
   factory PowerUseResponse.success() => PowerUseResponse(
         result: PowerUseResultType.success,
+      );
+  
+  factory PowerUseResponse.blocked() => PowerUseResponse(
+        result: PowerUseResultType.success, // Technically success execution, but blocked effect
+        blockedByShield: true,
       );
 
   factory PowerUseResponse.reflected(String byName) => PowerUseResponse(
@@ -161,6 +168,11 @@ class PowerService {
           throw '¡El escudo ya está activo!';
         }
         return PowerUseResponse.error(response['error']?.toString() ?? 'Error');
+      }
+
+      // Detectar bloqueo por escudo
+      if (success && response is Map && response['blocked'] == true) {
+         return PowerUseResponse.blocked();
       }
 
       // Detectar devolución (poder reflejado)
