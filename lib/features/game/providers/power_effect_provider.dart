@@ -25,32 +25,30 @@ class PowerFeedbackEvent {
 /// - Coordinar efectos especiales como Life Steal.
 class PowerEffectProvider extends ChangeNotifier {
   StreamSubscription? _subscription;
-  StreamSubscription? _casterSubscription; // Nueva suscripción para detectar reflejos salientes
+  StreamSubscription? _casterSubscription; 
+  StreamSubscription? _combatEventsSubscription; 
   Timer? _expiryTimer;
   Timer? _defenseFeedbackTimer;
-  // bool _shieldActive = false; // REMOVED: Legacy state
+
   String? _listeningForId;
   String? get listeningForId => _listeningForId;
   
-  bool _isManualCasting = false; // Flag para distinguir casting manual vs automático (reflejo)
+  bool _isManualCasting = false;
   bool _returnArmed = false;
-  bool _shieldArmed = false; // Flag para escudo de un solo uso (igual que Return)
+  bool _shieldArmed = false;
   
-  // FILTRO DE TIEMPO: Solo procesar eventos ocurridos después de iniciar la sesión
   DateTime? _sessionStartTime; 
 
-  Future<bool> Function(String powerSlug, String targetGamePlayerId)?
-      _returnHandler;
-  Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId)?
-      _lifeStealVictimHandler;
+  Future<bool> Function(String powerSlug, String targetGamePlayerId)? _returnHandler;
+  Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId)? _lifeStealVictimHandler;
+  
   DefenseAction? _lastDefenseAction;
   DateTime? _lastDefenseActionAt;
 
-  final Set<String> _processedEffectIds = {}; // IDEMPOTENCIA
+  final Set<String> _processedEffectIds = {};
+  
   String? _returnedByPlayerName;
   String? get returnedByPlayerName => _returnedByPlayerName;
-
-
 
   String? _returnedAgainstCasterId;
   String? get returnedAgainstCasterId => _returnedAgainstCasterId;
@@ -61,43 +59,29 @@ class PowerEffectProvider extends ChangeNotifier {
   final Map<String, String> _powerIdToSlugCache = {};
   final Map<String, Duration> _powerSlugToDurationCache = {};
   
-  // CACHE DE ID ESCUDO (Para evitar lookups en tiempo real durante combate)
   String? _cachedShieldPowerId;
 
-  // STREAM DE FEEDBACK (Event-Driven Architecture)
-  final StreamController<PowerFeedbackEvent> _feedbackStreamController = 
-      StreamController<PowerFeedbackEvent>.broadcast();
-  
+  final StreamController<PowerFeedbackEvent> _feedbackStreamController = StreamController<PowerFeedbackEvent>.broadcast();
   Stream<PowerFeedbackEvent> get feedbackStream => _feedbackStreamController.stream;
 
-  // STATE FOR CONCURRENT EFFECTS
   final Map<String, _ActiveEffect> _activeEffects = {};
 
-  // Backward compatibility getters (returns the latest added effect or relevant context)
   String? get activePowerSlug => _activeEffects.isNotEmpty ? _activeEffects.keys.last : null;
   String? get activeEffectId => _activeEffects.isNotEmpty ? _activeEffects.values.last.effectId : null;
   String? get activeEffectCasterId => _activeEffects.isNotEmpty ? _activeEffects.values.last.casterId : null;
   DateTime? get activePowerExpiresAt => _activeEffects.isNotEmpty ? _activeEffects.values.last.expiresAt : null;
 
-  // Public API for Concurrent Effects
   bool isEffectActive(String slug) => _activeEffects.containsKey(slug);
   
   bool isPowerActive(PowerType type) {
     switch (type) {
-      case PowerType.blind:
-        return isEffectActive('black_screen');
-      case PowerType.freeze:
-        return isEffectActive('freeze');
-      case PowerType.blur:
-        return isEffectActive('blur_screen');
-      case PowerType.lifeSteal:
-        return isEffectActive('life_steal');
-      case PowerType.stealth:
-        return isEffectActive('invisibility');
-      case PowerType.shield:
-        return isEffectActive('shield');
-      default:
-        return false;
+      case PowerType.blind: return isEffectActive('black_screen');
+      case PowerType.freeze: return isEffectActive('freeze');
+      case PowerType.blur: return isEffectActive('blur_screen');
+      case PowerType.lifeSteal: return isEffectActive('life_steal');
+      case PowerType.stealth: return isEffectActive('invisibility');
+      case PowerType.shield: return isEffectActive('shield');
+      default: return false;
     }
   }
   
@@ -105,28 +89,19 @@ class PowerEffectProvider extends ChangeNotifier {
   
   DateTime? getPowerExpirationByType(PowerType type) {
     switch (type) {
-      case PowerType.blind:
-        return getPowerExpiration('black_screen');
-      case PowerType.freeze:
-        return getPowerExpiration('freeze');
-      case PowerType.blur:
-        return getPowerExpiration('blur_screen');
-      case PowerType.lifeSteal:
-        return getPowerExpiration('life_steal');
-      case PowerType.stealth:
-        return getPowerExpiration('invisibility');
-      case PowerType.shield:
-        return getPowerExpiration('shield');
-      default:
-        return null;
+      case PowerType.blind: return getPowerExpiration('black_screen');
+      case PowerType.freeze: return getPowerExpiration('freeze');
+      case PowerType.blur: return getPowerExpiration('blur_screen');
+      case PowerType.lifeSteal: return getPowerExpiration('life_steal');
+      case PowerType.stealth: return getPowerExpiration('invisibility');
+      case PowerType.shield: return getPowerExpiration('shield');
+      default: return null;
     }
   }
   
-  // Variables temporales para pasar contexto a la estrategia durante onActivate
   String? _pendingEffectId;
   String? _pendingCasterId;
 
-  // Getters para Estrategias
   String? get pendingEffectId => _pendingEffectId;
   String? get pendingCasterId => _pendingCasterId;
   Future<void> Function(String, String?, String)? get lifeStealVictimHandler => _lifeStealVictimHandler;
@@ -139,42 +114,23 @@ class PowerEffectProvider extends ChangeNotifier {
     _pendingCasterId = casterId;
   }
 
-  void markEffectAsProcessed(String id) {
-    _processedEffectIds.add(id);
-  }
+  void markEffectAsProcessed(String id) => _processedEffectIds.add(id);
+  bool isEffectProcessed(String id) => _processedEffectIds.contains(id);
 
-  bool isEffectProcessed(String id) {
-    return _processedEffectIds.contains(id);
-  }
-
-  // REMOVED: Legacy setShieldState
-  // void setShieldState(bool value) { ... }
-
-  void setActiveEffectCasterId(String? id) {
-    // Deprecated setter, kept if needed but effects manage their own caster now
-    // No-op or we could try to find which effect to update, but usually this was for single state.
-  }
+  void setActiveEffectCasterId(String? id) {}
 
   SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
+    try { return Supabase.instance.client; } catch (_) { return null; }
   }
 
   bool get isReturnArmed => _returnArmed;
   bool get isShieldArmed => _shieldArmed;
 
-  void setManualCasting(bool value) {
-    _isManualCasting = value;
-  }
+  void setManualCasting(bool value) => _isManualCasting = value;
 
   void setShielded(bool value, {String? sourceSlug}) {
-     // Legacy method - now redirects to armShield() for unified defense pattern.
-     if (value) {
-        armShield();
-     } else {
+     if (value) armShield();
+     else {
         _shieldArmed = false;
         notifyListeners();
      }
@@ -185,83 +141,52 @@ class PowerEffectProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Arma el escudo defensivo (un solo uso).
-  /// Similar a armReturn(), el escudo se consumirá al interceptar un ataque.
-  /// También registra el efecto en _activeEffects para que la UI pueda mostrar el badge.
   Future<void> armShield() async {
     _shieldArmed = true;
     debugPrint('🛡️ Shield ARMED - Ready to block one attack');
-    
-    // Registrar en _activeEffects para que isPowerActive(shield) sea true
-    // y la UI pueda mostrar el badge del escudo activo
     try {
       final duration = await _getPowerDurationFromDb(powerSlug: 'shield');
-      
-      // Cachear ID del escudo para feedback rápido
       if (_cachedShieldPowerId == null) {
          try {
            final pRes = await _supabaseClient?.from('powers').select('id').eq('slug', 'shield').maybeSingle();
            _cachedShieldPowerId = pRes?['id']?.toString();
-           debugPrint('🛡️ Shield ID Cached: $_cachedShieldPowerId');
-         } catch(e) {
-           debugPrint('🛡️ FAILED to cache Shield ID: $e');
-         }
+         } catch(e) { debugPrint('🛡️ FAILED to cache Shield ID: $e'); }
       }
-
       final expiresAt = DateTime.now().toUtc().add(duration);
-      applyEffect(
-        slug: 'shield',
-        duration: duration,
-        expiresAt: expiresAt,
-      );
+      applyEffect(slug: 'shield', duration: duration, expiresAt: expiresAt);
     } catch (e) {
-      // Fallback: 2 minutos si falla la consulta
-      debugPrint('🛡️ Shield duration fetch failed, using fallback: $e');
       final duration = const Duration(minutes: 2);
-      applyEffect(
-        slug: 'shield',
-        duration: duration,
-        expiresAt: DateTime.now().toUtc().add(duration),
-      );
+      applyEffect(slug: 'shield', duration: duration, expiresAt: DateTime.now().toUtc().add(duration));
     }
-    
     notifyListeners();
   }
 
-  void configureReturnHandler(
-      Future<bool> Function(String powerSlug, String targetGamePlayerId)
-          handler) {
+  void configureReturnHandler(Future<bool> Function(String powerSlug, String targetGamePlayerId) handler) {
     _returnHandler = handler;
   }
 
-  void configureLifeStealVictimHandler(
-      Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId)
-          handler) {
+  void configureLifeStealVictimHandler(Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId) handler) {
     _lifeStealVictimHandler = handler;
   }
 
   void startListening(String? myGamePlayerId, {bool forceRestart = false}) {
     debugPrint('[DEBUG] 📡 PowerEffectProvider.startListening() CALLED');
     debugPrint('[DEBUG]    myGamePlayerId: $myGamePlayerId');
-    debugPrint('[DEBUG]    current _listeningForId: $_listeningForId');
-    debugPrint('[DEBUG]    _subscription is null? ${_subscription == null}');
-    debugPrint('[DEBUG]    forceRestart: $forceRestart');
-    debugPrint('[DEBUG]    _lifeStealVictimHandler is null? ${_lifeStealVictimHandler == null}');
     
     final supabase = _supabaseClient;
     if (supabase == null) {
-      debugPrint('[DEBUG] ❌ Supabase client is NULL - aborting');
       _clearAllEffects();
       _subscription?.cancel();
       _casterSubscription?.cancel();
+      _combatEventsSubscription?.cancel();
       return;
     }
 
     if (myGamePlayerId == null || myGamePlayerId.isEmpty) {
-      debugPrint('[DEBUG] ⚠️ gamePlayerId is null/empty - clearing subscriptions');
       _clearAllEffects();
       _subscription?.cancel();
       _casterSubscription?.cancel();
+       _combatEventsSubscription?.cancel();
       return;
     }
 
@@ -269,18 +194,14 @@ class PowerEffectProvider extends ChangeNotifier {
       debugPrint('[DEBUG] ⏭️ Already listening for $myGamePlayerId, skipping restart.');
       return;
     }
-
-    debugPrint('[DEBUG] ✅ Starting NEW subscription for: $myGamePlayerId');
-    _subscription?.cancel();
-    _casterSubscription?.cancel();
-    // _expiryTimer?.cancel(); // Removed single timer
-    _clearAllEffects(); // Start fresh on new subscription
+    
+    _clearAllEffects(); 
 
     _listeningForId = myGamePlayerId;
     _sessionStartTime = DateTime.now().toUtc();
     _processedEffectIds.clear();
-    debugPrint('[DEBUG]    Session start time: $_sessionStartTime');
 
+    // 1. Listen for Active Powers (Duration Effects)
     _subscription = supabase
         .from('active_powers')
         .stream(primaryKey: ['id'])
@@ -288,9 +209,10 @@ class PowerEffectProvider extends ChangeNotifier {
         .listen((List<Map<String, dynamic>> data) async {
           await _processEffects(data);
         }, onError: (e) {
-          debugPrint('PowerEffectProvider stream error: $e');
+          debugPrint('PowerEffectProvider active_powers stream error: $e');
         });
 
+    // 2. Listen for Outgoing Powers (Reflections)
     _casterSubscription = supabase
         .from('active_powers')
         .stream(primaryKey: ['id'])
@@ -300,6 +222,54 @@ class PowerEffectProvider extends ChangeNotifier {
         }, onError: (e) {
           debugPrint('PowerEffectProvider outgoing stream error: $e');
         });
+
+    // 3. Listen for Combat Events (Instant Results like Blocked Attacks)
+    _combatEventsSubscription = supabase
+        .from('combat_events')
+        .stream(primaryKey: ['id'])
+        .eq('target_id', myGamePlayerId)
+        .order('created_at', ascending: false) // Latest first
+        .limit(1)
+        .listen((List<Map<String, dynamic>> data) {
+           _handleCombatEvents(data);
+        }, onError: (e) {
+           debugPrint('PowerEffectProvider combat_events stream error: $e');
+        });
+  }
+
+  void _handleCombatEvents(List<Map<String, dynamic>> data) {
+    if (data.isEmpty) return;
+    
+    // Check duplication/timing
+    final event = data.first;
+    final createdAtStr = event['created_at'];
+    if (createdAtStr == null) return;
+    
+    final createdAt = DateTime.parse(createdAtStr);
+    if (_sessionStartTime != null && createdAt.isBefore(_sessionStartTime!)) return;
+    
+    // Idempotency check for events (using ID)
+    final eventId = event['id']?.toString();
+    if (eventId != null) {
+      if (_processedEffectIds.contains(eventId)) return;
+      _processedEffectIds.add(eventId);
+    }
+
+    final resultType = event['result_type'];
+    final powerSlug = event['power_slug'];
+
+    debugPrint('[COMBAT] ⚔️ Event Received: $resultType (Power: $powerSlug)');
+
+    if (resultType == 'shield_blocked') {
+        // Server confirmed shield blocked an attack
+        _shieldArmed = false; // Sync local state
+        _removeEffect('shield'); // Remove icon
+        
+        _registerDefenseAction(DefenseAction.shieldBroken);
+        _feedbackStreamController.add(PowerFeedbackEvent(
+            PowerFeedbackType.shieldBroken
+        ));
+    }
   }
 
   Future<void> _processOutgoingEffects(List<Map<String, dynamic>> data) async {
@@ -442,16 +412,12 @@ class PowerEffectProvider extends ChangeNotifier {
                                 slug == 'freeze' || 
                                 slug == 'blur_screen' ||
                                 isLifeSteal;
-                                
+
        // --- 1. RETURN MECHANISM (Highest Priority) ---
        if (_returnArmed && isOffensive) {
           final bool isSelf = casterId == _listeningForId;
           
           if (!isSelf && casterId != null) {
-            // Check if we should ignore this specific processed life steal? 
-            // Return consumes it, so it shouldn't be processed.
-            // If it's life steal, we reflect the "attempt".
-            
             _returnArmed = false;
             _registerDefenseAction(DefenseAction.returned);
             
@@ -484,37 +450,31 @@ class PowerEffectProvider extends ChangeNotifier {
           }
        }
 
-       // --- 2. SHIELD MECHANISM (Medium Priority) ---
-       if (_shieldArmed && isOffensive) {
-           debugPrint('[SHIELD] 🛡️ Intercepting attack: $slug');
+       // --- SHIELD SYNC (Server-Side Removal) ---
+       // If shield is active locally, but missing from the incoming stream, 
+       // it means the server consumed it (or it expired/was removed).
+       // We must remove it locally to update the UI immediately.
+       if (_shieldArmed && isEffectActive('shield')) {
+           bool shieldInStream = filtered.any((e) {
+               final s = e['power_slug'] ?? e['slug']; // handle both formats
+               return s == 'shield';
+           });
            
-           _shieldArmed = false;
-           _removeEffect('shield'); // Update UI
-           
-           _registerDefenseAction(DefenseAction.shieldBroken);
-           _feedbackStreamController.add(PowerFeedbackEvent(
-               PowerFeedbackType.shieldBroken
-           ));
-           
-           if (effectId != null) {
-              try {
-                await supabase.from('active_powers').delete().eq('id', effectId);
-                debugPrint('[SHIELD] 🛡️ Attack effect $slug ($effectId) consumed.');
-                
-                final attackerId = effect['caster_id']?.toString();
-                if (attackerId != null) {
-                   _sendShieldFeedback(attackerId);
-                }
-              } catch (e) {
-                debugPrint('[SHIELD] ❌ Failed to consume attack effect: $e');
-              }
+           if (!shieldInStream) {
+               debugPrint('[SHIELD] 🛡️ Shield missing from stream (consumed/expired) -> Removing local effect.');
+               _shieldArmed = false;
+               _removeEffect('shield');
            }
-           
-           notifyListeners();
-           return; // Stop processing
        }
+       
+       // --- INTERCEPTION LOGIC ---
+       // Shield interception is now handled Server-Side (execute_combat_power.sql).
+       // The attack is blocked at the DB level and never reaches active_powers.
+       // Feedback is handled via _combatEventsSubscription.
+       // We only keep Return interception here because it requires client-side Reflection logic 
+       // (until that is also moved to server).
 
-       // --- 3. HANDLE INCOMING FEEDBACK (As Attacker) ---
+       // --- HANDLE INCOMING FEEDBACK (As Attacker) ---
        if (slug == 'shield_feedback') {
            _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
            _feedbackStreamController.add(PowerFeedbackEvent(

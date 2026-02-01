@@ -99,9 +99,22 @@ BEGIN
         RETURN json_build_object('success', false, 'error', 'target_invisible');
     END IF;
 
-    -- B. Check Escudo (Se ignora para que el frontend lo procese, pero el RPC corre)
+    -- B. Check Escudo (Prioridad Media: Bloquea el ataque antes de Return)
+    SELECT id INTO v_shield_row_id FROM public.active_powers 
+    WHERE target_id = p_target_id AND power_slug = 'shield' AND expires_at > v_now LIMIT 1;
 
-    -- C. Check Return (Reflejo)
+    IF v_shield_row_id IS NOT NULL THEN
+        -- 1. Consumir el escudo
+        DELETE FROM public.active_powers WHERE id = v_shield_row_id;
+        
+        -- 2. Log del bloqueo
+        INSERT INTO public.combat_events (event_id, attacker_id, target_id, power_id, power_slug, result_type)
+        VALUES (v_event_id, p_caster_id, p_target_id, v_power_id, p_power_slug, 'shield_blocked');
+
+        -- 3. Retornar éxito (el ataque fue "exitoso" en ser procesado, pero bloqueado)
+        -- Importante: No se inserta el poder dañino en active_powers.
+        RETURN json_build_object('success', true, 'blocked', true, 'reason', 'shield_absorbed');
+    END IF;
     -- Obtener efecto return activo
     SELECT id INTO v_return_row_id FROM public.active_powers 
     WHERE target_id = p_target_id AND power_slug = 'return' AND expires_at > v_now LIMIT 1;
