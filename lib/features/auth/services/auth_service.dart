@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/models/player.dart';
 
 /// Servicio de autenticación que encapsula la lógica de login, registro y logout.
 /// 
@@ -167,13 +168,24 @@ class AuthService {
   /// Actualiza la información del perfil del usuario.
   Future<void> updateProfile(String userId, {String? name, String? email, String? cedula, String? phone}) async {
     try {
-      // 1. Actualizar nombre en la tabla profiles si se provee
+      // 1. Actualizar datos en la tabla profiles (DNI, Phone, etc.)
       if (name != null || cedula != null || phone != null) {
-        await _supabase.from('profiles').update({
-          if (name != null) 'name': name.trim(),
-          if (cedula != null) 'cedula': cedula,
-          if (phone != null) 'phone': phone,
-        }).eq('id', userId);
+        
+        // Pass cedula as string directly to 'dni'
+        final response = await _supabase.functions.invoke(
+          'auth-service/update-profile',
+          body: {
+            if (name != null) 'name': name.trim(),
+            if (cedula != null) 'dni': cedula,
+            if (phone != null) 'phone': phone.trim(),
+          },
+          method: HttpMethod.post,
+        );
+
+        if (response.status != 200) {
+           final error = response.data['error'] ?? 'Error desconocido al actualizar perfil';
+           throw error;
+        }
       }
 
       // 2. Actualizar email en Supabase Auth si se provee
@@ -221,5 +233,42 @@ class AuthService {
         .toString()
         .replaceAll('Exception: ', '')
         .replaceAll('exception: ', '');
+  }
+
+  /// Agrega un método de pago vinculado al usuario.
+  Future<void> addPaymentMethod({required String bankCode}) async {
+    try {
+      final response = await _supabase.functions.invoke(
+        'auth-service/add-payment-method',
+        body: {
+          'bank_code': bankCode,
+        },
+        method: HttpMethod.post,
+      );
+
+      if (response.status != 200) {
+        final error = response.data['error'] ?? 'Error desconocido al guardar método de pago';
+        throw error;
+      }
+    } catch (e) {
+      debugPrint('AuthService: Error adding payment method: $e');
+      throw _handleAuthError(e);
+    }
+  }
+  /// Obtiene el perfil del usuario.
+  Future<Player?> getProfile(String userId) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+      
+      if (response == null) return null;
+      return Player.fromJson(response);
+    } catch (e) {
+      debugPrint('AuthService: Error fetching profile: $e');
+      return null;
+    }
   }
 }

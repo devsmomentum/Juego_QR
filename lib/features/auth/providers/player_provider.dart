@@ -190,22 +190,36 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
-  Future<void> updateProfile({String? name, String? email}) async {
+  Future<void> updateProfile({String? name, String? email, String? cedula, String? phone}) async {
     if (_currentPlayer == null) return;
     try {
-      await _authService.updateProfile(_currentPlayer!.userId, name: name, email: email);
+      await _authService.updateProfile(_currentPlayer!.userId, 
+        name: name,
+        email: email, 
+        cedula: cedula, 
+        phone: phone,
+      );
       
       // Actualizar localmente
-      if (name != null) {
-        _currentPlayer = _currentPlayer!.copyWith(name: name);
-      }
-      if (email != null) {
-        _currentPlayer = _currentPlayer!.copyWith(email: email);
-      }
+      _currentPlayer = _currentPlayer!.copyWith(
+        name: name,
+        email: email,
+        cedula: cedula, 
+        phone: phone,
+      );
       
       notifyListeners();
     } catch (e) {
       debugPrint('Error updating profile in provider: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> addPaymentMethod({required String bankCode}) async {
+    try {
+      await _authService.addPaymentMethod(bankCode: bankCode);
+    } catch (e) {
+      debugPrint('Error adding payment method in provider: $e');
       rethrow;
     }
   }
@@ -226,6 +240,8 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     
     _isLoggingOut = false;
   }
+
+
 
   /// Global Reset: Clears all user session data
   /// Implementación de IResettable

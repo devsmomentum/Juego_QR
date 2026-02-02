@@ -23,8 +23,9 @@ class Player implements ITargetable {
   List<String>? eventsCompleted;
   int lives;
   int clovers; // New currency - tréboles
-  String? cedula;
-  String? phone;
+  final String? cedula;
+  final String? phone;
+  final String? documentType; // Added for Payment Profile
   Map<String, dynamic> stats;
 
   Player({
@@ -52,6 +53,7 @@ class Player implements ITargetable {
     this.currentEventId,
     this.cedula,
     this.phone,
+    this.documentType,
   })  : _avatarUrl = avatarUrl ?? '',
         inventory = inventory ?? [],
         stats = stats ??
@@ -133,7 +135,9 @@ class Player implements ITargetable {
       gamePlayerId: json['player_id'] ?? json['game_player_id'],
       avatarId: avatarId,
       clovers: json['clovers'] ?? 0,
-      cedula: json['cedula'],
+      documentType: json['document'],
+      // Map 'dni' (int) from DB to 'cedula' (String) in model if 'cedula' is null
+      cedula: json['cedula']?.toString() ?? json['dni']?.toString(),
       phone: json['phone'],
     );
   }
@@ -180,6 +184,15 @@ class Player implements ITargetable {
       status == PlayerStatus.slowed &&
       (frozenUntil == null ||
           DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
+
+  // Validation for payment profile
+  bool get hasCompletePaymentProfile =>
+      documentType != null &&
+      documentType!.isNotEmpty &&
+      cedula != null &&
+      cedula!.isNotEmpty &&
+      phone != null &&
+      phone!.isNotEmpty;
 
   void addExperience(int xp) {
     experience += xp;
@@ -258,6 +271,7 @@ class Player implements ITargetable {
     String? currentEventId,
     String? cedula,
     String? phone,
+    String? documentType,
   }) {
     return Player(
       userId: userId ?? this.userId,
@@ -284,6 +298,7 @@ class Player implements ITargetable {
       currentEventId: currentEventId ?? this.currentEventId,
       cedula: cedula ?? this.cedula,
       phone: phone ?? this.phone,
+      documentType: documentType ?? this.documentType,
     );
   }
 }
