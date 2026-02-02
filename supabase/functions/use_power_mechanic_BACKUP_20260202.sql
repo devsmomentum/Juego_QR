@@ -56,7 +56,7 @@ BEGIN
         VALUES (v_event_id, p_caster_id, p_caster_id, v_power_id, p_power_slug, 
                 CASE 
                     WHEN p_power_slug = 'shield' THEN v_now + interval '1 year'
-                    WHEN p_power_slug = 'return' THEN v_now + interval '1 year'
+                    WHEN p_power_slug = 'return' THEN v_now + interval '30 seconds'
                     ELSE v_now + (COALESCE(v_power_duration, 20) || ' seconds')::interval
                 END);
         
@@ -68,7 +68,6 @@ BEGIN
         DECLARE
             v_caster_affected boolean := false;
             v_return_row_id_blur uuid;
-            v_returned_by_name_blur text;
         BEGIN
         FOR v_rival_record IN 
             SELECT id FROM public.game_players 
@@ -95,10 +94,6 @@ BEGIN
                     -- Return activo: consumir y reflejar al caster
                     DELETE FROM public.active_powers WHERE id = v_return_row_id_blur;
                     
-                    -- Obtener nombre del jugador que reflejó
-                    SELECT name INTO v_returned_by_name_blur FROM public.profiles 
-                    WHERE id = (SELECT user_id FROM public.game_players WHERE id = v_rival_record.id);
-                    
                     -- Aplicar blur al CASTER (solo una vez aunque varios tengan return)
                     IF NOT v_caster_affected THEN
                         INSERT INTO public.active_powers (event_id, caster_id, target_id, power_id, power_slug, expires_at)
@@ -121,14 +116,8 @@ BEGIN
                 END IF;
             END IF;
         END LOOP;
-        
-        -- Retornar con información de reflexión si hubo (DENTRO del bloque donde las variables están en scope)
-        IF v_caster_affected THEN
-            RETURN json_build_object('success', true, 'returned', true, 'returned_by_name', v_returned_by_name_blur);
-        ELSE
-            RETURN json_build_object('success', true, 'message', 'broadcast_complete');
-        END IF;
         END;
+        RETURN json_build_object('success', true, 'message', 'broadcast_complete');
     END IF;
 
     -- 5. ATAQUES DIRECTOS

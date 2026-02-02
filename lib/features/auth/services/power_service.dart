@@ -119,24 +119,19 @@ class PowerService {
         });
         success = _coerceRpcSuccess(response);
       }
-      // 3. BLUR SCREEN: broadcast a todos los rivales
+      // 3. BLUR SCREEN: usa RPC que maneja return/shield correctamente
       else if (powerSlug == 'blur_screen') {
-        final paid = await decrementPowerBySlug(
-          powerSlug: 'blur_screen',
-          gamePlayerId: casterGamePlayerId,
-        );
-        if (!paid) {
-          return PowerUseResponse.error('No tienes este poder');
-        }
-
-        if (rivals != null && rivals.isNotEmpty) {
-          await _broadcastBlurScreenToRivals(
-            casterGamePlayerId: casterGamePlayerId,
-            rivals: rivals,
-            eventId: eventId,
-          );
-        }
-        return PowerUseResponse.success();
+        debugPrint('PowerService: ⚡ Executing blur_screen via RPC');
+        
+        // El RPC maneja el consumo de munición y la lógica de return/shield
+        response = await _supabase.rpc('use_power_mechanic', params: {
+          'p_caster_id': casterGamePlayerId,
+          'p_target_id': casterGamePlayerId, // blur_screen es broadcast, target no importa
+          'p_power_slug': 'blur_screen',
+        });
+        
+        debugPrint('PowerService: 📦 blur_screen RPC Response: $response');
+        success = _coerceRpcSuccess(response);
       }
       // 4. RETURN: target es el mismo caster
       else if (powerSlug == 'return') {
