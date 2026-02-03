@@ -8,7 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import 'qr_scanner_screen.dart';
 
 class ClueFinderScreen extends StatefulWidget {
-  final PhysicalClue clue;
+  final Clue clue; // Changed from PhysicalClue to Clue
 
   const ClueFinderScreen({super.key, required this.clue});
 

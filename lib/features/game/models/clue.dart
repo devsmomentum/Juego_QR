@@ -1,8 +1,4 @@
-import 'package:flutter/material.dart'; // Mantener por IconData si fuera necesario, pero el usuario pidió eliminar referencias a Navigator/BuildContext. 
-// Para ser estricto con "Limpieza de UI en Datos", deberíamos quitar Material. 
-// Pero ClueType.typeIcon devuelve un String (emoji) que no requiere Material.
-// Sin embargo, ClueType usa colores? No.
-// Vamos a eliminar los imports de pantallas tambien.
+import 'package:flutter/material.dart';
 
 enum ClueType {
   qrScan,
@@ -90,6 +86,11 @@ abstract class Clue {
   bool isCompleted;
   bool isLocked;
   final int sequenceIndex;
+  
+  // Universal coordinates for all clue types (including Minigames)
+  final double? latitude;
+  final double? longitude;
+  final String? qrCode;
 
   Clue({
     required this.id,
@@ -102,32 +103,28 @@ abstract class Clue {
     this.isCompleted = false,
     this.isLocked = true,
     this.sequenceIndex = 0,
+    this.latitude,
+    this.longitude,
+    this.qrCode,
   });
 
-  /// Abstract getters (moved logic out, kept string/icon data)
+  /// Abstract getters
   String get typeName;
   String get typeIcon;
 
   /// Strategy Pattern: Each clue type knows how to check its own unlock requirements.
-  /// OnlineClue returns true immediately (no physical checks needed).
-  /// PhysicalClue returns false (requires GPS/QR validation by the service).
   Future<bool> checkUnlockRequirements();
 
-  // Virtual getters for compatibility (returning null by default)
-  double? get latitude => null;
-  double? get longitude => null;
-  String? get qrCode => null;
   String? get minigameUrl => null;
   String? get riddleQuestion => null;
   String? get riddleAnswer => null;
   PuzzleType get puzzleType => PuzzleType.slidingPuzzle; 
   
   factory Clue.fromJson(Map<String, dynamic> json) {
-    
-    // Safety check for image URLs in JSON (from original code)
+    // Safety check for image URLs in JSON
     String? image = json['image_url'];
     if (image != null && (image.contains('C:/') || image.contains('file:///'))) {
-       // print('⚠️ Ruta inválida detectada y bloqueada: $image'); // Removing print to keep purely data if possible, or use debugPrint
+       // local path handling
     }
 
     final typeStr = json['type'] as String?;
@@ -145,10 +142,6 @@ abstract class Clue {
 }
 
 class PhysicalClue extends Clue {
-  final double? latitude;
-  final double? longitude;
-  final String? qrCode;
-
   PhysicalClue({
     required super.id,
     required super.title,
@@ -160,9 +153,9 @@ class PhysicalClue extends Clue {
     super.isCompleted,
     super.isLocked,
     super.sequenceIndex,
-    this.latitude,
-    this.longitude,
-    this.qrCode,
+    super.latitude,
+    super.longitude,
+    super.qrCode,
   });
 
   factory PhysicalClue.fromJson(Map<String, dynamic> json, ClueType type) {
@@ -211,11 +204,8 @@ class PhysicalClue extends Clue {
     }
   }
 
-  /// PhysicalClue requires GPS proximity or QR scan - returns false to trigger unlock dialog.
   @override
   Future<bool> checkUnlockRequirements() async {
-    // Physical clues require location/QR validation which is handled by the unlock dialog.
-    // Return false to indicate the clue is NOT auto-unlocked.
     return false;
   }
 }
@@ -241,6 +231,9 @@ class OnlineClue extends Clue {
     this.riddleQuestion,
     this.riddleAnswer,
     this.puzzleType = PuzzleType.slidingPuzzle,
+    super.latitude,
+    super.longitude,
+    super.qrCode,
   });
 
   factory OnlineClue.fromJson(Map<String, dynamic> json, ClueType type) {
@@ -264,6 +257,10 @@ class OnlineClue extends Clue {
       isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
       isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
       sequenceIndex: json['sequence_index'] ?? 0,
+      // Parse coordinates for online clues
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      qrCode: json['qr_code'],
     );
   }
 
@@ -273,10 +270,8 @@ class OnlineClue extends Clue {
   @override
   String get typeIcon => '🎮';
 
-  /// OnlineClue has no physical unlock requirements - always returns true.
   @override
   Future<bool> checkUnlockRequirements() async {
-    // Online clues have no GPS/QR requirements - always unlocked
     return true;
   }
 }

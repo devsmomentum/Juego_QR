@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/clue.dart';
 import '../screens/qr_scanner_screen.dart';
 import '../screens/puzzle_screen.dart';
+import '../screens/clue_finder_screen.dart';
 import '../../mall/screens/mall_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_mode_provider.dart';
@@ -79,47 +80,28 @@ class ClueNavigatorService {
   }
 
   /// Navigate with QR validation first (used in PRESENCIAL mode).
-  /// Shows QR scanner, validates the code, then navigates to puzzle.
+  /// Shows "Thermometer"/Hot-Cold screen -> QR Scanner -> Unlocks -> Navigates.
   static Future<void> _navigateWithQRValidation(BuildContext context, Clue clue) async {
-    debugPrint('[ClueNavigator] QR Validation required (PRESENCIAL mode)');
+    debugPrint('[ClueNavigator] Location Search & QR Validation required (PRESENCIAL mode)');
     
-    // Go to QR Scanner
-    final scannedCode = await Navigator.push<String>(
+    // 1. Go to Finder Screen (Thermometer)
+    // This screen handles the "Search -> Hot/Cold -> Scan Button" flow internally.
+    // It returns 'true' if the scan was successful and validated.
+    final bool? success = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => QRScannerScreen(expectedClueId: clue.id),
+        builder: (_) => ClueFinderScreen(clue: clue),
       ),
     );
     
-    // If user cancelled the scanner
-    if (scannedCode == null) {
-      debugPrint('[ClueNavigator] QR scan cancelled by user');
+    // If user backed out or didn't complete the scan
+    if (success != true) {
+      debugPrint('[ClueNavigator] Search/Scan sequence cancelled or failed');
       return;
     }
     
-    debugPrint('[ClueNavigator] QR scanned: $scannedCode');
-    
-    // Validate the scanned code
-    // Expected formats: 
-    // - "CLUE:{clueId}" 
-    // - "{clueId}" (direct match)
-    // - "DEV_SKIP_CODE" (developer bypass)
-    final bool isValid = _validateQRCode(scannedCode, clue.id);
-    
-    if (!isValid) {
-      debugPrint('[ClueNavigator] QR code invalid for clue ${clue.id}');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('El código QR no corresponde a esta pista.'),
-            backgroundColor: AppTheme.dangerRed,
-          ),
-        );
-      }
-      return;
-    }
-    
-    debugPrint('[ClueNavigator] QR validated! Unlocking clue and navigating to puzzle');
+    // 2. Unlock logic (Scan was successful inside ClueFinderScreen)
+    debugPrint('[ClueNavigator] QR validated via ClueFinder! Unlocking clue...');
     
     // Unlock the clue in GameProvider
     if (context.mounted) {
@@ -127,7 +109,7 @@ class ClueNavigatorService {
       gameProvider.unlockClue(clue.id);
     }
     
-    // Navigate to the puzzle/minigame
+    // 3. Navigate to the actual content (Puzzle/Interaction)
     if (context.mounted) {
       if (clue is OnlineClue) {
         Navigator.push(
