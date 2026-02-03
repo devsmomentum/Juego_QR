@@ -98,6 +98,18 @@ class Player implements ITargetable {
                      
     debugPrint('DEBUG: Player.fromJson final avatarId mapping result for ${json['name']}: $avatarId');
 
+    // Parse document type from DNI if missing
+    final String? dniVal = json['cedula']?.toString() ?? json['dni']?.toString();
+    String? docTypeVal = json['document'];
+    
+    // If document is null but DNI exists and starts with a letter, extract it.
+    if (docTypeVal == null && dniVal != null && dniVal.length > 1) {
+       final firstChar = dniVal[0].toUpperCase();
+       if (['V', 'E', 'J', 'G'].contains(firstChar)) {
+          docTypeVal = firstChar;
+       }
+    }
+
     return Player(
       userId: json['user_id'] ?? json['id'] ?? '',
       name: json['name'] ?? '',
@@ -135,9 +147,9 @@ class Player implements ITargetable {
       gamePlayerId: json['player_id'] ?? json['game_player_id'],
       avatarId: avatarId,
       clovers: json['clovers'] ?? 0,
-      documentType: json['document'],
+      documentType: docTypeVal,
       // Map 'dni' (int) from DB to 'cedula' (String) in model if 'cedula' is null
-      cedula: json['cedula']?.toString() ?? json['dni']?.toString(),
+      cedula: dniVal,
       phone: json['phone'],
     );
   }
@@ -187,8 +199,6 @@ class Player implements ITargetable {
 
   // Validation for payment profile
   bool get hasCompletePaymentProfile =>
-      documentType != null &&
-      documentType!.isNotEmpty &&
       cedula != null &&
       cedula!.isNotEmpty &&
       phone != null &&

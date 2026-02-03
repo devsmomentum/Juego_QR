@@ -67,40 +67,113 @@ serve(async (req) => {
         console.log("Sending to Pago a Pago:", JSON.stringify(payload))
 
         // 4. Call Pago a Pago API
-        const response = await fetch(PAGO_PAGO_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'pago_pago_api': pagoApiKey // Custom header required by provider
-            },
-            body: JSON.stringify(payload)
-        })
-
-        const data = await response.json()
-        console.log("Pago a Pago Response:", JSON.stringify(data))
-
-        // 5. Return result to Client
-        // MOCK RESPONSE IF API FAILS (FOR DEV ONLY - REMOVE IN PROD)
-        if (!response.ok && PAGO_PAGO_URL.includes('pagoapago.com/v1')) {
-            console.log("Simulating success for development since API URL is likely placeholder")
-            return new Response(JSON.stringify({
+        let data;
+        let pUrl = PAGO_PAGO_URL;
+        
+        // MOCK CHECK (For Dev/Test environments)
+        // If the URL suggests a mock/test endpoint that serves HTML or doesn't exist, we simulate.
+        if (pUrl.includes('pagoapago.com/v1') || pUrl.includes('mock')) {
+             console.log("Simulating success via MOCK logic (URL detected as placeholder/mock)")
+             data = {
                 success: true,
                 message: "Mock Order Created",
                 data: {
-                    payment_url: "https://pagoapago.com/checkout/mock-12345",
+                    payment_url: "https://pagoapago.com/checkout/mock-" + Date.now(),
                     order_id: `MOCK-${Date.now()}`
                 }
-            }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200,
+             }
+        } else {
+             // REAL API CALL
+             const response = await fetch(PAGO_PAGO_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'pago_pago_api': pagoApiKey
+                },
+                body: JSON.stringify(payload)
             })
+            
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Pago a Pago API Error (${response.status}): ${errText}`);
+            }
+            
+            data = await response.json();
+            console.log("Pago a Pago Response:", JSON.stringify(data))
         }
 
-        if (!response.ok) {
-            throw new Error(`Pago a Pago API Error: ${JSON.stringify(data)}`)
+        // 5. Persistence Logic (CRITICAL)
+        // Use Admin Client to bypass RLS for robust server-side insertion
+        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (!serviceRoleKey) {
+            console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing in environment variables!");
+            throw new Error("Server Misconfiguration: Missing DB Permissions");
         }
 
-        return new Response(JSON.stringify(data), {
+        const supabaseAdmin = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            serviceRoleKey
+        )
+
+        // Parse response data safely
+        const orderId = data.data?.order_id || data.order_id
+        const paymentUrl = data.data?.payment_url || data.payment_url
+
+        if (!orderId || !paymentUrl) {
+             console.error("Invalid Response Data for Persistence:", data);
+             if (data.success === false) throw new Error(data.message || "Unknown API Error");
+             throw new Error("Missing order_id or payment_url in response");
+        }
+
+        console.log(`Persisting order ${orderId} for user ${user.id}...`)
+        
+        // INSERT
+        const { error: dbError } = await supabaseAdmin.from('clover_orders').insert({
+            user_id: user.id,
+            amount: amount,
+            currency: currency || 'VES',
+            status: 'pending',
+            pago_pago_order_id: orderId,
+            payment_url: paymentUrl,
+            expires_at: expiresAt,
+            extra_data: {
+                original_amount: amount,
+                initiated_at: new Date().toISOString(),
+                api_response: data,
+                function_version: "v2-diagnostics"
+            }
+        })
+
+        if (dbError) {
+            console.error("CRITICAL DB ERROR:", dbError);
+            throw new Error(`Database Persistence Failed: ${dbError.message} (${dbError.code})`);
+        }
+        
+        // VERIFY READ-AFTER-WRITE
+        console.log("Verifying persistence...");
+        const { data: verifyData, error: verifyError } = await supabaseAdmin
+            .from('clover_orders')
+            .select('id, status')
+            .eq('pago_pago_order_id', orderId)
+            .single();
+            
+        if (verifyError || !verifyData) {
+            console.error("VERIFICATION FAILED:", verifyError);
+            // We don't throw here to avoid killing the successful payment link, but we log loud.
+        } else {
+             console.log("VERIFICATION SUCCESS: Record found:", verifyData);
+        }
+
+        console.log("Order persisted and verified successfully.");
+
+        return new Response(JSON.stringify({
+            ...data,
+            debug_info: {
+                persistence_verified: !!verifyData,
+                server_time: new Date().toISOString(),
+                correlation_id: `v2-${Date.now()}`
+            }
+        }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })

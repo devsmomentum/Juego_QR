@@ -41,6 +41,7 @@ import 'features/wallet/providers/wallet_provider.dart';
 import 'features/auth/providers/player_inventory_provider.dart';
 import 'features/auth/providers/player_stats_provider.dart';
 import 'features/game/services/game_stream_service.dart';
+import 'features/wallet/services/payment_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -159,7 +160,15 @@ class TreasureHuntApp extends StatelessWidget {
         }),
         ChangeNotifierProvider(create: (context) {
           final paymentRepo = Provider.of<MockPaymentRepository>(context, listen: false);
-          return WalletProvider(paymentRepository: paymentRepo);
+          // Create PaymentService here or perform specialized DI if needed.
+          // Since it's stateless (depends only on Supabase), we can create it here.
+          final supabase = Supabase.instance.client;
+          final paymentService = PaymentService(supabase);
+          
+          return WalletProvider(
+            paymentRepository: paymentRepo,
+            paymentService: paymentService,
+          );
         }),
       ],
       child: MaterialApp(
