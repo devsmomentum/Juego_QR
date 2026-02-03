@@ -56,11 +56,11 @@ serve(async (req) => {
             type_order: "EXTERNAL",
             expires_at: expiresAt,
             alias: `RECHARGE-${user.id.substring(0, 8)}-${Date.now()}`,
-            convert_from_usd: true, // Assuming input amount is in USD (Treboles)
+            convert_from_usd: false, // Ensure we are sending explicit VES amount
             url_redirect: "io.supabase.treasurehunt://payment-return",
             extra_data: {
                 user_id: user.id,
-                clovers_amount: amount // Pass original Tréboles amount to webhook
+                clovers_amount: amount // Amount in VES
             }
         }
 

@@ -16,6 +16,8 @@ import '../widgets/payment_profile_dialog.dart';
 import '../widgets/payment_method_selector.dart';
 import '../widgets/add_payment_method_dialog.dart';
 
+final bcv_dolar = 1;
+
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
 
@@ -564,15 +566,15 @@ class _WalletScreenState extends State<WalletScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Estimado en Bolívares (Tasa Ref: 370.25):",
+                        Text(
+                          "Estimado en Bolívares (Tasa Ref: $bcv_dolar):",
                           style: TextStyle(color: Colors.white54, fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           _amountController.text.isEmpty 
                               ? "0.00 VES"
-                              : "${(int.tryParse(_amountController.text) ?? 0) * 370.25} VES",
+                              : "${(int.tryParse(_amountController.text) ?? 0) * bcv_dolar} VES",
                           style: const TextStyle(
                             color: AppTheme.accentGold, 
                             fontWeight: FontWeight.bold,
@@ -645,7 +647,7 @@ class _WalletScreenState extends State<WalletScreen> {
       final service = PagoAPagoService(apiKey: apiKey);
 
       // Calcular monto en Bolívares
-      final bcv_dolar = 370.25;
+      
       final double amountBs = amount * bcv_dolar;
 
       // Llamar al nuevo método simplificado
