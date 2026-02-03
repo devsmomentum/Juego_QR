@@ -141,7 +141,7 @@ class _MallScreenState extends State<MallScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Centro Comercial Millenium"),
+        title: Text(Provider.of<AppModeProvider>(context).isOnlineMode ? "Tienda Online" : "Tiendas Aliadas"),
         backgroundColor: AppTheme.darkBg,
       ),
       body: Container(

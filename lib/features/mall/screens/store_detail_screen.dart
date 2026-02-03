@@ -229,9 +229,11 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           }
                           
                           // FORCE CATALOG IN ONLINE MODE: Siempre mostrar todo el catálogo disponible
-                          final displayProducts = isOnline 
-                              ? PowerItem.getShopItems() 
-                              : widget.store.products;
+                          // UPDATE: Usar los productos de la tienda (que traen precios personalizados)
+                          // Si la tienda viene vacía, entonces sí usar el catálogo default
+                          final displayProducts = widget.store.products.isNotEmpty 
+                              ? widget.store.products 
+                              : PowerItem.getShopItems();
                             
                           print("DEBUG: displayProducts length=${displayProducts.length}");
 

@@ -19,6 +19,7 @@ import '../widgets/qr_display_dialog.dart';
 import '../widgets/store_edit_dialog.dart';
 import '../../mall/providers/store_provider.dart';
 import '../../mall/models/mall_store.dart';
+import '../../mall/models/power_item.dart'; // NEW
 
 class EventCreationScreen extends StatefulWidget {
   final VoidCallback? onEventCreated;
@@ -837,6 +838,88 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                             ),
                           ),
                           const SizedBox(height: 30),
+                        ] else if (provider.eventType == 'online') ...[
+                           // --- Power Prices Configuration (Online Only) ---
+                           const Text("Configuración de Precios (Tienda)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.accentGold)),
+                           const SizedBox(height: 10),
+                           const Text("Personaliza el costo de los poderes para este evento.", style: TextStyle(color: Colors.white54, fontSize: 14)),
+                           const SizedBox(height: 20),
+                           
+                           LayoutBuilder(
+                             builder: (context, constraints) {
+                               return GridView.builder(
+                                 shrinkWrap: true,
+                                 physics: const NeverScrollableScrollPhysics(),
+                                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                   crossAxisCount: constraints.maxWidth < 600 ? 1 : 2,
+                                   crossAxisSpacing: 10,
+                                   mainAxisSpacing: 10,
+                                   childAspectRatio: constraints.maxWidth < 600 ? 4 : 3, // Taller items on mobile
+                                 ),
+                                 itemCount: PowerItem.getShopItems().length,
+                                 itemBuilder: (context, index) {
+                                   final power = PowerItem.getShopItems()[index];
+                                   final currentPrice = provider.powerPrices[power.id] ?? power.cost;
+                                   
+                                   return Container(
+                                     decoration: BoxDecoration(
+                                        color: AppTheme.cardBg,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.white10),
+                                     ),
+                                     padding: const EdgeInsets.all(12),
+                                     child: Row(
+                                       children: [
+                                          Container(
+                                            height: 48, width: 48,
+                                            decoration: BoxDecoration(
+                                              color: power.color.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Text(power.icon, style: const TextStyle(fontSize: 24)),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(power.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                Text("${power.cost} Default", style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                                              ],
+                                            ),
+                                          ),
+                                          
+                                          SizedBox(
+                                            width: 80,
+                                            child: TextFormField(
+                                               initialValue: currentPrice.toString(),
+                                               keyboardType: TextInputType.number,
+                                               textAlign: TextAlign.center,
+                                               decoration: inputDecoration.copyWith(
+                                                 contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+                                                 isDense: true,
+                                                 suffixText: '', 
+                                               ),
+                                               style: const TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold),
+                                               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                               onChanged: (v) {
+                                                  final val = int.tryParse(v);
+                                                  if (val != null) {
+                                                     provider.setPowerPrice(power.id, val);
+                                                  }
+                                               },
+                                            ),
+                                          ),
+                                       ],
+                                     ),
+                                   );
+                                 },
+                               );
+                             }
+                           ),
+                           const SizedBox(height: 30),
                         ],
 
                         // --- Submit Button ---

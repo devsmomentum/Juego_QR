@@ -10,6 +10,7 @@ import '../../game/providers/event_provider.dart';
 import '../../mall/providers/store_provider.dart';
 import '../../mall/models/mall_store.dart';
 import '../services/event_domain_service.dart';
+import '../../mall/models/power_item.dart'; // NEW
 
 
 class EventCreationProvider extends ChangeNotifier {
@@ -34,7 +35,11 @@ class EventCreationProvider extends ChangeNotifier {
   int _currentClueIndex = 0;
 
   // Tiendas
+  // Tiendas
   List<Map<String, dynamic>> _pendingStores = [];
+  
+  // Power Prices (Online)
+  Map<String, int> _powerPrices = {};
 
   // Control
   bool _isLoading = false;
@@ -56,6 +61,7 @@ class EventCreationProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get clueForms => _clueForms;
   int get currentClueIndex => _currentClueIndex;
   List<Map<String, dynamic>> get pendingStores => _pendingStores;
+  Map<String, int> get powerPrices => _powerPrices;
   bool get isLoading => _isLoading;
   String get eventId => _eventId;
   bool get isFormValid => _isFormValid;
@@ -101,7 +107,15 @@ class EventCreationProvider extends ChangeNotifier {
     _isLoading = false;
     _eventId = const Uuid().v4();
     _isFormValid = false;
+    _isFormValid = false;
     _eventType = 'on_site';
+    
+    // Initialize default power prices
+    _powerPrices = {};
+    for (var item in PowerItem.getShopItems()) {
+       _powerPrices[item.id] = item.cost;
+    }
+    
     notifyListeners();
   }
 
@@ -317,6 +331,13 @@ class EventCreationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // --- Power Prices Logic ---
+  void setPowerPrice(String powerId, int price) {
+    if (price < 0) return;
+    _powerPrices[powerId] = price;
+    notifyListeners();
+  }
+
   // --- Validation ---
 
   // --- Validation ---
@@ -403,8 +424,12 @@ class EventCreationProvider extends ChangeNotifier {
       if (createdEventId != null) {
         if (_eventType == 'online') {
             // Default Online Store via Domain Service
+            // Default Online Store via Domain Service
             try {
-               final defaultStore = EventDomainService.createDefaultOnlineStore(createdEventId);
+               final defaultStore = EventDomainService.createDefaultOnlineStore(
+                 createdEventId,
+                 customPrices: _powerPrices, // PASSING CUSTOM PRICES
+               );
                // We pass null for imageFile as we don't have one selected
                await storeProvider.createStore(defaultStore, null);
             } catch (e) {

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:uuid/uuid.dart';
 import '../../game/models/event.dart';
 import '../../mall/models/mall_store.dart';
+import '../../mall/models/power_item.dart'; // NEW
 import '../../../core/enums/entry_types.dart';
 
 /// Pure Dart domain service for event business rules.
@@ -33,16 +34,27 @@ class EventDomainService {
   /// Creates a default MallStore for online events.
   /// 
   /// Online events automatically get a pre-configured store with
-  /// standard name and description.
-  static MallStore createDefaultOnlineStore(String eventId) {
+  /// standard name and description. Now supports custom prices.
+  static MallStore createDefaultOnlineStore(String eventId, {Map<String, int>? customPrices}) {
+     // 1. Get Base Items
+     final defaultItems = PowerItem.getShopItems();
+     
+     // 2. Apply Custom Prices
+     List<PowerItem> products = defaultItems.map((item) {
+        if (customPrices != null && customPrices.containsKey(item.id)) {
+           return item.copyWith(cost: customPrices[item.id]);
+        }
+        return item;
+     }).toList();
+
      return MallStore(
        id: const Uuid().v4(),
        eventId: eventId,
        name: 'Tienda Online Oficial',
-       description: 'Tienda oficial para este evento online.',
+       description: 'Tienda oficial para este evento online. ¡Adquiere poderes aquí!',
        imageUrl: '', 
        qrCodeData: 'ONLINE_STORE_$eventId',
-       products: [], 
+       products: products, 
      );
   }
 
