@@ -627,6 +627,19 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                   ),
                                   ),
                                 ),
+                                // Subtitle
+                                Positioned(
+                                  bottom: -20,
+                                  child: Text(
+                                    "Búsqueda del tesoro ☘️",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.w300,
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                                ),
                                 // Logout Button (Top Right, Icon Only)
                                 Positioned(
                                   right: 0,

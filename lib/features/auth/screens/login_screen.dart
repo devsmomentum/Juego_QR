@@ -426,6 +426,16 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                   letterSpacing: 2,
                                 ),
                               ),
+                              const SizedBox(height: 5), // Reduced space
+                              const Text(
+                                "Búsqueda del tesoro ☘️",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w300,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
                               const SizedBox(height: 15),
 
                               // Logo con imagen personalizada
@@ -626,7 +636,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          "by",
+          "BY JOTA DE &",
           style: TextStyle(
             color: Colors.white.withOpacity(0.7),
             fontSize: 14,
