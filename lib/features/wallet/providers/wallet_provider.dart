@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/interfaces/i_payment_repository.dart';
 import '../../../core/models/transaction.dart';
+import '../services/payment_service.dart';
 
 
 /// Wallet provider for managing user's Tréboles balance.
@@ -14,6 +15,7 @@ import '../../../core/models/transaction.dart';
 /// - Payment operations coordination
 class WalletProvider extends ChangeNotifier {
   final IPaymentRepository _paymentRepository;
+  final PaymentService? _paymentService; // Optional for backward compatibility/stubbing if needed, but intended to be required.
 
   double _balance = 0.0;
   List<Transaction> _transactions = [];
@@ -21,8 +23,11 @@ class WalletProvider extends ChangeNotifier {
   String? _errorMessage;
   String? _currentUserId;
 
-  WalletProvider({required IPaymentRepository paymentRepository})
-      : _paymentRepository = paymentRepository;
+  WalletProvider({
+    required IPaymentRepository paymentRepository,
+    PaymentService? paymentService,
+  })  : _paymentRepository = paymentRepository,
+        _paymentService = paymentService;
 
   // --- Getters ---
   double get balance => _balance;
@@ -168,6 +173,37 @@ class WalletProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  /// Initiate external payment flow via Pago a Pago
+  Future<void> initiateExternalTopUp(double amount) async {
+    if (_paymentService == null) {
+      _errorMessage = "Servicio de pagos no configurado";
+      notifyListeners();
+      return;
+    }
+    if (_currentUserId == null) return;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final url = await _paymentService!.createPaymentOrder(
+        amount: amount,
+        userId: _currentUserId!,
+      );
+
+      if (url != null) {
+        // await _paymentService!.launchPaymentUrl(url); // Disabled per user request
+        debugPrint('[WalletProvider] Redirection disabled. URL: $url');
+      }
+    } catch (e) {
+      _errorMessage = 'Error iniciando pago: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // --- Private Methods ---

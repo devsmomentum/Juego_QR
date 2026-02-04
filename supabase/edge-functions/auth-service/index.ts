@@ -123,6 +123,121 @@ serve(async (req) => {
       )
     }
 
+    // --- UPDATE PROFILE ---
+    if (path === 'update-profile') {
+      const { name, dni, phone } = await req.json()
+
+      // Authorization Check
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader) {
+        throw new Error('Missing Authorization header')
+      }
+
+      // Create authenticated client for RLS
+      const userSupabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        {
+          global: {
+            headers: { Authorization: authHeader },
+          },
+        }
+      )
+
+      const { data: { user }, error: userError } = await userSupabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Invalid or expired session')
+      }
+
+      // Prepare update object
+      const updates: any = {}
+      if (name) updates.name = name
+      if (dni) updates.dni = dni
+      if (phone) updates.phone = phone
+
+      if (Object.keys(updates).length === 0) {
+        throw new Error('No fields to update')
+      }
+
+      const { data, error } = await userSupabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return new Response(
+        JSON.stringify(data),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // --- ADD PAYMENT METHOD ---
+    if (path === 'add-payment-method') {
+      const { bank_code } = await req.json()
+
+      // Authorization Check
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader) {
+        throw new Error('Missing Authorization header')
+      }
+
+      // Create authenticated client for RLS
+      const userSupabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        {
+          global: {
+            headers: { Authorization: authHeader },
+          },
+        }
+      )
+
+      const { data: { user }, error: userError } = await userSupabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Invalid or expired session')
+      }
+
+      // 1. Fetch Profile Data (DNI & Phone)
+      const { data: profile, error: profileError } = await userSupabase
+        .from('profiles')
+        .select('dni, phone')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profile) {
+        throw new Error('No se pudo cargar el perfil del usuario.')
+      }
+
+      if (!profile.dni || !profile.phone) {
+        throw new Error('Perfil incompleto. Falta DNI o Teléfono.')
+      }
+
+      // 2. Insert Payment Method
+      const { data, error } = await userSupabase
+        .from('user_payment_methods')
+        .insert({
+          user_id: user.id,
+          bank_code: bank_code,
+          phone_number: profile.phone,
+          dni: String(profile.dni),
+          is_default: true 
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return new Response(
+        JSON.stringify(data),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     return new Response(
       JSON.stringify({ error: 'Not Found' }),
       { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

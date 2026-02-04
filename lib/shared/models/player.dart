@@ -23,8 +23,9 @@ class Player implements ITargetable {
   List<String>? eventsCompleted;
   int lives;
   int clovers; // New currency - tréboles
-  String? cedula;
-  String? phone;
+  final String? cedula;
+  final String? phone;
+  final String? documentType; // Added for Payment Profile
   Map<String, dynamic> stats;
 
   Player({
@@ -52,6 +53,7 @@ class Player implements ITargetable {
     this.currentEventId,
     this.cedula,
     this.phone,
+    this.documentType,
   })  : _avatarUrl = avatarUrl ?? '',
         inventory = inventory ?? [],
         stats = stats ??
@@ -96,6 +98,18 @@ class Player implements ITargetable {
                      
     debugPrint('DEBUG: Player.fromJson final avatarId mapping result for ${json['name']}: $avatarId');
 
+    // Parse document type from DNI if missing
+    final String? dniVal = json['cedula']?.toString() ?? json['dni']?.toString();
+    String? docTypeVal = json['document'];
+    
+    // If document is null but DNI exists and starts with a letter, extract it.
+    if (docTypeVal == null && dniVal != null && dniVal.length > 1) {
+       final firstChar = dniVal[0].toUpperCase();
+       if (['V', 'E', 'J', 'G'].contains(firstChar)) {
+          docTypeVal = firstChar;
+       }
+    }
+
     return Player(
       userId: json['user_id'] ?? json['id'] ?? '',
       name: json['name'] ?? '',
@@ -133,7 +147,9 @@ class Player implements ITargetable {
       gamePlayerId: json['player_id'] ?? json['game_player_id'],
       avatarId: avatarId,
       clovers: json['clovers'] ?? 0,
-      cedula: json['cedula'],
+      documentType: docTypeVal,
+      // Map 'dni' (int) from DB to 'cedula' (String) in model if 'cedula' is null
+      cedula: dniVal,
       phone: json['phone'],
     );
   }
@@ -180,6 +196,13 @@ class Player implements ITargetable {
       status == PlayerStatus.slowed &&
       (frozenUntil == null ||
           DateTime.now().toUtc().isBefore(frozenUntil!.toUtc()));
+
+  // Validation for payment profile
+  bool get hasCompletePaymentProfile =>
+      cedula != null &&
+      cedula!.isNotEmpty &&
+      phone != null &&
+      phone!.isNotEmpty;
 
   void addExperience(int xp) {
     experience += xp;
@@ -258,6 +281,7 @@ class Player implements ITargetable {
     String? currentEventId,
     String? cedula,
     String? phone,
+    String? documentType,
   }) {
     return Player(
       userId: userId ?? this.userId,
@@ -284,6 +308,7 @@ class Player implements ITargetable {
       currentEventId: currentEventId ?? this.currentEventId,
       cedula: cedula ?? this.cedula,
       phone: phone ?? this.phone,
+      documentType: documentType ?? this.documentType,
     );
   }
 }

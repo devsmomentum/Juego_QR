@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -11,7 +12,11 @@ import '../../../core/services/pago_a_pago_service.dart';
 import '../../../core/models/pago_a_pago_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter/services.dart';
+import '../widgets/payment_profile_dialog.dart';
+import '../widgets/payment_method_selector.dart';
+import '../widgets/add_payment_method_dialog.dart';
+
+final bcv_dolar = 1;
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -33,6 +38,8 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     final playerProvider = Provider.of<PlayerProvider>(context);
+
+
     final player = playerProvider.currentPlayer;
     final cloverBalance = player?.clovers ?? 0;
 
@@ -417,7 +424,84 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  void _showRechargeDialog() {
+  void _showRechargeDialog() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    // Refresh profile to ensure we have the latest DNI/Phone data from DB
+    // This is critical to skip the form if data exists.
+    setState(() => _isLoading = true);
+    await playerProvider.refreshProfile();
+    setState(() => _isLoading = false);
+
+    final player = playerProvider.currentPlayer;
+    if (player == null) return;
+
+    // 1. Validate Profile
+    if (!player.hasCompletePaymentProfile) {
+       final bool? success = await showDialog(
+         context: context,
+         barrierDismissible: false,
+         builder: (_) => const PaymentProfileDialog()
+       );
+       
+       if (success != true) return; // User cancelled or failed
+    }
+    
+    // 2. Select Method
+    if (!mounted) return;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => PaymentMethodSelector(
+        onMethodSelected: (methodId) async {
+          Navigator.pop(ctx);
+          if (methodId == 'pago_movil') {
+            
+            setState(() => _isLoading = true);
+            try {
+              // Check if user has a payment method
+              final methods = await Supabase.instance.client
+                  .from('user_payment_methods')
+                  .select('id')
+                  .eq('user_id', player.userId)
+                  .limit(1);
+                  
+              if (!mounted) return;
+              setState(() => _isLoading = false);
+
+              if (methods.isEmpty) {
+                // Show Add Dialog
+                final bool? success = await showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const AddPaymentMethodDialog()
+                );
+                
+                if (success == true) {
+                   _showAmountDialog();
+                }
+              } else {
+                 _showAmountDialog();
+              }
+            } catch (e) {
+              if (mounted) setState(() => _isLoading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error validando métodos: $e')),
+              );
+            }
+
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Método no disponible por el momento')),
+            );
+          }
+        }
+      )
+    );
+  }
+
+  void _showAmountDialog() {
     _amountController.clear();
     showDialog(
       context: context,
@@ -482,15 +566,15 @@ class _WalletScreenState extends State<WalletScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Estimado en Bolívares (Tasa Ref: 370.25):",
+                        Text(
+                          "Estimado en Bolívares (Tasa Ref: $bcv_dolar):",
                           style: TextStyle(color: Colors.white54, fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           _amountController.text.isEmpty 
                               ? "0.00 VES"
-                              : "${(int.tryParse(_amountController.text) ?? 0) * 370.25} VES",
+                              : "${(int.tryParse(_amountController.text) ?? 0) * bcv_dolar} VES",
                           style: const TextStyle(
                             color: AppTheme.accentGold, 
                             fontWeight: FontWeight.bold,
@@ -558,32 +642,16 @@ class _WalletScreenState extends State<WalletScreen> {
     }
 
     try {
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-      if (token == null) throw Exception("No hay sesión activa");
-
       // Instanciar servicio
-      // La API KEY ya no es necesaria para llamar al Edge Function, pero el constructor la pide.
-      // Podemos pasar un string vacío o el valor del env si se quisiera.
       final apiKey = dotenv.env['PAGO_PAGO_API_KEY'] ?? ''; 
       final service = PagoAPagoService(apiKey: apiKey);
 
-      // Crear request
-      final request = PaymentOrderRequest(
-        amount: amount, 
-        currency: 'VES', 
-        email: user.email,
-        phone: user.phone ?? '0000000000',
-        dni: user.cedula ?? 'V00000000',
-        motive: 'Recarga de ${amount.toInt()} Tréboles - MapHunter', // Display as int
-        expiresAt: DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
-        typeOrder: 'EXTERNAL',
-        convertFromUsd: true,
-        extraData: {
-          'user_id': user.userId,
-        },
-      );
+      // Calcular monto en Bolívares
+      
+      final double amountBs = amount * bcv_dolar;
 
-      final response = await service.createPaymentOrder(request, token);
+      // Llamar al nuevo método simplificado
+      final response = await service.createSimplePaymentOrder(amountBs: amountBs);
 
       if (!mounted) return;
 
