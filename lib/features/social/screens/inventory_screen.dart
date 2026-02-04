@@ -76,10 +76,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/tienda.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          // Dark Overlay
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.6),
+            ),
+          ),
           AnimatedCyberBackground(
-            child: SafeArea(
-              child: Column(
-                children: [
+            gridColor: AppTheme.primaryPurple.withOpacity(0.15),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
                   // Header
                   Padding(
                     padding: const EdgeInsets.all(20.0),
@@ -198,8 +213,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             },
                           ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
           

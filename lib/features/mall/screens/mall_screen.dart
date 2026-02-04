@@ -142,118 +142,133 @@ class _MallScreenState extends State<MallScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Centro Comercial Millenium"),
-        backgroundColor: AppTheme.darkBg,
+        backgroundColor: Colors.black,
+        elevation: 0,
       ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
-        child: Column(
-          children: [
-             // Header
-             Container(
-               padding: const EdgeInsets.all(20),
-               decoration: BoxDecoration(
-                 color: AppTheme.cardBg,
-                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
-                 boxShadow: [
-                   BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)
-                 ]
+      body: Stack(
+        children: [
+          // Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/directorio.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          // Dark Overlay
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.6),
+            ),
+          ),
+          Column(
+            children: [
+               // Header
+               Container(
+                 padding: const EdgeInsets.all(20),
+                 decoration: BoxDecoration(
+                   color: AppTheme.cardBg.withOpacity(0.8),
+                   borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                   boxShadow: [
+                     BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)
+                   ]
+                 ),
+                 child: Row(
+                   children: [
+                     const Icon(Icons.storefront, size: 40, color: AppTheme.accentGold),
+                     const SizedBox(width: 15),
+                     Expanded(
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: const [
+                            Text(
+                              "Directorio de Tiendas",
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
+                            ),
+                            Text(
+                              "Busca sabotajes y vidas en las tiendas aliadas.",
+                              style: TextStyle(color: Colors.white70, fontSize: 12)
+                            ),
+                         ],
+                       ),
+                     )
+                   ],
+                 ),
                ),
-               child: Row(
-                 children: [
-                   const Icon(Icons.storefront, size: 40, color: AppTheme.accentGold),
-                   const SizedBox(width: 15),
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: const [
-                          Text(
-                            "Directorio de Tiendas",
-                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
-                          ),
-                          Text(
-                            "Busca sabotajes y vidas en las tiendas aliadas.",
-                            style: TextStyle(color: Colors.white70, fontSize: 12)
-                          ),
-                       ],
-                     ),
-                   )
-                 ],
-               ),
-             ),
-
-             Expanded(
-               child: storeProvider.isLoading 
-                 ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGold))
-                 : stores.isEmpty
-                   ? _buildEmptyState()
-                   : ListView.builder(
-                     padding: const EdgeInsets.all(16),
-                     itemCount: stores.length,
-                     itemBuilder: (context, index) {
-                       final store = stores[index];
-                       return Card(
-                         color: AppTheme.cardBg,
-                         margin: const EdgeInsets.only(bottom: 16),
-                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                         child: InkWell(
-                           onTap: () => _onStoreTap(context, store),
-                           borderRadius: BorderRadius.circular(16),
-                           child: Column(
-                             crossAxisAlignment: CrossAxisAlignment.start,
-                             children: [
-                               // Imagen de Tienda (Cover)
-                               ClipRRect(
-                                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                                 child: store.imageUrl.isNotEmpty 
-                                   ? Image.network(
-                                       store.imageUrl,
-                                       height: 120,
-                                       width: double.infinity,
-                                       fit: BoxFit.cover,
-                                       errorBuilder: (_,__,___) => _buildImagePlaceholder(),
-                                     )
-                                   : _buildImagePlaceholder(),
-                               ),
-                               
-                               Padding(
-                                 padding: const EdgeInsets.all(16),
-                                 child: Row(
-                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                   children: [
-                                     Expanded(
-                                       child: Column(
-                                         crossAxisAlignment: CrossAxisAlignment.start,
-                                         children: [
-                                           Text(
-                                             store.name,
-                                             style: const TextStyle(
-                                               color: Colors.white, 
-                                               fontSize: 18, 
-                                               fontWeight: FontWeight.bold
-                                             )
-                                           ),
-                                           const SizedBox(height: 5),
-                                           Text(
-                                             store.description,
-                                              style: const TextStyle(color: Colors.white60, fontSize: 12)
-                                           ),
-                                         ],
-                                       ),
-                                     ),
-                                     if (!Provider.of<AppModeProvider>(context).isOnlineMode)
-                                        const Icon(Icons.qr_code_scanner, color: AppTheme.secondaryPink),
-                                   ],
+  
+               Expanded(
+                 child: storeProvider.isLoading 
+                   ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGold))
+                   : stores.isEmpty
+                     ? _buildEmptyState()
+                     : ListView.builder(
+                       padding: const EdgeInsets.all(16),
+                       itemCount: stores.length,
+                       itemBuilder: (context, index) {
+                         final store = stores[index];
+                         return Card(
+                           color: AppTheme.cardBg.withOpacity(0.85),
+                           margin: const EdgeInsets.only(bottom: 16),
+                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                           child: InkWell(
+                             onTap: () => _onStoreTap(context, store),
+                             borderRadius: BorderRadius.circular(16),
+                             child: Column(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 // Imagen de Tienda (Cover)
+                                 ClipRRect(
+                                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                   child: store.imageUrl.isNotEmpty 
+                                     ? Image.network(
+                                         store.imageUrl,
+                                         height: 120,
+                                         width: double.infinity,
+                                         fit: BoxFit.cover,
+                                         errorBuilder: (_,__,___) => _buildImagePlaceholder(),
+                                       )
+                                     : _buildImagePlaceholder(),
                                  ),
-                               )
-                             ],
+                                 
+                                 Padding(
+                                   padding: const EdgeInsets.all(16),
+                                   child: Row(
+                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                     children: [
+                                       Expanded(
+                                         child: Column(
+                                           crossAxisAlignment: CrossAxisAlignment.start,
+                                           children: [
+                                             Text(
+                                               store.name,
+                                               style: const TextStyle(
+                                                 color: Colors.white, 
+                                                 fontSize: 18, 
+                                                 fontWeight: FontWeight.bold
+                                               )
+                                             ),
+                                             const SizedBox(height: 5),
+                                             Text(
+                                               store.description,
+                                                style: const TextStyle(color: Colors.white60, fontSize: 12)
+                                             ),
+                                           ],
+                                         ),
+                                       ),
+                                       if (!Provider.of<AppModeProvider>(context).isOnlineMode)
+                                          const Icon(Icons.qr_code_scanner, color: AppTheme.secondaryPink),
+                                     ],
+                                   ),
+                                 )
+                               ],
+                             ),
                            ),
-                         ),
-                       );
-                     },
-                   ),
-             )
-          ],
-        ),
+                         );
+                       },
+                     ),
+               )
+            ],
+          ),
+        ],
       ),
     );
   }

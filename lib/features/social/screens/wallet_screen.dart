@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
@@ -23,65 +24,49 @@ class _WalletScreenState extends State<WalletScreen> {
     final cloverBalance = player?.clovers ?? 0;
 
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
-      extendBody: true,
-      bottomNavigationBar: _buildBottomNavBar(),
-      body: AnimatedCyberBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom AppBar
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const GlitchText(
-                      text: "MapHunter",
-                      fontSize: 22,
-                    ),
-                  ],
-                ),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Custom AppBar
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center, // Center the title
+                children: [
+                   const GlitchText(
+                    text: "MapHunter",
+                    fontSize: 22,
+                  ),
+                ],
               ),
+            ),
 
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      // Balance Card with Custom Clover Icon
-                      Container(
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    // Balance Card with Custom Clover Icon
+                    CustomPaint(
+                      painter: PixelBorderPainter(color: const Color(0xFF10B981)),
+                      child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
                               const Color(0xFF10B981).withOpacity(0.3),
-                              const Color(0xFF059669).withOpacity(0.2),
+                              const Color(0xFF10B981).withOpacity(0.1),
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                            color: const Color(0xFF10B981).withOpacity(0.5),
-                            width: 2,
-                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF10B981).withOpacity(0.3),
-                              blurRadius: 30,
-                              spreadRadius: 5,
+                              color: const Color(0xFF10B981).withOpacity(0.15),
+                              blurRadius: 20,
+                              spreadRadius: 2,
                             ),
                           ],
                         ),
@@ -96,15 +81,29 @@ class _WalletScreenState extends State<WalletScreen> {
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 12),
                             
-                            // Custom Clover Icon (4-leaf clover made with circles)
-                            Transform.scale(
-                              scale: 0.6,
-                              child: _buildCustomCloverIcon(),
+                            // Clover Icon
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF10B981).withOpacity(0.2),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                '🍀',
+                                style: TextStyle(fontSize: 40),
+                              ),
                             ),
                             
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 12),
                             
                             // Balance Amount
                             Row(
@@ -116,16 +115,15 @@ class _WalletScreenState extends State<WalletScreen> {
                                   cloverBalance.toString(),
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 36,
+                                    fontSize: 48,
                                     fontWeight: FontWeight.w900,
                                     height: 1,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            // Massive Conversion info
                             const SizedBox(height: 12),
+                            // Massive Conversion info
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
@@ -146,45 +144,43 @@ class _WalletScreenState extends State<WalletScreen> {
                           ],
                         ),
                       ),
+                    ),
 
+                    const SizedBox(height: 40),
 
-                      const SizedBox(height: 40),
-
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildActionButton(
-                              icon: Icons.add_circle_outline,
-                              label: 'RECARGAR',
-                              color: AppTheme.accentGold,
-                              onTap: () => _showRechargeDialog(),
-                            ),
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionButton(
+                            icon: Icons.add_circle_outline,
+                            label: 'RECARGAR',
+                            color: AppTheme.accentGold,
+                            onTap: () => _showRechargeDialog(),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildActionButton(
-                              icon: Icons.remove_circle_outline,
-                              label: 'RETIRAR',
-                              color: AppTheme.secondaryPink,
-                              onTap: () => _showWithdrawDialog(),
-                            ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildActionButton(
+                            icon: Icons.remove_circle_outline,
+                            label: 'RETIRAR',
+                            color: AppTheme.secondaryPink,
+                            onTap: () => _showWithdrawDialog(),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+                    ),
 
-                      const SizedBox(height: 40),
+                    const SizedBox(height: 40),
 
-                      // Transaction History Section (Placeholder)
-                      Container(
+                    // Transaction History Section (Placeholder)
+                    CustomPaint(
+                      painter: PixelBorderPainter(color: Colors.white.withOpacity(0.3)),
+                      child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: AppTheme.cardBg.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
-                          ),
+                          color: AppTheme.cardBg.withOpacity(0.9),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,136 +217,18 @@ class _WalletScreenState extends State<WalletScreen> {
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCustomCloverIcon() {
-    return SizedBox(
-      width: 80,
-      height: 80,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Top leaf
-          Positioned(
-            top: 0,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF10B981),
-                    const Color(0xFF059669),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withOpacity(0.6),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Right leaf
-          Positioned(
-            right: 0,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF10B981),
-                    const Color(0xFF059669),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withOpacity(0.6),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Bottom leaf
-          Positioned(
-            bottom: 0,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF10B981),
-                    const Color(0xFF059669),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withOpacity(0.6),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Left leaf
-          Positioned(
-            left: 0,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF10B981),
-                    const Color(0xFF059669),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withOpacity(0.6),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Center
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF34D399),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF10B981).withOpacity(0.8),
-                  blurRadius: 15,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildActionButton({
     required IconData icon,
@@ -360,44 +238,42 @@ class _WalletScreenState extends State<WalletScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              color.withOpacity(0.3),
-              color.withOpacity(0.1),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: color.withOpacity(0.5),
-            width: 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.2),
-              blurRadius: 15,
-              spreadRadius: 1,
+      child: CustomPaint(
+        painter: PixelBorderPainter(color: color),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color.withOpacity(0.3),
+                color.withOpacity(0.1),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.2),
+                blurRadius: 15,
+                spreadRadius: 1,
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 12),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -475,91 +351,6 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.weekend, 'Local'),
-            _buildNavItem(1, Icons.explore, 'Escenarios'),
-            _buildNavItem(2, Icons.account_balance_wallet, 'Recargas'),
-            _buildNavItem(3, Icons.person, 'Perfil'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = index == 2; // Recargas is always selected in this screen
-    return GestureDetector(
-      onTap: () {
-        // Navigation logic
-        switch (index) {
-          case 0: // Local
-            _showComingSoonDialog(label);
-            break;
-          case 1: // Escenarios
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const ScenariosScreen(),
-              ),
-            );
-            break;
-          case 2: // Recargas - already here
-            break;
-          case 3: // Perfil
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const ProfileScreen(),
-              ),
-            );
-            break;
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
-          vertical: 8,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppTheme.accentGold : Colors.white54,
-              size: isSelected ? 24 : 22,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppTheme.accentGold,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showComingSoonDialog(String featureName) {
     showDialog(
@@ -596,4 +387,93 @@ class _WalletScreenState extends State<WalletScreen> {
       ),
     );
   }
+}
+
+class PixelBorderPainter extends CustomPainter {
+  final Color color;
+
+  PixelBorderPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    const double cornerSize = 15;
+    const double pixelSize = 4;
+
+    final path = Path()
+      ..moveTo(cornerSize, 0)
+      ..lineTo(size.width - cornerSize, 0)
+      ..moveTo(size.width, cornerSize)
+      ..lineTo(size.width, size.height - cornerSize)
+      ..moveTo(size.width - cornerSize, size.height)
+      ..lineTo(cornerSize, size.height)
+      ..moveTo(0, size.height - cornerSize)
+      ..lineTo(0, cornerSize);
+
+    canvas.drawPath(path, paint);
+
+    void drawCorner(double x, double y, bool right, bool bottom) {
+      final cp = Paint()..color = color..style = PaintingStyle.fill;
+      double dx = right ? -1 : 1;
+      double dy = bottom ? -1 : 1;
+
+      canvas.drawRect(Rect.fromLTWH(x, y, pixelSize * dx, cornerSize * dy), cp);
+      canvas.drawRect(Rect.fromLTWH(x, y, cornerSize * dx, pixelSize * dy), cp);
+      
+      canvas.drawRect(Rect.fromLTWH(x + (cornerSize + 5) * dx, y, pixelSize * dx, pixelSize * dy), cp);
+      canvas.drawRect(Rect.fromLTWH(x, y + (cornerSize + 5) * dy, pixelSize * dx, pixelSize * dy), cp);
+    }
+
+    drawCorner(0, 0, false, false);
+    drawCorner(size.width, 0, true, false);
+    drawCorner(0, size.height, false, true);
+    drawCorner(size.width, size.height, true, true);
+    
+    canvas.drawRect(Rect.fromLTWH(size.width/2 - 20, 0, 40, pixelSize), paint..style = PaintingStyle.fill);
+    canvas.drawRect(Rect.fromLTWH(size.width/2 - 20, size.height - pixelSize, 40, pixelSize), paint..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class PixelButtonPainter extends CustomPainter {
+  final Color color;
+
+  PixelButtonPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    final path = Path()
+      ..moveTo(10, 0)
+      ..lineTo(size.width - 10, 0)
+      ..arcToPoint(Offset(size.width, 10), radius: const Radius.circular(5))
+      ..lineTo(size.width, size.height - 10)
+      ..arcToPoint(Offset(size.width - 10, size.height), radius: const Radius.circular(5))
+      ..lineTo(10, size.height)
+      ..arcToPoint(Offset(0, size.height - 10), radius: const Radius.circular(5))
+      ..lineTo(0, 10)
+      ..arcToPoint(const Offset(10, 0), radius: const Radius.circular(5));
+
+    canvas.drawPath(path, paint);
+    
+    final detailPaint = Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 1.5;
+    
+    canvas.drawCircle(const Offset(5, 5), 2, detailPaint);
+    canvas.drawCircle(Offset(size.width - 5, 5), 2, detailPaint);
+    canvas.drawCircle(Offset(5, size.height - 5), 2, detailPaint);
+    canvas.drawCircle(Offset(size.width - 5, size.height - 5), 2, detailPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

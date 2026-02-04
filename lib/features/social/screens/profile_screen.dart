@@ -34,231 +34,210 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
-      extendBody: true,
-      bottomNavigationBar: _buildBottomNavBar(),
-      body: AnimatedCyberBackground(
-        child: CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 0,
-              floating: true,
-              pinned: true,
-              backgroundColor: Colors.black.withOpacity(0.5),
-              title: const Text('ID DE JUGADOR', 
-                style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.w900, fontSize: 16)),
-              centerTitle: true,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.logout, color: AppTheme.dangerRed),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: AppTheme.cardBg,
-                        title: const Text('Cerrar Sesión',
-                            style: TextStyle(color: Colors.white)),
-                        content: const Text(
-                          '¿Estás seguro que deseas cerrar sesión?',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancelar',
-                                style: TextStyle(color: Colors.white54)),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(ctx); // Close dialog
-                              playerProvider.logout();
-                              // AuthMonitor will handle navigation
-                            },
-                            child: const Text('Salir',
-                                style: TextStyle(color: AppTheme.dangerRed)),
-                          ),
-                        ],
+      backgroundColor: Colors.transparent,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 0,
+            floating: true,
+            pinned: true,
+            backgroundColor: Colors.black.withOpacity(0.5),
+            title: const Text('ID DE JUGADOR', 
+              style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.w900, fontSize: 16)),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout, color: AppTheme.dangerRed),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: AppTheme.cardBg,
+                      title: const Text('Cerrar Sesión',
+                          style: TextStyle(color: Colors.white)),
+                      content: const Text(
+                        '¿Estás seguro que deseas cerrar sesión?',
+                        style: TextStyle(color: Colors.white70),
                       ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // 1. GAMER CARD WITH NEON GLOW
-                    _buildGamerCard(player),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // 2. TEMPORAL STAMPS (SELLOS) - NEW ANIMATED SECTION
-                    _buildTemporalStampsSection(gameProvider),
-                    
-                    const SizedBox(height: 24),
-                    
-
-
-                    const SizedBox(height: 40),
-                    const Text("ASTHORIA PROTOCOL v1.0.4", 
-                      style: TextStyle(color: Colors.white10, fontSize: 10, letterSpacing: 4)),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancelar',
+                              style: TextStyle(color: Colors.white54)),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(ctx); // Close dialog
+                            playerProvider.logout();
+                            // AuthMonitor will handle navigation
+                          },
+                          child: const Text('Salir',
+                              style: TextStyle(color: AppTheme.dangerRed)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // 1. GAMER CARD WITH NEON GLOW
+                  _buildGamerCard(player),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // 2. TEMPORAL STAMPS (SELLOS) - NEW ANIMATED SECTION
+                  _buildTemporalStampsSection(gameProvider),
+                  
+                  const SizedBox(height: 40),
+                  const Text("ASTHORIA PROTOCOL v1.0.4", 
+                    style: TextStyle(color: Colors.white10, fontSize: 10, letterSpacing: 4)),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildGamerCard(dynamic player) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryPurple.withOpacity(0.2), 
-            blurRadius: 30, 
-            offset: const Offset(0, 10)
-          )
-        ]
-      ),
-      child: Column(
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-               SizedBox(
-                 width: 120, height: 120,
-                 child: CircularProgressIndicator(
-                   value: player.experienceProgress,
-                   strokeWidth: 8,
-                   backgroundColor: Colors.white10,
-                   valueColor: const AlwaysStoppedAnimation(AppTheme.accentGold),
-                 ),
-               ),
-               Container(
-                 width: 95, height: 95,
-                 decoration: BoxDecoration(
-                   shape: BoxShape.circle,
-                   gradient: LinearGradient(
-                     colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
-                     begin: Alignment.topLeft,
-                     end: Alignment.bottomRight,
-                   ),
-                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15)]
-                 ),
-                 child: ClipRRect(
-                   borderRadius: BorderRadius.circular(47.5),
-                   child: Builder(
-                     builder: (context) {
-                       final avatarId = player.avatarId;
-                       
-                       // 1. Prioridad: Avatar Local
-                       if (avatarId != null && avatarId.isNotEmpty) {
-                         return Image.asset(
-                           'assets/images/avatars/$avatarId.png',
-                           fit: BoxFit.cover,
-                           errorBuilder: (_, __, ___) => Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white),
-                         );
-                       }
-                       
-                       // 2. Fallback: Foto de perfil (URL)
-                       if (player.avatarUrl != null && player.avatarUrl!.startsWith('http')) {
-                         return Image.network(
-                           player.avatarUrl!,
-                           fit: BoxFit.cover,
-                           errorBuilder: (_, __, ___) => Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white),
-                         );
-                       }
-                       
-                       // 3. Fallback: Icono de profesión
-                       return Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white);
-                     },
+    return CustomPaint(
+      painter: PixelBorderPainter(color: AppTheme.primaryPurple),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryPurple.withOpacity(0.2),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primaryPurple.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 5),
+            )
+          ],
+        ),
+        child: Column(
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                 CustomPaint(
+                   painter: PixelBorderPainter(color: AppTheme.accentGold),
+                   child: Container(
+                     width: 95, height: 95,
+                     padding: const EdgeInsets.all(4),
+                     decoration: BoxDecoration(
+                       color: AppTheme.primaryPurple.withOpacity(0.3),
+                     ),
+                     child: Builder(
+                       builder: (context) {
+                         final avatarId = player.avatarId;
+                         
+                         // 1. Prioridad: Avatar Local
+                         if (avatarId != null && avatarId.isNotEmpty) {
+                           return Image.asset(
+                             'assets/images/avatars/$avatarId.png',
+                             fit: BoxFit.cover,
+                             errorBuilder: (_, __, ___) => Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white),
+                           );
+                         }
+                         
+                         // 2. Fallback: Foto de perfil (URL)
+                         if (player.avatarUrl != null && player.avatarUrl!.startsWith('http')) {
+                           return Image.network(
+                             player.avatarUrl!,
+                             fit: BoxFit.cover,
+                             errorBuilder: (_, __, ___) => Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white),
+                           );
+                         }
+                         
+                         // 3. Fallback: Icono de profesión
+                         return Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white);
+                       },
+                     ),
                    ),
                  ),
-               ),
-               Positioned(
-                 bottom: 0,
-                 child: Container(
-                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                   decoration: BoxDecoration(
-                     color: AppTheme.accentGold,
-                     borderRadius: BorderRadius.circular(12),
-                     boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black45)]
+                 Positioned(
+                   bottom: -5,
+                   child: Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                     decoration: BoxDecoration(
+                       color: AppTheme.accentGold,
+                       borderRadius: BorderRadius.circular(4),
+                       boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black45)]
+                     ),
+                     child: Text("LVL ${player.level}", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
                    ),
-                   child: Text("LVL ${player.level}", 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
-                 ),
-               )
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(player.name.toUpperCase(), 
-            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 2)),
-          const SizedBox(height: 4),
-          Text(player.profession.toUpperCase(), 
-            style: const TextStyle(color: AppTheme.secondaryPink, fontSize: 12, letterSpacing: 4, fontWeight: FontWeight.w300)),
-          
-          const SizedBox(height: 30),
-          
-          // Single Stats Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildStatCompact(Icons.star, "${player.totalXP}", "XP TOTAL", AppTheme.secondaryPink),
-              _buildVerticalDivider(),
-              _buildStatCompact(Icons.eco, "${player.clovers}", "TRÉBOLES", Colors.green),
-              _buildVerticalDivider(),
-              _buildStatCompact(Icons.emoji_events, "${player.eventsCompleted?.length ?? 0}", "EVENTOS", Colors.cyan),
-            ],
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Horizontal Divider
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Divider(
-              color: Colors.white.withOpacity(0.2),
-              thickness: 1,
+                 )
+              ],
             ),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Edit/Delete Profile Buttons
-          Row(
-            children: [
-              Expanded(
-                child: _buildProfileButton(
-                  icon: Icons.edit,
-                  label: "Editar Perfil",
-                  color: AppTheme.primaryPurple,
-                  onTap: () => _showEditProfileSheet(player),
-                ),
+            const SizedBox(height: 20),
+            Text(player.name.toUpperCase(), 
+              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 2)),
+            const SizedBox(height: 4),
+            Text(player.profession.toUpperCase(), 
+              style: const TextStyle(color: AppTheme.secondaryPink, fontSize: 12, letterSpacing: 4, fontWeight: FontWeight.w300)),
+            
+            const SizedBox(height: 30),
+            
+            // Single Stats Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatCompact(Icons.star, "${player.totalXP}", "XP TOTAL", AppTheme.secondaryPink),
+                _buildVerticalDivider(),
+                _buildStatCompact(Icons.eco, "${player.clovers}", "TRÉBOLES", Colors.green),
+                _buildVerticalDivider(),
+                _buildStatCompact(Icons.emoji_events, "${player.eventsCompleted?.length ?? 0}", "EVENTOS", Colors.cyan),
+              ],
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Horizontal Divider
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Divider(
+                color: Colors.white.withOpacity(0.2),
+                thickness: 1,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildProfileButton(
-                  icon: Icons.delete_outline,
-                  label: "Borrar Cuenta",
-                  color: AppTheme.dangerRed,
-                  onTap: () => _showDeleteConfirmation(),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Edit/Delete Profile Buttons
+            Row(
+              children: [
+                Expanded(
+                  child: _buildProfileButton(
+                    icon: Icons.edit,
+                    label: "Editar Perfil",
+                    color: AppTheme.primaryPurple,
+                    onTap: () => _showEditProfileSheet(player),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildProfileButton(
+                    icon: Icons.delete_outline,
+                    label: "Borrar Cuenta",
+                    color: AppTheme.dangerRed,
+                    onTap: () => _showDeleteConfirmation(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -274,19 +253,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withOpacity(0.4),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withOpacity(0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 18),
+            Icon(icon, color: Colors.white, size: 18),
             const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
-                color: color,
+              style: const TextStyle(
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),
@@ -509,27 +488,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        Container(
-          height: 110,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
+        CustomPaint(
+          painter: PixelBorderPainter(color: Colors.white.withOpacity(0.1)),
+          child: Container(
+            height: 110,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+            ),
+            child: gameProvider.clues.isEmpty
+              ? const Center(child: Text("Inicia una misión para recolectar sellos", 
+                  style: TextStyle(color: Colors.white24, fontSize: 12)))
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  itemCount: gameProvider.clues.length,
+                  itemBuilder: (context, index) {
+                    final clue = gameProvider.clues[index];
+                    final bool isCollected = clue.isCompleted;
+                    
+                    return _buildStampItem(clue, isCollected, index);
+                  },
+                ),
           ),
-          child: gameProvider.clues.isEmpty
-            ? const Center(child: Text("Inicia una misión para recolectar sellos", 
-                style: TextStyle(color: Colors.white24, fontSize: 12)))
-            : ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                itemCount: gameProvider.clues.length,
-                itemBuilder: (context, index) {
-                  final clue = gameProvider.clues[index];
-                  final bool isCollected = clue.isCompleted;
-                  
-                  return _buildStampItem(clue, isCollected, index);
-                },
-              ),
         ),
       ],
     );
@@ -656,91 +636,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return gradients[index % gradients.length];
   }
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(25),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.weekend, 'Local'),
-            _buildNavItem(1, Icons.explore, 'Escenarios'),
-            _buildNavItem(2, Icons.account_balance_wallet, 'Recargas'),
-            _buildNavItem(3, Icons.person, 'Perfil'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = index == 3; // Perfil is always selected in this screen
-    return GestureDetector(
-      onTap: () {
-        // Navigation logic
-        switch (index) {
-          case 0: // Local
-            _showComingSoonDialog(label);
-            break;
-          case 1: // Escenarios
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const ScenariosScreen(),
-              ),
-            );
-            break;
-          case 2: // Recargas
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const WalletScreen(),
-              ),
-            );
-            break;
-          case 3: // Perfil - already here
-            break;
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
-          vertical: 8,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppTheme.accentGold : Colors.white54,
-              size: isSelected ? 24 : 22,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppTheme.accentGold,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showComingSoonDialog(String featureName) {
     showDialog(
@@ -777,4 +672,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+class PixelBorderPainter extends CustomPainter {
+  final Color color;
+
+  PixelBorderPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    const double cornerSize = 15;
+    const double pixelSize = 4;
+
+    final path = Path()
+      ..moveTo(cornerSize, 0)
+      ..lineTo(size.width - cornerSize, 0)
+      ..moveTo(size.width, cornerSize)
+      ..lineTo(size.width, size.height - cornerSize)
+      ..moveTo(size.width - cornerSize, size.height)
+      ..lineTo(cornerSize, size.height)
+      ..moveTo(0, size.height - cornerSize)
+      ..lineTo(0, cornerSize);
+
+    canvas.drawPath(path, paint);
+
+    void drawCorner(double x, double y, bool right, bool bottom) {
+      final cp = Paint()..color = color..style = PaintingStyle.fill;
+      double dx = right ? -1 : 1;
+      double dy = bottom ? -1 : 1;
+
+      canvas.drawRect(Rect.fromLTWH(x, y, pixelSize * dx, cornerSize * dy), cp);
+      canvas.drawRect(Rect.fromLTWH(x, y, cornerSize * dx, pixelSize * dy), cp);
+      
+      canvas.drawRect(Rect.fromLTWH(x + (cornerSize + 5) * dx, y, pixelSize * dx, pixelSize * dy), cp);
+      canvas.drawRect(Rect.fromLTWH(x, y + (cornerSize + 5) * dy, pixelSize * dx, pixelSize * dy), cp);
+    }
+
+    drawCorner(0, 0, false, false);
+    drawCorner(size.width, 0, true, false);
+    drawCorner(0, size.height, false, true);
+    drawCorner(size.width, size.height, true, true);
+    
+    canvas.drawRect(Rect.fromLTWH(size.width/2 - 20, 0, 40, pixelSize), paint..style = PaintingStyle.fill);
+    canvas.drawRect(Rect.fromLTWH(size.width/2 - 20, size.height - pixelSize, 40, pixelSize), paint..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
