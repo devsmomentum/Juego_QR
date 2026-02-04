@@ -13,9 +13,11 @@ import '../../game/screens/game_mode_selector_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../../admin/screens/dashboard-screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../shared/widgets/animated_green_background.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../game/providers/connectivity_provider.dart';
 import '../../game/providers/game_provider.dart';
+import '../../../core/providers/theme_provider.dart';
 import 'dart:async'; // For TimeoutException
 import 'dart:math' as math;
 
@@ -34,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   bool _isPasswordVisible = false;
   late AnimationController _shimmerTitleController;
 
-  @override
+@override
   void initState() {
     super.initState();
     _shimmerTitleController = AnimationController(
@@ -42,8 +44,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       vsync: this,
     )..repeat();
   }
+  
 
-  @override
+@override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -395,10 +398,61 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDayMode = themeProvider.isDayMode;
+    
     return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: AnimatedCyberBackground(
-        child: SafeArea(
+      body: Stack(
+        children: [
+          // Fondo gradiente beige/crema con partículas doradas
+          if (isDayMode)
+            Stack(
+              children: [
+                // Gradiente base
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        const Color(0xFFD4C5A0), // Beige arena
+                        const Color(0xFFE8DCC4), // Crema claro
+                        const Color(0xFFC9B591), // Beige dorado
+                        const Color(0xFFB8A97A), // Beige oscuro
+                      ],
+                      stops: const [0.0, 0.3, 0.6, 1.0],
+                    ),
+                  ),
+                ),
+                // Partículas doradas flotantes
+                Positioned.fill(
+                  child: _GoldenParticles(),
+                ),
+                // Overlay suave
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFF4A7C59).withOpacity(0.03),
+                        Colors.transparent,
+                        const Color(0xFFD4AF37).withOpacity(0.05),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            // Night mode: Cyber background
+            Container(
+              color: const Color(0xFF0A0E27),
+              child: const AnimatedCyberBackground(child: SizedBox.expand()),
+            ),
+          
+          // Main Content
+          SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
@@ -417,152 +471,274 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Spacer(flex: 2),
+                              
+                              // Título con efecto glitch (restaurado)
                               const _GlitchText(
                                 text: 'MapHunter',
                                 style: TextStyle(
-                                  fontSize: 32,
+                                  fontSize: 38,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFFFAE500),
-                                  letterSpacing: 2,
+                                  letterSpacing: 3,
                                 ),
                               ),
-                              const SizedBox(height: 5), // Reduced space
-                              const Text(
-                                "Búsqueda del tesoro ☘️",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white70,
-                                  fontWeight: FontWeight.w300,
-                                  letterSpacing: 1.0,
-                                ),
-                              ),
-                              const SizedBox(height: 15),
+                              const SizedBox(height: 20),
 
-                              // Logo con imagen personalizada
+                              // Logo circular simple sin efectos de sombra
                               Container(
-                                width: constraints.maxHeight * 0.22,
-                                height: constraints.maxHeight * 0.22,
-                                constraints: const BoxConstraints(
-                                  minWidth: 120,
-                                  minHeight: 120,
-                                  maxWidth: 180,
-                                  maxHeight: 180,
-                                ),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppTheme.primaryPurple.withOpacity(0.4),
-                                      blurRadius: 35,
-                                      spreadRadius: 5,
-                                    ),
-                                  ],
-                                ),
+                                width: 180,
+                                height: 180,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(100),
                                   child: Transform.scale(
                                     scale: 1.5,
                                     child: Image.asset(
-                                      'assets/images/logo.png',
+                                      isDayMode 
+                                          ? 'assets/images/logodia.png' 
+                                          : 'assets/images/logo.png',
                                       fit: BoxFit.cover,
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 15),
+                              const SizedBox(height: 25),
 
                               // Subtítulo
                               Text(
                                 'BIENVENIDO',
-                                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                                  fontSize: 18,
-                                  letterSpacing: 2,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 3,
+                                  color: isDayMode 
+                                      ? const Color(0xFF3D5A3C) // Verde oscuro
+                                      : Colors.white,
+                                  shadows: isDayMode ? [] : [
+                                    const Shadow(
+                                      offset: Offset(1, 1),
+                                      blurRadius: 3,
+                                      color: Color(0x80000000),
+                                    ),
+                                  ],
                                 ),
                               ),
                               Text(
                                 'Inicia tu aventura',
-                                style: Theme.of(context).textTheme.bodyLarge,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: isDayMode 
+                                      ? const Color(0xFF6B5D4F) // Marrón cálido
+                                      : Colors.white70,
+                                ),
                               ),
                               const Spacer(flex: 1),
 
-                              // Email field
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                autofillHints: const [AutofillHints.email],
-                                style: const TextStyle(color: Colors.white),
-                                decoration: const InputDecoration(
-                                  labelText: 'Email',
-                                  labelStyle: TextStyle(color: Colors.white60),
-                                  prefixIcon: Icon(Icons.email_outlined, color: Colors.white60),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) return 'Ingresa tu email';
-                                  if (!value.contains('@')) return 'Email inválido';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 10),
-
-                              // Password field
-                              TextFormField(
-                                controller: _passwordController,
-                                obscureText: !_isPasswordVisible,
-                                textInputAction: TextInputAction.done,
-                                autofillHints: const [AutofillHints.password],
-                                onEditingComplete: _handleLogin,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  labelText: 'Contraseña',
-                                  labelStyle: const TextStyle(color: Colors.white60),
-                                  prefixIcon: const Icon(Icons.lock_outline, color: Colors.white60),
-                                  suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                                      color: Colors.white60,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _isPasswordVisible = !_isPasswordVisible;
-                                      });
-                                    },
+                              // Email field con glassmorphism
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: isDayMode 
+                                      ? Colors.white.withOpacity(0.65)
+                                      : Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDayMode
+                                        ? const Color(0xFFD4AF37).withOpacity(0.3)
+                                        : Colors.white24,
+                                    width: 1.5,
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isDayMode
+                                          ? const Color(0xFFD4AF37).withOpacity(0.15)
+                                          : Colors.black.withOpacity(0.1),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) return 'Ingresa tu contraseña';
-                                  if (value.length < 6) return 'Mínimo 6 caracteres';
-                                  return null;
-                                },
+                                child: TextFormField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.next,
+                                  autofillHints: const [AutofillHints.email],
+                                  style: TextStyle(
+                                    color: isDayMode 
+                                        ? const Color(0xFF2C2416)
+                                        : Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Email',
+                                    labelStyle: TextStyle(
+                                      color: isDayMode 
+                                          ? const Color(0xFF6B5D4F)
+                                          : Colors.white60,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.email_outlined, 
+                                      color: isDayMode 
+                                          ? const Color(0xFFD4AF37)
+                                          : const Color(0xFFD4AF37),
+                                    ),
+                                    filled: false,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: isDayMode
+                                            ? const Color(0xFFD4AF37)
+                                            : const Color(0xFFFAE500),
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) return 'Ingresa tu email';
+                                    if (!value.contains('@')) return 'Email inválido';
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+
+                              // Password field con glassmorphism
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: isDayMode 
+                                      ? Colors.white.withOpacity(0.65)
+                                      : Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDayMode
+                                        ? const Color(0xFFD4AF37).withOpacity(0.3)
+                                        : Colors.white24,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isDayMode
+                                          ? const Color(0xFFD4AF37).withOpacity(0.15)
+                                          : Colors.black.withOpacity(0.1),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                                ),
+                                child: TextFormField(
+                                  controller: _passwordController,
+                                  obscureText: !_isPasswordVisible,
+                                  textInputAction: TextInputAction.done,
+                                  autofillHints: const [AutofillHints.password],
+                                  onEditingComplete: _handleLogin,
+                                  style: TextStyle(
+                                    color: isDayMode 
+                                        ? const Color(0xFF2C2416)
+                                        : Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Contraseña',
+                                    labelStyle: TextStyle(
+                                      color: isDayMode 
+                                          ? const Color(0xFF6B5D4F)
+                                          : Colors.white60,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.lock_outline, 
+                                      color: isDayMode 
+                                          ? const Color(0xFFD4AF37)
+                                          : const Color(0xFFD4AF37),
+                                    ),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                        color: isDayMode 
+                                            ? const Color(0xFF6B5D4F)
+                                            : Colors.white60,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _isPasswordVisible = !_isPasswordVisible;
+                                        });
+                                      },
+                                    ),
+                                    filled: false,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: isDayMode
+                                            ? const Color(0xFFD4AF37)
+                                            : const Color(0xFFFAE500),
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) return 'Ingresa tu contraseña';
+                                    if (value.length < 6) return 'Mínimo 6 caracteres';
+                                    return null;
+                                  },
+                                ),
                               ),
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
                                   onPressed: _showForgotPasswordDialog,
-                                  child: const Text(
+                                  child: Text(
                                     '¿Olvidaste tu contraseña?',
                                     style: TextStyle(
-                                      color: Colors.white70,
+                                      color: isDayMode 
+                                          ? const Color(0xFF6B5D4F)
+                                          : Colors.white70,
                                       fontSize: 14,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 10),
                               
-                              // Login button
+                              // Login button con gradiente dorado-verde
                               SizedBox(
                                 width: double.infinity,
                                 height: 56,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    gradient: AppTheme.primaryGradient,
-                                    borderRadius: BorderRadius.circular(12),
+                                    gradient: LinearGradient(
+                                      colors: isDayMode
+                                          ? [
+                                              const Color(0xFF4A7C59), // Verde bosque
+                                              const Color(0xFF5C9970), // Verde medio
+                                              const Color(0xFFD4AF37), // Dorado
+                                            ]
+                                          : [
+                                              AppTheme.primaryPurple,
+                                              AppTheme.secondaryPink,
+                                            ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.primaryPurple.withOpacity(0.4),
+                                        color: isDayMode
+                                            ? const Color(0xFF4A7C59).withOpacity(0.4)
+                                            : AppTheme.primaryPurple.withOpacity(0.4),
                                         blurRadius: 20,
-                                        offset: const Offset(0, 10),
+                                        offset: const Offset(0, 8),
                                       ),
                                     ],
                                   ),
@@ -572,7 +748,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       backgroundColor: Colors.transparent,
                                       shadowColor: Colors.transparent,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
                                     child: const Text(
@@ -580,13 +756,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.2,
+                                        letterSpacing: 1.5,
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 16),
                               
                               // Register link
                               Row(
@@ -594,7 +771,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                 children: [
                                   Text(
                                     '¿No tienes cuenta? ',
-                                    style: Theme.of(context).textTheme.bodyMedium,
+                                    style: TextStyle(
+                                      color: isDayMode 
+                                          ? const Color(0xFF6B5D4F)
+                                          : Colors.white70,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                   TextButton(
                                     onPressed: () {
@@ -602,11 +784,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         MaterialPageRoute(builder: (_) => const RegisterScreen()),
                                       );
                                     },
-                                    child: const Text(
+                                    child: Text(
                                       'Regístrate',
                                       style: TextStyle(
-                                        color: AppTheme.secondaryPink,
+                                        color: isDayMode
+                                            ? const Color(0xFF4A7C59)
+                                            : AppTheme.secondaryPink,
                                         fontWeight: FontWeight.bold,
+                                        fontSize: 15,
                                       ),
                                     ),
                                   ),
@@ -615,7 +800,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               const Spacer(flex: 2),
                               
                               // Morna Branding
-                              _buildMornaBranding(),
+                              _buildMornaBranding(isDayMode),
                             ],
                           ),
                         ),
@@ -626,27 +811,73 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               );
             },
           ),
-        ),
+          ),
+          
+          // Theme Toggle Button (positioned last to be on top)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              child: GestureDetector(
+                onTap: () {
+                  print('Toggle button tapped! Current mode: $isDayMode');
+                  themeProvider.toggleTheme();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDayMode 
+                        ? const Color(0xFFB8A97A).withOpacity(0.3)
+                        : Colors.white.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDayMode
+                          ? const Color(0xFF6B5D4F).withOpacity(0.3)
+                          : Colors.white.withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    isDayMode ? Icons.nightlight_round : Icons.wb_sunny,
+                    color: isDayMode 
+                        ? const Color(0xFF3D5A3C)
+                        : AppTheme.accentGold,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMornaBranding() {
+  Widget _buildMornaBranding(bool isDayMode) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           "BY JOTA DE &",
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: isDayMode
+                ? const Color(0xFF6B5D4F).withOpacity(0.8)
+                : Colors.white.withOpacity(0.7),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(width: 8),
         Image.asset(
-          'assets/images/morna_logo.png',
-          height: 30,
+          'assets/images/morna_logo_new.png',
+          height: 35,
         ),
       ],
     );
@@ -771,3 +1002,133 @@ class _GlitchTextState extends State<_GlitchText> with SingleTickerProviderState
     );
   }
 }
+
+// Custom painter para patrón decorativo maya
+class _MayaPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF4A7C59).withOpacity(0.03)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    // Dibujar patrones geométricos inspirados en diseños mayas
+    const double spacing = 80;
+    
+    for (double x = 0; x < size.width + spacing; x += spacing) {
+      for (double y = 0; y < size.height + spacing; y += spacing) {
+        // Círculos concéntricos pequeños
+        canvas.drawCircle(Offset(x, y), 15, paint);
+        canvas.drawCircle(Offset(x, y), 8, paint);
+        
+        // Líneas diagonales formando un patrón
+        canvas.drawLine(
+          Offset(x - 20, y - 20),
+          Offset(x + 20, y + 20),
+          paint,
+        );
+        canvas.drawLine(
+          Offset(x + 20, y - 20),
+          Offset(x - 20, y + 20),
+          paint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Widget de partículas doradas flotantes
+class _GoldenParticles extends StatefulWidget {
+  @override
+  State<_GoldenParticles> createState() => _GoldenParticlesState();
+}
+
+class _GoldenParticlesState extends State<_GoldenParticles> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<_Particle> _particles = [];
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
+    
+    // Crear 30 partículas
+    for (int i = 0; i < 30; i++) {
+      _particles.add(_Particle());
+    }
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _ParticlesPainter(_particles, _controller.value),
+        );
+      },
+    );
+  }
+}
+
+class _Particle {
+  double x = math.Random().nextDouble();
+  double y = math.Random().nextDouble();
+  double size = math.Random().nextDouble() * 3 + 1;
+  double speed = math.Random().nextDouble() * 0.5 + 0.2;
+  double opacity = math.Random().nextDouble() * 0.4 + 0.2;
+}
+
+class _ParticlesPainter extends CustomPainter {
+  final List<_Particle> particles;
+  final double animationValue;
+  
+  _ParticlesPainter(this.particles, this.animationValue);
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var particle in particles) {
+      final paint = Paint()
+        ..color = Color(0xFFD4AF37).withOpacity(particle.opacity)
+        ..style = PaintingStyle.fill;
+      
+      // Calcular posición animada
+      final dy = ((particle.y + animationValue * particle.speed) % 1.0) * size.height;
+      final dx = particle.x * size.width;
+      
+      // Dibujar partícula
+      canvas.drawCircle(
+        Offset(dx, dy),
+        particle.size,
+        paint,
+      );
+      
+      // Agregar brillo
+      final glowPaint = Paint()
+        ..color = Color(0xFFFAE500).withOpacity(particle.opacity * 0.3)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size * 2);
+      
+      canvas.drawCircle(
+        Offset(dx, dy),
+        particle.size * 2,
+        glowPaint,
+      );
+    }
+  }
+  
+  @override
+  bool shouldRepaint(_ParticlesPainter oldDelegate) => true;
+}
+

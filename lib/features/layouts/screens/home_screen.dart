@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../game/screens/clues_screen.dart';
 import '../../game/screens/event_waiting_screen.dart';
 import '../../game/providers/event_provider.dart';
@@ -77,6 +78,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final player = Provider.of<PlayerProvider>(context).currentPlayer;
     final eventProvider = Provider.of<EventProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDayMode = themeProvider.isDayMode;
 
     try {
       final event = eventProvider.events.firstWhere((e) => e.id == widget.eventId);
@@ -98,7 +101,10 @@ class _HomeScreenState extends State<HomeScreen> {
     
     return SabotageOverlay(
       child: Scaffold(
-        body: _screens[_currentIndex],
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _screens,
+        ),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             boxShadow: [
@@ -114,6 +120,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: BottomNavigationBar(
               currentIndex: _currentIndex,
               onTap: (index) {
+                if (index == 3) {
+                  _showExitConfirmation();
+                  return;
+                }
                 if (player == null || (!player.isFrozen && !player.isBlinded)) {
                   setState(() {
                     _currentIndex = index;
@@ -121,26 +131,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               },
               type: BottomNavigationBarType.fixed,
-              backgroundColor: AppTheme.cardBg,
+              backgroundColor: isDayMode ? Colors.white : AppTheme.cardBg,
               selectedItemColor: AppTheme.secondaryPink,
-              unselectedItemColor: Colors.white54,
+              unselectedItemColor: isDayMode ? Colors.black54 : Colors.white54,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
               showUnselectedLabels: true,
               elevation: 0,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.map),
-                  activeIcon: Icon(Icons.map, size: 28),
+              items: [
+                _buildNavItem(
+                  icon: Icons.map_outlined,
+                  activeIcon: Icons.map,
                   label: 'Pistas',
+                  index: 0,
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.inventory_2_outlined),
-                  activeIcon: Icon(Icons.inventory_2, size: 28),
+                _buildNavItem(
+                  icon: Icons.inventory_2_outlined,
+                  activeIcon: Icons.inventory_2,
                   label: 'Inventario',
+                  index: 1,
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.leaderboard_outlined),
-                  activeIcon: Icon(Icons.leaderboard, size: 28),
+                _buildNavItem(
+                  icon: Icons.leaderboard_outlined,
+                  activeIcon: Icons.leaderboard,
                   label: 'Ranking',
+                  index: 2,
+                ),
+                _buildNavItem(
+                  icon: Icons.meeting_room_outlined,
+                  activeIcon: Icons.meeting_room,
+                  label: 'Salir',
+                  index: 3,
                 ),
               ],
             ),
@@ -148,5 +169,65 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  BottomNavigationBarItem _buildNavItem({
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    required int index,
+  }) {
+    final isSelected = _currentIndex == index;
+    // For the exit button, it's never "selected" in terms of index, but we can color it red for emphasis
+    final isExit = index == 3;
+    return BottomNavigationBarItem(
+      icon: Icon(
+        isSelected ? activeIcon : icon,
+        color: isExit ? AppTheme.dangerRed.withOpacity(0.8) : null,
+      ),
+      label: label,
+    );
+  }
+
+  Future<void> _showExitConfirmation() async {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDayMode = themeProvider.isDayMode;
+
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDayMode ? Colors.white : AppTheme.cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          "¿Salir del Evento?",
+          style: TextStyle(
+            color: isDayMode ? Colors.black : Colors.white, 
+            fontWeight: FontWeight.bold
+          ),
+        ),
+        content: Text(
+          "Si sales ahora, podrías perder tu progreso o tu posición en el ranking.",
+          style: TextStyle(color: isDayMode ? Colors.black87 : Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text("CANCELAR", style: TextStyle(color: isDayMode ? Colors.black54 : Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.dangerRed,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("SALIR"),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldExit == true && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 }
