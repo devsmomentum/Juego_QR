@@ -18,8 +18,9 @@ import '../widgets/payment_method_selector.dart';
 import '../widgets/add_payment_method_dialog.dart';
 import '../../wallet/widgets/withdrawal_method_selector.dart';
 import '../../wallet/screens/transaction_history_screen.dart';
-
-final bcv_dolar = 1;
+import '../../wallet/models/clover_plan.dart';
+import '../../wallet/services/clover_plan_service.dart';
+import '../../wallet/widgets/clover_plan_card.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -502,10 +503,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 );
                 
                 if (success == true) {
-                   _showAmountDialog();
+                   _showPlanSelectorDialog();
                 }
               } else {
-                 _showAmountDialog();
+                 _showPlanSelectorDialog();
               }
             } catch (e) {
               if (mounted) setState(() => _isLoading = false);
@@ -524,8 +525,9 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  void _showAmountDialog() {
-    _amountController.clear();
+  void _showPlanSelectorDialog() {
+    String? selectedPlanId;
+    
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -546,73 +548,83 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   const Text(
-                    'Ingresa la cantidad de tréboles que deseas comprar. (1 🍀 = 1\$)',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _amountController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Only allow integers
-                    style: const TextStyle(color: Colors.white),
-                    onChanged: (val) => setState(() {}),
-                    decoration: InputDecoration(
-                      labelText: 'Cantidad (Enteros)',
-                      labelStyle: const TextStyle(color: Colors.white60),
-                      prefixIcon: const Icon(Icons.star, color: Colors.white60),
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(10),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: FutureBuilder<List<CloverPlan>>(
+                future: CloverPlanService(
+                  supabaseClient: Supabase.instance.client,
+                ).fetchActivePlans(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 200,
+                      child: Center(
+                        child: CircularProgressIndicator(color: AppTheme.accentGold),
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: AppTheme.accentGold),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                   // Calculation Display
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Estimado en Bolívares (Tasa Ref: $bcv_dolar):",
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                    );
+                  }
+                  
+                  if (snapshot.hasError) {
+                    return SizedBox(
+                      height: 100,
+                      child: Center(
+                        child: Text(
+                          'Error cargando planes: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.redAccent),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _amountController.text.isEmpty 
-                              ? "0.00 VES"
-                              : "${(int.tryParse(_amountController.text) ?? 0) * bcv_dolar} VES",
-                          style: const TextStyle(
-                            color: AppTheme.accentGold, 
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16
+                      ),
+                    );
+                  }
+                  
+                  final plans = snapshot.data ?? [];
+                  if (plans.isEmpty) {
+                    return const SizedBox(
+                      height: 100,
+                      child: Center(
+                        child: Text(
+                          'No hay planes disponibles',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Selecciona un plan de tréboles:',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      // Plan Cards Grid
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: plans.map((plan) {
+                          return SizedBox(
+                            width: (MediaQuery.of(context).size.width - 140) / 2,
+                            child: CloverPlanCard(
+                              plan: plan,
+                              isSelected: selectedPlanId == plan.id,
+                              onTap: () {
+                                setState(() => selectedPlanId = plan.id);
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 20.0),
+                          child: Center(
+                            child: CircularProgressIndicator(color: AppTheme.accentGold),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  if (_isLoading)
-                   const Padding(
-                     padding: EdgeInsets.only(top: 20.0),
-                     child: CircularProgressIndicator(color: AppTheme.accentGold),
-                   ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
             actions: [
@@ -621,19 +633,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
               ),
               ElevatedButton(
-                onPressed: _isLoading ? null : () async {
-                  final amount = int.tryParse(_amountController.text); // Validate Integer
-                  if (amount == null || amount <= 0) {
-                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Ingresa un monto entero válido > 0')),
-                    );
-                    return;
-                  }
-
+                onPressed: (_isLoading || selectedPlanId == null) ? null : () async {
                   setState(() => _isLoading = true);
                   
-                  // Iniciar proceso de pago (cast to double for compatibility)
-                  await _initiatePayment(context, amount.toDouble());
+                  await _initiatePayment(context, selectedPlanId!);
 
                   if (mounted) {
                     setState(() => _isLoading = false);
@@ -643,6 +646,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentGold,
                   foregroundColor: Colors.black,
+                  disabledBackgroundColor: Colors.grey.withOpacity(0.3),
                 ),
                 child: const Text('Pagar'),
               ),
@@ -653,7 +657,10 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Future<void> _initiatePayment(BuildContext context, double amount) async {
+  /// Initiates payment with selected plan ID.
+  /// 
+  /// The Edge Function validates the plan and retrieves the true price from the database.
+  Future<void> _initiatePayment(BuildContext context, String planId) async {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final user = playerProvider.currentPlayer;
     
@@ -665,88 +672,88 @@ class _WalletScreenState extends State<WalletScreen> {
     }
 
     try {
-      // Instanciar servicio
-      final apiKey = dotenv.env['PAGO_PAGO_API_KEY'] ?? ''; 
-      final service = PagoAPagoService(apiKey: apiKey);
-
-      // Calcular monto en Bolívares
+      debugPrint('[WalletScreen] Initiating payment for plan: $planId');
       
-      final double amountBs = amount * bcv_dolar;
-
-      // Llamar al nuevo método simplificado
-      final response = await service.createSimplePaymentOrder(amountBs: amountBs);
+      // Call Edge Function directly with plan_id only (security: price validated server-side)
+      final response = await Supabase.instance.client.functions.invoke(
+        'api_pay_orders',
+        body: {
+          'plan_id': planId,
+        },
+      );
 
       if (!mounted) return;
 
-      if (response.success && response.paymentUrl != null) {
-        if (response.success && response.paymentUrl != null) {
-          
-          if (!mounted) return;
+      if (response.status != 200) {
+        throw Exception('Error en servicio de pagos (${response.status}): ${response.data}');
+      }
 
-          // Open WebView as a Modal Bottom Sheet (Google Style)
-          // "se tiene que quedar un espacio de la app" -> Top padding / limited height
-          // "hasta que no se quite sola... no se pueda cambiar de vista" -> isDismissible: false
-          
-          final bool? result = await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            isDismissible: false, // User cannot tap outside to dismiss
-            enableDrag: false,    // User cannot drag down to dismiss (unless we implement handle)
-            backgroundColor: Colors.transparent,
-            builder: (ctx) => Padding(
-              // Leave top space (Status bar + some margin) - e.g. top 10% visible
-              padding: EdgeInsets.only(top: MediaQuery.of(context).size.height * 0.1),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: PaymentWebViewModal(paymentUrl: response.paymentUrl!),
-              ),
-            ),
-          );
+      final responseData = response.data;
+      debugPrint('[WalletScreen] RAW RESPONSE: $responseData');
 
-          if (result == true) {
-             // Payment Successful!
-             if (!mounted) return;
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(
-                 content: Text('¡Pago Exitoso! Verificando saldo...'),
-                 backgroundColor: AppTheme.successGreen,
-               ),
-             );
-             
-             // Refresh User Balance logic (Wait a bit for backend to process webhook if any, or just fetch)
-             // Ideally we should poll or listen to realtime, but a simple refresh helps.
-             await Future.delayed(const Duration(seconds: 2));
-             if (mounted) {
-                await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
-             }
+      if (responseData == null) {
+         throw Exception('Respuesta vacía del servicio de pagos');
+      }
+      
+      if (responseData['success'] == false) {
+         throw Exception('API Error: ${responseData['message'] ?? responseData['error'] ?? "Unknown error"}');
+      }
 
-          } else {
-             // User closed modal without success or cancelled
-             if (!mounted) return;
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text('Operación cancelada o pendiente.')),
-             );
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-             SnackBar(content: Text('No se pudo abrir el link: ${response.paymentUrl}')),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(
-             content: Text('Error al crear orden: ${response.message}'),
-             backgroundColor: AppTheme.dangerRed,
+      // Parse response
+      final Map<String, dynamic> dataObj = responseData['data'] ?? responseData['result'] ?? responseData;
+      final String? paymentUrl = dataObj['payment_url']?.toString() ?? dataObj['url']?.toString();
+
+      if (paymentUrl == null || paymentUrl.isEmpty) {
+        throw Exception('URL de pago no recibida');
+      }
+
+      if (!mounted) return;
+
+      // Open WebView as a Modal Bottom Sheet
+      final bool? result = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        isDismissible: false,
+        enableDrag: false,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.only(top: MediaQuery.of(context).size.height * 0.1),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: PaymentWebViewModal(paymentUrl: paymentUrl),
+          ),
+        ),
+      );
+
+      if (result == true) {
+         if (!mounted) return;
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(
+             content: Text('¡Pago Exitoso! Verificando saldo...'),
+             backgroundColor: AppTheme.successGreen,
            ),
-        );
+         );
+         
+         await Future.delayed(const Duration(seconds: 2));
+         if (mounted) {
+            await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+         }
+      } else {
+         if (!mounted) return;
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Operación cancelada o pendiente.')),
+         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: AppTheme.dangerRed,
-        )
-      );
+      debugPrint('[WalletScreen] Payment error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppTheme.dangerRed,
+          )
+        );
+      }
     }
   }
 

@@ -8,6 +8,7 @@ import '../providers/event_creation_provider.dart';
 import 'competitions_management_screen.dart';
 import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
+import 'clover_plans_management_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 
@@ -21,12 +22,12 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  // Títulos para la navegación
   final List<String> _titles = [
     "Dashboard",
     "Crear Evento",
     "Competencias",
     "Usuarios",
+    "Planes",
     "Reportes", 
     "Configuración" 
   ];
@@ -36,6 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.add_circle_outline,
     Icons.emoji_events,
     Icons.people,
+    Icons.local_offer,
     Icons.bar_chart,
     Icons.settings,
   ];
@@ -102,6 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       const CompetitionsManagementScreen(), // Index 2
       const UserManagementScreen(),         // Index 3
+      const CloverPlansManagementScreen(),  // Index 4 - Planes
     ];
 
     return LayoutBuilder(
