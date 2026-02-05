@@ -14,10 +14,7 @@ class VideoPreloadService {
     await _preloadedController?.dispose();
     
     _preloadedPath = assetPath;
-    _preloadedController = VideoPlayerController.asset(
-      assetPath,
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-    );
+    _preloadedController = VideoPlayerController.asset(assetPath);
     
     try {
       await _preloadedController!.initialize();

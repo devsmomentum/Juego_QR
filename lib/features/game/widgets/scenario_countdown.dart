@@ -56,41 +56,20 @@ class _ScenarioCountdownState extends State<ScenarioCountdown> {
     if (_isStarted) {
       return Container(
         margin: const EdgeInsets.symmetric(vertical: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF00D9A3).withOpacity(0.15),
+          color: Colors.green.withOpacity(0.2),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF00D9A3), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF00D9A3).withOpacity(0.3),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
+          border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: Color(0xFF00D9A3),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              "EN CURSO",
-              style: TextStyle(
-                color: Color(0xFF00D9A3),
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ],
+        child: const Text(
+          "EN CURSO",
+          style: TextStyle(
+            color: Colors.greenAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+            letterSpacing: 1,
+          ),
         ),
       );
     }
