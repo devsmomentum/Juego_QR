@@ -28,6 +28,7 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
     _loadPlans();
   }
 
+
   Future<void> _loadPlans() async {
     setState(() {
       _isLoading = true;
@@ -255,13 +256,22 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
                     ],
                   ),
                 )
-              : ListView.builder(
+              : ListView(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _plans.length,
-                  itemBuilder: (context, index) {
-                    final plan = _plans[index];
-                    return _buildPlanCard(plan);
-                  },
+                  children: [
+                    // Section Title
+                    const Text(
+                      'Planes de Tréboles',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Plans List
+                    ..._plans.map((plan) => _buildPlanCard(plan)),
+                  ],
                 ),
     );
   }

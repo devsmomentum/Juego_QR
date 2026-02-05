@@ -21,6 +21,8 @@ import '../../wallet/screens/transaction_history_screen.dart';
 import '../../wallet/models/clover_plan.dart';
 import '../../wallet/services/clover_plan_service.dart';
 import '../../wallet/widgets/clover_plan_card.dart';
+import '../../wallet/models/withdrawal_plan.dart';
+import '../../wallet/services/withdrawal_plan_service.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -767,16 +769,15 @@ class _WalletScreenState extends State<WalletScreen> {
           Navigator.pop(ctx);
           // Allow bottom sheet animation to finish
           Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) _showWithdrawAmountDialog(method);
+            if (mounted) _showWithdrawPlanDialog(method);
           });
         },
       ),
     );
   }
 
-  void _showWithdrawAmountDialog(Map<String, dynamic> method) {
-    final amountController = TextEditingController();
-    bool isLoading = false;
+  void _showWithdrawPlanDialog(Map<String, dynamic> method) {
+    String? selectedPlanId;
     final bankCode = method['bank_code'] ?? '???';
     final phone = method['phone_number'] ?? '???';
 
@@ -795,68 +796,194 @@ class _WalletScreenState extends State<WalletScreen> {
                 const Icon(Icons.monetization_on, color: AppTheme.secondaryPink),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'Retirar a Banco $bankCode\n$phone',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Retirar Tréboles',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      Text(
+                        'A: $bankCode - $phone',
+                        style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'El retiro se procesará con los datos de tu identidad verificada.',
-                  style: TextStyle(color: Colors.white60, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration(
-                      'Monto a Retirar (Tréboles)', Icons.attach_money),
-                ),
-                if (isLoading)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 16),
-                    child: CircularProgressIndicator(color: AppTheme.secondaryPink),
-                  ),
-              ],
+            content: SizedBox(
+              width: double.maxFinite,
+              child: FutureBuilder<List<WithdrawalPlan>>(
+                future: WithdrawalPlanService(
+                  supabaseClient: Supabase.instance.client,
+                ).fetchActivePlans(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 200,
+                      child: Center(
+                        child: CircularProgressIndicator(color: AppTheme.secondaryPink),
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return SizedBox(
+                      height: 100,
+                      child: Center(
+                        child: Text(
+                          'Error: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final plans = snapshot.data ?? [];
+                  if (plans.isEmpty) {
+                    return const SizedBox(
+                      height: 100,
+                      child: Center(
+                        child: Text(
+                          'No hay planes de retiro disponibles',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Selecciona cuántos tréboles quieres retirar:',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      // Plan Cards
+                      ...plans.map((plan) {
+                        final isSelected = selectedPlanId == plan.id;
+                        return GestureDetector(
+                          onTap: () => setState(() => selectedPlanId = plan.id),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.secondaryPink.withOpacity(0.2)
+                                  : Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.secondaryPink
+                                    : Colors.white.withOpacity(0.1),
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                // Icon
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.secondaryPink.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      plan.icon ?? '💸',
+                                      style: const TextStyle(fontSize: 24),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Info
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        plan.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Costo: ${plan.cloversCost} 🍀',
+                                        style: const TextStyle(
+                                          color: Colors.white60,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Amount
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      plan.formattedAmountUsd,
+                                      style: TextStyle(
+                                        color: isSelected ? AppTheme.secondaryPink : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'USD',
+                                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                                // Check
+                                if (isSelected) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.check_circle, color: AppTheme.secondaryPink),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 16),
+                          child: Center(
+                            child: CircularProgressIndicator(color: AppTheme.secondaryPink),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
             actions: [
               TextButton(
-                onPressed: isLoading ? null : () => Navigator.pop(ctx),
-                child: const Text('Cancelar',
-                    style: TextStyle(color: Colors.white60)),
+                onPressed: _isLoading ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
               ),
               ElevatedButton(
-                onPressed: isLoading
+                onPressed: (_isLoading || selectedPlanId == null)
                     ? null
                     : () async {
-                        final amount = int.tryParse(amountController.text);
-                        if (amount == null || amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Monto inválido')));
-                          return;
-                        }
-
-                        setState(() => isLoading = true);
-                        await _processWithdrawal(
-                            context, amount.toDouble(), method);
+                        setState(() => _isLoading = true);
+                        await _processWithdrawalWithPlan(context, selectedPlanId!, method);
                         if (mounted) {
-                          setState(() => isLoading = false);
+                          setState(() => _isLoading = false);
                           Navigator.pop(ctx);
                         }
                       },
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.secondaryPink),
-                child: const Text('Confirmar Retiro',
-                    style: TextStyle(color: Colors.white)),
+                  backgroundColor: AppTheme.secondaryPink,
+                  disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                ),
+                child: const Text('Confirmar Retiro', style: TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -905,6 +1032,57 @@ class _WalletScreenState extends State<WalletScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Error: $e'), backgroundColor: AppTheme.dangerRed));
+      }
+    }
+  }
+
+  /// Process withdrawal using a withdrawal plan ID.
+  /// 
+  /// Sends plan_id to api_withdraw_funds Edge Function which handles:
+  /// - Fetching plan details from withdrawal_plans table
+  /// - Converting USD to VES using exchange rate from app_config
+  /// - Validating clover balance
+  /// - Processing the payment
+  Future<void> _processWithdrawalWithPlan(
+      BuildContext context, String planId, Map<String, dynamic> method) async {
+    try {
+      debugPrint('[WalletScreen] Processing withdrawal with plan: $planId');
+
+      final response = await Supabase.instance.client.functions.invoke(
+        'api_withdraw_funds',
+        body: {
+          'plan_id': planId,
+          'bank': method['bank_code'],
+          'dni': method['dni'],
+          'phone': method['phone_number'],
+        },
+      );
+
+      if (!mounted) return;
+
+      if (response.status != 200) {
+        final errorData = response.data;
+        throw Exception(errorData?['error'] ?? 'Error en el servidor (${response.status})');
+      }
+
+      final data = response.data;
+      if (data?['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('¡Retiro procesado exitosamente!'),
+          backgroundColor: AppTheme.successGreen,
+        ));
+        // Refresh balance
+        await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+      } else {
+        throw Exception(data?['error'] ?? 'Error desconocido');
+      }
+    } catch (e) {
+      debugPrint('[WalletScreen] Withdrawal error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppTheme.dangerRed,
+        ));
       }
     }
   }

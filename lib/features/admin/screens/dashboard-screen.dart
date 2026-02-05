@@ -9,6 +9,7 @@ import 'competitions_management_screen.dart';
 import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 import 'clover_plans_management_screen.dart';
+import 'withdrawal_plans_management_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 
@@ -27,7 +28,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Crear Evento",
     "Competencias",
     "Usuarios",
-    "Planes",
+    "Compras",
+    "Retiros",
     "Reportes", 
     "Configuración" 
   ];
@@ -38,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.emoji_events,
     Icons.people,
     Icons.local_offer,
+    Icons.money_off,
     Icons.bar_chart,
     Icons.settings,
   ];
@@ -104,7 +107,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       const CompetitionsManagementScreen(), // Index 2
       const UserManagementScreen(),         // Index 3
-      const CloverPlansManagementScreen(),  // Index 4 - Planes
+      const CloverPlansManagementScreen(),  // Index 4 - Planes Compra
+      const WithdrawalPlansManagementScreen(),  // Index 5 - Planes Retiro
     ];
 
     return LayoutBuilder(
