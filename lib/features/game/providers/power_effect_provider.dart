@@ -380,24 +380,39 @@ class PowerEffectProvider extends ChangeNotifier {
     final filtered = data.where((effect) {
       final targetId = effect['target_id'];
       final createdAtStr = effect['created_at'];
-      if (_listeningForId == null || targetId != _listeningForId) return false;
       
-       // 2. Event ID Check (New)
+      debugPrint("[DEBUG] 📦 Evento Recibido - ID: ${effect['id']} | Creado en: $createdAtStr | Target: $targetId");
+      
+      // 1. Validar que sea para mí
+      if (_listeningForId == null || targetId != _listeningForId) {
+        debugPrint("   ❌ Rechazado: Target no coincide (esperaba: $_listeningForId, recibió: $targetId)");
+        return false;
+      }
+      
+      // 2. Event ID Check
       if (_listeningForEventId != null) {
         final effectEventId = effect['event_id']?.toString();
         // Strict filtering: If listening for specific event, effect must match.
-        // If effect has 'null' event_id, we might accept it? Or reject?
-        // Assuming offensive powers always have event_id.
         if (effectEventId != null && effectEventId != _listeningForEventId) {
-             return false;
+          debugPrint("   ❌ Rechazado: Event ID no coincide (esperaba: $_listeningForEventId, recibió: $effectEventId)");
+          return false;
+        }
+      }
+      
+      // 3. Validar que sea reciente (evitar animaciones al entrar)
+      if (_sessionStartTime != null && createdAtStr != null) {
+        final createdAt = DateTime.parse(createdAtStr);
+        final sessionStart = _sessionStartTime!;
+        // Increased tolerance to avoid clock skew issues
+        const tolerance = Duration(hours: 2);
+        final adjustedSessionStart = sessionStart.subtract(tolerance);
+        debugPrint("   🕐 Comparación de tiempo: Evento=$createdAt vs Sesión=$sessionStart (tolerancia: 2h)");
+        if (createdAt.isBefore(adjustedSessionStart)) {
+          debugPrint("   ⚠️ Evento ignorado por ser ANTIGUO (${adjustedSessionStart.difference(createdAt).inSeconds}s antes del margen)");
+          return false;
         }
       }
 
-      if (_sessionStartTime != null && createdAtStr != null) {
-         final createdAt = DateTime.parse(createdAtStr);
-         final adjustedSessionStart = _sessionStartTime!.subtract(const Duration(seconds: 5));
-         if (createdAt.isBefore(adjustedSessionStart)) return false;
-      }
       return true;
     }).toList();
 

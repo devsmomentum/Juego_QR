@@ -13,6 +13,7 @@ class Scenario {
   final DateTime? date;
   final bool isCompleted; // Nueva propiedad
   final String type;
+  final int currentParticipants;
 
   const Scenario({
     required this.id,
@@ -29,6 +30,7 @@ class Scenario {
     this.date,
     this.isCompleted = false,
     this.type = 'on_site',
+    this.currentParticipants = 0,
   });
 
   factory Scenario.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,7 @@ class Scenario {
       date: json['date'] != null ? DateTime.parse(json['date']) : null,
       isCompleted: json['is_completed'] ?? false,
       type: json['type'] ?? 'on_site',
+      currentParticipants: (json['current_participants'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -66,6 +69,7 @@ class Scenario {
       'date': date?.toIso8601String(),
       'is_completed': isCompleted,
       'type': type,
+      'current_participants': currentParticipants,
     };
   }
 }

@@ -16,6 +16,7 @@ import 'winner_celebration_screen.dart'; // Import for celebration screen
 // Duplicate import removed (animated_cyber_background already imported above)
 import '../../../shared/widgets/exit_protection_wrapper.dart'; // Protection
 import '../services/clue_navigator_service.dart'; // New Service
+import 'puzzle_screen.dart';
 
 
 class CluesScreen extends StatefulWidget {
@@ -320,6 +321,16 @@ class _CluesScreenState extends State<CluesScreen> {
                                   final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
                                   final gameProvider = Provider.of<GameProvider>(context, listen: false);
                                   
+                                  // --- MODO ESPECTADOR: Ver solo info ---
+                                  if (player?.role == 'spectator') {
+                                    // Navegar a la pantalla de puzzle en modo solo lectura
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
+                                    );
+                                    return;
+                                  }
+
                                   if ((player?.lives ?? 0) <= 0 || gameProvider.lives <= 0) {
                                      Navigator.push(
                                         context, 

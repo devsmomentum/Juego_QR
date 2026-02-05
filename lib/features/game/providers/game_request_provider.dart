@@ -11,6 +11,8 @@ enum SubmitRequestResult {
   alreadyRequested,
   /// El usuario ya es jugador de este evento
   alreadyPlayer,
+  /// El evento está lleno (límite de 30)
+  eventFull,
   /// Error al enviar la solicitud
   error,
 }
@@ -28,12 +30,20 @@ class GameRequestProvider extends ChangeNotifier {
   /// 
   /// Verifica primero si el usuario ya es un game_player o ya tiene una solicitud.
   /// Retorna el resultado de la operación.
-  Future<SubmitRequestResult> submitRequest(Player player, String eventId) async {
+  Future<SubmitRequestResult> submitRequest(Player player, String eventId, int maxPlayers) async {
     try {
       _lastError = null; // Reset error
       // IMPORTANTE: Usar player.userId para consultas de BD, no player.id (que puede ser gamePlayerId)
       final String userId = player.userId;
       debugPrint('[REQUEST_SUBMIT] 🎯 START: userId=$userId, eventId=$eventId');
+
+      // PASO 0: Verificar si el evento está lleno
+      debugPrint('[REQUEST_SUBMIT] 🔍 Step 0: Checking if event is full...');
+      final participantCount = await getParticipantCount(eventId);
+      if (participantCount >= maxPlayers) {
+        debugPrint('[REQUEST_SUBMIT] ⚠️ RESULT: Event is full ($participantCount/$maxPlayers). Aborting.');
+        return SubmitRequestResult.eventFull;
+      }
 
       // PASO 1: Verificar si ya es un game_player para este evento
       debugPrint('[REQUEST_SUBMIT] 🔍 Step 1: Checking if already game_player...');
@@ -240,6 +250,23 @@ void clearLocalRequests() {
     } catch (e) {
       debugPrint('Error rejecting request: $e');
       rethrow;
+    }
+  }
+
+  /// Cuenta el número de participantes activos en un evento.
+  Future<int> getParticipantCount(String eventId) async {
+    try {
+      final response = await _supabase
+          .from('game_players')
+          .select('id')
+          .eq('event_id', eventId)
+          .neq('status', 'spectator')
+          .count(CountOption.exact);
+      
+      return response.count;
+    } catch (e) {
+      debugPrint('Error counting participants: $e');
+      return 0;
     }
   }
 }

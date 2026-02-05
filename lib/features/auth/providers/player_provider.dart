@@ -42,6 +42,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   StreamSubscription? _gamePlayersSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _profileSubscription;
   Timer? _pollingTimer;
+  bool _isSpectatorSession = false; // NEW: Flag for spectator mode choice
   
   List<PowerItem> _shopItems = PowerItem.getShopItems();
   
@@ -288,6 +289,55 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
+  /// Cambia el rol localmente (usado para Modo Espectador).
+  void setSpectatorRole(bool isSpectator) {
+    _isSpectatorSession = isSpectator;
+    if (_currentPlayer != null) {
+      _currentPlayer = _currentPlayer!.copyWith(role: isSpectator ? 'spectator' : 'user');
+      notifyListeners();
+    }
+  }
+
+  /// Registra al espectador en el evento como 'ghost player' con status spectator.
+  /// Esto le permite tener un game_player_id para comprar y sabotear.
+  Future<void> joinAsSpectator(String eventId) async {
+    if (_currentPlayer == null) return;
+    try {
+      final userId = _currentPlayer!.userId;
+      
+      // 1. Verificar si ya tiene un record en este evento
+      final existing = await _supabase
+          .from('game_players')
+          .select('id, status')
+          .eq('user_id', userId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+      
+      if (existing == null) {
+        // 2. Crear un ghost player
+        await _supabase.from('game_players').insert({
+          'user_id': userId,
+          'event_id': eventId,
+          'status': 'spectator',
+          'lives': 0, // No juega, no tiene vidas
+        });
+        debugPrint('PlayerProvider: Ghost player created for spectator $userId');
+      } else if (existing['status'] == 'pending' || existing['status'] == 'rejected') {
+        // Si el usuario tenía una solicitud pendiente o rechazada, le permitimos ser espectador
+        await _supabase
+            .from('game_players')
+            .update({'status': 'spectator'})
+            .eq('id', existing['id']);
+        debugPrint('PlayerProvider: Updated status to spectator for user $userId');
+      }
+      
+      // 3. Refrescar perfil para cargar el gamePlayerId
+      await refreshProfile(eventId: eventId);
+    } catch (e) {
+      debugPrint('PlayerProvider: Error joining as spectator: $e');
+    }
+  }
+
   // ============================================================
   // INVENTORY OPERATIONS (delegated to InventoryService)
   // ============================================================
@@ -323,13 +373,25 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
 
     try {
-      final result = await _inventoryService.purchaseItem(
-        userId: _currentPlayer!.userId,
-        eventId: eventId,
-        itemId: itemId,
-        cost: cost,
-        isPower: isPower,
-      );
+      final PurchaseResult result;
+      
+      if (_isSpectatorSession) {
+        // Los espectadores usan el flujo manual para bypass de RPC restrictivo
+        result = await _inventoryService.purchaseItemAsSpectator(
+          userId: _currentPlayer!.userId,
+          eventId: eventId,
+          itemId: itemId,
+          cost: cost,
+        );
+      } else {
+        result = await _inventoryService.purchaseItem(
+          userId: _currentPlayer!.userId,
+          eventId: eventId,
+          itemId: itemId,
+          cost: cost,
+          isPower: isPower,
+        );
+      }
 
       if (result.success) {
         _currentPlayer!.coins -= cost;
@@ -521,9 +583,14 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
 
       // Prepare rivals list for blur_screen
       List<RivalInfo>? rivals;
-      String? eventId;
+      
+      // Determine Event ID (Critical for Spectators and Broadcasts)
+      String? eventId = _currentPlayer?.currentEventId;
+      if (eventId == null && gameProvider != null) {
+         eventId = gameProvider.currentEventId;
+      }
+
       if (powerSlug == 'blur_screen' && gameProvider != null) {
-        eventId = gameProvider.currentEventId;
         if (eventId != null && gameProvider.leaderboard.isEmpty) {
           try {
             await gameProvider.fetchLeaderboard();
@@ -546,6 +613,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         powerSlug: powerSlug,
         rivals: rivals,
         eventId: eventId,
+        isSpectator: _isSpectatorSession,
         isAlreadyActive: isAlreadyActive, 
       );
       
@@ -712,16 +780,22 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
       newPlayer.gamePlayerId = gamePlayerId;
       newPlayer.currentEventId = fetchedEventId;
 
+      // Apply spectator session override
+      Player finalPlayer = newPlayer;
+      if (_isSpectatorSession) {
+        finalPlayer = finalPlayer.copyWith(role: 'spectator');
+      }
+
       // Check ban BEFORE notifying a "valid" state
-      if (newPlayer.status == PlayerStatus.banned) {
+      if (finalPlayer.status == PlayerStatus.banned) {
          debugPrint("BANNED user detected in realtime. Logging out...");
          _banMessage = 'Has sido baneado por un administrador.';
          await logout(clearBanMessage: false);
          return; 
       }
 
-      _currentPlayer = newPlayer;
-      debugPrint('🔍 PlayerProvider: notifyListeners(). gamePlayerId: ${_currentPlayer?.gamePlayerId}, eventId: ${_currentPlayer?.currentEventId}');
+      _currentPlayer = finalPlayer;
+      debugPrint('🔍 PlayerProvider: notifyListeners(). gamePlayerId: ${_currentPlayer?.gamePlayerId}, eventId: ${_currentPlayer?.currentEventId}, role: ${_currentPlayer?.role}');
       notifyListeners();
 
       // Check pending penalties from previous disconnections

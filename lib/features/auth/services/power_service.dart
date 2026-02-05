@@ -80,6 +80,7 @@ class PowerService {
     required String powerSlug,
     List<RivalInfo>? rivals,
     String? eventId,
+    bool isSpectator = false,
     bool isAlreadyActive = false,
   }) async {
     try {
@@ -144,6 +145,46 @@ class PowerService {
       }
       // 5. OTROS PODERES
       else {
+        if (isSpectator) {
+           // MODO ESPECTADOR: Bypass RPC y ejecutar efecto directo insertando en active_powers
+           debugPrint('PowerService: 👻 Spectator Sabotage: $powerSlug against $targetGamePlayerId');
+           
+           // A. Descontar munición manualmente
+           final paid = await decrementPowerBySlug(
+             powerSlug: powerSlug,
+             gamePlayerId: casterGamePlayerId,
+           );
+           
+           if (!paid) {
+             return PowerUseResponse.error('No tienes munición para este sabotaje');
+           }
+
+           // B. Insertar efecto directo
+           final now = DateTime.now().toUtc();
+           final duration = await getPowerDuration(powerSlug: powerSlug);
+           final expiresAt = now.add(duration).toIso8601String();
+
+           final powerRes = await _supabase
+               .from('powers')
+               .select('id')
+               .eq('slug', powerSlug)
+               .maybeSingle();
+
+           if (powerRes != null) {
+              await _supabase.from('active_powers').insert({
+                'target_id': targetGamePlayerId,
+                'caster_id': casterGamePlayerId,
+                'power_id': powerRes['id'],
+                'power_slug': powerSlug,
+                'expires_at': expiresAt,
+                if (eventId != null) 'event_id': eventId,
+              });
+              return PowerUseResponse.success();
+           } else {
+              return PowerUseResponse.error('Poder no encontrado');
+           }
+        }
+
         debugPrint('PowerService: ⚡ Executing RPC for $powerSlug');
         debugPrint('   Caster: $casterGamePlayerId');
         debugPrint('   Target: $targetGamePlayerId');

@@ -27,9 +27,11 @@ import '../widgets/scenario_countdown.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/services/video_preload_service.dart';
 import 'winner_celebration_screen.dart';
+import 'spectator_mode_screen.dart'; // ADDED
 import '../services/game_access_service.dart'; // NEW
 import 'game_mode_selector_screen.dart';
 import '../mappers/scenario_mapper.dart'; // NEW
+import '../../../core/enums/user_role.dart';
 import '../../social/screens/profile_screen.dart'; // For navigation
 import '../../social/screens/wallet_screen.dart'; // For wallet navigation
 
@@ -55,6 +57,151 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
   bool _isLoading = true;
   bool _isProcessing = false; // Prevents double taps
   int _navIndex = 1; // Default to Escenarios (index 1)
+
+  // The default user role for scenario selection
+  UserRole get role => UserRole.player;
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppTheme.dangerRed.withOpacity(0.5)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: AppTheme.dangerRed),
+            SizedBox(width: 12),
+            Text('Cerrar Sesión', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro que deseas cerrar sesión?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.dangerRed,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+              await playerProvider.logout();
+              if (mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text('SALIR'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: AppTheme.accentGold),
+            const SizedBox(width: 12),
+            const Text('Conócenos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'MapHunter es una experiencia de búsqueda del tesoro con realidad aumentada. '
+          '¡Explora, resuelve pistas y compite por premios increíbles!',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTermsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.description_outlined, color: AppTheme.accentGold),
+            const SizedBox(width: 12),
+            const Text('Términos y Condiciones', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Al utilizar MapHunter, aceptas nuestros términos de servicio y política de privacidad. '
+            'Para más información, visita nuestro sitio web.',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSupportDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.support_agent_outlined, color: AppTheme.accentGold),
+            const SizedBox(width: 12),
+            const Text('Soporte', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          '¿Necesitas ayuda? Contáctanos a través de nuestro correo de soporte: soporte@maphunter.com',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -144,139 +291,6 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
     super.dispose();
   }
 
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        elevation: 20,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppTheme.primaryPurple, width: 2),
-        ),
-        title: Column(
-          children: [
-            const Icon(Icons.logout, size: 40, color: AppTheme.accentGold),
-            const SizedBox(height: 12),
-            const Text(
-              'OPCIONES DE SALIDA',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white, 
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
-          '¿Deseas cambiar de modo de juego o cerrar sesión completamente?',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        actions: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.swap_horiz, size: 18),
-                label: const Text('CAMBIAR MODO'),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppTheme.accentGold),
-                  foregroundColor: AppTheme.accentGold,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.pushReplacement(
-                    context, 
-                    MaterialPageRoute(builder: (_) => const GameModeSelectorScreen())
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.power_settings_new, size: 18, color: Colors.white),
-                label: const Text('CERRAR SESIÓN'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.dangerRed,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 5,
-                ),
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await Provider.of<PlayerProvider>(context, listen: false).logout();
-                },
-              ),
-               const SizedBox(height: 16),
-              TextButton(
-                 onPressed: () => Navigator.pop(ctx),
-                 style: TextButton.styleFrom(foregroundColor: Colors.white38),
-                 child: const Text('CANCELAR', style: TextStyle(letterSpacing: 2)),
-              )
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Acerca de MapHunter', style: TextStyle(color: Colors.white)),
-        content: const SingleChildScrollView(
-          child: Text(
-            "MapHunter es una experiencia de juego inmersiva que combina la realidad con el mundo digital.\n\n"
-            "Conócenos:\n"
-            "Somos un equipo apasionado por la tecnología y la aventura. Nuestra misión es transformar espacios cotidianos en escenarios de juego emocionantes.\n\n"
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showTermsDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Términos y Condiciones', style: TextStyle(color: Colors.white)),
-        content: const SingleChildScrollView(
-          child: Text(
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\n\n"
-            "1. Reglas del Juego...\n"
-            "2. Conducta del Jugador...\n"
-            "3. Privacidad...",
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
-
 
 
 
@@ -302,10 +316,11 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
     });
 
     try {
+      // Mostrar diálogo de carga
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+        builder: (ctx) => const Center(child: CircularProgressIndicator(color: AppTheme.accentGold)),
       );
 
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
@@ -320,6 +335,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         scenario: scenario,
         playerProvider: playerProvider,
         requestProvider: requestProvider,
+        role: role,
       );
 
       if (!mounted) return;
@@ -434,15 +450,213 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           break;
 
         case AccessResultType.spectatorAllowed:
-          // Spectator mode - navigate to read-only game view
-          // TODO: Implement SpectatorScreen when Phase 2 is complete
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Modo Espectador - Próximamente'),
-              backgroundColor: Colors.blue,
+          // Si el usuario quería entrar como jugador (rol default) pero el servicio
+          // devolvió espectador, significa que el evento está lleno (u otra razón).
+          // Mostramos diálogo de confirmación.
+          if (role == UserRole.player) {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Dialog(
+                  backgroundColor: Colors.transparent,
+                  insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF1A1F3A).withOpacity(0.95),
+                          const Color(0xFF0A0E27).withOpacity(0.95),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: AppTheme.secondaryPink.withOpacity(0.5),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.secondaryPink.withOpacity(0.15),
+                          blurRadius: 25,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header area with a subtle glow
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: AppTheme.secondaryPink.withOpacity(0.05),
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                              ),
+                            ),
+                            Column(
+                              children: [
+                                const SizedBox(height: 20),
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppTheme.secondaryPink,
+                                        AppTheme.secondaryPink.withOpacity(0.7),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.secondaryPink.withOpacity(0.4),
+                                        blurRadius: 15,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.group_off_rounded,
+                                    color: Colors.white,
+                                    size: 36,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        
+                        const Text(
+                          '¡EVENTO LLENO!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Content
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 30),
+                          child: Column(
+                            children: [
+                              Text(
+                                result.message ?? 'El cupo de jugadores activos (${scenario.maxPlayers}) ha sido alcanzado.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No te preocupes, aún puedes vivir la experiencia desde el modo espectador.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                  height: 1.6,
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              
+                              // Main Button
+                              SizedBox(
+                                width: double.infinity,
+                                height: 56,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [AppTheme.secondaryPink, Color(0xFFFF4081)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.secondaryPink.withOpacity(0.35),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.visibility_rounded, color: Colors.white),
+                                        SizedBox(width: 12),
+                                        Text(
+                                          'MODO ESPECTADOR',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Cancel Button
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.white38,
+                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                                ),
+                                child: const Text(
+                                  'VOLVER AL INICIO',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+
+            if (confirm != true) return;
+          }
+
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SpectatorModeScreen(eventId: scenario.id),
             ),
           );
           break;
+
+
       }
     } catch (e, stackTrace) {
       debugPrint('ScenariosScreen: CRITICAL ERROR: $e');
@@ -1030,9 +1244,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                                       // Background Image
                                                       (scenario.imageUrl
                                                                   .isNotEmpty &&
-                                                              scenario.imageUrl
-                                                                  .startsWith(
-                                                                      'http'))
+                                                               scenario.imageUrl
+                                                                   .startsWith(
+                                                                       'http'))
                                                           ? Image.network(
                                                               scenario.imageUrl,
                                                               fit: BoxFit.cover,
@@ -1150,7 +1364,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                                                       Text(
                                                                         scenario.isCompleted 
                                                                             ? 'FINALIZADA'
-                                                                            : 'MAX ${scenario.maxPlayers}',
+                                                                            : '${scenario.currentParticipants} / ${scenario.maxPlayers}',
                                                                         style: const TextStyle(
                                                                           color: Colors.white,
                                                                           fontWeight: FontWeight.bold,
@@ -1185,6 +1399,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                                                 color: Colors
                                                                     .white70,
                                                                 fontSize: 12,
+                                                                height: 1.2,
                                                               ),
                                                               maxLines: 2,
                                                               overflow:
@@ -1198,13 +1413,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                                                     null &&
                                                                 !scenario
                                                                     .isCompleted)
-                                                              Center(
-                                                                  child: ScenarioCountdown(
-                                                                      targetDate:
-                                                                          scenario.date!)),
+                                                               Center(
+                                                                   child: ScenarioCountdown(
+                                                                       targetDate:
+                                                                           scenario.date!)),
 
-                                                            const SizedBox(
-                                                                height: 10),
+                                                            const SizedBox(height: 10),
+
                                                             SizedBox(
                                                               width: double
                                                                   .infinity,
@@ -1226,6 +1441,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                                                     style: const TextStyle(fontWeight: FontWeight.bold)),
                                                               ),
                                                             ),
+
                                                           ],
                                                         ),
                                                       ),
@@ -1253,30 +1469,6 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         ),
       ),
     ),
-      ),
-    );
-  }
-  void _showSupportDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Soporte y Mantenimiento', style: TextStyle(color: Colors.white)),
-        content: const SingleChildScrollView(
-          child: Text(
-            "Si tienes algún problema o sugerencia, contáctanos:\n\n"
-            "📧 Email: soporte@maphunter.com\n"
-            "📞 Teléfono: +58 xxx xxx xxx\n\n"
-            "Estamos disponibles de Lunes a Viernes, 9:00 AM - 5:00 PM.",
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cerrar'),
-          ),
-        ],
       ),
     );
   }
