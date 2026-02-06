@@ -1,189 +1,336 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 serve(async (req) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    // Use Service Role for safe DB operations (balance updates)
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    );
+
+    // Authenticate User properly
+    const authToken = req.headers.get("Authorization");
+    if (!authToken) throw new Error("Missing Authorization header");
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseAdmin.auth.getUser(authToken.replace("Bearer ", ""));
+
+    if (userError || !user) {
+      throw new Error("Unauthorized");
     }
+
+    // CHANGED: Accept plan_id instead of raw amount (security: price validated server-side)
+    const { plan_id, bank, dni, phone, cta } = await req.json();
+
+    if (!plan_id || !bank || !dni || (!phone && !cta)) {
+      throw new Error(
+        "Missing required fields: plan_id, bank, dni, and (phone or cta)",
+      );
+    }
+
+    console.log(
+      `[api_withdraw_funds] Processing withdrawal for user ${user.id}, plan_id: ${plan_id}`,
+    );
+
+    // 1. FETCH AND VALIDATE WITHDRAWAL PLAN FROM DATABASE
+    const { data: plan, error: planError } = await supabaseAdmin
+      .from("withdrawal_plans")
+      .select("id, name, clovers_cost, amount_usd, is_active")
+      .eq("id", plan_id)
+      .single();
+
+    if (planError) {
+      console.error("Plan fetch error:", planError);
+      throw new Error(`Plan inválido: ${planError.message}`);
+    }
+
+    if (!plan) {
+      throw new Error("Plan de retiro no encontrado");
+    }
+
+    if (!plan.is_active) {
+      throw new Error("El plan de retiro seleccionado no está disponible");
+    }
+
+    // CRITICAL: Use values from DATABASE, not from client
+    const cloversCost = plan.clovers_cost;
+    const amountUsd = plan.amount_usd;
+
+    console.log(
+      `[api_withdraw_funds] Plan validated: ${plan.name}, Clovers Cost: ${cloversCost}, Amount: $${amountUsd} USD`,
+    );
+
+    // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
+    const { data: configData, error: configError } = await supabaseAdmin
+      .from("app_config")
+      .select("value")
+      .eq("key", "bcv_exchange_rate")
+      .single();
+
+    if (configError || !configData) {
+      console.error("Exchange rate fetch error:", configError);
+      throw new Error(
+        "No se pudo obtener la tasa de cambio. Contacte a soporte.",
+      );
+    }
+
+    // Parse the exchange rate (stored as jsonb string like "56.50")
+    const bcvRate = parseFloat(configData.value);
+    if (isNaN(bcvRate) || bcvRate <= 0) {
+      throw new Error("Tasa de cambio inválida configurada en el sistema");
+    }
+
+    // 3. CALCULATE VES AMOUNT
+    const amountVes = amountUsd * bcvRate;
+    console.log(
+      `[api_withdraw_funds] Exchange: $${amountUsd} USD × ${bcvRate} = ${amountVes.toFixed(2)} VES`,
+    );
+
+    // 4. CHECK & DEDUCT CLOVERS (using clovers_cost from plan)
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("clovers")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      throw new Error("Profile not found");
+    }
+
+    if (profile.clovers < cloversCost) {
+      throw new Error(
+        `Saldo insuficiente: Tienes ${profile.clovers} tréboles, necesitas ${cloversCost}`,
+      );
+    }
+
+    // Deduct clovers immediately
+    const { error: deductError } = await supabaseAdmin
+      .from("profiles")
+      .update({ clovers: profile.clovers - cloversCost })
+      .eq("id", user.id);
+
+    if (deductError) throw new Error("Error al descontar tréboles");
+
+    console.log(
+      `[api_withdraw_funds] Deducted ${cloversCost} clovers from user. New balance: ${profile.clovers - cloversCost}`,
+    );
+
+    // 5. CALL PAGO A PAGO WITH VES AMOUNT
+    const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY")!;
+    const PAGO_PAGO_WITHDRAW_URL = Deno.env.get("PAGO_PAGO_WITHDRAW_URL")!;
+
+    // NOTE: Keep DNI and Phone as-is - Pago a Pago expects exact format
+    // DNI: "V19400121" (with prefix)
+    // Phone: "04242382511" (with leading zero)
+    console.log(
+      `[api_withdraw_funds] Sending Withdrawal: DNI=${dni}, Phone=${phone}, Bank=${bank}, Amount=${amountVes.toFixed(2)} VES`,
+    );
+
+    // IMPORTANT: Only send the 4 required fields for Pago Móvil
+    // Do NOT include null/undefined fields like 'cta' as they may cause errors
+    const payload: Record<string, unknown> = {
+      amount: amountVes, // VES amount (converted from USD)
+      bank: bank,
+      phone: phone, // Keep as-is with leading zero
+      dni: dni,     // Keep as-is with prefix (V/E/J/P/G)
+    };
+
+    let apiSuccess = false;
+    let apiResponseData: Record<string, unknown> | null = null;
 
     try {
-        // Use Service Role for safe DB operations (balance updates)
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
+      const response = await fetch(PAGO_PAGO_WITHDRAW_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          pago_pago_api: pagoApiKey,
+        },
+        body: JSON.stringify(payload),
+      });
 
-        // Authenticate User properly
-        const authToken = req.headers.get('Authorization')
-        if (!authToken) throw new Error("Missing Authorization header")
-
-        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(authToken.replace('Bearer ', ''))
-
-        if (userError || !user) {
-            throw new Error("Unauthorized")
-        }
-
-        const { amount, bank, dni, phone, cta } = await req.json()
-
-        if (!amount || !bank || !dni || (!phone && !cta)) {
-            throw new Error("Missing required fields: amount, bank, dni, and (phone or cta)")
-        }
-
-        console.log(`Processing withdrawal request for user ${user.id} of amount ${amount}`)
-
-        // 1. CHECK & DEDUCT BALANCE (Transactional-like)
-        const { data: profile, error: profileError } = await supabaseAdmin
-            .from('profiles')
-            .select('clovers')
-            .eq('id', user.id)
-            .single()
-
-        if (profileError || !profile) {
-            throw new Error("Profile not found")
-        }
-
-        if (profile.clovers < amount) {
-            throw new Error(`Insufficient funds: Has ${profile.clovers}, needs ${amount}`)
-        }
-
-        // Deduct funds immediately
-        const { error: deductError } = await supabaseAdmin
-            .from('profiles')
-            .update({ clovers: profile.clovers - amount })
-            .eq('id', user.id)
-
-        if (deductError) throw new Error("Failed to deduct funds")
-
-        // 2. CALL PAGO A PAGO
-        const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')!
-        const PAGO_PAGO_WITHDRAW_URL = Deno.env.get('PAGO_PAGO_WITHDRAW_URL')!
-
-        // Sanitize Data
-        const cleanDni = dni.replace(/\D/g, ''); // Remove 'V', 'E', '-' etc. return only numbers
-        const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
-
-        console.log(`Sending Withdrawal: DNI=${cleanDni} (Raw: ${dni}), Phone=${cleanPhone}, Bank=${bank}, Amount=${amount}`)
-
-        const payload = {
-            amount: amount,
-            bank: bank,
-            dni: cleanDni,
-            phone: cleanPhone,
-            cta: cta
-            // Add other mandatory fields if any from docs, e.g. bank_account_type if needed
-        }
-
-        let apiSuccess = false
-        let apiResponseData = null
-
-        try {
-            const response = await fetch(PAGO_PAGO_WITHDRAW_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'pago_pago_api': pagoApiKey
-                },
-                body: JSON.stringify(payload)
-            })
-
-            apiResponseData = await response.json()
-            apiSuccess = response.ok && apiResponseData.success
-
-        } catch (netError) {
-            console.error("Network error calling Pago a Pago:", netError)
-            apiSuccess = false
-        }
-
-        // 3. HANDLE FAILURE -> REFUND
-        if (!apiSuccess) {
-            console.error("Withdrawal Failed. Refunding user...", apiResponseData)
-
-            // Fetch fresh balance to be safe regarding concurrency (simple approach)
-            const { data: currentProfile } = await supabaseAdmin
-                .from('profiles')
-                .select('clovers')
-                .eq('id', user.id)
-                .single()
-
-            if (currentProfile) {
-                await supabaseAdmin
-                    .from('profiles')
-                    .update({ clovers: currentProfile.clovers + amount })
-                    .eq('id', user.id)
-
-                // Log Refund in Wallet Ledger
-                const { error: refundLedgerError } = await supabaseAdmin.from('wallet_ledger').insert({
-                    user_id: user.id,
-                    amount: amount, // Positive for refund
-                    description: "Reembolso por fallo en retiro",
-                    order_id: null,
-                    metadata: apiResponseData
-                })
-                
-                if (refundLedgerError) {
-                    console.error("CRITICAL: Failed to log refund in wallet_ledger:", refundLedgerError)
-                }
-            }
-
-            const failureMsg = apiResponseData?.message ?? 
-                             JSON.stringify(apiResponseData) ?? 
-                             "Withdrawal failed at payment provider (No detail).";
-            throw new Error(`Withdrawal failed: ${failureMsg}. Funds refunded.`)
-        }
-
-        // 4. LOG SUCCESSFUL TRANSACTION
-        await supabaseAdmin.from('payment_transactions').insert({
-            user_id: user.id,
-            amount: amount,
-            type: 'WITHDRAWAL', // Ensure this enum/type exists or usage string
-            status: 'COMPLETED',
-            provider_data: apiResponseData,
-            order_id: apiResponseData.data?.transaction_id || `WD-${Date.now()}`
-        })
-
-        // 5. LOG IN WALLET LEDGER
-        const referenceInfo = apiResponseData.data?.details?.external_reference || apiResponseData.data?.reference || 'N/A';
-        const transactionId = apiResponseData.data?.transaction_id;
-        
-        // Ensure we don't pass a text ID if the DB expects UUID for order_id. 
-        // We'll store the transaction ID in the description/metadata to be safe.
-        const { error: ledgerError } = await supabaseAdmin.from('wallet_ledger').insert({
-            user_id: user.id,
-            amount: -amount, // Negative for withdrawal
-            description: `Retiro de Fondos - Ref: ${referenceInfo} (ID: ${transactionId})`,
-            order_id: null, // Safest option without knowing schema. Metadata has the details.
-            metadata: apiResponseData
-        })
-
-        if (ledgerError) {
-            console.error("CRITICAL: Failed to log withdrawal in wallet_ledger:", ledgerError)
-            // Optional: return warning or part of the error? 
-            // For now, we just log it so we don't fail the client response since the money is already moved.
-            return new Response(JSON.stringify({ 
-                success: true, 
-                data: apiResponseData,
-                warning: "Transaction completed but ledger update failed. Contact support."
-            }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200, // Still 200 because money was moved
-            })
-        }
-
-        return new Response(JSON.stringify({ success: true, data: apiResponseData }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-        })
-
-    } catch (error) {
-        console.error("Withdrawal flow error:", error)
-        return new Response(JSON.stringify({ error: error.message, success: false }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
-        })
+      apiResponseData = await response.json() as Record<string, unknown>;
+      
+      // Log the full response for debugging
+      console.log(`[api_withdraw_funds] Pago a Pago Response:`, JSON.stringify(apiResponseData));
+      
+      // IMPROVED SUCCESS DETECTION:
+      // 1. Check for transaction_id as definitive proof of success
+      // 2. Pago a Pago may return success:false but still process the payment
+      const dataObj = apiResponseData?.data as Record<string, unknown> | undefined;
+      const hasTransactionId = !!dataObj?.transaction_id;
+      const hasCompletedStatus = dataObj?.status === "completed";
+      const explicitSuccess = apiResponseData?.success === true;
+      
+      // Consider success if we have a transaction_id OR explicit success
+      apiSuccess = response.ok && (hasTransactionId || explicitSuccess || hasCompletedStatus);
+      
+      console.log(`[api_withdraw_funds] Success evaluation: response.ok=${response.ok}, hasTransactionId=${hasTransactionId}, hasCompletedStatus=${hasCompletedStatus}, explicitSuccess=${explicitSuccess}, FINAL=${apiSuccess}`);
+      
+    } catch (netError) {
+      console.error("Network error calling Pago a Pago:", netError);
+      apiSuccess = false;
     }
-})
+
+    // 6. HANDLE FAILURE -> REFUND CLOVERS
+    if (!apiSuccess) {
+      console.error("Withdrawal Failed. Refunding clovers...", apiResponseData);
+
+      // Fetch fresh balance to be safe regarding concurrency
+      const { data: currentProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("clovers")
+        .eq("id", user.id)
+        .single();
+
+      if (currentProfile) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ clovers: currentProfile.clovers + cloversCost })
+          .eq("id", user.id);
+
+        // Log Refund in Wallet Ledger
+        const { error: refundLedgerError } = await supabaseAdmin
+          .from("wallet_ledger")
+          .insert({
+            user_id: user.id,
+            amount: cloversCost, // Positive for refund (clovers returned)
+            description: `Reembolso por fallo en retiro - Plan: ${plan.name}`,
+            order_id: null,
+            metadata: {
+              plan_id: plan.id,
+              plan_name: plan.name,
+              amount_usd: amountUsd,
+              amount_ves: amountVes,
+              bcv_rate: bcvRate,
+              api_response: apiResponseData,
+            },
+          });
+
+        if (refundLedgerError) {
+          console.error(
+            "CRITICAL: Failed to log refund in wallet_ledger:",
+            refundLedgerError,
+          );
+        }
+      }
+
+      const failureMsg =
+        apiResponseData?.message ??
+        JSON.stringify(apiResponseData) ??
+        "Withdrawal failed at payment provider (No detail).";
+      throw new Error(`Retiro fallido: ${failureMsg}. Tréboles reembolsados.`);
+    }
+
+    // 7. LOG SUCCESSFUL TRANSACTION
+    // Safe access to nested data properties
+    const responseData = apiResponseData?.data as Record<string, unknown> | undefined;
+    const detailsData = responseData?.details as Record<string, unknown> | undefined;
+    
+    await supabaseAdmin.from("payment_transactions").insert({
+      user_id: user.id,
+      amount: amountVes,
+      type: "WITHDRAWAL",
+      status: "COMPLETED",
+      provider_data: {
+        ...apiResponseData,
+        plan_id: plan.id,
+        plan_name: plan.name,
+        clovers_cost: cloversCost,
+        amount_usd: amountUsd,
+        bcv_rate: bcvRate,
+      },
+      order_id: responseData?.transaction_id || `WD-${Date.now()}`,
+    });
+
+    // 8. LOG IN WALLET LEDGER
+    const referenceInfo =
+      detailsData?.external_reference ||
+      responseData?.reference ||
+      "N/A";
+    const transactionId = responseData?.transaction_id;
+
+    const { error: ledgerError } = await supabaseAdmin
+      .from("wallet_ledger")
+      .insert({
+        user_id: user.id,
+        amount: -cloversCost, // Negative for withdrawal (clovers spent)
+        description: `Retiro: ${plan.name} - $${amountUsd} USD (${amountVes.toFixed(2)} VES) - Ref: ${referenceInfo}`,
+        order_id: null,
+        metadata: {
+          plan_id: plan.id,
+          plan_name: plan.name,
+          clovers_cost: cloversCost,
+          amount_usd: amountUsd,
+          amount_ves: amountVes,
+          bcv_rate: bcvRate,
+          transaction_id: transactionId,
+          api_response: apiResponseData,
+        },
+      });
+
+    if (ledgerError) {
+      console.error(
+        "CRITICAL: Failed to log withdrawal in wallet_ledger:",
+        ledgerError,
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: apiResponseData,
+          warning:
+            "Transaction completed but ledger update failed. Contact support.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
+    console.log(
+      `[api_withdraw_funds] Withdrawal successful for plan ${plan.name}`,
+    );
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          ...apiResponseData,
+          plan: {
+            id: plan.id,
+            name: plan.name,
+            clovers_cost: cloversCost,
+            amount_usd: amountUsd,
+            amount_ves: amountVes,
+          },
+        },
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
+  } catch (error) {
+    console.error("Withdrawal flow error:", error);
+    return new Response(
+      JSON.stringify({ error: error.message, success: false }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      },
+    );
+  }
+});
