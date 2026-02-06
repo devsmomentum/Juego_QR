@@ -2,7 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/transaction_item.dart';
 
 abstract class ITransactionRepository {
-  Future<List<TransactionItem>> getMyTransactions();
+  Future<List<TransactionItem>> getMyTransactions({int? limit});
 }
 
 class SupabaseTransactionRepository implements ITransactionRepository {
@@ -12,12 +12,18 @@ class SupabaseTransactionRepository implements ITransactionRepository {
       : _supabase = supabase ?? Supabase.instance.client;
 
   @override
-  Future<List<TransactionItem>> getMyTransactions() async {
+  Future<List<TransactionItem>> getMyTransactions({int? limit}) async {
     try {
-      final response = await _supabase
+      var query = _supabase
           .from('user_activity_feed')
           .select('*')
           .order('created_at', ascending: false);
+
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+
+      final response = await query;
 
       if (response == null) {
         return [];
