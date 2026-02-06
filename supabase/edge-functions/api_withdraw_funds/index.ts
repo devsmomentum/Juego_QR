@@ -45,11 +45,12 @@ serve(async (req) => {
       `[api_withdraw_funds] Processing withdrawal for user ${user.id}, plan_id: ${plan_id}`,
     );
 
-    // 1. FETCH AND VALIDATE WITHDRAWAL PLAN FROM DATABASE
+    // 1. FETCH AND VALIDATE WITHDRAWAL PLAN
     const { data: plan, error: planError } = await supabaseAdmin
-      .from("withdrawal_plans")
-      .select("id, name, clovers_cost, amount_usd, is_active")
+      .from("transaction_plans")
+      .select("id, name, amount, price, is_active, type")
       .eq("id", plan_id)
+      .eq("type", "withdraw") // Security: Ensure it is a WITHDRAW plan
       .single();
 
     if (planError) {
@@ -66,8 +67,9 @@ serve(async (req) => {
     }
 
     // CRITICAL: Use values from DATABASE, not from client
-    const cloversCost = plan.clovers_cost;
-    const amountUsd = plan.amount_usd;
+    // CRITICAL: Use values from DATABASE
+    const cloversCost = plan.amount;
+    const amountUsd = plan.price;
 
     console.log(
       `[api_withdraw_funds] Plan validated: ${plan.name}, Clovers Cost: ${cloversCost}, Amount: $${amountUsd} USD`,

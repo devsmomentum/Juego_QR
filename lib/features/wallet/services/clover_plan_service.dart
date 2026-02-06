@@ -18,8 +18,9 @@ class CloverPlanService {
   Future<List<CloverPlan>> fetchActivePlans() async {
     try {
       final data = await _supabase
-          .from('clover_plans')
+          .from('transaction_plans') // Unified Table
           .select()
+          .eq('type', 'buy') // Filter for Buy plans
           .eq('is_active', true)
           .order('sort_order', ascending: true);
 
@@ -37,8 +38,9 @@ class CloverPlanService {
     try {
       // This requires admin privileges due to RLS
       final data = await _supabase
-          .from('clover_plans')
+          .from('transaction_plans')
           .select()
+          .eq('type', 'buy')
           .order('sort_order', ascending: true);
 
       return (data as List)
@@ -63,13 +65,13 @@ class CloverPlanService {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      if (priceUsd != null) updates['price_usd'] = priceUsd;
-      if (cloversQuantity != null) updates['clovers_quantity'] = cloversQuantity;
+      if (priceUsd != null) updates['price'] = priceUsd; // Map to 'price'
+      if (cloversQuantity != null) updates['amount'] = cloversQuantity; // Map to 'amount'
       if (isActive != null) updates['is_active'] = isActive;
       if (name != null) updates['name'] = name;
 
       await _supabase
-          .from('clover_plans')
+          .from('transaction_plans')
           .update(updates)
           .eq('id', id);
     } catch (e) {

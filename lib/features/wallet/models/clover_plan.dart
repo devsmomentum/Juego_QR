@@ -25,8 +25,8 @@ class CloverPlan {
     return CloverPlan(
       id: json['id'] as String,
       name: json['name'] as String,
-      cloversQuantity: json['clovers_quantity'] as int,
-      priceUsd: (json['price_usd'] as num).toDouble(),
+      cloversQuantity: json['amount'] as int, // Mapped from 'amount'
+      priceUsd: (json['price'] as num).toDouble(), // Mapped from 'price'
       iconUrl: json['icon_url'] as String?,
       sortOrder: json['sort_order'] as int? ?? 0,
       isActive: json['is_active'] as bool? ?? true,
@@ -36,8 +36,8 @@ class CloverPlan {
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'clovers_quantity': cloversQuantity,
-    'price_usd': priceUsd,
+    'amount': cloversQuantity, // Mapped to 'amount'
+    'price': priceUsd, // Mapped to 'price'
     'icon_url': iconUrl,
     'sort_order': sortOrder,
     'is_active': isActive,
