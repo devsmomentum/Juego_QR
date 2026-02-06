@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/clover_plan.dart';
 
 class PaymentService {
   final SupabaseClient _supabase;
@@ -162,6 +163,22 @@ class PaymentService {
     }
   }
 
+  /// Fetches unified activity feed (ledger + orders) from user_activity_feed view.
+  Future<List<Map<String, dynamic>>> getUserActivityFeed(String userId) async {
+    try {
+      final response = await _supabase
+          .from('user_activity_feed')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+      
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('[PaymentService] Error fetching activity feed: $e');
+      return [];
+    }
+  }
+
   /// Fetches pending or failed orders for a user.
   Future<List<Map<String, dynamic>>> getPendingOrders(String userId) async {
     try {
@@ -175,6 +192,21 @@ class PaymentService {
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('[PaymentService] Error fetching pending orders: $e');
+      return [];
+    }
+  }
+
+  /// Fetches available clover purchase plans.
+  Future<List<CloverPlan>> getCloverPlans() async {
+    try {
+      final response = await _supabase
+          .from('clover_plans')
+          .select()
+          .order('price_usd', ascending: true);
+      
+      return (response as List).map((e) => CloverPlan.fromJson(e)).toList();
+    } catch (e) {
+      debugPrint('Error fetching clover plans: $e');
       return [];
     }
   }

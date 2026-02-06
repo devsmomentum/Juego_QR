@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../models/transaction_item.dart';
 
 class TransactionCard extends StatelessWidget {
@@ -14,41 +15,49 @@ class TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine visuals based on state and type
-    final isPending = item.status == 'pending';
-    final isFailed = item.status == 'failed';
-    final isWithdrawal = item.type == 'withdrawal';
-    final isDeposit = item.type == 'deposit';
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    final color = item.statusColor;
     
-    Color color;
-    IconData icon;
+    // Status Text Map
     String statusText;
-
-    if (isPending) {
-      color = Colors.orange;
-      icon = Icons.access_time_rounded;
-      statusText = 'Pendiente';
-    } else if (isFailed) {
-      color = Colors.red;
-      icon = Icons.error_outline_rounded;
-      statusText = 'Fallido';
-    } else if (isWithdrawal) {
-      color = Colors.red;
-      icon = Icons.arrow_upward_rounded;
-      statusText = 'Retiro';
-    } else {
-      // Deposit / Completed
-      color = Colors.green;
-      icon = Icons.eco_rounded; // Clover-like
-      statusText = 'Exitoso';
+    IconData icon;
+    
+    switch (item.status.toLowerCase()) {
+       case 'completed':
+       case 'success':
+       case 'paid':
+         statusText = 'Exitoso';
+         icon = Icons.eco_rounded;
+         break;
+       case 'pending':
+         statusText = 'Pendiente';
+         icon = Icons.access_time_rounded;
+         break;
+       case 'failed':
+       case 'error':
+         statusText = 'Fallido';
+         icon = Icons.error_outline_rounded;
+         break;
+       case 'expired':
+         statusText = 'Expirado';
+         icon = Icons.timer_off_rounded;
+         break;
+       default:
+         statusText = item.status;
+         icon = Icons.info_outline;
     }
 
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    // Override icon/text for special types if needed, or rely on status
+    if (item.type == 'withdrawal' && (item.status == 'completed' || item.status == 'success')) {
+       icon = Icons.arrow_upward_rounded;
+       statusText = 'Retiro';
+    }
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Colors.white.withOpacity(0.05), // Subtle cyber glass
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -73,13 +82,14 @@ class TransactionCard extends StatelessWidget {
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         dateFormat.format(item.date),
                         style: TextStyle(
-                          color: Colors.grey[600],
+                          color: Colors.white70,
                           fontSize: 12,
                         ),
                       ),
@@ -90,9 +100,9 @@ class TransactionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${isWithdrawal ? '-' : '+'}${item.amount.toStringAsFixed(2)}',
+                      '${item.isCredit ? '+' : '-'}${item.amount.toStringAsFixed(2)}',
                       style: TextStyle(
-                        color: color,
+                        color: item.isCredit ? AppTheme.successGreen : AppTheme.dangerRed, // Override status color for amount sign
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -120,8 +130,8 @@ class TransactionCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (isPending && item.paymentUrl != null) ...[
-              const Divider(height: 24),
+            if (item.canResumePayment) ...[
+              const Divider(height: 24, color: Colors.white10),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(

@@ -23,6 +23,12 @@ enum TransactionType {
   
   /// Transfer between users.
   transfer,
+  
+  /// Money added to wallet (synonym for topUp).
+  deposit,
+  
+  /// Money withdrawn from wallet.
+  withdrawal,
 }
 
 /// Transaction status.
@@ -38,6 +44,9 @@ enum TransactionStatus {
   
   /// Transaction was cancelled/reversed.
   cancelled,
+
+  /// Transaction expired (e.g. pending payment).
+  expired,
 }
 
 /// Transaction record for the wallet audit trail.
@@ -78,7 +87,7 @@ class Transaction {
       ),
       status: TransactionStatus.values.firstWhere(
         (e) => e.name == map['status'],
-        orElse: () => TransactionStatus.pending,
+        orElse: () => map['status'] == 'expired' ? TransactionStatus.expired : TransactionStatus.pending,
       ),
       createdAt: DateTime.parse(map['created_at'] as String),
       completedAt: map['completed_at'] != null 
