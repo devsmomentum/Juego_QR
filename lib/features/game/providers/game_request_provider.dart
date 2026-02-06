@@ -347,4 +347,32 @@ void clearLocalRequests() {
       return false;
     }
   }
+
+  /// Inscribe a un usuario en un evento online GRATUITO.
+  /// Crea el registro de jugador directamente sin cobrar.
+  Future<void> joinFreeOnlineEvent(String userId, String eventId) async {
+    debugPrint('[FREE_ONLINE] 🎮 Joining free online event...');
+    
+    try {
+      // Opción A: Usar RPC existente
+      await _supabase.rpc('initialize_game_for_user', params: {
+        'target_user_id': userId,
+        'target_event_id': eventId,
+      });
+      debugPrint('[FREE_ONLINE] ✅ RPC Join Success');
+    } catch (e) {
+      debugPrint('[FREE_ONLINE] ⚠️ RPC failed: $e. Trying direct insert...');
+      
+      // Opción B: Insert directo (Fallback)
+      await _supabase.from('game_players').insert({
+        'user_id': userId,
+        'event_id': eventId,
+        'status': 'active',
+        'lives': 3,
+        'joined_at': DateTime.now().toIso8601String(),
+        'role': 'player',
+      });
+      debugPrint('[FREE_ONLINE] ✅ Direct Insert Success');
+    }
+  }
 }

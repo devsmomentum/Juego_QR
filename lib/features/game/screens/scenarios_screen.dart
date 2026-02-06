@@ -436,10 +436,100 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           break;
 
         case AccessResultType.needsCode:
-          Navigator.of(context).push(
-            MaterialPageRoute(
-                builder: (_) => CodeFinderScreen(scenario: scenario)),
-          );
+          if (scenario.type == 'online') {
+            // Online event: Skip CodeFinderScreen entirely
+            if (scenario.entryFee > 0) {
+              // Online PAID: Handle payment first
+              final userClovers = playerProvider.currentPlayer?.clovers ?? 0;
+              if (userClovers >= scenario.entryFee) {
+                // Has enough -> Confirm payment
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppTheme.cardBg,
+                    title: const Text('💰 Evento de Pago', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    content: Text('Este evento cuesta ${scenario.entryFee} 🍀.\n\nTu saldo: $userClovers 🍀', style: const TextStyle(color: Colors.white70)),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold, foregroundColor: Colors.black),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('PAGAR Y ENTRAR'),
+                      ),
+                    ],
+                  ),
+                );
+                
+                if (confirm == true) {
+                   setState(() => _isProcessing = true);
+                   showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+                   
+                   final success = await requestProvider.joinOnlinePaidEvent(
+                      playerProvider.currentPlayer!.userId, scenario.id, scenario.entryFee
+                   );
+                   
+                   if (!mounted) return;
+                   Navigator.pop(context);
+                   
+                   if (success) {
+                     playerProvider.updateLocalClovers(userClovers - scenario.entryFee);
+                     await playerProvider.refreshProfile();
+                     setState(() { _participantStatusMap[scenario.id] = true; });
+                     
+                     await gameProvider.fetchClues(eventId: scenario.id);
+                     if (mounted) {
+                       Navigator.push(context, MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
+                     }
+                   } else {
+                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error procesando el pago.')));
+                   }
+                   setState(() => _isProcessing = false);
+                }
+              } else {
+                // Insufficient funds
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppTheme.cardBg,
+                    title: const Text('Saldo Insuficiente', style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold)),
+                    content: Text('Este evento cuesta ${scenario.entryFee} 🍀.\nSolo tienes $userClovers 🍀.', style: const TextStyle(color: Colors.white70)),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                        icon: const Icon(Icons.account_balance_wallet),
+                        label: const Text('IR A BILLETERA'),
+                        onPressed: () { Navigator.pop(ctx); Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())); },
+                      ),
+                    ],
+                  ),
+                );
+              }
+            } else {
+              // Online FREE: Join directly and enter game
+              showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+              
+              try {
+                // Create game_player record for free online event
+                await requestProvider.joinFreeOnlineEvent(playerProvider.currentPlayer!.userId, scenario.id);
+                setState(() { _participantStatusMap[scenario.id] = true; });
+                
+                await gameProvider.fetchClues(eventId: scenario.id);
+                if (mounted) {
+                  Navigator.pop(context); // Close loading
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
+                }
+              } catch (e) {
+                if (mounted) Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al ingresar: $e')));
+              }
+            }
+          } else {
+            // Presencial event: Show CodeFinderScreen (thermometer + QR)
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => CodeFinderScreen(scenario: scenario)),
+            );
+          }
           break;
           
         case AccessResultType.needsAvatar:
