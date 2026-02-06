@@ -13,6 +13,7 @@ class Scenario {
   final DateTime? date;
   final bool isCompleted; // Nueva propiedad
   final String type;
+  final int entryFee;
   final int currentParticipants;
 
   const Scenario({
@@ -30,6 +31,7 @@ class Scenario {
     this.date,
     this.isCompleted = false,
     this.type = 'on_site',
+    this.entryFee = 0,
     this.currentParticipants = 0,
   });
 
@@ -49,6 +51,7 @@ class Scenario {
       date: json['date'] != null ? DateTime.parse(json['date']) : null,
       isCompleted: json['is_completed'] ?? false,
       type: json['type'] ?? 'on_site',
+      entryFee: json['entry_fee'] ?? 0,
       currentParticipants: (json['current_participants'] as num?)?.toInt() ?? 0,
     );
   }
@@ -69,6 +72,7 @@ class Scenario {
       'date': date?.toIso8601String(),
       'is_completed': isCompleted,
       'type': type,
+      'entry_fee': entryFee,
       'current_participants': currentParticipants,
     };
   }
