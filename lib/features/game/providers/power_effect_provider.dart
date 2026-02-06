@@ -60,6 +60,7 @@ class PowerEffectProvider extends ChangeNotifier {
   final Map<String, Duration> _powerSlugToDurationCache = {};
   
   String? _cachedShieldPowerId;
+  DateTime? _ignoreShieldUntil;
 
   final StreamController<PowerFeedbackEvent> _feedbackStreamController = StreamController<PowerFeedbackEvent>.broadcast();
   Stream<PowerFeedbackEvent> get feedbackStream => _feedbackStreamController.stream;
@@ -277,14 +278,25 @@ class PowerEffectProvider extends ChangeNotifier {
     debugPrint('[COMBAT] ⚔️ Event Received: $resultType (Power: $powerSlug)');
 
     if (resultType == 'shield_blocked') {
+        debugPrint('[COMBAT] 🛡️💥 SHIELD_BLOCKED event detected!');
+        debugPrint('[COMBAT]    - Shield Armed Before: $_shieldArmed');
+        debugPrint('[COMBAT]    - Shield Active Before: ${isEffectActive('shield')}');
+        
         // Server confirmed shield blocked an attack
         _shieldArmed = false; // Sync local state
         _removeEffect('shield'); // Remove icon
+        _ignoreShieldUntil = DateTime.now().add(const Duration(seconds: 10));
+        
+        debugPrint('[COMBAT]    - Shield Armed After: $_shieldArmed');
+        debugPrint('[COMBAT]    - Shield Active After: ${isEffectActive('shield')}');
+        debugPrint('[COMBAT]    - Ignore Shield Until: $_ignoreShieldUntil');
         
         _registerDefenseAction(DefenseAction.shieldBroken);
         _feedbackStreamController.add(PowerFeedbackEvent(
             PowerFeedbackType.shieldBroken
         ));
+        
+        debugPrint('[COMBAT] 🛡️ Shield broken feedback emitted');
     }
   }
 
@@ -448,6 +460,8 @@ class PowerEffectProvider extends ChangeNotifier {
     
     final now = DateTime.now().toUtc();
 
+    bool shieldBrokenInBatch = false;
+
     for (final effect in filtered) {
        final slug = await _resolveEffectSlug(effect);
        if (slug == null) continue;
@@ -469,6 +483,19 @@ class PowerEffectProvider extends ChangeNotifier {
                                 slug == 'freeze' || 
                                 slug == 'blur_screen' ||
                                 isLifeSteal;
+
+       // --- 0. PREVENT RE-APPLYING BROKEN SHIELD ---
+       // Check if broken in this batch OR explicitly ignored due to recent break
+       if (slug == 'shield') {
+          if (shieldBrokenInBatch) {
+             debugPrint('[SHIELD] 🛑 Skipping shield application because it was broken in this batch.');
+             continue;
+          }
+          if (_ignoreShieldUntil != null && _ignoreShieldUntil!.isAfter(now)) {
+             debugPrint('[SHIELD] 🛑 Skipping shield application (Ignored until $_ignoreShieldUntil)');
+             continue;
+          }
+       }
 
        // --- 1. RETURN MECHANISM (Highest Priority) ---
        if (_returnArmed && isOffensive) {
@@ -507,11 +534,76 @@ class PowerEffectProvider extends ChangeNotifier {
           }
        }
 
+        // --- CLIENT-SIDE SHIELD FALLBACK ---
+        // If server failed to block and we see an offensive power + we have shield
+        // Note: 'shield_feedback' is just a notification, not an attack, so ignore it here.
+        debugPrint('[SHIELD-CHECK] Checking client-side shield interception for: $slug');
+        debugPrint('[SHIELD-CHECK]   _shieldArmed: $_shieldArmed');
+        debugPrint('[SHIELD-CHECK]   isOffensive: $isOffensive');
+        debugPrint('[SHIELD-CHECK]   slug != shield: ${slug != 'shield'}');
+        debugPrint('[SHIELD-CHECK]   slug != shield_feedback: ${slug != 'shield_feedback'}');
+        debugPrint('[SHIELD-CHECK]   !shieldBrokenInBatch: ${!shieldBrokenInBatch}');
+        
+        if (_shieldArmed && isOffensive && slug != 'shield' && slug != 'shield_feedback' && !shieldBrokenInBatch) {
+            debugPrint('[SHIELD] 🛡️💥 CLIENT-SIDE INTERCEPTION ACTIVATED!');
+            debugPrint('[SHIELD] 🛡️ Client-side interception! Server let $slug through but Shield is up.');
+            
+            // A. Consume shield locally
+            _shieldArmed = false;
+            shieldBrokenInBatch = true;
+            _ignoreShieldUntil = DateTime.now().add(const Duration(seconds: 10)); // IGNORE SHIELD FOR 10s
+            _removeEffect('shield');
+            
+            debugPrint('[SHIELD] 🛡️ Shield removed from active effects');
+            
+            // B. Trigger "Shield Broken" Feedback Animation
+            _registerDefenseAction(DefenseAction.shieldBroken);
+            _feedbackStreamController.add(PowerFeedbackEvent(
+               PowerFeedbackType.shieldBroken,
+               relatedPlayerName: casterId
+            ));
+            
+            debugPrint('[SHIELD] 🛡️ Shield broken feedback emitted (client-side)');
+
+            // C. Attempt to clean up DB (best effort) to correct state
+            // Remove the offensive power
+            if (effectId != null) {
+               try {
+                 await supabase.from('active_powers').delete().eq('id', effectId);
+                 debugPrint('[SHIELD] 🗑️ Deleted offensive power from DB: $effectId');
+               } catch (e) {
+                 debugPrint('[SHIELD] ❌ Failed to delete offensive power: $e');
+               }
+            }
+            
+            // Also ideally we should remove the shield row from DB if we know its ID
+            if (_cachedShieldPowerId != null) { 
+                // This is tricky without the specific active_power ID for the shield.
+                // Rely mainly on the fact that we removed it locally.
+                // We could look for it in the 'filtered' list.
+                final shieldEffect = filtered.firstWhere(
+                   (e) => (e['power_slug'] ?? e['slug']) == 'shield', 
+                   orElse: () => {}
+                );
+                final shieldRowId = shieldEffect['id']?.toString();
+                if (shieldRowId != null) {
+                    try {
+                      await supabase.from('active_powers').delete().eq('id', shieldRowId);
+                      debugPrint('[SHIELD] 🗑️ Deleted shield from DB: $shieldRowId');
+                    } catch (e) {
+                      debugPrint('[SHIELD] ❌ Failed to delete shield: $e');
+                    }
+                }
+            }
+            
+            continue; // D. BLOCK THE EFFECT (Do not apply it)
+        }
+
        // --- SHIELD SYNC (Server-Side Removal) ---
        // If shield is active locally, but missing from the incoming stream, 
        // it means the server consumed it (or it expired/was removed).
        // We must remove it locally to update the UI immediately.
-       if (_shieldArmed && isEffectActive('shield')) {
+       if (_shieldArmed && !shieldBrokenInBatch && isEffectActive('shield')) {
            bool shieldInStream = filtered.any((e) {
                final s = e['power_slug'] ?? e['slug']; // handle both formats
                return s == 'shield';
@@ -562,6 +654,10 @@ class PowerEffectProvider extends ChangeNotifier {
        // --- 5. STANDARD EFFECT APPLICATION ---
        // Only if !isExpired (checked at top)
        if (isExpired) continue; // Redundant but safe
+
+       // Special check: If this is shield, and we broke it this batch, skip (already handled by top check, 
+       // but applies to `applyEffect` too).
+       if (slug == 'shield' && shieldBrokenInBatch) continue;
 
        if (!isEffectActive(slug)) {
           final strategy = PowerStrategyFactory.get(slug);
@@ -647,8 +743,17 @@ class PowerEffectProvider extends ChangeNotifier {
     _lastDefenseActionAt = DateTime.now();
     notifyListeners();
 
-    // Duración diferenciada: Returned es un evento más importante => 4s
-    final duration = action == DefenseAction.returned 
+    // ⚡ CRITICAL: Emit feedback event for shield broken
+    if (action == DefenseAction.shieldBroken) {
+      _feedbackStreamController.add(PowerFeedbackEvent(
+        PowerFeedbackType.shieldBroken,
+        message: 'Shield broken',
+      ));
+      debugPrint('[SHIELD] 🛡️💥 Shield broken feedback event emitted');
+    }
+
+    // Duración diferenciada: Returned y ShieldBroken son eventos importantes => 4s
+    final duration = (action == DefenseAction.returned || action == DefenseAction.shieldBroken)
         ? const Duration(seconds: 4) 
         : const Duration(seconds: 2);
 

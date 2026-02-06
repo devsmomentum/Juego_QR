@@ -1432,6 +1432,44 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                                                       ),
                                                                 ),
                                                               ),
+                                                              const SizedBox(height: 12),
+                                                              SizedBox(
+                                                                width: 250,
+                                                                child: OutlinedButton(
+                                                                  onPressed: () {
+                                                                    Navigator.push(
+                                                                      context,
+                                                                      MaterialPageRoute(
+                                                                        builder: (_) => SpectatorModeScreen(eventId: scenario.id),
+                                                                      ),
+                                                                    );
+                                                                  },
+                                                                  style: OutlinedButton.styleFrom(
+                                                                    side: BorderSide(color: Colors.white.withOpacity(0.6), width: 1.5),
+                                                                    shape: RoundedRectangleBorder(
+                                                                      borderRadius: BorderRadius.circular(20),
+                                                                    ),
+                                                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                                                    backgroundColor: Colors.black45,
+                                                                  ),
+                                                                  child: const Row(
+                                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                                    children: [
+                                                                      Icon(Icons.visibility_outlined, color: Colors.white, size: 20),
+                                                                      SizedBox(width: 8),
+                                                                      Text(
+                                                                         "MODO ESPECTADOR",
+                                                                         style: TextStyle(
+                                                                           color: Colors.white,
+                                                                           fontWeight: FontWeight.bold,
+                                                                           fontSize: 12,
+                                                                           letterSpacing: 1.0,
+                                                                         ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
                                                             ],
                                                           ),
                                                         ),

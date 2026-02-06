@@ -30,7 +30,7 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 5000), // Increased to 5s
     );
     
     _scaleAnimation = Tween<double>(begin: 1.0, end: 2.5).animate(
@@ -38,25 +38,26 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
     );
     
     _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.3, 1.0)),
+      CurvedAnimation(parent: _controller, curve: const Interval(0.6, 1.0)), // Fade out later
     );
     
     _controller.forward().then((_) => widget.onComplete?.call());
   }
-  
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         return Container(
-          color: Colors.cyanAccent.withOpacity(0.15 * _opacityAnimation.value),
+          // Background flash: Blue tint
+          color: Colors.blueAccent.withOpacity(0.15 * _opacityAnimation.value),
           child: Stack(
             children: [
               // Destello central
@@ -72,23 +73,29 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            Colors.white.withOpacity(0.8),
-                            Colors.cyanAccent.withOpacity(0.6),
-                            Colors.cyan.withOpacity(0.3),
+                            Colors.white.withOpacity(0.9),
+                            Colors.cyanAccent.withOpacity(0.7), 
+                            Colors.blueAccent.withOpacity(0.4),    
                             Colors.transparent,
                           ],
                           stops: const [0.0, 0.3, 0.6, 1.0],
                         ),
                         boxShadow: [
+                           // Strong blue glow
                           BoxShadow(
                             color: Colors.cyanAccent.withOpacity(0.6),
-                            blurRadius: 40,
+                            blurRadius: 50,
                             spreadRadius: 20,
+                          ),
+                          BoxShadow(
+                            color: Colors.blue.withOpacity(0.4),
+                            blurRadius: 80,
+                            spreadRadius: 30,
                           ),
                         ],
                       ),
                       child: Icon(
-                        Icons.shield,
+                        Icons.shield, 
                         size: 60,
                         color: Colors.white.withOpacity(_opacityAnimation.value),
                       ),
@@ -97,80 +104,88 @@ class _ShieldBreakingEffectState extends State<ShieldBreakingEffect>
                 ),
               ),
               
-              // Fragmentos de escudo rompiendo
-              if (_controller.value > 0.2)
-                ...List.generate(8, (index) {
-                  final angle = (index / 8) * 2 * pi;
-                  final distance = 100 * (_controller.value - 0.2) * 1.25;
-                  return Positioned(
-                    left: MediaQuery.of(context).size.width / 2 + cos(angle) * distance - 10,
-                    top: MediaQuery.of(context).size.height / 2 + sin(angle) * distance - 10,
-                    child: Opacity(
-                      opacity: (1 - _controller.value).clamp(0.0, 1.0),
-                      child: Transform.rotate(
-                        angle: angle + _controller.value * 2,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: Colors.cyanAccent.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(4),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.cyanAccent.withOpacity(0.4),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              
-              // Texto de protección
+              // Texto de protección - Improved styling
               Positioned(
                 bottom: MediaQuery.of(context).size.height * 0.35,
                 left: 0,
                 right: 0,
                 child: Opacity(
                   opacity: _opacityAnimation.value,
-                  child: Text(
-                    widget.title ?? '¡ESCUDO ROTO!',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(
-                          color: Colors.cyanAccent,
-                          blurRadius: 20,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Column(
+                      children: [
+                        // Shield Icon with glow
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.cyanAccent.withOpacity(0.5),
+                                blurRadius: 30,
+                                spreadRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.shield_outlined, 
+                            color: Colors.cyanAccent, 
+                            size: 50,
+                          ),
                         ),
-                        Shadow(
-                          color: Colors.black,
-                          offset: Offset(2, 2),
-                          blurRadius: 4,
+                        const SizedBox(height: 16),
+                        // Main title
+                        Text(
+                          widget.title ?? '¡ATAQUE BLOQUEADO!',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36, 
+                            fontWeight: FontWeight.w900, 
+                            letterSpacing: 3.0,
+                            decoration: TextDecoration.none,
+                            shadows: [
+                              Shadow(
+                                color: Colors.cyanAccent,
+                                blurRadius: 40,
+                              ),
+                              Shadow(
+                                color: Colors.blueAccent,
+                                blurRadius: 20,
+                              ),
+                              Shadow(
+                                color: Colors.black,
+                                offset: Offset(4, 4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Subtitle
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            widget.subtitle ?? 'El objetivo tenía un escudo activo',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.0,
+                              decoration: TextDecoration.none,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black87,
+                                  offset: Offset(2, 2),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-              ),
-              
-              Positioned(
-                bottom: MediaQuery.of(context).size.height * 0.30,
-                left: 0,
-                right: 0,
-                child: Opacity(
-                  opacity: _opacityAnimation.value,
-                  child: Text(
-                    widget.subtitle ?? 'Tu protección ha sido consumida',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),

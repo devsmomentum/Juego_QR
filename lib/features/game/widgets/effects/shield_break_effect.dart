@@ -14,22 +14,37 @@ class _ShieldBreakEffectState extends State<ShieldBreakEffect>
   late AnimationController _controller;
   late Animation<double> _scaleAnim;
   late Animation<double> _opacityAnim;
+  late Animation<double> _shakeAnim;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 3000), // Increased duration
     );
 
-    _scaleAnim = Tween<double>(begin: 1.0, end: 1.5).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    // Bounce / Elastic scale up
+    _scaleAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.2).chain(CurveTween(curve: Curves.easeOut)), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5).chain(CurveTween(curve: Curves.easeIn)), weight: 40),
+    ]).animate(_controller);
 
-    _opacityAnim = Tween<double>(begin: 0.8, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
+    // Shake effect
+    _shakeAnim = TweenSequence<double>([
+       TweenSequenceItem(tween: Tween(begin: 0, end: 10), weight: 10),
+       TweenSequenceItem(tween: Tween(begin: 10, end: -10), weight: 10),
+       TweenSequenceItem(tween: Tween(begin: -10, end: 10), weight: 10),
+       TweenSequenceItem(tween: Tween(begin: 10, end: 0), weight: 10),
+       TweenSequenceItem(tween: ConstantTween(0), weight: 60),
+    ]).animate(_controller);
+
+    // Fade out at the end
+    _opacityAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 70),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 30),
+    ]).animate(_controller);
 
     _controller.forward().then((_) {
       if (widget.onComplete != null) {
@@ -53,12 +68,68 @@ class _ShieldBreakEffectState extends State<ShieldBreakEffect>
           builder: (context, child) {
             return Opacity(
               opacity: _opacityAnim.value,
-              child: Transform.scale(
-                scale: _scaleAnim.value,
-                child: const Icon(
-                  Icons.shield_outlined,
-                  size: 150,
-                  color: Colors.cyanAccent,
+              child: Transform.translate(
+                offset: Offset(_shakeAnim.value, 0),
+                child: Transform.scale(
+                  scale: _scaleAnim.value,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                           // Glow beneath
+                           Container(
+                              width: 100, height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.cyanAccent.withOpacity(0.5),
+                                    blurRadius: 40,
+                                    spreadRadius: 10,
+                                  )
+                                ]
+                              ),
+                           ),
+                           // Broken Shield Icon
+                           const Icon(
+                              Icons.gpp_bad_rounded,
+                              size: 100,
+                              color: Colors.cyanAccent,
+                           ),
+                           // Cracks overlay (Red)
+                           const Icon(
+                              Icons.flash_on_rounded,
+                              size: 80,
+                              color: Colors.redAccent,
+                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red, width: 2),
+                        ),
+                        child: const Text(
+                          '¡ESCUDO ROTO!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                            decoration: TextDecoration.none,
+                            shadows: [
+                              Shadow(color: Colors.black45, offset: Offset(2, 2), blurRadius: 4)
+                            ]
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

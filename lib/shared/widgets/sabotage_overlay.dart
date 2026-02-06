@@ -14,6 +14,7 @@ import '../../features/game/widgets/effects/invisibility_effect.dart';
 import '../../features/game/widgets/effects/steal_failed_effect.dart';
 import '../../features/game/widgets/effects/shield_break_effect.dart'; // Defender (Broken)
 import '../../features/game/widgets/effects/shield_breaking_effect.dart'; // Attacker (Blocked)
+import '../../features/game/widgets/effects/shield_active_effect.dart'; // NEW Shield Active Logic
 import '../models/player.dart';
 import '../../features/auth/providers/player_provider.dart';
 import '../../features/mall/models/power_item.dart'; // Required for PowerType
@@ -201,7 +202,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
           _localDefenseAction = action;
       });
       
-      _localDefenseActionTimer = Timer(const Duration(seconds: 3), () {
+      _localDefenseActionTimer = Timer(const Duration(seconds: 5), () {
           if (mounted) {
               setState(() {
                   _localDefenseAction = null;
@@ -409,6 +410,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
                 key: ValueKey(_lifeStealCasterName),
                 casterName: _lifeStealCasterName!,
               ),
+
+            // Nuevo efecto de ESCUDO ACTIVO
+            // Don't show active shield if it's currently breaking
+            if (powerProvider.isEffectActive('shield') && !_showShieldBreakAnimation)
+              ShieldActiveEffect(expiresAt: powerProvider.getPowerExpiration('shield')),
 
             if (isPlayerInvisible || isInvisible)
               InvisibilityEffect(expiresAt: powerProvider.getPowerExpiration('invisibility')),
