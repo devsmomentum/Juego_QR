@@ -242,4 +242,109 @@ void clearLocalRequests() {
       rethrow;
     }
   }
+
+  /// Procesa el pago de la inscripción a un evento (solo descuenta tréboles).
+  /// NO crea el registro de jugador - el usuario debe pasar por el flujo normal de solicitud.
+  /// 
+  /// Retorna true si el descuento fue exitoso.
+  Future<bool> processEventPayment(String userId, String eventId, int cost) async {
+    try {
+      debugPrint('[PAYMENT] 💰 Processing event payment. Cost: $cost');
+
+      // 1. Verificación de seguridad de saldo
+      final profile = await _supabase.from('profiles').select('clovers').eq('id', userId).single();
+      final currentClovers = profile['clovers'] as int;
+
+      if (currentClovers < cost) {
+        debugPrint('[PAYMENT] ❌ Insufficient funds. Need $cost, have $currentClovers');
+        return false;
+      }
+
+      // 2. Descontar monedas (Treboles)
+      debugPrint('[PAYMENT] 💸 Deducting $cost clovers...');
+      await _supabase.from('profiles').update({
+        'clovers': currentClovers - cost
+      }).eq('id', userId);
+
+      debugPrint('[PAYMENT] ✅ Payment successful! User now has ${currentClovers - cost} clovers.');
+      return true;
+
+    } catch (e) {
+      debugPrint('[PAYMENT] ❌ Payment error: $e');
+      return false;
+    }
+  }
+
+  /// Procesa el pago Y la inscripción directa para eventos ONLINE.
+  /// Para eventos online, el pago permite entrada directa sin aprobación de admin.
+  /// 
+  /// Retorna true si el pago y la inscripción fueron exitosos.
+  Future<bool> joinOnlinePaidEvent(String userId, String eventId, int cost) async {
+    try {
+      debugPrint('[ONLINE_JOIN] 💰 Processing online event payment + join. Cost: $cost');
+
+      // 1. Verificación de seguridad de saldo
+      final profile = await _supabase.from('profiles').select('clovers').eq('id', userId).single();
+      final currentClovers = profile['clovers'] as int;
+
+      if (currentClovers < cost) {
+        debugPrint('[ONLINE_JOIN] ❌ Insufficient funds. Need $cost, have $currentClovers');
+        return false;
+      }
+
+      // 2. Descontar monedas (Treboles)
+      debugPrint('[ONLINE_JOIN] 💸 Deducting $cost clovers...');
+      await _supabase.from('profiles').update({
+        'clovers': currentClovers - cost
+      }).eq('id', userId);
+
+      // 3. Crear registro de jugador (entrada directa para online)
+      bool joinSuccess = false;
+      
+      try {
+        // Opción A: Usar RPC existente
+        debugPrint('[ONLINE_JOIN] 🔄 Trying RPC initialize_game_for_user...');
+        await _supabase.rpc('initialize_game_for_user', params: {
+          'target_user_id': userId,
+          'target_event_id': eventId,
+        });
+        joinSuccess = true;
+        debugPrint('[ONLINE_JOIN] ✅ RPC Join Success');
+      } catch (e) {
+        debugPrint('[ONLINE_JOIN] ⚠️ RPC Join failed: $e. Trying direct insert...');
+        
+        // Opción B: Insert directo (Fallback)
+        try {
+          await _supabase.from('game_players').insert({
+            'user_id': userId,
+            'event_id': eventId,
+            'status': 'active',
+            'lives': 3,
+            'joined_at': DateTime.now().toIso8601String(),
+            'role': 'player',
+          });
+          joinSuccess = true;
+          debugPrint('[ONLINE_JOIN] ✅ Manual Insert Success');
+        } catch (e2) {
+          debugPrint('[ONLINE_JOIN] ❌ Manual Insert failed: $e2');
+        }
+      }
+
+      if (joinSuccess) {
+        debugPrint('[ONLINE_JOIN] ✅ User successfully joined online event!');
+        return true;
+      } else {
+        // ROLLBACK: Refund clovers if join failed
+        debugPrint('[ONLINE_JOIN] ↺ Rolling back payment due to join failure...');
+        await _supabase.from('profiles').update({
+          'clovers': currentClovers 
+        }).eq('id', userId);
+        return false;
+      }
+
+    } catch (e) {
+      debugPrint('[ONLINE_JOIN] ❌ Critical error: $e');
+      return false;
+    }
+  }
 }
