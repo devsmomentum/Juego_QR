@@ -10,6 +10,7 @@ import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 import 'clover_plans_management_screen.dart';
 import 'withdrawal_plans_management_screen.dart';
+import 'global_config_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 
@@ -109,6 +110,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const UserManagementScreen(),         // Index 3
       const CloverPlansManagementScreen(),  // Index 4 - Planes Compra
       const WithdrawalPlansManagementScreen(),  // Index 5 - Planes Retiro
+      const Center(child: Text('Reportes - En desarrollo', style: TextStyle(color: Colors.white54))),  // Index 6 - Reportes
+      const GlobalConfigScreen(),           // Index 7 - Configuración
     ];
 
     return LayoutBuilder(

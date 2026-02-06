@@ -23,6 +23,7 @@ import '../../wallet/services/clover_plan_service.dart';
 import '../../wallet/widgets/clover_plan_card.dart';
 import '../../wallet/models/withdrawal_plan.dart';
 import '../../wallet/services/withdrawal_plan_service.dart';
+import '../../../core/services/app_config_service.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -530,6 +531,13 @@ class _WalletScreenState extends State<WalletScreen> {
   void _showPlanSelectorDialog() {
     String? selectedPlanId;
     
+    // Combined future to fetch plans and gateway fee together
+    final configService = AppConfigService(supabaseClient: Supabase.instance.client);
+    final combinedFuture = Future.wait([
+      CloverPlanService(supabaseClient: Supabase.instance.client).fetchActivePlans(),
+      configService.getGatewayFeePercentage(),
+    ]);
+    
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -552,10 +560,8 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
             content: SizedBox(
               width: double.maxFinite,
-              child: FutureBuilder<List<CloverPlan>>(
-                future: CloverPlanService(
-                  supabaseClient: Supabase.instance.client,
-                ).fetchActivePlans(),
+              child: FutureBuilder<List<dynamic>>(
+                future: combinedFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
@@ -578,7 +584,9 @@ class _WalletScreenState extends State<WalletScreen> {
                     );
                   }
                   
-                  final plans = snapshot.data ?? [];
+                  final plans = (snapshot.data?[0] as List<CloverPlan>?) ?? [];
+                  final gatewayFee = (snapshot.data?[1] as double?) ?? 0.0;
+                  
                   if (plans.isEmpty) {
                     return const SizedBox(
                       height: 100,
@@ -599,6 +607,13 @@ class _WalletScreenState extends State<WalletScreen> {
                         'Selecciona un plan de tréboles:',
                         style: TextStyle(color: Colors.white70),
                       ),
+                      if (gatewayFee > 0) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Nota: La pasarela cobra +${gatewayFee.toStringAsFixed(1)}% de comisión',
+                          style: TextStyle(color: Colors.amber.withOpacity(0.8), fontSize: 11),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       // Plan Cards Grid
                       Wrap(
@@ -610,6 +625,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             child: CloverPlanCard(
                               plan: plan,
                               isSelected: selectedPlanId == plan.id,
+                              feePercentage: gatewayFee,
                               onTap: () {
                                 setState(() => selectedPlanId = plan.id);
                               },
