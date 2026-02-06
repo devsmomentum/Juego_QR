@@ -6,11 +6,13 @@ import '../models/transaction_item.dart';
 class TransactionCard extends StatelessWidget {
   final TransactionItem item;
   final VoidCallback? onResumePayment;
+  final VoidCallback? onCancelOrder;
 
   const TransactionCard({
     super.key,
     required this.item,
     this.onResumePayment,
+    this.onCancelOrder,
   });
 
   @override
@@ -145,23 +147,47 @@ class TransactionCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (item.canResumePayment) ...[
+            if (item.canResumePayment || item.canCancel) ...[
               const Divider(height: 24, color: Colors.white10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: onResumePayment,
-                  icon: const Icon(Icons.payment, size: 18),
-                  label: const Text('Continuar Pago'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              Row(
+                children: [
+                   if (item.canResumePayment)
+                     Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: onResumePayment,
+                        icon: const Icon(Icons.payment, size: 18),
+                        label: const Text('Completar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
+                    
+                    if (item.canResumePayment && item.canCancel)
+                      const SizedBox(width: 8),
+
+                    if (item.canCancel)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onCancelOrder,
+                          icon: const Icon(Icons.cancel_outlined, size: 18),
+                          label: const Text('Cancelar'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                            side: const BorderSide(color: Colors.redAccent),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                ],
               ),
             ],
           ],

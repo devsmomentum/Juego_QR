@@ -225,6 +225,50 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           onResumePayment: item.canResumePayment
                               ? () => _onResumePayment(item.paymentUrl!)
                               : null,
+                          onCancelOrder: item.canCancel
+                              ? () async {
+                                  // Confirmation Dialog
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      backgroundColor: AppTheme.cardBg,
+                                      title: const Text('Cancelar Orden', style: TextStyle(color: Colors.white)),
+                                      content: const Text(
+                                        '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                        style: TextStyle(color: Colors.white70),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text('No', style: TextStyle(color: Colors.white54)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  
+                                  if (confirm != true) return;
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Cancelando orden...')),
+                                  );
+                                  
+                                  final success = await _repository.cancelOrder(item.id);
+                                  
+                                  if (mounted) {
+                                     ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(success ? 'Orden cancelada exitosamente' : 'Error al cancelar'),
+                                        backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                      ),
+                                    );
+                                    if (success) _loadData();
+                                  }
+                                }
+                              : null,
                         );
                       },
                     );

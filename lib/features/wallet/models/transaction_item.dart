@@ -43,6 +43,8 @@ class TransactionItem {
   
   bool get canResumePayment => isPending && paymentUrl != null && paymentUrl!.isNotEmpty;
 
+  bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order');
+
   Color get statusColor {
     switch (status.toLowerCase()) {
       case 'completed':

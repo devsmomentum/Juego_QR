@@ -312,14 +312,53 @@ class _WalletScreenState extends State<WalletScreen> {
                                     // or allow resume functionality. I'll allow resume.
                                     onResumePayment: _recentTransactions[index].canResumePayment
                                         ? () async {
-                                           // We need to implement resume logic or navigate to Full History
-                                           // Navigating to history is safer/easier context.
+                                           // Navigate to Full History for context
                                            Navigator.push(
                                               context,
                                               MaterialPageRoute(
                                                 builder: (_) => const TransactionHistoryScreen(),
                                               ),
+                                            ).then((_) => _loadRecentTransactions());
+                                          }
+                                        : null,
+                                    onCancelOrder: _recentTransactions[index].canCancel
+                                        ? () async {
+                                            // Cancel Logic with Confirmation
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                backgroundColor: AppTheme.cardBg,
+                                                title: const Text('Cancelar Orden', style: TextStyle(color: Colors.white)),
+                                                content: const Text(
+                                                  '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                                  style: TextStyle(color: Colors.white70),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: const Text('No', style: TextStyle(color: Colors.white54)),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
+                                                  ),
+                                                ],
+                                              ),
                                             );
+                                            
+                                            if (confirm != true) return;
+
+                                            setState(() => _isLoadingHistory = true);
+                                            final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
+                                                  backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                                ),
+                                              );
+                                              _loadRecentTransactions();
+                                            }
                                           }
                                         : null,
                                   );
