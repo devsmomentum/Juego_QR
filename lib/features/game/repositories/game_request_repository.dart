@@ -231,18 +231,25 @@ class GameRequestRepository implements IGameRequestRepository {
     try {
       final response = await _supabase
           .from('game_requests')
-          .select('*, profiles!inner(name, email), events!inner(name)')
+          .select('*, profiles(name, email), events(title)')
           .order('created_at', ascending: false);
 
+      debugPrint('GameRequestRepository: Raw response count: ${(response as List).length}');
+
       return (response as List).map((data) {
+        debugPrint('GameRequestRepository: Mapping request - ID: ${data['id']}, User: ${data['profiles']?['name']}, Event: ${data['events']?['title']}');
+        
         return GameRequest(
           id: data['id'],
           userId: data['user_id'],
           eventId: data['event_id'],
           status: data['status'],
+          createdAt: data['created_at'] != null 
+              ? DateTime.parse(data['created_at']) 
+              : null,
           userName: data['profiles']?['name'],
           userEmail: data['profiles']?['email'],
-          eventName: data['events']?['name'],
+          eventName: data['events']?['title'],
         );
       }).toList();
     } catch (e) {

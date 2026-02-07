@@ -49,6 +49,7 @@ import 'core/services/effect_timer_service.dart';
 import 'features/game/repositories/power_repository_impl.dart';
 import 'features/game/strategies/power_strategy_factory.dart';
 import 'features/game/repositories/game_request_repository.dart';
+import 'features/mall/providers/shop_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -215,6 +216,24 @@ class TreasureHuntApp extends StatelessWidget {
           final authService = Provider.of<AuthService>(context, listen: false);
           
           final provider = PaymentMethodProvider(repository: repo);
+          
+          // Register cleanup for logout
+          authService.onLogout(() async => provider.resetState());
+          
+          return provider;
+        }),
+        
+        // --- NEW: Phase 2 - Shop Provider ---
+        ChangeNotifierProvider(create: (context) {
+          final supabase = Supabase.instance.client;
+          final powerService = PowerService(supabaseClient: supabase);
+          final inventoryService = InventoryService(supabaseClient: supabase);
+          final authService = Provider.of<AuthService>(context, listen: false);
+          
+          final provider = ShopProvider(
+            powerService: powerService,
+            inventoryService: inventoryService,
+          );
           
           // Register cleanup for logout
           authService.onLogout(() async => provider.resetState());
