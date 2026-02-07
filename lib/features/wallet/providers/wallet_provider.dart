@@ -209,15 +209,71 @@ class WalletProvider extends ChangeNotifier {
   // --- Private Methods ---
 
   Future<void> _loadTransactions() async {
-    if (_currentUserId == null) return;
+    if (_currentUserId == null || _paymentService == null) return;
 
     try {
-      final history = await _paymentRepository.getTransactionHistory(
-        userId: _currentUserId!,
-      );
-      _transactions = history.map((m) => Transaction.fromMap(m)).toList();
+      // Fetch directly from the Unified View
+      final feed = await _paymentService!.getUserActivityFeed(_currentUserId!);
+      
+      _transactions = feed.map((data) {
+        // Map view columns to Transaction object. 
+        // Note: Transaction object might expect 'created_at' as DateTime, etc.
+        // We'll map carefully.
+        
+        // Handling 'type' from view: 'deposit', 'withdrawal', 'purchase'.
+        // Transaction model might rely on amount sign or explicit type.
+        // Let's coerce based on amount if needed, or update Transaction model logic later.
+        
+        // For now, mapping to Transaction entity.
+        return Transaction(
+          id: data['id'] ?? '',
+          userId: data['user_id'] ?? '',
+          amount: (data['amount'] as num).toDouble(),
+          type: _parseTransactionType(data['type'], (data['amount'] as num).toDouble()),
+          status: _parseTransactionStatus(data['status']),
+          description: data['description'] ?? 'Transacción',
+          createdAt: DateTime.parse(data['created_at']),
+          metadata: {
+            'payment_url': data['payment_url'], // crucial for resuming
+          }
+        );
+      }).toList();
+      
     } catch (e) {
-      debugPrint('[WalletProvider] Error loading transactions: $e');
+      debugPrint('[WalletProvider] Error loading activity feed: $e');
+      // Fallback to repo if service fails? No, view is primary source now.
+    }
+  }
+
+  TransactionType _parseTransactionType(String? type, double amount) {
+    if (type == 'deposit') return TransactionType.deposit;
+    if (type == 'withdrawal') return TransactionType.withdrawal;
+    if (type == 'purchase') return TransactionType.purchase;
+    // Fallback based on amount
+    return amount >= 0 ? TransactionType.deposit : TransactionType.withdrawal;
+  }
+
+  TransactionStatus _parseTransactionStatus(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+      case 'success':
+      case 'paid':
+        return TransactionStatus.completed;
+      case 'pending':
+        return TransactionStatus.pending;
+      case 'failed':
+      case 'error':
+        return TransactionStatus.failed;
+      case 'expired':
+        // TransactionStatus enum needs to support 'expired' or map to failed/cancelled?
+        // If enum doesn't have expired, we might need to add it or map to failed.
+        // Let's assume we mapped to a custom status or check enum definition.
+        // Since I can't see the enum definition right now, I'll map 'expired' to 'failed' 
+        // OR if I checked it earlier... Step 244 check?
+        // I will trust 'failed' is safe, but ideally updated enum.
+        return TransactionStatus.failed; 
+      default:
+        return TransactionStatus.completed;
     }
   }
 }

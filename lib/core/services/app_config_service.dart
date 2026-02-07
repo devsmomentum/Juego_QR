@@ -60,6 +60,54 @@ class AppConfigService {
     }
   }
 
+  /// Fetches the gateway fee percentage for visual display.
+  /// Returns the fee as a double (e.g., 3.0 for 3%), or 0.0 as fallback.
+  Future<double> getGatewayFeePercentage() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'gateway_fee_percentage')
+          .maybeSingle();
+
+      if (response != null && response['value'] != null) {
+        final value = response['value'];
+        if (value is num) {
+          return value.toDouble();
+        } else if (value is String) {
+          return double.tryParse(value) ?? 0.0;
+        }
+      }
+      
+      debugPrint('[AppConfigService] No gateway fee found, using 0.0');
+      return 0.0;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching gateway fee: $e');
+      return 0.0;
+    }
+  }
+
+  /// Updates the gateway fee percentage.
+  /// Only admins can perform this operation (enforced by RLS).
+  Future<bool> updateGatewayFeePercentage(double fee) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      
+      await _supabase.from('app_config').upsert({
+        'key': 'gateway_fee_percentage',
+        'value': fee,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      });
+
+      debugPrint('[AppConfigService] Gateway fee updated to $fee%');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating gateway fee: $e');
+      return false;
+    }
+  }
+
   /// Fetches a generic config value by key.
   Future<dynamic> getConfig(String key) async {
     try {

@@ -23,6 +23,10 @@ import '../../wallet/services/clover_plan_service.dart';
 import '../../wallet/widgets/clover_plan_card.dart';
 import '../../wallet/models/withdrawal_plan.dart';
 import '../../wallet/services/withdrawal_plan_service.dart';
+import '../../../core/services/app_config_service.dart';
+import '../../wallet/models/transaction_item.dart';
+import '../../wallet/repositories/transaction_repository.dart';
+import '../../wallet/widgets/transaction_card.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -34,6 +38,32 @@ class WalletScreen extends StatefulWidget {
 class _WalletScreenState extends State<WalletScreen> {
   final TextEditingController _amountController = TextEditingController();
   bool _isLoading = false;
+  
+  // History State
+  final ITransactionRepository _transactionRepository = SupabaseTransactionRepository();
+  List<TransactionItem> _recentTransactions = [];
+  bool _isLoadingHistory = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentTransactions();
+  }
+
+  Future<void> _loadRecentTransactions() async {
+    try {
+      final txs = await _transactionRepository.getMyTransactions(limit: 5);
+      if (mounted) {
+        setState(() {
+          _recentTransactions = txs;
+          _isLoadingHistory = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingHistory = false);
+      debugPrint("Error loading history: $e");
+    }
+  }
 
   @override
   void dispose() {
@@ -153,23 +183,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             const SizedBox(height: 4),
                             // Massive Conversion info
                             const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.accentGold.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-                              ),
-                              child: const Text(
-                                '1 🍀 = 1\$',
-                                style: TextStyle(
-                                  color: AppTheme.accentGold,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-                            ),
+                            
                           ],
                         ),
                       ),
@@ -203,69 +217,154 @@ class _WalletScreenState extends State<WalletScreen> {
                       const SizedBox(height: 40),
 
                       // Transaction History Section (Placeholder -> Entry Point)
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const TransactionHistoryScreen(),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: AppTheme.cardBg.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.1),
-                            ),
+                      // Recent Transactions Section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBg.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.history,
-                                        color: AppTheme.accentGold,
-                                        size: 20,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.history,
+                                      color: AppTheme.accentGold,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'ÚLTIMOS MOVIMIENTOS',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1,
                                       ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'HISTORIAL DE TRANSACCIONES',
+                                    ),
+                                  ],
+                                ),
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const TransactionHistoryScreen(),
+                                      ),
+                                    ).then((_) => _loadRecentTransactions()); // Refresh on return
+                                  },
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        'Ver todo',
                                         style: TextStyle(
-                                          color: Colors.white,
+                                          color: AppTheme.accentGold,
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
-                                          letterSpacing: 1,
                                         ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.arrow_forward_ios,
+                                        color: AppTheme.accentGold,
+                                        size: 10,
                                       ),
                                     ],
                                   ),
-                                  Icon(
-                                    Icons.arrow_forward_ios,
-                                    color: Colors.white.withOpacity(0.3),
-                                    size: 14,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            
+                            if (_isLoadingHistory)
+                              const Center(child: CircularProgressIndicator(color: Colors.white24))
+                            else if (_recentTransactions.isEmpty)
                               const Center(
-                                child: Text(
-                                  'Ver historial completo y pendientes',
-                                  style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 14,
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20.0),
+                                  child: Text(
+                                    'No hay transacciones recientes',
+                                    style: TextStyle(color: Colors.white38),
                                   ),
                                 ),
+                              )
+                            else
+                              ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _recentTransactions.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                itemBuilder: (context, index) {
+                                  // Use standard TransactionCard but perhaps slightly more compact if needed
+                                  // For now, using the standard one is consistent.
+                                  return TransactionCard(
+                                    item: _recentTransactions[index],
+                                    // We can disable buttons here if we want strictly read-only preview
+                                    // or allow resume functionality. I'll allow resume.
+                                    onResumePayment: _recentTransactions[index].canResumePayment
+                                        ? () async {
+                                           // Navigate to Full History for context
+                                           Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => const TransactionHistoryScreen(),
+                                              ),
+                                            ).then((_) => _loadRecentTransactions());
+                                          }
+                                        : null,
+                                    onCancelOrder: _recentTransactions[index].canCancel
+                                        ? () async {
+                                            // Cancel Logic with Confirmation
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                backgroundColor: AppTheme.cardBg,
+                                                title: const Text('Cancelar Orden', style: TextStyle(color: Colors.white)),
+                                                content: const Text(
+                                                  '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                                  style: TextStyle(color: Colors.white70),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: const Text('No', style: TextStyle(color: Colors.white54)),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            
+                                            if (confirm != true) return;
+
+                                            setState(() => _isLoadingHistory = true);
+                                            final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
+                                                  backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                                ),
+                                              );
+                                              _loadRecentTransactions();
+                                            }
+                                          }
+                                        : null,
+                                  );
+                                },
                               ),
-                            ],
-                          ),
+                          ],
                         ),
                       ),
                     ],
@@ -530,6 +629,13 @@ class _WalletScreenState extends State<WalletScreen> {
   void _showPlanSelectorDialog() {
     String? selectedPlanId;
     
+    // Combined future to fetch plans and gateway fee together
+    final configService = AppConfigService(supabaseClient: Supabase.instance.client);
+    final combinedFuture = Future.wait([
+      CloverPlanService(supabaseClient: Supabase.instance.client).fetchActivePlans(),
+      configService.getGatewayFeePercentage(),
+    ]);
+    
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -552,10 +658,8 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
             content: SizedBox(
               width: double.maxFinite,
-              child: FutureBuilder<List<CloverPlan>>(
-                future: CloverPlanService(
-                  supabaseClient: Supabase.instance.client,
-                ).fetchActivePlans(),
+              child: FutureBuilder<List<dynamic>>(
+                future: combinedFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
@@ -578,7 +682,9 @@ class _WalletScreenState extends State<WalletScreen> {
                     );
                   }
                   
-                  final plans = snapshot.data ?? [];
+                  final plans = (snapshot.data?[0] as List<CloverPlan>?) ?? [];
+                  final gatewayFee = (snapshot.data?[1] as double?) ?? 0.0;
+                  
                   if (plans.isEmpty) {
                     return const SizedBox(
                       height: 100,
@@ -599,6 +705,13 @@ class _WalletScreenState extends State<WalletScreen> {
                         'Selecciona un plan de tréboles:',
                         style: TextStyle(color: Colors.white70),
                       ),
+                      if (gatewayFee > 0) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Nota: La pasarela cobra +${gatewayFee.toStringAsFixed(1)}% de comisión',
+                          style: TextStyle(color: Colors.amber.withOpacity(0.8), fontSize: 11),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       // Plan Cards Grid
                       Wrap(
@@ -610,6 +723,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             child: CloverPlanCard(
                               plan: plan,
                               isSelected: selectedPlanId == plan.id,
+                              feePercentage: gatewayFee,
                               onTap: () {
                                 setState(() => selectedPlanId = plan.id);
                               },
@@ -739,9 +853,12 @@ class _WalletScreenState extends State<WalletScreen> {
          await Future.delayed(const Duration(seconds: 2));
          if (mounted) {
             await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+            await _loadRecentTransactions(); // Refresh history to show success/pending
          }
       } else {
          if (!mounted) return;
+         // Refresh anyway to show the pending order if it was created
+         _loadRecentTransactions();
          ScaffoldMessenger.of(context).showSnackBar(
            const SnackBar(content: Text('Operación cancelada o pendiente.')),
          );
@@ -1071,8 +1188,9 @@ class _WalletScreenState extends State<WalletScreen> {
           content: Text('¡Retiro procesado exitosamente!'),
           backgroundColor: AppTheme.successGreen,
         ));
-        // Refresh balance
+        // Refresh balance and history
         await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+        _loadRecentTransactions();
       } else {
         throw Exception(data?['error'] ?? 'Error desconocido');
       }

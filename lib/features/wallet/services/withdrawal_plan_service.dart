@@ -13,8 +13,9 @@ class WithdrawalPlanService {
   Future<List<WithdrawalPlan>> fetchActivePlans() async {
     try {
       final response = await _supabase
-          .from('withdrawal_plans')
+          .from('transaction_plans')
           .select()
+          .eq('type', 'withdraw')
           .eq('is_active', true)
           .order('sort_order');
 
@@ -31,8 +32,9 @@ class WithdrawalPlanService {
   Future<List<WithdrawalPlan>> fetchAllPlans() async {
     try {
       final response = await _supabase
-          .from('withdrawal_plans')
+          .from('transaction_plans')
           .select()
+          .eq('type', 'withdraw')
           .order('sort_order');
 
       return (response as List)
@@ -55,12 +57,12 @@ class WithdrawalPlanService {
       'updated_at': DateTime.now().toIso8601String(),
     };
 
-    if (cloversCost != null) updates['clovers_cost'] = cloversCost;
-    if (amountUsd != null) updates['amount_usd'] = amountUsd;
+    if (cloversCost != null) updates['amount'] = cloversCost; // Map to 'amount'
+    if (amountUsd != null) updates['price'] = amountUsd; // Map to 'price'
     if (isActive != null) updates['is_active'] = isActive;
 
     await _supabase
-        .from('withdrawal_plans')
+        .from('transaction_plans')
         .update(updates)
         .eq('id', planId);
 
@@ -74,11 +76,12 @@ class WithdrawalPlanService {
     required double amountUsd,
     String? icon,
   }) async {
-    await _supabase.from('withdrawal_plans').insert({
+    await _supabase.from('transaction_plans').insert({
       'name': name,
-      'clovers_cost': cloversCost,
-      'amount_usd': amountUsd,
-      'icon': icon ?? '💸',
+      'amount': cloversCost, // Map to 'amount'
+      'price': amountUsd, // Map to 'price'
+      'type': 'withdraw', // Explicit Type
+      'icon_url': icon ?? '💸', // Map to 'icon_url'
       'is_active': true,
     });
 

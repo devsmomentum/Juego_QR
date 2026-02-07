@@ -56,11 +56,12 @@ serve(async (req) => {
       serviceRoleKey,
     );
 
-    // 4. VALIDATE PLAN FROM DATABASE (Server-Side Truth)
+    // 4. VALIDATE PLAN FROM DATABASE (Unified Table)
     const { data: plan, error: planError } = await supabaseAdmin
-      .from("clover_plans")
-      .select("id, name, clovers_quantity, price_usd, is_active")
+      .from("transaction_plans")
+      .select("id, name, amount, price, is_active, type")
       .eq("id", plan_id)
+      .eq("type", "buy") // Security: Ensure it is a BUY plan
       .single();
 
     if (planError) {
@@ -77,8 +78,9 @@ serve(async (req) => {
     }
 
     // CRITICAL: Use price from DATABASE, not from client
-    const amount = plan.price_usd;
-    const cloversQuantity = plan.clovers_quantity;
+    // CRITICAL: Use price from DATABASE
+    const amount = plan.price;
+    const cloversQuantity = plan.amount;
     const currency = "USD"; // Always USD
 
     console.log(

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/glitch_text.dart';
 import '../models/transaction_item.dart';
-import '../providers/wallet_provider.dart';
-import '../services/payment_service.dart';
+import '../repositories/transaction_repository.dart';
+import '../providers/wallet_provider.dart'; // Keep for balance refresh only
 import '../widgets/payment_webview_modal.dart';
 import '../widgets/transaction_card.dart';
 
@@ -18,122 +17,29 @@ class TransactionHistoryScreen extends StatefulWidget {
 }
 
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
-  // Use PaymentService to fetch pending orders directly
-  late final PaymentService _paymentService;
-  bool _isLoading = true;
-  List<TransactionItem> _items = [];
+  final ITransactionRepository _repository = SupabaseTransactionRepository();
+  late Future<List<TransactionItem>> _transactionsFuture;
+  
+  String _selectedFilter = 'Todos'; // 'Todos', 'Exitoso', 'Pendiente', 'Fallido', 'Expirado'
+  final List<String> _filters = ['Todos', 'Exitoso', 'Pendiente', 'Fallido', 'Expirado'];
 
   @override
   void initState() {
     super.initState();
-    _paymentService = PaymentService(Supabase.instance.client);
-    // Initialize data fetch
+    _loadData();
+  }
+
+  void _loadData() {
+    setState(() {
+      _transactionsFuture = _repository.getMyTransactions();
+    });
+    // Also refresh balance in background
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchData();
+       Provider.of<WalletProvider>(context, listen: false).refreshBalance();
     });
   }
 
-  Future<void> _fetchData() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    final walletProvider = Provider.of<WalletProvider>(context, listen: false);
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-
-    if (userId == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      // 1. Ensure Ledger is loaded
-      // We assume walletProvider is already initialized, but refreshing is good.
-      await walletProvider.refreshBalance(); // This also reloads transactions in current implementation? 
-      // Checking WalletProvider: _loadTransactions is private and called in initialize or topUp. 
-      // refreshBalance calls getBalance but NOT _loadTransactions in the code I saw?
-      // Wait, let's look at WalletProvider code again. 
-      // refreshBalance calls _paymentRepository.getBalance but NOT loadTransactions.
-      // initialize calls _loadTransactions.
-      // So we might need to rely on what's already there or add a method to refresh transactions.
-      // For now, let's assume transactions are loaded or we use what's available.
-      
-      // 2. Fetch Pending Orders
-      final pendingOrdersFuture = _paymentService.getPendingOrders(userId);
-      
-      final results = await Future.wait([
-        // Future.value(walletProvider.transactions), // Actually we want fresh data if possible
-        pendingOrdersFuture,
-      ]);
-
-      final pendingOrders = results[0] as List<Map<String, dynamic>>;
-      final ledgerTransactions = walletProvider.transactions;
-
-      // 3. Merge Strategies
-      final List<TransactionItem> mergedItems = [];
-
-      // Map Ledger (Confirmed)
-      for (final tx in ledgerTransactions) {
-        // We only show confirmed stuff from ledger usually, or based on status.
-        // The user said: "status = 'completed'. Si amount > 0 'deposit', < 0 'withdrawal'"
-        // Transaction model has status field.
-        
-        // Skip if not completed? User said "El historial confirmado...".
-        // But TransactionStatus could be 'pending' in ledger too? 
-        // User said: "Source 1: wallet_ledger... Mapping: status = 'completed'".
-        // So I force status to completed for these? Or I only take completed ones?
-        // "Trae todos los registros... Mapeo: status = 'completed'." -> imply visually they show as completed/historical.
-        
-        String type = tx.amount >= 0 ? 'deposit' : 'withdrawal';
-        
-        mergedItems.add(TransactionItem(
-          date: tx.createdAt,
-          amount: tx.amount.abs(), // Visuals handle sign usually, but card expects amount. Card displays +/- based on type.
-          // Wait, Card code: '${isWithdrawal ? '-' : '+'}${item.amount.toStringAsFixed(2)}'
-          // So I should pass positive amount to Card if I use type to distinguish.
-          description: tx.description ?? (type == 'deposit' ? 'Recarga' : 'Retiro'),
-          status: 'completed',
-          type: type,
-        ));
-      }
-
-      // Map Pending Orders
-      for (final order in pendingOrders) {
-        // "Trae SOLO los registros donde status sea 'pending' o 'failed'"
-        // Already filtered in service.
-        final status = order['status'] as String? ?? 'pending';
-        final amount = (order['amount'] as num).toDouble();
-        final createdString = order['created_at'] as String;
-        final date = DateTime.parse(createdString);
-        final paymentUrl = order['payment_url'] as String?;
-
-        mergedItems.add(TransactionItem(
-          date: date,
-          amount: amount,
-          description: 'Intento de Compra', // or order['motive']
-          status: status,
-          type: 'deposit', // Orders are usually attempts to deposit money
-          paymentUrl: paymentUrl,
-        ));
-      }
-
-      // 4. Sort by Date Descending
-      mergedItems.sort((a, b) => b.date.compareTo(a.date));
-
-      if (mounted) {
-        setState(() {
-          _items = mergedItems;
-          _isLoading = false;
-        });
-      }
-
-    } catch (e) {
-      debugPrint('Error fetching history: $e');
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   void _onResumePayment(String url) async {
-    // Open PaymentWebViewModal
     final bool? result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -149,17 +55,39 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       ),
     );
 
-    // Refresh list regardless of result to show updated status if changed in DB
-    // (Though webhooks might take a moment, so maybe delay?)
     if (result == true) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Pago completado. Actualizando...'),
           backgroundColor: AppTheme.successGreen,
         ),
       );
+      _loadData(); // Reload list
     }
-    _fetchData();
+  }
+
+  List<TransactionItem> _filterTransactions(List<TransactionItem> allItems) {
+    if (_selectedFilter == 'Todos') {
+      return allItems;
+    }
+
+    return allItems.where((tx) {
+      final status = tx.status.toLowerCase();
+      
+      switch (_selectedFilter) {
+        case 'Exitoso':
+          return status == 'completed' || status == 'success' || status == 'paid';
+        case 'Pendiente':
+          return status == 'pending';
+        case 'Fallido':
+          return status == 'failed' || status == 'error';
+        case 'Expirado':
+          return status == 'expired';
+        default:
+          return true;
+      }
+    }).toList();
   }
 
   @override
@@ -190,34 +118,162 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       text: "Historial",
                       fontSize: 22,
                     ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: AppTheme.accentGold),
+                      onPressed: _loadData,
+                    ),
                   ],
                 ),
               ),
 
-              // List
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGold))
-                    : _items.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No hay transacciones registradas',
-                              style: TextStyle(color: Colors.white54),
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.only(bottom: 20),
-                            itemCount: _items.length,
-                            itemBuilder: (context, index) {
-                              final item = _items[index];
-                              return TransactionCard(
-                                item: item,
-                                onResumePayment: (item.status == 'pending' && item.paymentUrl != null)
-                                    ? () => _onResumePayment(item.paymentUrl!)
-                                    : null,
-                              );
-                            },
+              // Filters
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: _filters.map((filter) {
+                    final isSelected = _selectedFilter == filter;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ChoiceChip(
+                        label: Text(
+                          filter,
+                          style: TextStyle(
+                            color: isSelected ? Colors.black : Colors.white70,
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
+                        selected: isSelected,
+                        selectedColor: AppTheme.accentGold,
+                        backgroundColor: Colors.white10,
+                        onSelected: (bool selected) {
+                          if (selected) {
+                            setState(() => _selectedFilter = filter);
+                          }
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Transaction List FutureBuilder
+              Expanded(
+                child: FutureBuilder<List<TransactionItem>>(
+                  future: _transactionsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: AppTheme.accentGold));
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.error_outline, size: 48, color: AppTheme.dangerRed),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Error al cargar historial:\n${snapshot.error}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadData,
+                                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                                child: const Text("Reintentar"),
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    final allItems = snapshot.data ?? [];
+                    final filteredItems = _filterTransactions(allItems);
+
+                    if (filteredItems.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.history_toggle_off, size: 60, color: Colors.white24),
+                            const SizedBox(height: 16),
+                            Text(
+                              allItems.isEmpty 
+                                  ? 'No tienes movimientos aún.' 
+                                  : 'No hay transacciones ${_selectedFilter != 'Todos' ? '$_selectedFilter(s)' : ''}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      itemCount: filteredItems.length,
+                      itemBuilder: (context, index) {
+                        final item = filteredItems[index];
+                        return TransactionCard(
+                          item: item,
+                          onResumePayment: item.canResumePayment
+                              ? () => _onResumePayment(item.paymentUrl!)
+                              : null,
+                          onCancelOrder: item.canCancel
+                              ? () async {
+                                  // Confirmation Dialog
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      backgroundColor: AppTheme.cardBg,
+                                      title: const Text('Cancelar Orden', style: TextStyle(color: Colors.white)),
+                                      content: const Text(
+                                        '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                        style: TextStyle(color: Colors.white70),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text('No', style: TextStyle(color: Colors.white54)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  
+                                  if (confirm != true) return;
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Cancelando orden...')),
+                                  );
+                                  
+                                  final success = await _repository.cancelOrder(item.id);
+                                  
+                                  if (mounted) {
+                                     ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(success ? 'Orden cancelada exitosamente' : 'Error al cancelar'),
+                                        backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                      ),
+                                    );
+                                    if (success) _loadData();
+                                  }
+                                }
+                              : null,
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -226,3 +282,4 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     );
   }
 }
+

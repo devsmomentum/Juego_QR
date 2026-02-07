@@ -26,10 +26,10 @@ class WithdrawalPlan {
     return WithdrawalPlan(
       id: json['id'] as String,
       name: json['name'] as String,
-      cloversCost: json['clovers_cost'] as int,
-      amountUsd: (json['amount_usd'] as num).toDouble(),
+      cloversCost: json['amount'] as int, // Mapped from 'amount'
+      amountUsd: (json['price'] as num).toDouble(), // Mapped from 'price'
       isActive: json['is_active'] as bool? ?? true,
-      icon: json['icon'] as String?,
+      icon: json['icon_url'] as String?, // Mapped from 'icon_url'
       sortOrder: json['sort_order'] as int? ?? 0,
     );
   }
@@ -38,10 +38,10 @@ class WithdrawalPlan {
     return {
       'id': id,
       'name': name,
-      'clovers_cost': cloversCost,
-      'amount_usd': amountUsd,
+      'amount': cloversCost, // Mapped to 'amount'
+      'price': amountUsd, // Mapped to 'price'
       'is_active': isActive,
-      'icon': icon,
+      'icon_url': icon, // Mapped to 'icon_url'
       'sort_order': sortOrder,
     };
   }
