@@ -2,7 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../features/game/providers/game_provider.dart';
-import '../../features/game/providers/power_effect_provider.dart';
+import '../../features/game/providers/game_provider.dart';
+import '../../features/game/providers/power_interfaces.dart';
 import '../../features/game/widgets/effects/blind_effect.dart';
 import '../../features/game/widgets/effects/freeze_effect.dart';
 
@@ -63,8 +64,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   // NEW: Timer expiration subscription for guaranteed unlock
   StreamSubscription<EffectEvent>? _timerEventSubscription;
 
-  // Cached provider references to avoid context access in callbacks
-  PowerEffectProvider? _powerProviderRef;
+  // Cached provider references
+  PowerEffectReader? _powerReaderRef;
+  PowerEffectManager? _powerManagerRef;
   PlayerProvider? _playerProviderRef;
   GameProvider? _gameProviderRef;
   String? _lastKnownGamePlayerId;
@@ -80,11 +82,12 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       debugPrint('[DEBUG] 🎭 SabotageOverlay.initState() - PostFrameCallback START');
       
       // Cache provider references
-      _powerProviderRef = Provider.of<PowerEffectProvider>(context, listen: false);
+      _powerReaderRef = Provider.of<PowerEffectReader>(context, listen: false);
+      _powerManagerRef = Provider.of<PowerEffectManager>(context, listen: false);
       _gameProviderRef = Provider.of<GameProvider>(context, listen: false);
       _playerProviderRef = Provider.of<PlayerProvider>(context, listen: false);
 
-      debugPrint('[DEBUG]    powerProvider.listeningForId: ${_powerProviderRef?.listeningForId}');
+      debugPrint('[DEBUG]    powerManager present: ${_powerManagerRef != null}');
       debugPrint('[DEBUG]    playerProvider.gamePlayerId: ${_playerProviderRef?.currentPlayer?.gamePlayerId}');
 
       // Configurar el handler y listener
@@ -93,17 +96,17 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       
       // Listener para Stream de Feedback
       _feedbackSubscription?.cancel();
-      _feedbackSubscription = _powerProviderRef?.feedbackStream.listen(_handleFeedback);
+      _feedbackSubscription = _powerReaderRef?.feedbackStream.listen(_handleFeedback);
       
       // Listener para manejar cambios de bloqueo de navegación
-      _powerProviderRef?.addListener(_handlePowerChanges);
+      _powerReaderRef?.addListener(_handlePowerChanges);
       
       // CRITICAL: Listener para detectar cuando gamePlayerId cambia
       _playerProviderRef?.addListener(_onPlayerChanged);
 
       // NEW: Subscribe to timer expiration events for GUARANTEED screen unlock
       _timerEventSubscription?.cancel();
-      _timerEventSubscription = _powerProviderRef?.timerService.effectStream.listen((event) {
+      _timerEventSubscription = _powerReaderRef?.effectStream.listen((event) {
         // CRITICAL: Check mounted IMMEDIATELY before any state access
         if (!mounted) return;
         
@@ -138,7 +141,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
          _tryStartListening();
        } else {
          debugPrint('[DEBUG] 🛑 SabotageOverlay: Stopping listener (User left game)');
-         _powerProviderRef?.startListening(null, forceRestart: true);
+         _powerManagerRef?.startListening(null, forceRestart: true);
        }
     }
   }
@@ -238,9 +241,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   }
 
   void _tryStartListening() {
-    final powerProvider = _powerProviderRef;
+    final powerManager = _powerManagerRef;
     final playerProvider = _playerProviderRef;
-    if (powerProvider == null || playerProvider == null) return;
+    if (powerManager == null || playerProvider == null) return;
 
     final currentGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
     final currentEventId = playerProvider.currentPlayer?.currentEventId;
@@ -248,7 +251,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     if (currentGamePlayerId != null && currentGamePlayerId.isNotEmpty) {
       debugPrint('[DEBUG] 🔄 SabotageOverlay: Iniciando listener con gamePlayerId: $currentGamePlayerId, eventId: $currentEventId');
       _lastKnownGamePlayerId = currentGamePlayerId;
-      powerProvider.startListening(currentGamePlayerId, eventId: currentEventId, forceRestart: true);
+      powerManager.startListening(currentGamePlayerId, eventId: currentEventId, forceRestart: true);
     } else {
       debugPrint('[DEBUG] ⚠️ SabotageOverlay: gamePlayerId aún es NULL, esperando cambio...');
     }
@@ -263,7 +266,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     _timerEventSubscription?.cancel(); // NEW: Cancel timer event subscription
     
     // Remove listeners using cached references (safe, no context access)
-    _powerProviderRef?.removeListener(_handlePowerChanges);
+    _powerReaderRef?.removeListener(_handlePowerChanges);
     _playerProviderRef?.removeListener(_onPlayerChanged);
     
     super.dispose();
@@ -273,7 +276,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     if (!mounted) return;
     
     // Use cached refs instead of context access
-    final powerProvider = _powerProviderRef;
+    final powerProvider = _powerReaderRef;
     final gameProvider = _gameProviderRef;
     final playerProvider = _playerProviderRef;
     
@@ -378,7 +381,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   Widget build(BuildContext context) {
     // Usamos Consumer para escuchar cambios de forma segura en el árbol de widgets
     // Esto evita problemas de assertions durante reclasificación de ancestros (reparanting)
-    return Consumer3<PowerEffectProvider, PlayerProvider, GameProvider>(
+    return Consumer3<PowerEffectReader, PlayerProvider, GameProvider>(
       builder: (context, powerProvider, playerProvider, gameProvider, child) {
         
         // Usamos _localDefenseAction en lugar de activeDefenseAction del provider

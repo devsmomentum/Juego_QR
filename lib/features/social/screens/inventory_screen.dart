@@ -9,7 +9,7 @@ import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
 import '../widgets/inventory_item_card.dart';
 import '../../mall/screens/mall_screen.dart';
 import '../../../shared/utils/game_ui_utils.dart';
-import '../../game/providers/power_effect_provider.dart';
+import '../../game/providers/power_interfaces.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 // PowerSwipeAction se mantiene disponible pero no se usa en este flujo simplificado
 
@@ -189,7 +189,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 ),
                               );
 
-                              final effectProvider = Provider.of<PowerEffectProvider>(context);
+                              final effectProvider = Provider.of<PowerEffectReader>(context);
                               // Solo verificamos estado activo para poderes defensivos personales
                               final isDefensive = ['shield', 'invisibility', 'return'].contains(itemDef.id);
                               final isActive = isDefensive && effectProvider.isEffectActive(itemDef.id);
@@ -248,7 +248,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       BuildContext context, PowerItem item, String myPlayerId) async {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final effectProvider =
-        Provider.of<PowerEffectProvider>(context, listen: false);
+        Provider.of<PowerEffectManager>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
 
@@ -463,7 +463,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Future<void> _executePower(
       PowerItem item, String targetGamePlayerId, String targetName,
       {required bool isOffensive,
-      required PowerEffectProvider effectProvider,
+      required PowerEffectManager effectProvider,
       required GameProvider gameProvider}) async {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 

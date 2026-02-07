@@ -10,7 +10,7 @@ import '../../../shared/models/player.dart'; // Import Player model
 import '../providers/connectivity_provider.dart';
 import '../../mall/models/power_item.dart';
 import '../widgets/effects/blur_effect.dart';
-import '../providers/power_effect_provider.dart';
+import '../providers/power_interfaces.dart';
 // --- Imports de Minijuegos Existentes ---
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
 import '../widgets/minigames/tic_tac_toe_minigame.dart';
@@ -1160,10 +1160,10 @@ Widget _buildMinigameScaffold(
 
                   // EFECTO BLUR (Inyectado aquí)
                   // EFECTO BLUR (Inyectado aquí)
-                  if (context.watch<PowerEffectProvider>().isPowerActive(PowerType.blur))
+                  if (context.watch<PowerEffectReader>().isPowerActive(PowerType.blur))
                     Builder(
                       builder: (context) {
-                         final expiry = context.read<PowerEffectProvider>().getPowerExpirationByType(PowerType.blur);
+                         final expiry = context.read<PowerEffectReader>().getPowerExpirationByType(PowerType.blur);
                          if (expiry != null) {
                            return Positioned.fill(
                              child: BlurScreenEffect(expiresAt: expiry),

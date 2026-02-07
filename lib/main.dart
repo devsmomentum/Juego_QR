@@ -19,6 +19,7 @@ import 'core/theme/app_theme.dart';
 
 import 'features/game/providers/event_provider.dart'; 
 import 'features/game/providers/power_effect_provider.dart';
+import 'features/game/providers/power_interfaces.dart';
 import 'features/game/providers/connectivity_provider.dart';
 import 'features/admin/screens/admin_login_screen.dart'; 
 import 'shared/widgets/sabotage_overlay.dart';
@@ -148,6 +149,13 @@ class TreasureHuntApp extends StatelessWidget {
            authService.onLogout(() async => provider.resetState());
            return provider;
         }),
+        // ISP Proxies
+        ListenableProxyProvider<PowerEffectProvider, PowerEffectReader>(
+           update: (_, provider, __) => provider,
+        ),
+        ListenableProxyProvider<PowerEffectProvider, PowerEffectManager>(
+           update: (_, provider, __) => provider,
+        ),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AppModeProvider()),
         

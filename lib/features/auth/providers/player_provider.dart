@@ -6,6 +6,7 @@ import '../../mall/models/power_item.dart';
 import '../../../shared/models/player.dart';
 import '../../../shared/interfaces/i_resettable.dart';
 import '../../game/providers/power_effect_provider.dart';
+import '../../game/providers/power_interfaces.dart';
 import '../../game/providers/game_provider.dart';
 import '../services/auth_service.dart';
 import '../services/inventory_service.dart';
@@ -510,7 +511,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   }
 
   /// Sync real inventory from backend.
-  Future<void> syncRealInventory({PowerEffectProvider? effectProvider}) async {
+  Future<void> syncRealInventory({PowerEffectManager? effectProvider}) async {
     if (_currentPlayer == null) {
       debugPrint('[DEBUG] ❌ syncRealInventory: _currentPlayer is NULL');
       return;
@@ -574,7 +575,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Future<PowerUseResult> usePower({
     required String powerSlug,
     required String targetGamePlayerId,
-    required PowerEffectProvider effectProvider,
+    required PowerEffectManager effectProvider,
     GameProvider? gameProvider,
     bool allowReturnForward = true,
   }) async {

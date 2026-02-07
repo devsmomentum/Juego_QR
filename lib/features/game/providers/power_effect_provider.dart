@@ -5,15 +5,10 @@ import '../strategies/power_strategy_factory.dart';
 import '../../mall/models/power_item.dart';
 import '../../../core/services/effect_timer_service.dart';
 
-enum PowerFeedbackType { lifeStolen, shieldBroken, attackBlocked, defenseSuccess, returned, stealFailed }
+import 'power_interfaces.dart';
 
-class PowerFeedbackEvent {
-  final PowerFeedbackType type;
-  final String message;
-  final String? relatedPlayerName;
-  
-  PowerFeedbackEvent(this.type, {this.message = '', this.relatedPlayerName});
-}
+// EXPORT TO MAINTAIN BACKWARD COMPATIBILITY
+export 'power_interfaces.dart'; 
 
 /// Provider encargado de escuchar y gestionar los efectos de poderes en tiempo real.
 ///
@@ -24,7 +19,7 @@ class PowerFeedbackEvent {
 /// - Gestionar la duración y expiración de los efectos visuales.
 /// - Lógica de defensa (Escudos y Reflejo/Return).
 /// - Coordinar efectos especiales como Life Steal.
-class PowerEffectProvider extends ChangeNotifier {
+class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, PowerEffectManager {
   // --- DEPENDENCY INJECTION (Phase 1 Refactoring) ---
   final SupabaseClient _supabase;
   final EffectTimerService _timerService;
@@ -45,6 +40,9 @@ class PowerEffectProvider extends ChangeNotifier {
 
   // --- EXPOSE TIMER SERVICE FOR STRATEGIES ---
   EffectTimerService get timerService => _timerService;
+
+  @override
+  Stream<EffectEvent> get effectStream => _timerService.effectStream;
 
   StreamSubscription? _subscription;
   StreamSubscription? _casterSubscription; 
@@ -353,14 +351,14 @@ class PowerEffectProvider extends ChangeNotifier {
   /// Aplica un efecto y gestiona su temporizador.
   /// 
   /// DELEGATED to EffectTimerService (SRP compliance).
-  void applyEffect({
+  Future<void> applyEffect({
     required String slug,
     required Duration duration,
     String? effectId,
     String? casterId,
     required DateTime expiresAt,
     Duration? dbDuration, // Optional: authoritative duration from database
-  }) {
+  }) async {
     // 🛡️ RACE CONDITION FIX:
     // If we stopped listening (user left game), do NOT apply new effects.
     if (_listeningForId == null) {
@@ -691,6 +689,7 @@ class PowerEffectProvider extends ChangeNotifier {
   }
 
   /// Resets the provider state, stopping all listeners and clearing effects.
+  @override
   void resetState() {
     debugPrint('[PowerEffectProvider] 🧹 Resetting State (Logout/Cleanup)');
     startListening(null, forceRestart: true);
@@ -700,6 +699,11 @@ class PowerEffectProvider extends ChangeNotifier {
     _returnedAgainstCasterId = null;
     _listeningForEventId = null;
     notifyListeners();
+  }
+
+  @override
+  void stopListening() {
+    startListening(null);
   }
 
   @override
@@ -717,4 +721,4 @@ class PowerEffectProvider extends ChangeNotifier {
 
 // REMOVED: _ActiveEffect class - moved to EffectTimerService (SRP compliance)
 
-enum DefenseAction { shieldBlocked, returned, stealFailed, shieldBroken, attackBlockedByEnemy }
+

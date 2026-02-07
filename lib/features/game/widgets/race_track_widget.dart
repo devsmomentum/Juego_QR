@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/player.dart';
 import '../../game/models/race_view_data.dart';
-import '../providers/power_effect_provider.dart';
+import '../providers/power_interfaces.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../services/race_logic_service.dart';
@@ -36,7 +36,7 @@ class RaceTrackWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final effectProvider = Provider.of<PowerEffectProvider>(context);
+    final effectProvider = Provider.of<PowerEffectManager>(context);
     final gameProvider = Provider.of<GameProvider>(context);
     final String? myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
 
@@ -292,7 +292,7 @@ class RaceTrackWidget extends StatelessWidget {
     required String targetName,
     required bool isTargetSelf,
     required PlayerProvider playerProvider,
-    required PowerEffectProvider effectProvider,
+    required PowerEffectManager effectProvider,
     required GameProvider gameProvider,
   }) async {
     // Set loading state

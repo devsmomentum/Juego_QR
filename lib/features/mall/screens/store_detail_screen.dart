@@ -4,7 +4,7 @@ import '../models/mall_store.dart';
 import '../models/power_item.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../game/providers/game_provider.dart';
-import '../../game/providers/power_effect_provider.dart';
+import '../../game/providers/power_interfaces.dart';
 import '../../../core/theme/app_theme.dart';
 import '../widgets/shop_item_card.dart';
 import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
@@ -76,7 +76,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
       if (successCount > 0) {
         // CRITICAL FIX: Sincronizar inventario inmediatamente
-        final effectProvider = Provider.of<PowerEffectProvider>(context, listen: false);
+        final effectProvider = Provider.of<PowerEffectManager>(context, listen: false);
         await playerProvider.syncRealInventory(effectProvider: effectProvider);
         
         // Actualizar vidas si es necesario
