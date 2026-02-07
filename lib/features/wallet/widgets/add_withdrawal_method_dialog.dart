@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../auth/providers/player_provider.dart';
+import '../providers/payment_method_provider.dart';
+import '../repositories/payment_method_repository.dart';
 
+/// Pure UI Dialog for adding withdrawal methods
+/// 
+/// Responsibilities:
+/// - Display form for bank selection
+/// - Validate user input
+/// - Delegate creation to PaymentMethodProvider
 class AddWithdrawalMethodDialog extends StatefulWidget {
   const AddWithdrawalMethodDialog({super.key});
 
@@ -47,6 +54,7 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
 
     try {
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final paymentProvider = Provider.of<PaymentMethodProvider>(context, listen: false);
       final player = playerProvider.currentPlayer;
 
       if (player == null) throw Exception('Usuario no identificado');
@@ -54,23 +62,33 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
          throw Exception('Perfil incompleto (Faltan datos de identidad)');
       }
 
-      await Supabase.instance.client.from('user_payment_methods').insert({
-        'user_id': player.userId,
-        'bank_code': _selectedBankCode,
-        'phone_number': player.phone,
-        'dni': player.cedula,
-        'is_default': false, // or true if it's the first one logic
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      final data = PaymentMethodCreate(
+        userId: player.userId,
+        bankCode: _selectedBankCode!,
+        phoneNumber: player.phone!,
+        dni: player.cedula!,
+        isDefault: false,
+      );
+
+      final success = await paymentProvider.createMethod(data);
 
       if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Método de retiro agregado'),
-            backgroundColor: AppTheme.successGreen,
-          ),
-        );
+        if (success) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Método de retiro agregado'),
+              backgroundColor: AppTheme.successGreen,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(paymentProvider.error ?? 'Error desconocido'),
+              backgroundColor: AppTheme.dangerRed,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

@@ -832,11 +832,15 @@ class _WalletScreenState extends State<WalletScreen> {
         isDismissible: false,
         enableDrag: false,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => Padding(
-          padding: EdgeInsets.only(top: MediaQuery.of(context).size.height * 0.1),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: PaymentWebViewModal(paymentUrl: paymentUrl),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 20,
+            ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: PaymentWebViewModal(paymentUrl: paymentUrl),
+            ),
           ),
         ),
       );

@@ -39,6 +39,8 @@ import 'features/events/services/event_service.dart';
 import 'core/repositories/lives_repository.dart';
 import 'core/repositories/mock_payment_repository.dart';
 import 'features/wallet/providers/wallet_provider.dart';
+import 'features/wallet/providers/payment_method_provider.dart';
+import 'features/wallet/repositories/payment_method_repository.dart';
 import 'features/auth/providers/player_inventory_provider.dart';
 import 'features/auth/providers/player_stats_provider.dart';
 import 'features/game/services/game_stream_service.dart';
@@ -194,6 +196,22 @@ class TreasureHuntApp extends StatelessWidget {
             paymentRepository: paymentRepo,
             paymentService: paymentService,
           );
+        }),
+        
+        // --- NEW: Payment Method Management ---
+        Provider<PaymentMethodRepository>(
+          create: (_) => PaymentMethodRepository(supabaseClient: Supabase.instance.client),
+        ),
+        ChangeNotifierProvider(create: (context) {
+          final repo = Provider.of<PaymentMethodRepository>(context, listen: false);
+          final authService = Provider.of<AuthService>(context, listen: false);
+          
+          final provider = PaymentMethodProvider(repository: repo);
+          
+          // Register cleanup for logout
+          authService.onLogout(() async => provider.resetState());
+          
+          return provider;
         }),
       ],
       child: MaterialApp(
