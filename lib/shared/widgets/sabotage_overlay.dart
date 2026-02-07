@@ -22,6 +22,7 @@ import '../../features/mall/models/power_item.dart'; // Required for PowerType
 import '../utils/global_keys.dart'; // Importar para navegación
 import '../../features/game/widgets/minigames/game_over_overlay.dart';
 import '../../features/mall/screens/mall_screen.dart';
+import '../../core/services/effect_timer_service.dart'; // NEW: For timer expiration events
 
 class SabotageOverlay extends StatefulWidget {
   final Widget child;
@@ -58,6 +59,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   String _noLivesMessage = '¡Te han robado tu última vida!\nNecesitas comprar más vidas para continuar.';
   bool _noLivesCanRetry = false;
   bool _noLivesShowShop = true;
+
+  // NEW: Timer expiration subscription for guaranteed unlock
+  StreamSubscription<EffectEvent>? _timerEventSubscription;
 
   // Cached provider references to avoid context access in callbacks
   PowerEffectProvider? _powerProviderRef;
@@ -96,6 +100,26 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       
       // CRITICAL: Listener para detectar cuando gamePlayerId cambia
       _playerProviderRef?.addListener(_onPlayerChanged);
+
+      // NEW: Subscribe to timer expiration events for GUARANTEED screen unlock
+      _timerEventSubscription?.cancel();
+      _timerEventSubscription = _powerProviderRef?.timerService.effectStream.listen((event) {
+        // CRITICAL: Check mounted IMMEDIATELY before any state access
+        if (!mounted) return;
+        
+        if (event.type == EffectEventType.expired || event.type == EffectEventType.removed) {
+          // Check if this was a blocking effect
+          if (event.slug == 'freeze' || event.slug == 'black_screen') {
+            debugPrint('🔓 [UI-UNLOCK] SabotageOverlay: Efecto bloqueante expirado: ${event.slug}');
+            
+            // Use post-frame callback to ensure widget tree is stable
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _handlePowerChanges();
+            });
+          }
+        }
+      });
     });
   }
 
@@ -236,6 +260,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     _lifeStealAnimationTimer?.cancel();
     _feedbackSubscription?.cancel();
     _localDefenseActionTimer?.cancel();
+    _timerEventSubscription?.cancel(); // NEW: Cancel timer event subscription
     
     // Remove listeners using cached references (safe, no context access)
     _powerProviderRef?.removeListener(_handlePowerChanges);
@@ -270,6 +295,8 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     final isFreezeActive = powerProvider.isEffectActive('freeze');
     final isBlackScreenActive = powerProvider.isEffectActive('black_screen');
     
+    debugPrint('[UNBLOCK-CHECK] freeze=$isFreezeActive, black_screen=$isBlackScreenActive, _isBlockingActive=$_isBlockingActive');
+    
     // Lista de efectos que deben congelar la navegación
     final shouldBlock = isFreezeActive || isBlackScreenActive;
     
@@ -291,13 +318,27 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         // Esto maneja el caso donde el usuario pudiera cerrarlo (aunque no debería poder)
         if (mounted) {
            _isBlockingActive = false;
+           debugPrint('🔓 [UI-UNLOCK] Ruta de bloqueo cerrada via .then()');
         }
       });
     } else if (!shouldBlock && _isBlockingActive) {
       debugPrint("✅ DESBLOQUEANDO NAVEGACIÓN ✅");
-      rootNavigatorKey.currentState?.pop(); // Cierra _BlockingPageRoute
-      _isBlockingActive = false;
+      _forcePopBlockingRoute();
     }
+  }
+
+  /// Forces pop of blocking route with safety checks
+  void _forcePopBlockingRoute() {
+    if (!_isBlockingActive) return;
+    
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      debugPrint('🔓 [UI-UNLOCK] Ejecutando pop de _BlockingPageRoute');
+      navigator.pop();
+    } else {
+      debugPrint('⚠️ [UI-UNLOCK] No se puede hacer pop, pero marcando _isBlockingActive=false');
+    }
+    _isBlockingActive = false;
   }
 
   void _showLifeStealBanner(String message,

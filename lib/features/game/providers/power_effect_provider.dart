@@ -44,7 +44,8 @@ class PowerEffectProvider extends ChangeNotifier {
 
   StreamSubscription? _subscription;
   StreamSubscription? _casterSubscription; 
-  StreamSubscription? _combatEventsSubscription; 
+  StreamSubscription? _combatEventsSubscription;
+  StreamSubscription<EffectEvent>? _timerEventSubscription; // NEW: Listen for timer expirations
   Timer? _expiryTimer;
   Timer? _defenseFeedbackTimer;
 
@@ -250,6 +251,16 @@ class PowerEffectProvider extends ChangeNotifier {
         }, onError: (e) {
            debugPrint('PowerEffectProvider combat_events stream error: $e');
         });
+
+    // 4. Listen for Timer Expiration Events (CRITICAL for UI unlock)
+    _timerEventSubscription?.cancel();
+    _timerEventSubscription = _timerService.effectStream.listen((event) {
+      if (event.type == EffectEventType.expired || event.type == EffectEventType.removed) {
+        debugPrint('🔓 [UI-UNLOCK] Removiendo bloqueo de pantalla para efecto: ${event.slug}');
+        // Notify listeners so SabotageOverlay can react immediately
+        notifyListeners();
+      }
+    });
   }
 
   void _handleCombatEvents(List<Map<String, dynamic>> data) {
@@ -492,113 +503,11 @@ class PowerEffectProvider extends ChangeNotifier {
           }
        }
 
-       // --- 1. RETURN MECHANISM (Highest Priority) ---
-       // TODO: MOVE TO BACKEND - Client-side arbitration for Return power.
-       // This logic decides locally whether to reflect an attack.
-       // Should be handled by a database trigger or RPC for anti-cheat.
-       if (_returnArmed && isOffensive) {
-          final bool isSelf = casterId == _listeningForId;
-          
-          if (!isSelf && casterId != null) {
-            _returnArmed = false;
-            _registerDefenseAction(DefenseAction.returned);
-            
-            _returnedAgainstCasterId = casterId;
-            _returnedPowerSlug = slug;
-
-            // Delete incoming
-            if (effectId != null) {
-               try {
-                  await supabase.from('active_powers').delete().eq('id', effectId);
-               } catch (_) {}
-            }
-
-            // Reflect
-            try {
-               final reflectDuration = await _getPowerDurationFromDb(powerSlug: slug);
-               final exp = DateTime.now().toUtc().add(reflectDuration).toIso8601String();
-               final payload = {
-                  'target_id': casterId,
-                  'caster_id': _listeningForId,
-                  'power_slug': slug,
-                  'expires_at': exp,
-               };
-               if (effect['event_id'] != null) payload['event_id'] = effect['event_id'];
-               await supabase.from('active_powers').insert(payload);
-            } catch (_) {}
-
-            notifyListeners();
-            return; // Stop processing any other effects if we returned one
-          }
-       }
-
-        // --- CLIENT-SIDE SHIELD FALLBACK ---
-        // TODO: MOVE TO BACKEND - Client-side shield interception.
-        // This logic blocks attacks locally when server fails to enforce shield.
-        // Should be handled entirely by database triggers for anti-cheat.
-        // If server failed to block and we see an offensive power + we have shield
-        // Note: 'shield_feedback' is just a notification, not an attack, so ignore it here.
-        debugPrint('[SHIELD-CHECK] Checking client-side shield interception for: $slug');
-        debugPrint('[SHIELD-CHECK]   _shieldArmed: $_shieldArmed');
-        debugPrint('[SHIELD-CHECK]   isOffensive: $isOffensive');
-        debugPrint('[SHIELD-CHECK]   slug != shield: ${slug != 'shield'}');
-        debugPrint('[SHIELD-CHECK]   slug != shield_feedback: ${slug != 'shield_feedback'}');
-        debugPrint('[SHIELD-CHECK]   !shieldBrokenInBatch: ${!shieldBrokenInBatch}');
-        
-        if (_shieldArmed && isOffensive && slug != 'shield' && slug != 'shield_feedback' && !shieldBrokenInBatch) {
-            debugPrint('[SHIELD] 🛡️💥 CLIENT-SIDE INTERCEPTION ACTIVATED!');
-            debugPrint('[SHIELD] 🛡️ Client-side interception! Server let $slug through but Shield is up.');
-            
-            // A. Consume shield locally
-            _shieldArmed = false;
-            shieldBrokenInBatch = true;
-            _ignoreShieldUntil = DateTime.now().add(const Duration(seconds: 10)); // IGNORE SHIELD FOR 10s
-            _removeEffect('shield');
-            
-            debugPrint('[SHIELD] 🛡️ Shield removed from active effects');
-            
-            // B. Trigger "Shield Broken" Feedback Animation
-            _registerDefenseAction(DefenseAction.shieldBroken);
-            _feedbackStreamController.add(PowerFeedbackEvent(
-               PowerFeedbackType.shieldBroken,
-               relatedPlayerName: casterId
-            ));
-            
-            debugPrint('[SHIELD] 🛡️ Shield broken feedback emitted (client-side)');
-
-            // C. Attempt to clean up DB (best effort) to correct state
-            // Remove the offensive power
-            if (effectId != null) {
-               try {
-                 await supabase.from('active_powers').delete().eq('id', effectId);
-                 debugPrint('[SHIELD] 🗑️ Deleted offensive power from DB: $effectId');
-               } catch (e) {
-                 debugPrint('[SHIELD] ❌ Failed to delete offensive power: $e');
-               }
-            }
-            
-            // Also ideally we should remove the shield row from DB if we know its ID
-            if (_cachedShieldPowerId != null) { 
-                // This is tricky without the specific active_power ID for the shield.
-                // Rely mainly on the fact that we removed it locally.
-                // We could look for it in the 'filtered' list.
-                final shieldEffect = filtered.firstWhere(
-                   (e) => (e['power_slug'] ?? e['slug']) == 'shield', 
-                   orElse: () => {}
-                );
-                final shieldRowId = shieldEffect['id']?.toString();
-                if (shieldRowId != null) {
-                    try {
-                      await supabase.from('active_powers').delete().eq('id', shieldRowId);
-                      debugPrint('[SHIELD] 🗑️ Deleted shield from DB: $shieldRowId');
-                    } catch (e) {
-                      debugPrint('[SHIELD] ❌ Failed to delete shield: $e');
-                    }
-                }
-            }
-            
-            continue; // D. BLOCK THE EFFECT (Do not apply it)
-        }
+       // --- BACKEND-AUTHORITATIVE COMBAT (Phase 2 Refactor) ---
+       // Return and Shield interception are now handled entirely by the server
+       // via `use_power_mechanic` RPC. The client only reacts to:
+       // 1. `active_powers` stream for visual effects
+       // 2. `combat_events` stream for feedback animations (shield_blocked, reflected)
 
        // --- SHIELD SYNC (Server-Side Removal) ---
        // If shield is active locally, but missing from the incoming stream, 
@@ -846,6 +755,8 @@ class PowerEffectProvider extends ChangeNotifier {
   void dispose() {
     _subscription?.cancel();
     _casterSubscription?.cancel();
+    _combatEventsSubscription?.cancel();
+    _timerEventSubscription?.cancel(); // NEW: Cancel timer event subscription
     _defenseFeedbackTimer?.cancel();
     _clearAllEffects();
     _feedbackStreamController.close(); // Cleanup Stream

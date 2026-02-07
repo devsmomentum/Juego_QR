@@ -202,6 +202,9 @@ class PowerService {
 
       // Manejo de errores del servidor
       if (response is Map && response['success'] == false) {
+        if (response['error'] == 'unauthorized') {
+          throw 'No tienes permiso para usar este poder';
+        }
         if (response['error'] == 'target_invisible') {
           throw '¡El objetivo es invisible!';
         }
