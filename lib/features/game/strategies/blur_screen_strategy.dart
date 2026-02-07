@@ -3,15 +3,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/power_effect_provider.dart';
 import 'power_strategy.dart';
 import 'power_response.dart';
-import 'spectator_helper.dart';
 
-class FreezeStrategy implements PowerStrategy {
+class BlurScreenStrategy implements PowerStrategy {
   final SupabaseClient _supabase;
 
-  FreezeStrategy(this._supabase);
+  BlurScreenStrategy(this._supabase);
 
   @override
-  String get slug => 'freeze';
+  String get slug => 'blur_screen';
 
   @override
   Future<PowerUseResponse> execute({
@@ -21,20 +20,10 @@ class FreezeStrategy implements PowerStrategy {
     String? eventId,
     bool isSpectator = false,
   }) async {
-    if (isSpectator) {
-      return SpectatorHelper.executeSpectatorPower(
-        supabase: _supabase,
-        casterId: casterId,
-        targetId: targetId,
-        powerSlug: slug,
-        eventId: eventId,
-      );
-    }
-
-    // Freeze logic via RPC
+    // BlurScreen logic via RPC (RPC handles broadcast)
     final response = await _supabase.rpc('use_power_mechanic', params: {
       'p_caster_id': casterId,
-      'p_target_id': targetId,
+      'p_target_id': casterId, // Broadcast power targets self/all via RPC logic
       'p_power_slug': slug,
     });
     
@@ -43,8 +32,8 @@ class FreezeStrategy implements PowerStrategy {
 
   @override
   void onActivate(PowerEffectProvider provider) {
-    debugPrint("FreezeStrategy.onActivate");
-    // Freeze logic (Overlay) is handled by UI observing the slug.
+    debugPrint("BlurScreenStrategy.onActivate");
+    // UI effect handled by provider observing slug
   }
 
   @override
@@ -52,6 +41,6 @@ class FreezeStrategy implements PowerStrategy {
 
   @override
   void onDeactivate(PowerEffectProvider provider) {
-    debugPrint("FreezeStrategy.onDeactivate");
+     debugPrint("BlurScreenStrategy.onDeactivate");
   }
 }

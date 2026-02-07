@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/power_effect_provider.dart';
 import 'power_strategy.dart';
 import 'power_response.dart';
-import 'spectator_helper.dart';
 
-class FreezeStrategy implements PowerStrategy {
+class ReturnStrategy implements PowerStrategy {
   final SupabaseClient _supabase;
 
-  FreezeStrategy(this._supabase);
+  ReturnStrategy(this._supabase);
 
   @override
-  String get slug => 'freeze';
+  String get slug => 'return';
 
   @override
   Future<PowerUseResponse> execute({
@@ -21,30 +21,19 @@ class FreezeStrategy implements PowerStrategy {
     String? eventId,
     bool isSpectator = false,
   }) async {
-    if (isSpectator) {
-      return SpectatorHelper.executeSpectatorPower(
-        supabase: _supabase,
-        casterId: casterId,
-        targetId: targetId,
-        powerSlug: slug,
-        eventId: eventId,
-      );
-    }
-
-    // Freeze logic via RPC
     final response = await _supabase.rpc('use_power_mechanic', params: {
       'p_caster_id': casterId,
-      'p_target_id': targetId,
+      'p_target_id': casterId, // Return targets self (reflects next attack)
       'p_power_slug': slug,
     });
-    
     return PowerUseResponse.fromRpcResponse(response);
   }
 
   @override
   void onActivate(PowerEffectProvider provider) {
-    debugPrint("FreezeStrategy.onActivate");
-    // Freeze logic (Overlay) is handled by UI observing the slug.
+    debugPrint("↩️ Return activado - Tu próximo ataque será reflejado");
+    HapticFeedback.mediumImpact();
+    // Return flag handled by provider logic/timer
   }
 
   @override
@@ -52,6 +41,6 @@ class FreezeStrategy implements PowerStrategy {
 
   @override
   void onDeactivate(PowerEffectProvider provider) {
-    debugPrint("FreezeStrategy.onDeactivate");
+    debugPrint("ReturnStrategy.onDeactivate");
   }
 }

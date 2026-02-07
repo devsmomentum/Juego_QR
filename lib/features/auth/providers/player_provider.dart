@@ -11,6 +11,7 @@ import '../services/auth_service.dart';
 import '../services/inventory_service.dart';
 import '../services/power_service.dart';
 import '../../admin/services/admin_service.dart';
+import '../../game/strategies/power_response.dart';
 
 enum PowerUseResult { success, reflected, error, blocked }
 
@@ -548,17 +549,10 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
       _currentPlayer!.gamePlayerId = result.gamePlayerId;
       
       // Configure PowerEffectProvider
+      
       debugPrint('[DEBUG] 🎯 Configuring PowerEffectProvider...');
       effectProvider?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
-      effectProvider?.configureReturnHandler((slug, casterId) async {
-        final powerResult = await usePower(
-          powerSlug: slug,
-          targetGamePlayerId: casterId,
-          effectProvider: effectProvider,
-          allowReturnForward: false,
-        );
-        return powerResult != PowerUseResult.error;
-      });
+      // effectProvider?.configureReturnHandler - REMOVED: Return logic is now handled by strategies
       
       debugPrint('[DEBUG] 📡 Calling startListening with gamePlayerId: ${result.gamePlayerId} and eventId: $eventId');
       effectProvider?.startListening(result.gamePlayerId, eventId: eventId);
@@ -660,6 +654,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
           return PowerUseResult.success;
 
         case PowerUseResultType.error:
+        default:
           return PowerUseResult.error;
       }
     } catch (e) {

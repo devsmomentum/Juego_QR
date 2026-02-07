@@ -5,13 +5,13 @@ import 'power_strategy.dart';
 import 'power_response.dart';
 import 'spectator_helper.dart';
 
-class FreezeStrategy implements PowerStrategy {
+class BlackScreenStrategy implements PowerStrategy {
   final SupabaseClient _supabase;
 
-  FreezeStrategy(this._supabase);
+  BlackScreenStrategy(this._supabase);
 
   @override
-  String get slug => 'freeze';
+  String get slug => 'black_screen';
 
   @override
   Future<PowerUseResponse> execute({
@@ -31,20 +31,17 @@ class FreezeStrategy implements PowerStrategy {
       );
     }
 
-    // Freeze logic via RPC
     final response = await _supabase.rpc('use_power_mechanic', params: {
       'p_caster_id': casterId,
       'p_target_id': targetId,
       'p_power_slug': slug,
     });
-    
     return PowerUseResponse.fromRpcResponse(response);
   }
 
   @override
   void onActivate(PowerEffectProvider provider) {
-    debugPrint("FreezeStrategy.onActivate");
-    // Freeze logic (Overlay) is handled by UI observing the slug.
+    debugPrint("BlackScreenStrategy.onActivate");
   }
 
   @override
@@ -52,6 +49,6 @@ class FreezeStrategy implements PowerStrategy {
 
   @override
   void onDeactivate(PowerEffectProvider provider) {
-    debugPrint("FreezeStrategy.onDeactivate");
+    debugPrint("BlackScreenStrategy.onDeactivate");
   }
 }

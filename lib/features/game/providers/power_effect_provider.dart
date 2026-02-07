@@ -37,7 +37,11 @@ class PowerEffectProvider extends ChangeNotifier {
     required SupabaseClient supabaseClient,
     required EffectTimerService timerService,
   })  : _supabase = supabaseClient,
-        _timerService = timerService;
+        _timerService = timerService {
+    _powerStrategyFactory = PowerStrategyFactory(_supabase);
+  }
+
+  late final PowerStrategyFactory _powerStrategyFactory;
 
   // --- EXPOSE TIMER SERVICE FOR STRATEGIES ---
   EffectTimerService get timerService => _timerService;
@@ -46,7 +50,6 @@ class PowerEffectProvider extends ChangeNotifier {
   StreamSubscription? _casterSubscription; 
   StreamSubscription? _combatEventsSubscription;
   StreamSubscription<EffectEvent>? _timerEventSubscription; // NEW: Listen for timer expirations
-  Timer? _expiryTimer;
   Timer? _defenseFeedbackTimer;
 
   String? _listeningForId;
@@ -56,9 +59,10 @@ class PowerEffectProvider extends ChangeNotifier {
   bool _returnArmed = false;
   bool _shieldArmed = false;
   
+
+
   DateTime? _sessionStartTime; 
 
-  Future<bool> Function(String powerSlug, String targetGamePlayerId)? _returnHandler;
   Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId)? _lifeStealVictimHandler;
   
   DefenseAction? _lastDefenseAction;
@@ -176,10 +180,6 @@ class PowerEffectProvider extends ChangeNotifier {
       applyEffect(slug: 'shield', duration: duration, expiresAt: DateTime.now().toUtc().add(duration));
     }
     notifyListeners();
-  }
-
-  void configureReturnHandler(Future<bool> Function(String powerSlug, String targetGamePlayerId) handler) {
-    _returnHandler = handler;
   }
 
   void configureLifeStealVictimHandler(Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId) handler) {
@@ -392,8 +392,6 @@ class PowerEffectProvider extends ChangeNotifier {
   }
 
   Future<void> _processEffects(List<Map<String, dynamic>> data) async {
-    final supabase = _supabase;
-
     // Filter logic (same as before)
     final filtered = data.where((effect) {
       final targetId = effect['target_id'];
@@ -437,9 +435,7 @@ class PowerEffectProvider extends ChangeNotifier {
     // Shield Check (Concurrent/One-Shot Logic)
     // We check if 'shield' is active in _activeEffects.
     // If so, and we receive an OFFENSIVE effect, we block it and break the shield.
-    
-    final isShieldUp = isPowerActive(PowerType.shield);
-    
+        
     // We need to identify if ANY of the incoming valid effects is offensive.
     // AND if we haven't processed it yet (though Filtered list implies they are relevant).
     
@@ -484,11 +480,6 @@ class PowerEffectProvider extends ChangeNotifier {
        // Must be active OR be life_steal (which we verify via idempotency later, but for defense it counts as "incoming")
        // If it's a standard effect and it's expired, we ignore it completely (ghost effect).
        if (isExpired && !isLifeSteal) continue;
-
-       final bool isOffensive = slug == 'black_screen' || 
-                                slug == 'freeze' || 
-                                slug == 'blur_screen' ||
-                                isLifeSteal;
 
        // --- 0. PREVENT RE-APPLYING BROKEN SHIELD ---
        // Check if broken in this batch OR explicitly ignored due to recent break
@@ -550,8 +541,8 @@ class PowerEffectProvider extends ChangeNotifier {
           }
           
           setPendingEffectContext(effectId, casterId);
-          final strategy = PowerStrategyFactory.get('life_steal');
-          strategy?.onActivate(this);
+          final strategy = _powerStrategyFactory.get('life_steal');
+          strategy.onActivate(this);
           setPendingEffectContext(null, null);
           
           _feedbackStreamController.add(PowerFeedbackEvent(
@@ -570,8 +561,8 @@ class PowerEffectProvider extends ChangeNotifier {
        if (slug == 'shield' && shieldBrokenInBatch) continue;
 
        if (!isEffectActive(slug)) {
-          final strategy = PowerStrategyFactory.get(slug);
-          strategy?.onActivate(this); 
+          final strategy = _powerStrategyFactory.get(slug);
+          strategy.onActivate(this); 
        }
 
        applyEffect(
@@ -636,11 +627,6 @@ class PowerEffectProvider extends ChangeNotifier {
     }
   }
 
-  void _clearEffect() {
-     // Deprecated internal method, mapping to clearAll for safety or ignore
-     _clearAllEffects();
-  }
-
   void clearActiveEffect() {
     _clearAllEffects();
   }
@@ -678,11 +664,6 @@ class PowerEffectProvider extends ChangeNotifier {
     });
   }
 
-  bool _isShieldSlug(String? slug) {
-    if (slug == null) return false;
-    return slug == 'shield';
-  }
-
   void notifyPowerReturned(String byPlayerName) {
     _returnedByPlayerName = byPlayerName;
     _registerDefenseAction(DefenseAction.returned);
@@ -707,36 +688,6 @@ class PowerEffectProvider extends ChangeNotifier {
       PowerFeedbackType.stealFailed,
     ));
     notifyListeners();
-  }
-
-  Future<void> _sendShieldFeedback(String targetId) async {
-     final supabase = _supabase;
-     
-     // USAR ID CACHEADO O FAIL LOUDLY
-     final powerId = _cachedShieldPowerId;
-     
-     if (powerId == null) {
-       debugPrint('🛑 CRITICAL ERROR: Cannot send Shield Feedback - Missing Power ID!');
-       debugPrint('   Ensure armShield() was called or DB has slug "shield".');
-       return;
-     }
-
-     try {
-       // Insert a short-lived effect for feedback
-       final duration = const Duration(seconds: 3);
-       final expiresAt = DateTime.now().toUtc().add(duration).toIso8601String();
-       
-       await supabase.from('active_powers').insert({
-          'target_id': targetId, // Attacker is now target of feedback
-          'caster_id': _listeningForId, // Me
-          'power_id': powerId,
-          'power_slug': 'shield_feedback', // Special slug
-          'expires_at': expiresAt,
-       });
-       debugPrint('[SHIELD] 📨 Feedback sent to attacker $targetId (using power_id: $powerId)');
-     } catch (e) {
-       debugPrint('[SHIELD] ⚠️ Failed to send feedback: $e');
-     }
   }
 
   /// Resets the provider state, stopping all listeners and clearing effects.
