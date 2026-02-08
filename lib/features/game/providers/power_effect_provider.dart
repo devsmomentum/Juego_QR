@@ -291,21 +291,19 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
     final resultType = event['result_type'];
     final powerSlug = event['power_slug'];
 
-    debugPrint('[COMBAT] ⚔️ Event Received: $resultType (Power: $powerSlug)');
+    debugPrint('🛡️ [COMBAT-EVENT] Nuevo evento detectado: $resultType (Power: $powerSlug)');
 
     if (resultType == 'shield_blocked') {
-        debugPrint('[COMBAT] 🛡️💥 SHIELD_BLOCKED event detected!');
+        debugPrint('[COMBAT] 🛡️💥 SHIELD_BLOCKED event processed!');
         debugPrint('[COMBAT]    - Shield Armed Before: $_shieldArmed');
-        debugPrint('[COMBAT]    - Shield Active Before: ${isEffectActive('shield')}');
         
         // Server confirmed shield blocked an attack
         _shieldArmed = false; // Sync local state
-        _removeEffect('shield'); // Remove icon
-        _ignoreShieldUntil = DateTime.now().add(const Duration(seconds: 10));
+        // Force remove effect locally in case stream hasn't updated yet
+        _removeEffect('shield'); 
+        _ignoreShieldUntil = DateTime.now().add(const Duration(seconds: 5)); // Reduced from 10s to 5s for responsiveness
         
-        debugPrint('[COMBAT]    - Shield Armed After: $_shieldArmed');
-        debugPrint('[COMBAT]    - Shield Active After: ${isEffectActive('shield')}');
-        debugPrint('[COMBAT]    - Ignore Shield Until: $_ignoreShieldUntil');
+        debugPrint('[COMBAT]    - Shield Armed After Update: $_shieldArmed');
         
         _registerDefenseAction(DefenseAction.shieldBroken);
         _feedbackStreamController.add(PowerFeedbackEvent(

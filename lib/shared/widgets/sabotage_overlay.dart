@@ -200,6 +200,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             break;
             
         case PowerFeedbackType.shieldBroken:
+            debugPrint('🛡️ [UI] SabotageOverlay received shieldBroken event');
             _triggerLocalDefenseAction(DefenseAction.shieldBroken);
             setState(() {
                _showShieldBreakAnimation = true;

@@ -33,7 +33,7 @@ class PowerRepositoryImpl implements PowerRepository {
         .stream(primaryKey: ['id'])
         .eq('target_id', targetId)
         .order('created_at', ascending: false)
-        .limit(1);
+        .order('created_at', ascending: false);
   }
 
   @override
