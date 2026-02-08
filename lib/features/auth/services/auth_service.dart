@@ -244,6 +244,18 @@ class AuthService {
     if (errorMsg.contains('contraseña incorrecta')) {
       return 'Contraseña incorrecta. Por favor, verifica e intenta de nuevo.';
     }
+    if (errorMsg.contains('cédula ya está registrada')) {
+      return 'Esta cédula ya está registrada. Intenta con otra.';
+    }
+    if (errorMsg.contains('teléfono ya está registrado')) {
+      return 'Este teléfono ya está registrado. Intenta con otro.';
+    }
+    if (errorMsg.contains('formato de cédula')) {
+      return 'Formato de cédula inválido. Usa V12345678 o E12345678.';
+    }
+    if (errorMsg.contains('formato de teléfono')) {
+      return 'Formato de teléfono inválido. Usa 0412-1234567.';
+    }
     if (errorMsg.contains('user already registered') ||
         errorMsg.contains('already exists')) {
       return 'Este correo ya está registrado. Intenta iniciar sesión.';

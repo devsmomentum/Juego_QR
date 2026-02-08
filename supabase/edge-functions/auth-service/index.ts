@@ -68,17 +68,61 @@ serve(async (req) => {
 
     // --- REGISTER ---
     if (path === 'register') {
-      const { email, password, name } = await req.json()
+      const { email, password, name, cedula, phone } = await req.json()
 
       if (!email || !password || !name) {
         throw new Error('Email, password and name are required')
+      }
+
+      // Validar formato de cédula venezolana (V/E + 6-9 dígitos)
+      if (cedula) {
+        const cedulaRegex = /^[VE]\d{6,9}$/i
+        if (!cedulaRegex.test(cedula)) {
+          throw new Error('Formato de cédula inválido. Usa V12345678 o E12345678')
+        }
+
+        // Verificar si la cédula ya existe
+        const { data: existingCedula } = await supabaseClient
+          .from('profiles')
+          .select('id')
+          .eq('cedula', cedula.toUpperCase())
+          .single()
+
+        if (existingCedula) {
+          throw new Error('Esta cédula ya está registrada')
+        }
+      }
+
+      // Validar formato de teléfono venezolano (04XX-XXXXXXX)
+      if (phone) {
+        const phoneDigits = phone.replace('-', '')
+        const phoneRegex = /^04(12|14|24|16|26)\d{7}$/
+
+        if (!phoneRegex.test(phoneDigits)) {
+          throw new Error('Formato de teléfono inválido. Usa 0412-1234567')
+        }
+
+        // Verificar si el teléfono ya existe
+        const { data: existingPhone } = await supabaseClient
+          .from('profiles')
+          .select('id')
+          .eq('phone', phoneDigits)
+          .single()
+
+        if (existingPhone) {
+          throw new Error('Este teléfono ya está registrado')
+        }
       }
 
       const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
         options: {
-          data: { name }
+          data: {
+            name,
+            cedula: cedula ? cedula.toUpperCase() : null,
+            phone: phone ? phone.replace('-', '') : null
+          }
         }
       })
 
