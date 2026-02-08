@@ -228,23 +228,17 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
              // Generic success
              break;
              
-        case PowerFeedbackType.returned:
+        case PowerFeedbackType.returnSuccess:
              // Autonomous feedback logic (like Shield)
              final attackerId = event.relatedPlayerName;
              final attackerName = _resolvePlayerNameFromLeaderboard(attackerId);
-             
-             // We can assume slug might be passed via message or we fetch it? 
-             // Actually PowerFeedbackEvent doesn't have slug. We can update provider to send it or just use generic.
-             // Or rely on provider state just for capturing the slug momentarily?
-             // Best approach: provider sends event AFTER setting public getters.
-             // We capture them NOW into our local state.
              
              final pProvider = Provider.of<PowerEffectReader>(context, listen: false);
              final slug = pProvider is PowerEffectProvider 
                   ? (pProvider as PowerEffectProvider).returnedPowerSlug 
                   : null;
 
-             _triggerLocalDefenseAction(DefenseAction.returned);
+             // DO NOT trigger 'DefenseAction.returned' here (that shows rejection effect!)
              
              if (mounted) {
                 setState(() {
@@ -264,6 +258,17 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
                     }
                 });
              }
+             break;
+
+        case PowerFeedbackType.returnRejection:
+             // This is when WE are the victim of a return.
+             // We show the "ReturnRejectionEffect" via DefenseAction.returned
+             _triggerLocalDefenseAction(DefenseAction.returned);
+             break;
+             
+        case PowerFeedbackType.returned:
+             // Fallback for backward compatibility or stray events
+             _triggerLocalDefenseAction(DefenseAction.returned);
              break;
              
         case PowerFeedbackType.stealFailed:

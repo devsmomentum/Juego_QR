@@ -4,7 +4,7 @@ import '../../mall/models/power_item.dart';
 import '../../../core/services/effect_timer_service.dart';
 
 /// Enum for types of feedback the user receives from power interactions.
-enum PowerFeedbackType { lifeStolen, shieldBroken, attackBlocked, defenseSuccess, returned, stealFailed }
+enum PowerFeedbackType { lifeStolen, shieldBroken, attackBlocked, defenseSuccess, returned, stealFailed, returnSuccess, returnRejection }
 
 /// Event emitted when a power interaction occurs that requires user feedback.
 class PowerFeedbackEvent {

@@ -332,7 +332,7 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
             
             // Emit positive feedback event (for toasts or other listeners)
             _feedbackStreamController.add(PowerFeedbackEvent(
-                PowerFeedbackType.returned,
+                PowerFeedbackType.returnSuccess,
                 message: '¡Ataque devuelto exitosamente!',
                 relatedPlayerName: attackerId,
             ));
@@ -666,7 +666,7 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
     _returnedByPlayerName = byPlayerName;
     _registerDefenseAction(DefenseAction.returned);
     _feedbackStreamController.add(PowerFeedbackEvent(
-      PowerFeedbackType.returned,
+      PowerFeedbackType.returnRejection,
       relatedPlayerName: byPlayerName,
     ));
     notifyListeners();
