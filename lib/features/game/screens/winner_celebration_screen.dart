@@ -11,12 +11,14 @@ class WinnerCelebrationScreen extends StatefulWidget {
   final String eventId;
   final int playerPosition;
   final int totalCluesCompleted;
+  final int? prizeWon; // NEW
 
   const WinnerCelebrationScreen({
     super.key,
     required this.eventId,
     required this.playerPosition,
     required this.totalCluesCompleted,
+    this.prizeWon, // NEW
   });
 
   @override
@@ -27,24 +29,35 @@ class WinnerCelebrationScreen extends StatefulWidget {
 class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   late ConfettiController _confettiController;
   late int _currentPosition; // Mutable state for position
+  bool _isLoading = true; // NEW: Start with loading state
 
   @override
   void initState() {
     super.initState();
-    _currentPosition = widget.playerPosition; // Initialize
+    debugPrint("🏆 WinnerCelebrationScreen INIT: Prize = ${widget.prizeWon}");
+    _currentPosition = widget.playerPosition;
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 3));
 
-    // Start confetti for top 3 finishers (positive ranks only)
-    if (_currentPosition >= 1 && _currentPosition <= 3) {
-      _confettiController.play();
+    // If we already have a valid position, no need to wait for loading
+    if (_currentPosition > 0) {
+      _isLoading = false;
+      if (_currentPosition <= 3) {
+        _confettiController.play();
+      }
     }
 
-    // Load final leaderboard and update position if needed
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
 
-      // CRITICAL: Ensure eventId is set in the provider so fetchLeaderboard knows what to fetch
+      // REFRESH WALLET to ensure balance is current
+      await playerProvider.reloadProfile();
+      debugPrint(
+          "💰 Wallet refreshed on podium. Balance: ${playerProvider.currentPlayer?.clovers}");
+
+      // CRITICAL: Ensure eventId is set in the provider
       if (gameProvider.currentEventId != widget.eventId) {
         await gameProvider.fetchClues(eventId: widget.eventId, silent: true);
       }
@@ -53,8 +66,18 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       gameProvider.addListener(_updatePositionFromLeaderboard);
 
       gameProvider.fetchLeaderboard();
-      // Try immediate update if data exists
+
+      // Try immediate update
       _updatePositionFromLeaderboard();
+
+      // Safety timeout: If after 5 seconds we still loading, force show content (as unranked if needed)
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted && _isLoading) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      });
     });
   }
 
@@ -62,29 +85,41 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     if (!mounted) return;
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+
+    // If leaderboard is still empty and loading, do nothing yet (unless timeout hits)
+    if (gameProvider.leaderboard.isEmpty && gameProvider.isLoading) return;
 
     if (gameProvider.leaderboard.isNotEmpty) {
-      final index =
-          gameProvider.leaderboard.indexWhere((p) => p.userId == playerProvider.currentPlayer?.userId);
-      
-      // Si no participó (index -1) y ya estábamos en 0, nos quedamos en 0
-      if (index == -1 && _currentPosition == 0) return;
+      final index = gameProvider.leaderboard
+          .indexWhere((p) => p.userId == playerProvider.currentPlayer?.userId);
 
       final newPos =
           index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
 
-      // Update if position changed or was 0 (unknown)
+      // Update state if changed
       if (newPos != _currentPosition && newPos > 0) {
+        debugPrint(
+            "🏆 Position Updated from Leaderboard: $_currentPosition -> $newPos");
         setState(() {
           _currentPosition = newPos;
+          _isLoading = false; // Data is ready
         });
-        // Check for confetti again
+
         if (newPos >= 1 && newPos <= 3) {
           _confettiController.play();
         } else {
           _confettiController.stop();
         }
+      } else {
+        // Even if position didn't change, we have data, so stop loading
+        if (_isLoading) {
+          setState(() => _isLoading = false);
+        }
+      }
+    } else {
+      // Leaderboard loaded but empty?
+      if (_isLoading && !gameProvider.isLoading) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -175,223 +210,288 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                 ),
               ),
 
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              if (_isLoading)
+                const Center(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // User's Position Header (Very Prominent)
-                      Column(
-                        children: [
-                          Text(
-                            _currentPosition > 0 ? _getCelebrationMessage() : 'Resultados del Evento',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: _getPositionColor(),
+                      CircularProgressIndicator(color: AppTheme.accentGold),
+                      SizedBox(height: 20),
+                      Text("Calculando resultados finales...",
+                          style: TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                )
+              else
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 20),
+                    child: Column(
+                      children: [
+                        // User's Position Header (Very Prominent)
+                        Column(
+                          children: [
+                            Text(
+                              _currentPosition > 0
+                                  ? _getCelebrationMessage()
+                                  : 'Resultados del Evento',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: _getPositionColor(),
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 10),
-                          if (_currentPosition > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                              decoration: BoxDecoration(
-                                color: _getPositionColor().withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: _getPositionColor(), width: 2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _getPositionColor().withOpacity(0.2),
-                                    blurRadius: 15,
-                                    spreadRadius: 2,
+                            const SizedBox(height: 10),
+                            if (_currentPosition > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 30, vertical: 15),
+                                decoration: BoxDecoration(
+                                  color: _getPositionColor().withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: _getPositionColor(), width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          _getPositionColor().withOpacity(0.2),
+                                      blurRadius: 15,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: Column(children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _getMedalEmoji(),
+                                        style: const TextStyle(fontSize: 40),
+                                      ),
+                                      const SizedBox(width: 15),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'TU POSICIÓN',
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 1.5,
+                                            ),
+                                          ),
+                                          Text(
+                                            '#$_currentPosition',
+                                            style: TextStyle(
+                                              fontSize: 36,
+                                              fontWeight: FontWeight.w900,
+                                              color: _getPositionColor(),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                  if (widget.prizeWon != null &&
+                                      widget.prizeWon! > 0) ...[
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black45,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: const Color(0xFFFFD700)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text("💰",
+                                              style: TextStyle(fontSize: 20)),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "+${widget.prizeWon} 🍀",
+                                            style: const TextStyle(
+                                              color: Color(0xFFFFD700),
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  ]
+                                ]),
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: Colors.white10),
+                                ),
+                                child: const Text(
+                                  'No participaste en esta competencia.\nAquí tienes el podio final:',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 14),
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        const Spacer(),
+
+                        // Top 3 Podium (Fixed at center)
+                        if (gameProvider.leaderboard.isNotEmpty)
+                          Column(
+                            children: [
+                              const Text(
+                                'PODIO DE LA CARRERA',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.cardBg.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                      color:
+                                          AppTheme.accentGold.withOpacity(0.2)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    // 2nd place
+                                    if (gameProvider.leaderboard.length >= 2)
+                                      _buildPodiumPosition(
+                                        gameProvider.leaderboard[1],
+                                        2,
+                                        60,
+                                        Colors.grey,
+                                      )
+                                    else if (gameProvider.leaderboard.length >=
+                                        3)
+                                      const SizedBox(width: 60),
+
+                                    // 1st place
+                                    _buildPodiumPosition(
+                                      gameProvider.leaderboard[0],
+                                      1,
+                                      90,
+                                      const Color(0xFFFFD700),
+                                    ),
+
+                                    // 3rd place
+                                    if (gameProvider.leaderboard.length >= 3)
+                                      _buildPodiumPosition(
+                                        gameProvider.leaderboard[2],
+                                        3,
+                                        50,
+                                        const Color(0xFFCD7F32),
+                                      )
+                                    else if (gameProvider.leaderboard.length >=
+                                        2)
+                                      const SizedBox(width: 60),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (gameProvider.isLoading)
+                          const CircularProgressIndicator()
+                        else
+                          const Text(
+                            'No hay resultados disponibles',
+                            style: TextStyle(color: Colors.white54),
+                          ),
+
+                        const Spacer(),
+
+                        // Final Info and Button
+                        Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(15),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  const Icon(Icons.stars,
+                                      color: Colors.greenAccent, size: 20),
+                                  const SizedBox(width: 10),
                                   Text(
-                                    _getMedalEmoji(),
-                                    style: const TextStyle(fontSize: 40),
-                                  ),
-                                  const SizedBox(width: 15),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'TU POSICIÓN',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1.5,
-                                        ),
-                                      ),
-                                      Text(
-                                        '#$_currentPosition',
-                                        style: TextStyle(
-                                          fontSize: 36,
-                                          fontWeight: FontWeight.w900,
-                                          color: _getPositionColor(),
-                                        ),
-                                      ),
-                                    ],
+                                    '${widget.totalCluesCompleted} Pistas Completadas',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ],
                               ),
-                            )
-                          else
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(color: Colors.white10),
-                              ),
-                              child: const Text(
-                                'No participaste en esta competencia.\nAquí tienes el podio final:',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white70, fontSize: 14),
-                              ),
                             ),
-                        ],
-                      ),
-
-                      const Spacer(),
-
-                      // Top 3 Podium (Fixed at center)
-                      if (gameProvider.leaderboard.isNotEmpty)
-                        Column(
-                          children: [
-                            const Text(
-                              'PODIO DE LA CARRERA',
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: AppTheme.cardBg.withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: AppTheme.accentGold.withOpacity(0.2)),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  // 2nd place
-                                  if (gameProvider.leaderboard.length >= 2)
-                                    _buildPodiumPosition(
-                                      gameProvider.leaderboard[1],
-                                      2,
-                                      60,
-                                      Colors.grey,
-                                    )
-                                  else if (gameProvider.leaderboard.length >= 3)
-                                    const SizedBox(width: 60),
-                                    
-                                  // 1st place
-                                  _buildPodiumPosition(
-                                    gameProvider.leaderboard[0],
-                                    1,
-                                    90,
-                                    const Color(0xFFFFD700),
+                            const SizedBox(height: 30),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const ScenariosScreen()),
+                                    (route) => false,
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.accentGold,
+                                  foregroundColor: Colors.black,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 18),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
-                                  
-                                  // 3rd place
-                                  if (gameProvider.leaderboard.length >= 3)
-                                    _buildPodiumPosition(
-                                      gameProvider.leaderboard[2],
-                                      3,
-                                      50,
-                                      const Color(0xFFCD7F32),
-                                    )
-                                  else if (gameProvider.leaderboard.length >= 2)
-                                    const SizedBox(width: 60),
-                                ],
+                                  elevation: 8,
+                                  shadowColor:
+                                      AppTheme.accentGold.withOpacity(0.5),
+                                ),
+                                icon: const Icon(Icons.home_rounded, size: 28),
+                                label: const Text(
+                                  'VOLVER AL INICIO',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
-                        )
-                      else if (gameProvider.isLoading)
-                        const CircularProgressIndicator()
-                      else
-                        const Text(
-                          'No hay resultados disponibles',
-                          style: TextStyle(color: Colors.white54),
                         ),
-
-                      const Spacer(),
-
-                      // Final Info and Button
-                      Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.stars, color: Colors.greenAccent, size: 20),
-                                const SizedBox(width: 10),
-                                Text(
-                                  '${widget.totalCluesCompleted} Pistas Completadas',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 30),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(builder: (_) => const ScenariosScreen()),
-                                  (route) => false,
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.accentGold,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                elevation: 8,
-                                shadowColor: AppTheme.accentGold.withOpacity(0.5),
-                              ),
-                              icon: const Icon(Icons.home_rounded, size: 28),
-                              label: const Text(
-                                'VOLVER AL INICIO',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                    ],
+                        const SizedBox(height: 10),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -425,7 +525,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     }
   }
 
-  Widget _buildPodiumPosition(player, int position, double height, Color color) {
+  Widget _buildPodiumPosition(
+      player, int position, double height, Color color) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -455,17 +556,21 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                       return Image.asset(
                         'assets/images/avatars/$avatarId.png',
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white70, size: 25),
+                        errorBuilder: (_, __, ___) => const Icon(Icons.person,
+                            color: Colors.white70, size: 25),
                       );
                     }
-                    if (player.avatarUrl.isNotEmpty && player.avatarUrl.startsWith('http')) {
+                    if (player.avatarUrl.isNotEmpty &&
+                        player.avatarUrl.startsWith('http')) {
                       return Image.network(
                         player.avatarUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white70, size: 25),
+                        errorBuilder: (_, __, ___) => const Icon(Icons.person,
+                            color: Colors.white70, size: 25),
                       );
                     }
-                    return const Icon(Icons.person, color: Colors.white70, size: 25);
+                    return const Icon(Icons.person,
+                        color: Colors.white70, size: 25);
                   },
                 ),
               ),
