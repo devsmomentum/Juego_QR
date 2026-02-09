@@ -446,7 +446,18 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         
         // ⚡ HARD GATE: Si no hay gamePlayerId, NO mostramos NADA de sabotaje.
         final gpId = playerProvider.currentPlayer?.gamePlayerId;
-        if (gpId == null) {
+        
+        // [FIX] Validar también que estemos en una sesión de juego ACTIVA (GameProvider initialized)
+        // Esto previene mostrar el escucho en Login, Lobby o Splash.
+        final activeEventId = gameProvider.currentEventId;
+        final playerEventId = playerProvider.currentPlayer?.currentEventId;
+        
+        // Requerimos:
+        // 1. Tener gamePlayerId (Usuario logueado y provisionado)
+        // 2. GameProvider debe tener un evento activo (Usuario entró a jugar)
+        // 3. (Opcional) Coincidencia de evento para mayor seguridad
+        
+        if (gpId == null || activeEventId == null) {
           return child ?? const SizedBox();
         }
         

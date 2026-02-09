@@ -60,6 +60,7 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
   bool _isManualCasting = false;
   bool _returnArmed = false;
   bool _shieldArmed = false;
+  DateTime? _shieldLastArmedAt; // Grace period for optimistic UI
   
 
 
@@ -196,6 +197,7 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
 
   Future<void> armShield() async {
     _shieldArmed = true;
+    _shieldLastArmedAt = DateTime.now(); // Start grace period
     _returnArmed = false; // Mutual exclusivity
     debugPrint('🛡️ Shield ARMED - Ready to block one attack');
     try {
@@ -207,11 +209,17 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
            // For simplicity in this step, we just use duration.
          } catch(e) { debugPrint('🛡️ FAILED to cache Shield ID: $e'); }
       }
-      final expiresAt = DateTime.now().toUtc().add(duration);
-      applyEffect(slug: 'shield', duration: duration, expiresAt: expiresAt);
+      // SHIELD FIX: Always use long duration locally (365 days)
+      // The shield should only break when attacked, not by time.
+      const longDuration = Duration(days: 365);
+      final expiresAt = DateTime.now().toUtc().add(longDuration);
+      
+      applyEffect(slug: 'shield', duration: longDuration, expiresAt: expiresAt);
     } catch (e) {
-      final duration = const Duration(minutes: 2);
-      applyEffect(slug: 'shield', duration: duration, expiresAt: DateTime.now().toUtc().add(duration));
+      debugPrint('Error arming shield: $e');
+      // Fallback
+      const longDuration = Duration(days: 365);
+      applyEffect(slug: 'shield', duration: longDuration, expiresAt: DateTime.now().toUtc().add(longDuration));
     }
     notifyListeners();
   }
@@ -596,8 +604,15 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
            
            if (!shieldInStream) {
                debugPrint('[SHIELD] 🛡️ Shield missing from stream (consumed/expired) -> Removing local effect.');
-               _shieldArmed = false;
-               _removeEffect('shield');
+               // GRACE PERIOD: If we just armed it (< 5s ago), don't remove it yet.
+               // It might take a moment to appear in the stream.
+               if (_shieldLastArmedAt != null && DateTime.now().difference(_shieldLastArmedAt!).inSeconds < 5) {
+                   debugPrint('[SHIELD] ⏳ Grace period active (armed ${_shieldLastArmedAt}), keeping local shield.');
+               } else {
+                   debugPrint('[SHIELD] 🛡️ Shield missing from stream (consumed/expired) -> Removing local effect.');
+                   _shieldArmed = false;
+                   _removeEffect('shield');
+               }
            }
        }
        
@@ -634,10 +649,10 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
 
        applyEffect(
          slug: slug,
-         duration: duration,
+         duration: slug == 'shield' ? const Duration(days: 365) : duration, // FORCE LONG DURATION FOR SHIELD
          effectId: effectId,
          casterId: casterId,
-         expiresAt: expiresAt
+         expiresAt: slug == 'shield' ? DateTime.now().add(const Duration(days: 365)) : expiresAt 
        );
     }
   }
