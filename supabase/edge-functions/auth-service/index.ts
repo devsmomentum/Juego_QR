@@ -81,11 +81,11 @@ serve(async (req) => {
           throw new Error('Formato de cédula inválido. Usa V12345678 o E12345678')
         }
 
-        // Verificar si la cédula ya existe
+        // Verificar si la cédula ya existe (buscar en campo 'dni' de la BD)
         const { data: existingCedula } = await supabaseClient
           .from('profiles')
           .select('id')
-          .eq('cedula', cedula.toUpperCase())
+          .eq('dni', cedula.toUpperCase())
           .single()
 
         if (existingCedula) {
@@ -128,38 +128,49 @@ serve(async (req) => {
 
       if (error) throw error
 
-      // // Ensure the user starts with 100 coins.
-      // // We use the Service Role key to bypass RLS and safely upsert the profile.
-      // if (data?.user?.id) {
-      //   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      //   if (!serviceKey) {
-      //     throw new Error(
-      //       'Missing SUPABASE_SERVICE_ROLE_KEY. Set it in Supabase Edge Function secrets to initialize profile coins.'
-      //     )
-      //   }
+      // Ensure the user starts with 100 coins and persist cedula/phone.
+      // We use the Service Role key to bypass RLS and safely upsert the profile.
+      if (data?.user?.id) {
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        if (!serviceKey) {
+          throw new Error(
+            'Missing SUPABASE_SERVICE_ROLE_KEY. Set it in Supabase Edge Function secrets to initialize profile coins.'
+          )
+        }
 
-      //   const serviceClient = createClient(
-      //     Deno.env.get('SUPABASE_URL') ?? '',
-      //     serviceKey,
-      //     { auth: { persistSession: false } }
-      //   )
+        const serviceClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          serviceKey,
+          { auth: { persistSession: false } }
+        )
 
-      //   const { error: profileError } = await serviceClient
-      //     .from('profiles')
-      //     .upsert(
-      //       {
-      //         id: data.user.id,
-      //         email,
-      //         name,
-      //         role: 'user',
-      //         total_coins: 100,
-      //         coins: 100,
-      //       },
-      //       { onConflict: 'id' }
-      //     )
+        const { error: profileError } = await serviceClient
+          .from('profiles')
+          .upsert(
+            {
+              id: data.user.id,
+              email,
+              name,
+              role: 'user',
+              total_coins: 100,
+              coins: 100,
+              dni: cedula ? cedula.toUpperCase() : null,
+              phone: phone ? phone.replace('-', '') : null
+            },
+            { onConflict: 'id' }
+          )
 
-      //   if (profileError) throw profileError
-      // }
+        if (profileError) {
+          // Manejar errores de constraint único con mensajes amigables
+          if (profileError.message?.includes('profiles_dni_key')) {
+            throw new Error('Esta cédula ya está registrada')
+          }
+          if (profileError.message?.includes('profiles_phone_key')) {
+            throw new Error('Este teléfono ya está registrado')
+          }
+          throw profileError
+        }
+      }
 
       return new Response(
         JSON.stringify(data),
