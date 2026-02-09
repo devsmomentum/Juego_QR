@@ -244,27 +244,31 @@ class TreasureHuntApp extends StatelessWidget {
           return provider;
         }),
       ],
-      child: MaterialApp(
-        title: 'MapHunter',
-        navigatorKey: rootNavigatorKey,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        builder: (context, child) {
-          return AuthMonitor(
-            child: ConnectivityMonitor(
-              child: GameSessionMonitor( // Monitoreo de reinicio
-                child: SabotageOverlay(child: child ?? const SizedBox()),
-              ),
-            ),
+      child: Consumer<PlayerProvider>(
+        builder: (context, playerProvider, child) {
+          return MaterialApp(
+            title: 'MapHunter',
+            navigatorKey: rootNavigatorKey,
+            debugShowCheckedModeBanner: false,
+            theme: playerProvider.isDarkMode ? AppTheme.darkTheme : AppTheme.lightTheme,
+            builder: (context, child) {
+              return AuthMonitor(
+                child: ConnectivityMonitor(
+                  child: GameSessionMonitor( // Monitoreo de reinicio
+                    child: SabotageOverlay(child: child ?? const SizedBox()),
+                  ),
+                ),
+              );
+            },
+            
+            // 5. LÓGICA PRINCIPAL:
+            // Si estamos en WEB -> Muestra la pantalla de Login de Admin
+            // Si estamos en MÓVIL o WINDOWS (para pruebas) -> Muestra el Splash Screen normal para usuarios
+            home: kIsWeb 
+                ? const AdminLoginScreen() 
+                : const SplashScreen(),
           );
         },
-        
-        // 5. LÓGICA PRINCIPAL:
-        // Si estamos en WEB -> Muestra la pantalla de Login de Admin
-        // Si estamos en MÓVIL o WINDOWS (para pruebas) -> Muestra el Splash Screen normal para usuarios
-        home: kIsWeb 
-            ? const AdminLoginScreen() 
-            : const SplashScreen(),
       ),
     );
   }
