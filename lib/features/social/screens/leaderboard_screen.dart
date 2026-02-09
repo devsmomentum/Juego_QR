@@ -89,6 +89,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               padding: const EdgeInsets.all(20.0),
               child: Row(
                 children: [
+                  // Botón para volver a escenarios
+                  Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () {
+                         // Si estamos en HomeScreen (tabs), esto hará pop del HomeScreen entero
+                         // devolviéndonos a ScenariosScreen (si fue pushed).
+                         Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                  
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
