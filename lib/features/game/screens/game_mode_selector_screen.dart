@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -25,17 +26,17 @@ class GameModeSelectorScreen extends StatelessWidget {
                   'SELECCIONA TU MODO',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        fontSize: 24,
-                        letterSpacing: 2,
-                        color: Colors.white,
-                        shadows: [
-                          const Shadow(
-                            color: AppTheme.primaryPurple,
-                            blurRadius: 10,
-                            offset: Offset(0, 0),
-                          ),
-                        ],
+                    fontSize: 24,
+                    letterSpacing: 2,
+                    color: Colors.white,
+                    shadows: [
+                      const Shadow(
+                        color: AppTheme.primaryPurple,
+                        blurRadius: 10,
+                        offset: Offset(0, 0),
                       ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
@@ -47,49 +48,58 @@ class GameModeSelectorScreen extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                
+
                 // Card Presencial
                 _ModeCard(
                   title: 'MODO PRESENCIAL',
-                  description: 'Vive la aventura en el mundo real. Requiere GPS y escanear códigos QR en ubicaciones físicas.',
+                  description:
+                      'Vive la aventura en el mundo real. Requiere GPS y escanear códigos QR en ubicaciones físicas.',
                   icon: Icons.location_on_outlined,
                   color: AppTheme.accentGold,
                   onTap: () {
-                    context.read<AppModeProvider>().setMode(GameMode.presencial);
+                    context
+                        .read<AppModeProvider>()
+                        .setMode(GameMode.presencial);
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const ScenariosScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const ScenariosScreen()),
                     );
                   },
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Card Online
                 _ModeCard(
                   title: 'MODO ONLINE',
-                  description: 'Participa desde cualquier lugar. Acceso mediante códigos PIN y minijuegos digitales.',
+                  description:
+                      'Participa desde cualquier lugar. Acceso mediante códigos PIN y minijuegos digitales.',
                   icon: Icons.wifi,
                   color: Colors.cyanAccent,
                   onTap: () {
                     context.read<AppModeProvider>().setMode(GameMode.online);
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const ScenariosScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const ScenariosScreen()),
                     );
                   },
                 ),
-                
+
                 const Spacer(),
-                
+
                 // Logout button for convenience
                 TextButton.icon(
                   onPressed: () async {
                     // Logout and navigate to login
                     try {
+                      // Reset system UI mode before logout
+                      SystemChrome.setEnabledSystemUIMode(
+                          SystemUiMode.immersiveSticky);
                       await context.read<PlayerProvider>().logout();
                     } catch (e) {
                       debugPrint('Error logging out: $e');
                     }
-                    
+
                     if (context.mounted) {
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -98,7 +108,8 @@ class GameModeSelectorScreen extends StatelessWidget {
                     }
                   },
                   icon: const Icon(Icons.arrow_back, color: Colors.white54),
-                  label: const Text('Volver', style: TextStyle(color: Colors.white54)),
+                  label: const Text('Volver',
+                      style: TextStyle(color: Colors.white54)),
                 ),
               ],
             ),
@@ -128,7 +139,8 @@ class _ModeCard extends StatefulWidget {
   State<_ModeCard> createState() => _ModeCardState();
 }
 
-class _ModeCardState extends State<_ModeCard> with SingleTickerProviderStateMixin {
+class _ModeCardState extends State<_ModeCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   bool _isHovered = false;

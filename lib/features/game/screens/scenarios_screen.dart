@@ -1,14 +1,14 @@
 import 'dart:math' as math;
-import 'dart:io' show Platform; 
-import 'package:flutter/foundation.dart' show kIsWeb; 
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart'; 
-import 'package:geolocator/geolocator.dart'; 
+import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:ui';
 import '../models/scenario.dart';
-import '../providers/event_provider.dart'; 
+import '../providers/event_provider.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../auth/providers/player_inventory_provider.dart'; // NEW
@@ -19,7 +19,7 @@ import '../../../core/theme/app_theme.dart';
 import 'code_finder_screen.dart';
 import 'game_request_screen.dart';
 import '../../auth/screens/avatar_selection_screen.dart';
-import 'event_waiting_screen.dart'; 
+import 'event_waiting_screen.dart';
 import '../models/event.dart'; // Import GameEvent model
 import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
@@ -35,8 +35,6 @@ import '../../../core/enums/user_role.dart';
 import '../../social/screens/profile_screen.dart'; // For navigation
 import '../../social/screens/wallet_screen.dart'; // For wallet navigation
 
-
-
 class ScenariosScreen extends StatefulWidget {
   const ScenariosScreen({super.key});
 
@@ -44,23 +42,24 @@ class ScenariosScreen extends StatefulWidget {
   State<ScenariosScreen> createState() => _ScenariosScreenState();
 }
 
-class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderStateMixin {
+class _ScenariosScreenState extends State<ScenariosScreen>
+    with TickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _hoverController;
   late Animation<Offset> _hoverAnimation;
-  
+
   // New Controllers
   late AnimationController _shimmerController;
   late AnimationController _glitchController;
-  
+
   int _currentPage = 0;
   bool _isLoading = true;
   bool _isProcessing = false; // Prevents double taps
   int _navIndex = 1; // Default to Escenarios (index 1)
-  
+
   // Cache for participant status to show "Entering..." vs "Request Access"
   Map<String, bool> _participantStatusMap = {};
-  
+
   // Cache for ban status to show banned button
   Map<String, String?> _banStatusMap = {}; // NEW
 
@@ -80,7 +79,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           children: [
             Icon(Icons.logout, color: AppTheme.dangerRed),
             SizedBox(width: 12),
-            Text('Cerrar Sesión', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text('Cerrar Sesión',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const Text(
@@ -90,7 +91,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -99,7 +101,10 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
             ),
             onPressed: () async {
               Navigator.pop(ctx);
-              final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+              final playerProvider =
+                  Provider.of<PlayerProvider>(context, listen: false);
+              // Reset system UI mode before logout
+              SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
               await playerProvider.logout();
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -128,7 +133,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           children: [
             Icon(Icons.info_outline, color: AppTheme.accentGold),
             const SizedBox(width: 12),
-            const Text('Conócenos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Text('Conócenos',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const Text(
@@ -139,7 +146,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+            child:
+                Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
           ),
         ],
       ),
@@ -159,7 +167,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           children: [
             Icon(Icons.description_outlined, color: AppTheme.accentGold),
             const SizedBox(width: 12),
-            const Text('Términos y Condiciones', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Text('Términos y Condiciones',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const SingleChildScrollView(
@@ -172,7 +182,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+            child:
+                Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
           ),
         ],
       ),
@@ -192,7 +203,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           children: [
             Icon(Icons.support_agent_outlined, color: AppTheme.accentGold),
             const SizedBox(width: 12),
-            const Text('Soporte', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Text('Soporte',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const Text(
@@ -202,7 +215,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+            child:
+                Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
           ),
         ],
       ),
@@ -219,7 +233,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
     _hoverController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
-    )..repeat(reverse: true); 
+    )..repeat(reverse: true);
 
     _hoverAnimation = Tween<Offset>(
       begin: Offset.zero,
@@ -237,53 +251,57 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
 
     // 3. Glitch Text Animation
     _glitchController = AnimationController(
-        vsync: this, 
-        duration: const Duration(milliseconds: 4000), // Occurs every 4 seconds
+      vsync: this,
+      duration: const Duration(milliseconds: 4000), // Occurs every 4 seconds
     )..repeat();
-
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      
+
       // CLEANUP: Ensure we are disconnected from any previous game
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final powerProvider = Provider.of<PowerEffectManager>(context, listen: false);
-      
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final powerProvider =
+          Provider.of<PowerEffectManager>(context, listen: false);
+
       debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
       _cleanupGameState();
-      
+
       _loadEvents();
       // Empezar a precargar el video del primer avatar para que sea instantáneo
-      VideoPreloadService().preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
+      VideoPreloadService()
+          .preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
     });
   }
 
   /// Cleans up any active game session data to prevent ghost effects or state leaks.
   void _cleanupGameState() {
-      if (!mounted) return;
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final powerProvider = Provider.of<PowerEffectManager>(context, listen: false);
-      
-      debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
-      
-      // Schedule to avoid frame collision during navigation pop
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-          gameProvider.resetState(); 
-          playerProvider.clearGameContext(); 
-          powerProvider.startListening(null, forceRestart: true);
-      });
+    if (!mounted) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final powerProvider =
+        Provider.of<PowerEffectManager>(context, listen: false);
+
+    debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
+
+    // Schedule to avoid frame collision during navigation pop
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      gameProvider.resetState();
+      playerProvider.clearGameContext();
+      powerProvider.startListening(null, forceRestart: true);
+    });
   }
 
   Future<void> _loadEvents() async {
     print("DEBUG: _loadEvents start");
     final eventProvider = Provider.of<EventProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
-    
+    final requestProvider =
+        Provider.of<GameRequestProvider>(context, listen: false);
+
     await eventProvider.fetchEvents();
-    
+
     // Load participation status and ban status for each event
     final userId = playerProvider.currentPlayer?.userId;
     if (userId != null) {
@@ -291,7 +309,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       final Map<String, String?> banMap = {}; // NEW
       for (final event in eventProvider.events) {
         try {
-          final data = await requestProvider.isPlayerParticipant(userId, event.id);
+          final data =
+              await requestProvider.isPlayerParticipant(userId, event.id);
           statusMap[event.id] = data['isParticipant'] as bool? ?? false;
           banMap[event.id] = data['status'] as String?; // NEW: Track ban status
         } catch (e) {
@@ -306,7 +325,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         });
       }
     }
-    
+
     print("DEBUG: _loadEvents end. Mounted: $mounted");
     if (mounted) {
       setState(() {
@@ -321,12 +340,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
     _hoverController.dispose();
     _shimmerController.dispose();
     _glitchController.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
   }
-
-
-
 
   Future<void> _onScenarioSelected(Scenario scenario) async {
     if (_isProcessing) return;
@@ -354,13 +370,17 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) => const Center(child: CircularProgressIndicator(color: AppTheme.accentGold)),
+        builder: (ctx) => const Center(
+            child: CircularProgressIndicator(color: AppTheme.accentGold)),
       );
 
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider =
+          Provider.of<GameRequestProvider>(context, listen: false);
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final inventoryProvider = Provider.of<PlayerInventoryProvider>(context, listen: false); // NEW
+      final inventoryProvider =
+          Provider.of<PlayerInventoryProvider>(context, listen: false); // NEW
 
       final accessService = GameAccessService();
 
@@ -410,19 +430,23 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               if (success) {
                 // CLEANUP: Prevent Inventory Leak
                 if (gameProvider.currentEventId != scenario.id) {
-                   debugPrint('🚫 Event Switch: Cleaning up old state for ${scenario.id}...');
-                   inventoryProvider.resetEventState(); // Clean inventory lists (Provider)
-                   playerProvider.clearCurrentInventory(); // Clean active inventory (Player model)
+                  debugPrint(
+                      '🚫 Event Switch: Cleaning up old state for ${scenario.id}...');
+                  inventoryProvider
+                      .resetEventState(); // Clean inventory lists (Provider)
+                  playerProvider
+                      .clearCurrentInventory(); // Clean active inventory (Player model)
                 }
 
                 await gameProvider.fetchClues(eventId: scenario.id);
                 if (mounted) {
                   Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => HomeScreen(eventId: scenario.id))).then((_) {
-                            _cleanupGameState();
-                          });
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => HomeScreen(eventId: scenario.id)))
+                      .then((_) {
+                    _cleanupGameState();
+                  });
                 }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -455,7 +479,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           // CRITICAL: Clear game context to prevent power effects
           // This sets gamePlayerId = null, which triggers the hard gate in SabotageOverlay
           playerProvider.clearGameContext();
-          
+
           // Navigate directly to spectator mode for banned users
           await gameProvider.fetchClues(eventId: scenario.id);
           if (mounted) {
@@ -490,46 +514,68 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: AppTheme.cardBg,
-                    title: const Text('💰 Evento de Pago', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    content: Text('Este evento cuesta ${scenario.entryFee} 🍀.\n\nTu saldo: $userClovers 🍀', style: const TextStyle(color: Colors.white70)),
+                    title: const Text('💰 Evento de Pago',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                    content: Text(
+                        'Este evento cuesta ${scenario.entryFee} 🍀.\n\nTu saldo: $userClovers 🍀',
+                        style: const TextStyle(color: Colors.white70)),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancelar',
+                              style: TextStyle(color: Colors.white54))),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold, foregroundColor: Colors.black),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.accentGold,
+                            foregroundColor: Colors.black),
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text('PAGAR Y ENTRAR'),
                       ),
                     ],
                   ),
                 );
-                
-                if (confirm == true) {
-                   setState(() => _isProcessing = true);
-                   showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-                   
-                   final success = await requestProvider.joinOnlinePaidEvent(
-                      playerProvider.currentPlayer!.userId, scenario.id, scenario.entryFee
-                   );
 
-                   // Artificial delay for specific online join action
-                   await Future.delayed(const Duration(seconds: 2));
-                   
-                   if (!mounted) return;
-                   Navigator.pop(context);
-                   
-                   if (success) {
-                     playerProvider.updateLocalClovers(userClovers - scenario.entryFee);
-                     await playerProvider.refreshProfile();
-                     setState(() { _participantStatusMap[scenario.id] = true; });
-                     
-                     await gameProvider.fetchClues(eventId: scenario.id);
-                     if (mounted) {
-                       Navigator.push(context, MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
-                     }
-                   } else {
-                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error procesando el pago.')));
-                   }
-                   setState(() => _isProcessing = false);
+                if (confirm == true) {
+                  setState(() => _isProcessing = true);
+                  showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) =>
+                          const Center(child: CircularProgressIndicator()));
+
+                  final success = await requestProvider.joinOnlinePaidEvent(
+                      playerProvider.currentPlayer!.userId,
+                      scenario.id,
+                      scenario.entryFee);
+
+                  // Artificial delay for specific online join action
+                  await Future.delayed(const Duration(seconds: 2));
+
+                  if (!mounted) return;
+                  Navigator.pop(context);
+
+                  if (success) {
+                    playerProvider
+                        .updateLocalClovers(userClovers - scenario.entryFee);
+                    await playerProvider.refreshProfile();
+                    setState(() {
+                      _participantStatusMap[scenario.id] = true;
+                    });
+
+                    await gameProvider.fetchClues(eventId: scenario.id);
+                    if (mounted) {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  HomeScreen(eventId: scenario.id)));
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Error procesando el pago.')));
+                  }
+                  setState(() => _isProcessing = false);
                 }
               } else {
                 // Insufficient funds
@@ -537,15 +583,29 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: AppTheme.cardBg,
-                    title: const Text('Saldo Insuficiente', style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold)),
-                    content: Text('Este evento cuesta ${scenario.entryFee} 🍀.\nSolo tienes $userClovers 🍀.', style: const TextStyle(color: Colors.white70)),
+                    title: const Text('Saldo Insuficiente',
+                        style: TextStyle(
+                            color: AppTheme.dangerRed,
+                            fontWeight: FontWeight.bold)),
+                    content: Text(
+                        'Este evento cuesta ${scenario.entryFee} 🍀.\nSolo tienes $userClovers 🍀.',
+                        style: const TextStyle(color: Colors.white70)),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cerrar')),
                       ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryPurple),
                         icon: const Icon(Icons.account_balance_wallet),
                         label: const Text('IR A BILLETERA'),
-                        onPressed: () { Navigator.pop(ctx); Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())); },
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const WalletScreen()));
+                        },
                       ),
                     ],
                   ),
@@ -553,42 +613,59 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               }
             } else {
               // Online FREE: Join directly and enter game
-              showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-              
+              showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) =>
+                      const Center(child: CircularProgressIndicator()));
+
               try {
                 // Create game_player record for free online event
-                await requestProvider.joinFreeOnlineEvent(playerProvider.currentPlayer!.userId, scenario.id);
-                
+                await requestProvider.joinFreeOnlineEvent(
+                    playerProvider.currentPlayer!.userId, scenario.id);
+
                 // Artificial delay for specific online join action
                 await Future.delayed(const Duration(seconds: 2));
-                
-                setState(() { _participantStatusMap[scenario.id] = true; });
-                
+
+                setState(() {
+                  _participantStatusMap[scenario.id] = true;
+                });
+
                 await gameProvider.fetchClues(eventId: scenario.id);
                 if (mounted) {
                   Navigator.pop(context); // Close loading
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => HomeScreen(eventId: scenario.id)));
                 }
               } catch (e) {
-                if (mounted) Navigator.pop(context); // Close loading despite error so we can show snackbar
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al ingresar: $e')));
+                if (mounted)
+                  Navigator.pop(
+                      context); // Close loading despite error so we can show snackbar
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al ingresar: $e')));
               }
             }
           } else {
             // Presencial event: Show CodeFinderScreen (thermometer + QR)
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => CodeFinderScreen(scenario: scenario)),
+              MaterialPageRoute(
+                  builder: (_) => CodeFinderScreen(scenario: scenario)),
             );
           }
           break;
-          
+
         case AccessResultType.needsAvatar:
-           // Should be handled in allowed logic usually, but if separated:
-           Navigator.push(context, MaterialPageRoute(builder: (_) => AvatarSelectionScreen(eventId: scenario.id)));
-           break;
-          
-        case AccessResultType.approvedWait: 
-           break;
+          // Should be handled in allowed logic usually, but if separated:
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => AvatarSelectionScreen(eventId: scenario.id)));
+          break;
+
+        case AccessResultType.approvedWait:
+          break;
 
         case AccessResultType.needsPayment:
           final entryFee = (result.data?['entryFee'] as num?)?.toInt() ?? 0;
@@ -600,8 +677,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: AppTheme.cardBg,
-                title: const Text('Confirmar Inscripción', 
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                title: const Text('Confirmar Inscripción',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
                 content: Text(
                   'Este evento tiene un costo de $entryFee 🍀.\n\n'
                   'Tu saldo: $userClovers 🍀\n'
@@ -611,11 +689,12 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                    child: const Text('Cancelar',
+                        style: TextStyle(color: Colors.white54)),
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentGold, 
+                      backgroundColor: AppTheme.accentGold,
                       foregroundColor: Colors.black,
                     ),
                     onPressed: () => Navigator.pop(ctx, true),
@@ -627,78 +706,84 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
 
             if (confirm == true) {
               // Procesar Pago
-               setState(() => _isProcessing = true);
-               showDialog(
-                 context: context,
-                 barrierDismissible: false,
-                 builder: (_) => const Center(child: CircularProgressIndicator()),
-               );
-               
-               // Usar función apropiada según tipo de evento
-               final bool success;
-               if (scenario.type == 'online') {
-                  // Online: Pago + inscripción directa (sin esperar admin)
-                  success = await requestProvider.joinOnlinePaidEvent(
-                     playerProvider.currentPlayer!.userId, 
-                     scenario.id, 
-                     entryFee
-                  );
-               } else {
-                  // Presencial: Solo pago (luego pasa por flujo de solicitud)
-                  success = await requestProvider.processEventPayment(
-                     playerProvider.currentPlayer!.userId, 
-                     scenario.id, 
-                     entryFee
-                  );
-               }
-               
-               if (!mounted) return;
-               Navigator.pop(context); // Close loading overlay
-               
-               if (success) {
-                 // Actualizar saldo localmente para reflejar cambio inmediato
-                 playerProvider.updateLocalClovers(userClovers - entryFee);
-                 await playerProvider.refreshProfile();
-                 
-                 // Actualizar mapa de participación
-                 setState(() {
-                    _participantStatusMap[scenario.id] = (scenario.type == 'online');
-                 });
-                 
-                 // Navegar al flujo correcto según tipo de evento
-                 if (mounted) {
-                    if (scenario.type == 'online') {
-                       // Online: Ir directo a la carrera (ya está inscrito)
-                       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-                       await gameProvider.fetchClues(eventId: scenario.id);
-                       Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)),
-                       );
-                    } else {
-                       // Presencial: Mostrar termómetro primero -> QR -> Solicitar Acceso
-                       Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => CodeFinderScreen(scenario: scenario)),
-                       );
-                    }
-                 }
-               } else {
-                 ScaffoldMessenger.of(context).showSnackBar(
-                   const SnackBar(content: Text('Error procesando el pago. Intenta de nuevo.')),
-                 );
-               }
-               setState(() => _isProcessing = false);
-            }
+              setState(() => _isProcessing = true);
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) =>
+                    const Center(child: CircularProgressIndicator()),
+              );
 
+              // Usar función apropiada según tipo de evento
+              final bool success;
+              if (scenario.type == 'online') {
+                // Online: Pago + inscripción directa (sin esperar admin)
+                success = await requestProvider.joinOnlinePaidEvent(
+                    playerProvider.currentPlayer!.userId,
+                    scenario.id,
+                    entryFee);
+              } else {
+                // Presencial: Solo pago (luego pasa por flujo de solicitud)
+                success = await requestProvider.processEventPayment(
+                    playerProvider.currentPlayer!.userId,
+                    scenario.id,
+                    entryFee);
+              }
+
+              if (!mounted) return;
+              Navigator.pop(context); // Close loading overlay
+
+              if (success) {
+                // Actualizar saldo localmente para reflejar cambio inmediato
+                playerProvider.updateLocalClovers(userClovers - entryFee);
+                await playerProvider.refreshProfile();
+
+                // Actualizar mapa de participación
+                setState(() {
+                  _participantStatusMap[scenario.id] =
+                      (scenario.type == 'online');
+                });
+
+                // Navegar al flujo correcto según tipo de evento
+                if (mounted) {
+                  if (scenario.type == 'online') {
+                    // Online: Ir directo a la carrera (ya está inscrito)
+                    final gameProvider =
+                        Provider.of<GameProvider>(context, listen: false);
+                    await gameProvider.fetchClues(eventId: scenario.id);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => HomeScreen(eventId: scenario.id)),
+                    );
+                  } else {
+                    // Presencial: Mostrar termómetro primero -> QR -> Solicitar Acceso
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => CodeFinderScreen(scenario: scenario)),
+                    );
+                  }
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content:
+                          Text('Error procesando el pago. Intenta de nuevo.')),
+                );
+              }
+              setState(() => _isProcessing = false);
+            }
           } else {
             // Caso 2: Saldo Insuficiente -> Redirigir Wallet
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: AppTheme.cardBg,
-                title: const Text('Saldo Insuficiente', 
-                    style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold)),
+                title: const Text('Saldo Insuficiente',
+                    style: TextStyle(
+                        color: AppTheme.dangerRed,
+                        fontWeight: FontWeight.bold)),
                 content: Text(
                   'Este evento cuesta $entryFee 🍀.\n'
                   'Solo tienes $userClovers 🍀 disponibles.',
@@ -707,7 +792,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                    child: const Text('Cancelar',
+                        style: TextStyle(color: Colors.white54)),
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -741,7 +827,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                 filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: Dialog(
                   backgroundColor: Colors.transparent,
-                  insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  insetPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -776,7 +863,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                               height: 120,
                               decoration: BoxDecoration(
                                 color: AppTheme.secondaryPink.withOpacity(0.05),
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(22)),
                               ),
                             ),
                             Column(
@@ -796,7 +884,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.secondaryPink.withOpacity(0.4),
+                                        color: AppTheme.secondaryPink
+                                            .withOpacity(0.4),
                                         blurRadius: 15,
                                         spreadRadius: 2,
                                       ),
@@ -812,7 +901,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                             ),
                           ],
                         ),
-                        
+
                         const Text(
                           '¡EVENTO LLENO!',
                           style: TextStyle(
@@ -823,14 +912,15 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                           ),
                         ),
                         const SizedBox(height: 20),
-                        
+
                         // Content
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 30),
                           child: Column(
                             children: [
                               Text(
-                                result.message ?? 'El cupo de jugadores activos (${scenario.maxPlayers}) ha sido alcanzado.',
+                                result.message ??
+                                    'El cupo de jugadores activos (${scenario.maxPlayers}) ha sido alcanzado.',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -849,7 +939,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                 ),
                               ),
                               const SizedBox(height: 32),
-                              
+
                               // Main Button
                               SizedBox(
                                 width: double.infinity,
@@ -857,12 +947,16 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                 child: Container(
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [AppTheme.secondaryPink, Color(0xFFFF4081)],
+                                      colors: [
+                                        AppTheme.secondaryPink,
+                                        Color(0xFFFF4081)
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.secondaryPink.withOpacity(0.35),
+                                        color: AppTheme.secondaryPink
+                                            .withOpacity(0.35),
                                         blurRadius: 12,
                                         offset: const Offset(0, 6),
                                       ),
@@ -878,9 +972,11 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                       ),
                                     ),
                                     child: const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.visibility_rounded, color: Colors.white),
+                                        Icon(Icons.visibility_rounded,
+                                            color: Colors.white),
                                         SizedBox(width: 12),
                                         Text(
                                           'MODO ESPECTADOR',
@@ -897,13 +993,14 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              
+
                               // Cancel Button
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, false),
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.white38,
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12, horizontal: 24),
                                 ),
                                 child: const Text(
                                   'VOLVER AL INICIO',
@@ -936,8 +1033,6 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
             ),
           );
           break;
-
-
       }
     } catch (e, stackTrace) {
       debugPrint('ScenariosScreen: CRITICAL ERROR: $e');
@@ -994,7 +1089,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
             const SizedBox(width: 12),
             const Text(
               'Próximamente',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -1149,15 +1245,17 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       child: ElevatedButton(
         onPressed: () async {
           // CRITICAL: Navigate directly without validation flow
-          final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-          final gameProvider = Provider.of<GameProvider>(context, listen: false);
-          
+          final playerProvider =
+              Provider.of<PlayerProvider>(context, listen: false);
+          final gameProvider =
+              Provider.of<GameProvider>(context, listen: false);
+
           // Clear game context to prevent power effects
           playerProvider.clearGameContext();
-          
+
           // Fetch clues for spectator view
           await gameProvider.fetchClues(eventId: scenario.id);
-          
+
           if (mounted) {
             Navigator.push(
               context,
@@ -1218,12 +1316,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        
+
         final shouldExit = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: AppTheme.cardBg,
-            title: const Text('¿Salir de MapHunter?', style: TextStyle(color: Colors.white)),
+            title: const Text('¿Salir de MapHunter?',
+                style: TextStyle(color: Colors.white)),
             content: const Text(
               '¿Estás seguro que deseas salir de la aplicación?',
               style: TextStyle(color: Colors.white70),
@@ -1231,7 +1330,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                child: const Text('Cancelar',
+                    style: TextStyle(color: Colors.white54)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -1250,585 +1350,694 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         }
       },
       child: Scaffold(
-      extendBody: true,
-      bottomNavigationBar: SafeArea(
-        bottom: true,
-        child: _buildBottomNavBar(),
-      ),
-      body: AnimatedCyberBackground(
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Dark overlay for better text readability
-              // Dark overlay removed for lighter background
-             LayoutBuilder(
-              builder: (context, viewportConstraints) {
-                return RefreshIndicator(
-                  onRefresh: _loadEvents,
-                  color: AppTheme.accentGold,
-                  backgroundColor: AppTheme.cardBg,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: SizedBox(
-                      height: viewportConstraints.maxHeight,
-                      child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                          // Custom AppBar with Game Title and Logout
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 0),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              alignment: Alignment.center,
-                              children: [
-                                // Game Title with Glitch Effect
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 30.0),
-                                  child: Center(
-                                    child: AnimatedBuilder(
-                                      animation: _glitchController,
-                                      builder: (context, child) {
-                                        final double value = _glitchController.value;
-                                        const Color primaryColor = Color(0xFFFAE500); // Cyberpunk bright yellow
-                                        
-                                        // Much slower oscillation (10x instead of 40x)
-                                        double offsetX = math.sin(value * 10 * math.pi) * 0.5;
-                                        double offsetY = math.cos(value * 8 * math.pi) * 0.3;
-                                        
-                                        // Chromatic aberrations breathing much slower (5x instead of 20x)
-                                        double cyanX = offsetX - 1.5 - (math.sin(value * 5 * math.pi) * 2.0);
-                                        double magX = offsetX + 1.5 + (math.cos(value * 5 * math.pi) * 2.0);
-                                        
-                                        // Softer periodic spikes
-                                        double spike = 0.0;
-                                        if (value > 0.45 && value < 0.50) {
-                                          spike = 3.0 * math.sin((value - 0.45) * 20 * math.pi);
-                                        } else if (value > 0.90 && value < 0.95) {
-                                          spike = -2.0 * math.sin((value - 0.90) * 20 * math.pi);
-                                        }
-                                        offsetX += spike;
+        extendBody: true,
+        bottomNavigationBar: SafeArea(
+          bottom: true,
+          child: _buildBottomNavBar(),
+        ),
+        body: AnimatedCyberBackground(
+          child: SafeArea(
+            child: Stack(
+              children: [
+                // Dark overlay for better text readability
+                // Dark overlay removed for lighter background
+                LayoutBuilder(builder: (context, viewportConstraints) {
+                  return RefreshIndicator(
+                    onRefresh: _loadEvents,
+                    color: AppTheme.accentGold,
+                    backgroundColor: AppTheme.cardBg,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: viewportConstraints.maxHeight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Custom AppBar with Game Title and Logout
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                  20,
+                                  MediaQuery.of(context).padding.top + 20,
+                                  20,
+                                  0),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                alignment: Alignment.center,
+                                children: [
+                                  // Game Title with Glitch Effect
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 30.0),
+                                    child: Center(
+                                      child: AnimatedBuilder(
+                                        animation: _glitchController,
+                                        builder: (context, child) {
+                                          final double value =
+                                              _glitchController.value;
+                                          const Color primaryColor = Color(
+                                              0xFFFAE500); // Cyberpunk bright yellow
 
-                                        return Stack(
-                                          clipBehavior: Clip.none,
-                                          alignment: Alignment.center,
-                                          children: [
-                                            // Cyan Shadow
-                                            Transform.translate(
-                                              offset: Offset(cyanX, offsetY),
-                                              child: Text(
-                                                "MapHunter",
-                                                style: TextStyle(
-                                                  fontSize: 46,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: const Color(0xFF00FFFF).withOpacity(0.6),
-                                                  letterSpacing: 1,
-                                                  height: 1.0,
-                                                ),
-                                              ),
-                                            ),
-                                            // Magenta Shadow
-                                            Transform.translate(
-                                              offset: Offset(magX, offsetY),
-                                              child: Text(
-                                                "MapHunter",
-                                                style: TextStyle(
-                                                  fontSize: 46,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: const Color(0xFFFF00FF).withOpacity(0.6),
-                                                  letterSpacing: 1,
-                                                  height: 1.0,
-                                                ),
-                                              ),
-                                            ),
-                                            // Primary Yellow Text
-                                            Transform.translate(
-                                              offset: Offset(offsetX, offsetY),
-                                              child: Text(
-                                                "MapHunter",
-                                                style: TextStyle(
-                                                  fontSize: 46,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: value > 0.98 ? Colors.white : primaryColor,
-                                                  letterSpacing: 1,
-                                                  height: 1.0,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                // Subtitle
-                                Positioned(
-                                  bottom: -20,
-                                  child: Text(
-                                    "Búsqueda del tesoro ☘️",
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white70,
-                                      fontWeight: FontWeight.w300,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                ),
-                                
-                                // --- LEFT: EXIT BUTTON ---
-                                Positioned(
-                                  left: 0,
-                                  top: -24,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.logout, color: Colors.white, size: 28),
-                                    onPressed: _showLogoutDialog,
-                                  ),
-                                ),
+                                          // Much slower oscillation (10x instead of 40x)
+                                          double offsetX =
+                                              math.sin(value * 10 * math.pi) *
+                                                  0.5;
+                                          double offsetY =
+                                              math.cos(value * 8 * math.pi) *
+                                                  0.3;
 
-                                // --- RIGHT: HAMBURGER MENU ---
-                                Positioned(
-                                  right: 0,
-                                  top: -24,
-                                  child: Theme(
-                                    data: Theme.of(context).copyWith(
-                                      dividerTheme: const DividerThemeData(
-                                        color: Colors.white24,
-                                        thickness: 1,
+                                          // Chromatic aberrations breathing much slower (5x instead of 20x)
+                                          double cyanX = offsetX -
+                                              1.5 -
+                                              (math.sin(value * 5 * math.pi) *
+                                                  2.0);
+                                          double magX = offsetX +
+                                              1.5 +
+                                              (math.cos(value * 5 * math.pi) *
+                                                  2.0);
+
+                                          // Softer periodic spikes
+                                          double spike = 0.0;
+                                          if (value > 0.45 && value < 0.50) {
+                                            spike = 3.0 *
+                                                math.sin((value - 0.45) *
+                                                    20 *
+                                                    math.pi);
+                                          } else if (value > 0.90 &&
+                                              value < 0.95) {
+                                            spike = -2.0 *
+                                                math.sin((value - 0.90) *
+                                                    20 *
+                                                    math.pi);
+                                          }
+                                          offsetX += spike;
+
+                                          return Stack(
+                                            clipBehavior: Clip.none,
+                                            alignment: Alignment.center,
+                                            children: [
+                                              // Cyan Shadow
+                                              Transform.translate(
+                                                offset: Offset(cyanX, offsetY),
+                                                child: Text(
+                                                  "MapHunter",
+                                                  style: TextStyle(
+                                                    fontSize: 46,
+                                                    fontWeight: FontWeight.w900,
+                                                    color:
+                                                        const Color(0xFF00FFFF)
+                                                            .withOpacity(0.6),
+                                                    letterSpacing: 1,
+                                                    height: 1.0,
+                                                  ),
+                                                ),
+                                              ),
+                                              // Magenta Shadow
+                                              Transform.translate(
+                                                offset: Offset(magX, offsetY),
+                                                child: Text(
+                                                  "MapHunter",
+                                                  style: TextStyle(
+                                                    fontSize: 46,
+                                                    fontWeight: FontWeight.w900,
+                                                    color:
+                                                        const Color(0xFFFF00FF)
+                                                            .withOpacity(0.6),
+                                                    letterSpacing: 1,
+                                                    height: 1.0,
+                                                  ),
+                                                ),
+                                              ),
+                                              // Primary Yellow Text
+                                              Transform.translate(
+                                                offset:
+                                                    Offset(offsetX, offsetY),
+                                                child: Text(
+                                                  "MapHunter",
+                                                  style: TextStyle(
+                                                    fontSize: 46,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: value > 0.98
+                                                        ? Colors.white
+                                                        : primaryColor,
+                                                    letterSpacing: 1,
+                                                    height: 1.0,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
                                       ),
                                     ),
-                                    child: PopupMenuButton<String>(
-                                      icon: const Icon(Icons.menu, color: Colors.white, size: 28),
-                                      color: AppTheme.cardBg.withOpacity(0.95),
-                                      elevation: 15,
-                                      offset: const Offset(0, 45),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                        side: const BorderSide(color: AppTheme.accentGold, width: 1.5),
+                                  ),
+                                  // Subtitle
+                                  Positioned(
+                                    bottom: -20,
+                                    child: Text(
+                                      "Búsqueda del tesoro ☘️",
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w300,
+                                        letterSpacing: 1.0,
                                       ),
-                                      onSelected: (value) {
-                                        switch (value) {
-                                          case 'profile':
-                                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-                                            break;
-                                          case 'about':
-                                            _showAboutDialog();
-                                            break;
-                                          case 'terms':
-                                            _showTermsDialog();
-                                            break;
-                                          case 'support':
-                                            _showSupportDialog();
-                                            break;
-                                          case 'logout':
-                                            _showLogoutDialog();
-                                            break;
-                                        }
-                                      },
-                                      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                        PopupMenuItem<String>(
-                                          value: 'profile',
-                                          child: Row(
-                                            children: const [
-                                              Icon(Icons.person, color: AppTheme.accentGold), 
-                                              SizedBox(width: 12), 
-                                              Text('Perfil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))
-                                            ],
-                                          ),
-                                        ),
-                                        PopupMenuItem<String>(
-                                          value: 'about',
-                                          child: Row(
-                                            children: const [
-                                              Icon(Icons.info_outline, color: AppTheme.accentGold), 
-                                              SizedBox(width: 12), 
-                                              Text('Conócenos', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))
-                                            ],
-                                          ),
-                                        ),
-                                        PopupMenuItem<String>(
-                                          value: 'terms',
-                                          child: Row(
-                                            children: const [
-                                              Icon(Icons.description_outlined, color: AppTheme.accentGold), 
-                                              SizedBox(width: 12), 
-                                              Text('Términos y Condiciones', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))
-                                            ],
-                                          ),
-                                        ),
-                                        PopupMenuItem<String>(
-                                          value: 'support',
-                                          child: Row(
-                                            children: const [
-                                              Icon(Icons.support_agent_outlined, color: AppTheme.accentGold), 
-                                              SizedBox(width: 12), 
-                                              Text('Soporte y Mantenimiento', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))
-                                            ],
-                                          ),
-                                        ),
-                                      ],
                                     ),
                                   ),
-                                ),
-                              ],
-                          ),
-                        ),
 
-                        // Description Text
-                        // Description Text with Enhanced Style
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(40, 40, 40, 20),
-                          child: Text(
-                            '¡Embárcate en una emocionante búsqueda del tesoro resolviendo pistas intrigantes para descubrir el gran premio oculto!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              height: 1.5,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.5,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
+                                  // --- LEFT: EXIT BUTTON ---
+                                  Positioned(
+                                    left: 0,
+                                    top: -24,
+                                    child: IconButton(
+                                      icon: const Icon(Icons.logout,
+                                          color: Colors.white, size: 28),
+                                      onPressed: _showLogoutDialog,
+                                    ),
+                                  ),
 
-                        const SizedBox(height: 10),
-
-                        // Title for Selection
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: const Center(
-                            child: Text(
-                              "ELIGE TU AVENTURA",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppTheme.accentGold,
-                                fontSize: 22,
-                                letterSpacing: -1.5,
-                                fontWeight: FontWeight.w900,
+                                  // --- RIGHT: HAMBURGER MENU ---
+                                  Positioned(
+                                    right: 0,
+                                    top: -24,
+                                    child: Theme(
+                                      data: Theme.of(context).copyWith(
+                                        dividerTheme: const DividerThemeData(
+                                          color: Colors.white24,
+                                          thickness: 1,
+                                        ),
+                                      ),
+                                      child: PopupMenuButton<String>(
+                                        icon: const Icon(Icons.menu,
+                                            color: Colors.white, size: 28),
+                                        color:
+                                            AppTheme.cardBg.withOpacity(0.95),
+                                        elevation: 15,
+                                        offset: const Offset(0, 45),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          side: const BorderSide(
+                                              color: AppTheme.accentGold,
+                                              width: 1.5),
+                                        ),
+                                        onSelected: (value) {
+                                          switch (value) {
+                                            case 'profile':
+                                              Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          const ProfileScreen()));
+                                              break;
+                                            case 'about':
+                                              _showAboutDialog();
+                                              break;
+                                            case 'terms':
+                                              _showTermsDialog();
+                                              break;
+                                            case 'support':
+                                              _showSupportDialog();
+                                              break;
+                                            case 'logout':
+                                              _showLogoutDialog();
+                                              break;
+                                          }
+                                        },
+                                        itemBuilder: (BuildContext context) =>
+                                            <PopupMenuEntry<String>>[
+                                          PopupMenuItem<String>(
+                                            value: 'profile',
+                                            child: Row(
+                                              children: const [
+                                                Icon(Icons.person,
+                                                    color: AppTheme.accentGold),
+                                                SizedBox(width: 12),
+                                                Text('Perfil',
+                                                    style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w500))
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem<String>(
+                                            value: 'about',
+                                            child: Row(
+                                              children: const [
+                                                Icon(Icons.info_outline,
+                                                    color: AppTheme.accentGold),
+                                                SizedBox(width: 12),
+                                                Text('Conócenos',
+                                                    style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w500))
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem<String>(
+                                            value: 'terms',
+                                            child: Row(
+                                              children: const [
+                                                Icon(Icons.description_outlined,
+                                                    color: AppTheme.accentGold),
+                                                SizedBox(width: 12),
+                                                Text('Términos y Condiciones',
+                                                    style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w500))
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem<String>(
+                                            value: 'support',
+                                            child: Row(
+                                              children: const [
+                                                Icon(
+                                                    Icons
+                                                        .support_agent_outlined,
+                                                    color: AppTheme.accentGold),
+                                                SizedBox(width: 12),
+                                                Text('Soporte y Mantenimiento',
+                                                    style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w500))
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ),
 
+                            // Description Text
+                            // Description Text with Enhanced Style
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(40, 40, 40, 20),
+                              child: Text(
+                                '¡Embárcate en una emocionante búsqueda del tesoro resolviendo pistas intrigantes para descubrir el gran premio oculto!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.5,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
 
-                        // Scenarios Carousel - Expanded to fit remaining space
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              return _isLoading
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                      color: AppTheme.accentGold))
-                              : scenarios.isEmpty
-                                  ? const Center(
-                                      child: Text("No hay competencias disponibles",
-                                          style: TextStyle(color: Colors.white)))
-                                  : ScrollConfiguration(
-                                      behavior: ScrollConfiguration.of(context)
-                                          .copyWith(
-                                        dragDevices: {
-                                          PointerDeviceKind.touch,
-                                          PointerDeviceKind.mouse,
-                                        },
-                                      ),
-                                      child: PageView.builder(
-                                        controller: _pageController,
-                                        onPageChanged: (index) {
-                                          setState(() {
-                                            _currentPage = index;
-                                          });
-                                        },
-                                        itemCount: scenarios.length,
-                                        itemBuilder: (context, index) {
-                                          final scenario = scenarios[index];
-                                          return AnimatedBuilder(
-                                            animation: _pageController,
-                                            builder: (context, child) {
-                                              double value = 1.0;
-                                              if (_pageController
-                                                  .position.haveDimensions) {
-                                                value = _pageController.page! -
-                                                    index;
-                                                value =
-                                                    (1 - (value.abs() * 0.3))
-                                                        .clamp(0.0, 1.0);
-                                              } else {
-                                                value = index == _currentPage
-                                                    ? 1.0
-                                                    : 0.7;
-                                              }
-                                              
-                                              // Use LayoutBuilder to be responsive inside the carousel item
-                                              return Center(
-                                                child: SizedBox(
-                                                  height: Curves.easeOut
-                                                          .transform(value) *
-                                                      constraints.maxHeight, // Full height
+                            const SizedBox(height: 10),
 
-                                                  width: Curves.easeOut
-                                                          .transform(value) *
-                                                      340, // Maximized width
-                                                  child: child,
-                                                ),
-                                              );
-                                            },
-                                            child: GestureDetector(
-                                              onTap: () =>
-                                                  _onScenarioSelected(scenario),
-                                              child: Container(
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 10),
-                                                decoration: BoxDecoration(
-                                                  borderRadius:
-                                                      BorderRadius.circular(30),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Colors.black
-                                                          .withOpacity(0.5),
-                                                      blurRadius: 20,
-                                                      offset:
-                                                          const Offset(0, 10),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(30),
-                                                  child: Stack(
-                                                    fit: StackFit.expand,
-                                                    children: [
-                                                      // Background Image
-                                                      (scenario.imageUrl
-                                                                  .isNotEmpty &&
-                                                               scenario.imageUrl
-                                                                   .startsWith(
-                                                                       'http'))
-                                                          ? Image.network(
-                                                              scenario.imageUrl,
-                                                              fit: BoxFit.cover,
-                                                              errorBuilder: (context,
-                                                                  error,
-                                                                  stackTrace) {
-                                                                return Container(
-                                                                  color: Colors
-                                                                      .grey[800],
-                                                                  child: const Icon(
-                                                                      Icons
-                                                                          .broken_image,
-                                                                      size: 50,
-                                                                      color: Colors
-                                                                          .white54),
-                                                                );
-                                                              },
-                                                            )
-                                                          : Container(
-                                                              color: Colors
-                                                                  .grey[900],
-                                                              child: Column(
-                                                                mainAxisAlignment:
-                                                                    MainAxisAlignment
-                                                                        .center,
-                                                                children: const [
-                                                                  Icon(
-                                                                      Icons
-                                                                          .image_not_supported,
-                                                                      size: 50,
-                                                                      color: Colors
-                                                                          .white24),
-                                                                  SizedBox(
-                                                                      height:
-                                                                          8),
-                                                                  Text(
-                                                                      "Sin imagen",
-                                                                      style: TextStyle(
-                                                                          color: Colors
-                                                                              .white24,
-                                                                          fontSize:
-                                                                              12)),
-                                                                ],
+                            // Title for Selection
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: const Center(
+                                child: Text(
+                                  "ELIGE TU AVENTURA",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppTheme.accentGold,
+                                    fontSize: 22,
+                                    letterSpacing: -1.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // Scenarios Carousel - Expanded to fit remaining space
+                            Expanded(
+                              child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                return _isLoading
+                                    ? const Center(
+                                        child: CircularProgressIndicator(
+                                            color: AppTheme.accentGold))
+                                    : scenarios.isEmpty
+                                        ? const Center(
+                                            child: Text(
+                                                "No hay competencias disponibles",
+                                                style: TextStyle(
+                                                    color: Colors.white)))
+                                        : ScrollConfiguration(
+                                            behavior:
+                                                ScrollConfiguration.of(context)
+                                                    .copyWith(
+                                              dragDevices: {
+                                                PointerDeviceKind.touch,
+                                                PointerDeviceKind.mouse,
+                                              },
+                                            ),
+                                            child: PageView.builder(
+                                              controller: _pageController,
+                                              onPageChanged: (index) {
+                                                setState(() {
+                                                  _currentPage = index;
+                                                });
+                                              },
+                                              itemCount: scenarios.length,
+                                              itemBuilder: (context, index) {
+                                                final scenario =
+                                                    scenarios[index];
+                                                return AnimatedBuilder(
+                                                  animation: _pageController,
+                                                  builder: (context, child) {
+                                                    double value = 1.0;
+                                                    if (_pageController.position
+                                                        .haveDimensions) {
+                                                      value = _pageController
+                                                              .page! -
+                                                          index;
+                                                      value = (1 -
+                                                              (value.abs() *
+                                                                  0.3))
+                                                          .clamp(0.0, 1.0);
+                                                    } else {
+                                                      value =
+                                                          index == _currentPage
+                                                              ? 1.0
+                                                              : 0.7;
+                                                    }
+
+                                                    // Use LayoutBuilder to be responsive inside the carousel item
+                                                    return Center(
+                                                      child: SizedBox(
+                                                        height: Curves.easeOut
+                                                                .transform(
+                                                                    value) *
+                                                            constraints
+                                                                .maxHeight, // Full height
+
+                                                        width: Curves.easeOut
+                                                                .transform(
+                                                                    value) *
+                                                            340, // Maximized width
+                                                        child: child,
+                                                      ),
+                                                    );
+                                                  },
+                                                  child: GestureDetector(
+                                                    onTap: () =>
+                                                        _onScenarioSelected(
+                                                            scenario),
+                                                    child: Container(
+                                                      margin: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 10),
+                                                      decoration: BoxDecoration(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(30),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Colors.black
+                                                                .withOpacity(
+                                                                    0.5),
+                                                            blurRadius: 20,
+                                                            offset:
+                                                                const Offset(
+                                                                    0, 10),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(30),
+                                                        child: Stack(
+                                                          fit: StackFit.expand,
+                                                          children: [
+                                                            // Background Image
+                                                            (scenario.imageUrl
+                                                                        .isNotEmpty &&
+                                                                    scenario
+                                                                        .imageUrl
+                                                                        .startsWith(
+                                                                            'http'))
+                                                                ? Image.network(
+                                                                    scenario
+                                                                        .imageUrl,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    errorBuilder:
+                                                                        (context,
+                                                                            error,
+                                                                            stackTrace) {
+                                                                      return Container(
+                                                                        color: Colors
+                                                                            .grey[800],
+                                                                        child: const Icon(
+                                                                            Icons
+                                                                                .broken_image,
+                                                                            size:
+                                                                                50,
+                                                                            color:
+                                                                                Colors.white54),
+                                                                      );
+                                                                    },
+                                                                  )
+                                                                : Container(
+                                                                    color: Colors
+                                                                            .grey[
+                                                                        900],
+                                                                    child:
+                                                                        Column(
+                                                                      mainAxisAlignment:
+                                                                          MainAxisAlignment
+                                                                              .center,
+                                                                      children: const [
+                                                                        Icon(
+                                                                            Icons
+                                                                                .image_not_supported,
+                                                                            size:
+                                                                                50,
+                                                                            color:
+                                                                                Colors.white24),
+                                                                        SizedBox(
+                                                                            height:
+                                                                                8),
+                                                                        Text(
+                                                                            "Sin imagen",
+                                                                            style:
+                                                                                TextStyle(color: Colors.white24, fontSize: 12)),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+
+                                                            // Gradient Overlay
+                                                            Container(
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                gradient:
+                                                                    LinearGradient(
+                                                                  begin: Alignment
+                                                                      .topCenter,
+                                                                  end: Alignment
+                                                                      .bottomCenter,
+                                                                  colors: [
+                                                                    Colors
+                                                                        .transparent,
+                                                                    Colors.black
+                                                                        .withOpacity(
+                                                                            0.6),
+                                                                    Colors.black
+                                                                        .withOpacity(
+                                                                            0.9),
+                                                                  ],
+                                                                  stops: const [
+                                                                    0.3,
+                                                                    0.7,
+                                                                    1.0
+                                                                  ],
+                                                                ),
                                                               ),
                                                             ),
 
-                                                      // Gradient Overlay
-                                                      Container(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          gradient:
-                                                              LinearGradient(
-                                                            begin: Alignment
-                                                                .topCenter,
-                                                            end: Alignment
-                                                                .bottomCenter,
-                                                            colors: [
-                                                              Colors
-                                                                  .transparent,
-                                                              Colors.black
-                                                                  .withOpacity(
-                                                                      0.6),
-                                                              Colors.black
-                                                                  .withOpacity(
-                                                                      0.9),
-                                                            ],
-                                                            stops: const [
-                                                              0.3,
-                                                              0.7,
-                                                              1.0
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-
-                                                      // Content
-                                                      Padding(
-                                                        padding: const EdgeInsets.all(24.0),
-                                                        child: FittedBox(
-                                                          fit: BoxFit.scaleDown,
-                                                          alignment: Alignment.bottomCenter,
-                                                          child: Column(
-                                                            mainAxisAlignment: MainAxisAlignment.end,
-                                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                                            children: [
-                                                              // State Tag
-                                                              Row(
-                                                                children: [
-                                                                  Container(
-                                                                    padding: const EdgeInsets.symmetric(
-                                                                        horizontal: 12, vertical: 6),
-                                                                    decoration: BoxDecoration(
-                                                                      color: scenario.isCompleted 
-                                                                          ? AppTheme.dangerRed.withOpacity(0.9)
-                                                                          : Colors.black54,
-                                                                      borderRadius: BorderRadius.circular(20),
-                                                                      border: Border.all(
-                                                                          color: Colors.white24),
-                                                                    ),
-                                                                    child: Row(
-                                                                      mainAxisSize: MainAxisSize.min,
+                                                            // Content
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .all(
+                                                                      24.0),
+                                                              child: FittedBox(
+                                                                fit: BoxFit
+                                                                    .scaleDown,
+                                                                alignment: Alignment
+                                                                    .bottomCenter,
+                                                                child: Column(
+                                                                  mainAxisAlignment:
+                                                                      MainAxisAlignment
+                                                                          .end,
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  children: [
+                                                                    // State Tag
+                                                                    Row(
                                                                       children: [
-                                                                        Icon(
-                                                                            scenario.isCompleted 
-                                                                                ? Icons.emoji_events
-                                                                                : Icons.people,
-                                                                            color: Colors.white,
-                                                                            size: 14),
-                                                                        const SizedBox(width: 6),
-                                                                        Text(
-                                                                          scenario.isCompleted 
-                                                                              ? 'FINALIZADA'
-                                                                              : 'MAX ${scenario.maxPlayers}',
-                                                                          style: const TextStyle(
-                                                                            color: Colors.white,
-                                                                            fontWeight: FontWeight.bold,
-                                                                            fontSize: 12,
+                                                                        Container(
+                                                                          padding: const EdgeInsets
+                                                                              .symmetric(
+                                                                              horizontal: 12,
+                                                                              vertical: 6),
+                                                                          decoration:
+                                                                              BoxDecoration(
+                                                                            color: scenario.isCompleted
+                                                                                ? AppTheme.dangerRed.withOpacity(0.9)
+                                                                                : Colors.black54,
+                                                                            borderRadius:
+                                                                                BorderRadius.circular(20),
+                                                                            border:
+                                                                                Border.all(color: Colors.white24),
+                                                                          ),
+                                                                          child:
+                                                                              Row(
+                                                                            mainAxisSize:
+                                                                                MainAxisSize.min,
+                                                                            children: [
+                                                                              Icon(scenario.isCompleted ? Icons.emoji_events : Icons.people, color: Colors.white, size: 14),
+                                                                              const SizedBox(width: 6),
+                                                                              Text(
+                                                                                scenario.isCompleted ? 'FINALIZADA' : 'MAX ${scenario.maxPlayers}',
+                                                                                style: const TextStyle(
+                                                                                  color: Colors.white,
+                                                                                  fontWeight: FontWeight.bold,
+                                                                                  fontSize: 12,
+                                                                                ),
+                                                                              ),
+                                                                            ],
                                                                           ),
                                                                         ),
                                                                       ],
                                                                     ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              const SizedBox(height: 12),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            12),
 
-                                                              Text(
-                                                                scenario.name,
-                                                                style: const TextStyle(
-                                                                  color: Colors.white,
-                                                                  fontSize: 24,
-                                                                  fontWeight: FontWeight.bold,
-                                                                ),
-                                                              ),
-                                                              const SizedBox(height: 4),
-                                                              Text(
-                                                                scenario.description,
-                                                                style: const TextStyle(
-                                                                  color: Colors.white70,
-                                                                  fontSize: 12,
-                                                                ),
-                                                                maxLines: 2,
-                                                                overflow: TextOverflow.ellipsis,
-                                                              ),
-                                                              const SizedBox(height: 10),
-
-                                                              if (scenario.date != null && !scenario.isCompleted)
-                                                                Center(
-                                                                    child: ScenarioCountdown(
-                                                                        targetDate: scenario.date!)),
-
-                                                              const SizedBox(height: 10),
-                                                              SizedBox(
-                                                                width: 250,
-                                                                child: (_banStatusMap[scenario.id] == 'banned' || _banStatusMap[scenario.id] == 'suspended')
-                                                                  ? _buildBannedButton(scenario)
-                                                                  : ElevatedButton(
-                                                                      onPressed: () {
-                                                                        _onScenarioSelected(scenario);
-                                                                      },
-                                                                      style: ElevatedButton.styleFrom(
-                                                                        backgroundColor: AppTheme.accentGold,
-                                                                        foregroundColor: Colors.black,
-                                                                        elevation: 8,
-                                                                        shape: RoundedRectangleBorder(
-                                                                          borderRadius: BorderRadius.circular(20),
-                                                                        ),
+                                                                    Text(
+                                                                      scenario
+                                                                          .name,
+                                                                      style:
+                                                                          const TextStyle(
+                                                                        color: Colors
+                                                                            .white,
+                                                                        fontSize:
+                                                                            24,
+                                                                        fontWeight:
+                                                                            FontWeight.bold,
                                                                       ),
-                                                                      child: scenario.isCompleted 
-                                                                        ? const Text("VER PODIO", style: TextStyle(fontWeight: FontWeight.bold))
-                                                                        : _participantStatusMap[scenario.id] == true
-                                                                          ? const Row(
-                                                                              mainAxisSize: MainAxisSize.min,
-                                                                              children: [
-                                                                                Icon(Icons.play_arrow, size: 20),
-                                                                                SizedBox(width: 6),
-                                                                                Text("ENTRAR", style: TextStyle(fontWeight: FontWeight.bold)),
-                                                                              ],
-                                                                            )
-                                                                          : Row(
-                                                                              mainAxisSize: MainAxisSize.min,
-                                                                              children: [
-                                                                                Text(
-                                                                                    scenario.entryFee == 0 
-                                                                                        ? "INSCRIBETE (GRATIS)" 
-                                                                                        : "INSCRIBETE (${scenario.entryFee} 🍀)",
-                                                                                    style: const TextStyle(fontWeight: FontWeight.bold)
+                                                                    ),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            4),
+                                                                    Text(
+                                                                      scenario
+                                                                          .description,
+                                                                      style:
+                                                                          const TextStyle(
+                                                                        color: Colors
+                                                                            .white70,
+                                                                        fontSize:
+                                                                            12,
+                                                                      ),
+                                                                      maxLines:
+                                                                          2,
+                                                                      overflow:
+                                                                          TextOverflow
+                                                                              .ellipsis,
+                                                                    ),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            10),
+
+                                                                    if (scenario.date !=
+                                                                            null &&
+                                                                        !scenario
+                                                                            .isCompleted)
+                                                                      Center(
+                                                                          child:
+                                                                              ScenarioCountdown(targetDate: scenario.date!)),
+
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            10),
+                                                                    SizedBox(
+                                                                      width:
+                                                                          250,
+                                                                      child: (_banStatusMap[scenario.id] == 'banned' ||
+                                                                              _banStatusMap[scenario.id] ==
+                                                                                  'suspended')
+                                                                          ? _buildBannedButton(
+                                                                              scenario)
+                                                                          : ElevatedButton(
+                                                                              onPressed: () {
+                                                                                _onScenarioSelected(scenario);
+                                                                              },
+                                                                              style: ElevatedButton.styleFrom(
+                                                                                backgroundColor: AppTheme.accentGold,
+                                                                                foregroundColor: Colors.black,
+                                                                                elevation: 8,
+                                                                                shape: RoundedRectangleBorder(
+                                                                                  borderRadius: BorderRadius.circular(20),
                                                                                 ),
-                                                                                if (scenario.entryFee == 0) ...[
-                                                                                   const SizedBox(width: 6),
-                                                                                   const Icon(Icons.card_giftcard, size: 18),
-                                                                                ],
-                                                                              ],
+                                                                              ),
+                                                                              child: scenario.isCompleted
+                                                                                  ? const Text("VER PODIO", style: TextStyle(fontWeight: FontWeight.bold))
+                                                                                  : _participantStatusMap[scenario.id] == true
+                                                                                      ? const Row(
+                                                                                          mainAxisSize: MainAxisSize.min,
+                                                                                          children: [
+                                                                                            Icon(Icons.play_arrow, size: 20),
+                                                                                            SizedBox(width: 6),
+                                                                                            Text("ENTRAR", style: TextStyle(fontWeight: FontWeight.bold)),
+                                                                                          ],
+                                                                                        )
+                                                                                      : Row(
+                                                                                          mainAxisSize: MainAxisSize.min,
+                                                                                          children: [
+                                                                                            Text(scenario.entryFee == 0 ? "INSCRIBETE (GRATIS)" : "INSCRIBETE (${scenario.entryFee} 🍀)", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                                                            if (scenario.entryFee == 0) ...[
+                                                                                              const SizedBox(width: 6),
+                                                                                              const Icon(Icons.card_giftcard, size: 18),
+                                                                                            ],
+                                                                                          ],
+                                                                                        ),
                                                                             ),
                                                                     ),
+                                                                  ],
+                                                                ),
                                                               ),
-                                                            ],
-                                                          ),
+                                                            ),
+                                                          ],
                                                         ),
                                                       ),
-                                                    ],
+                                                    ),
                                                   ),
-                                                ),
-                                              ),
+                                                );
+                                              },
                                             ),
                                           );
-                                        },
-
-                                      ),
-                                    );
-                                  } 
-                                ),
-                              ),
-                        // Bottom spacing restored
-                        const SizedBox(height: 30),
-                      ],
+                              }),
+                            ),
+                            // Bottom spacing restored
+                            const SizedBox(height: 30),
+                          ],
+                        ),
+                      ),
                     ),
-                    ),
-                  ),
-                );
-            }
+                  );
+                }),
+              ],
+            ),
           ),
-          ],
         ),
-      ),
-    ),
       ),
     );
   }

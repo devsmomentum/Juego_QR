@@ -77,6 +77,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             TextButton(
                               onPressed: () {
                                 Navigator.pop(ctx); // Close dialog
+                                // Reset system UI mode before logout
+                                SystemChrome.setEnabledSystemUIMode(
+                                    SystemUiMode.immersiveSticky);
                                 playerProvider.logout();
                                 // AuthMonitor will handle navigation
                               },
