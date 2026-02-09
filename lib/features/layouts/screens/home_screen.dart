@@ -18,7 +18,7 @@ import '../../game/screens/spectator_mode_screen.dart'; // ADDED
 import '../../../shared/widgets/loading_indicator.dart';
 
 class HomeScreen extends StatefulWidget {
-  final String eventId; 
+  final String eventId;
 
   const HomeScreen({super.key, required this.eventId});
 
@@ -28,9 +28,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  
+
   late List<Widget> _screens;
-  
+
   // Debug logic
   bool _forceGameStart = false;
 
@@ -38,21 +38,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final effectProvider = Provider.of<PowerEffectManager>(context, listen: false);
-      
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final effectProvider =
+          Provider.of<PowerEffectManager>(context, listen: false);
+
       // Spectators don't need inventory sync
       if (playerProvider.currentPlayer?.role != 'spectator') {
         playerProvider.syncRealInventory(effectProvider: effectProvider);
       }
-      
+
       // Sincronizar contexto del evento actual
       playerProvider.setCurrentEventContext(widget.eventId);
 
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     });
 
-    final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+    final player =
+        Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
     final isSpectator = player?.role == 'spectator';
 
     if (isSpectator) {
@@ -67,7 +70,9 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
       // Placeholder mientras redirige
-      _screens = [const Scaffold(body: Center(child: LoadingIndicator()))];
+      _screens = [
+        const Scaffold(body: Center(child: LoadingIndicator()))
+      ];
     } else {
       _screens = [
         CluesScreen(eventId: widget.eventId),
@@ -93,11 +98,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     // Usamos la referencia guardada, no el context
     WidgetsBinding.instance.addPostFrameCallback((_) {
-        _gameProviderRef.resetState();
-        _playerProviderRef.clearGameContext(); // ⚡ CRITICAL: Stops SabotageOverlay
-        debugPrint("HomeScreen disposed: Game Set Reset & Player Context Cleared");
+      _gameProviderRef.resetState();
+      _playerProviderRef
+          .clearGameContext(); // ⚡ CRITICAL: Stops SabotageOverlay
+      debugPrint(
+          "HomeScreen disposed: Game Set Reset & Player Context Cleared");
     });
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
   }
 
@@ -107,15 +114,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final eventProvider = Provider.of<EventProvider>(context);
 
     try {
-      final event = eventProvider.events.firstWhere((e) => e.id == widget.eventId);
+      final event =
+          eventProvider.events.firstWhere((e) => e.id == widget.eventId);
       final now = DateTime.now();
-      
+
       if (event.date.toLocal().isAfter(now) && !_forceGameStart) {
         return EventWaitingScreen(
           event: event,
           onTimerFinished: () {
             setState(() {
-               _forceGameStart = true;
+              _forceGameStart = true;
             });
           },
         );
@@ -123,65 +131,68 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       // Fallback
     }
-    
+
     final isSpectator = player?.role == 'spectator';
 
     Widget content = Scaffold(
-        body: _screens[_currentIndex],
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, -5),
+      body: _screens[_currentIndex],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              if (player == null || (!player.isFrozen && !player.isBlinded)) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              }
+            },
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: AppTheme.cardBg,
+            selectedItemColor: AppTheme.secondaryPink,
+            unselectedItemColor: Colors.white54,
+            showUnselectedLabels: true,
+            elevation: 0,
+            items: [
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.map),
+                activeIcon: Icon(Icons.map, size: 28),
+                label: 'Pistas',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(
+                    isSpectator ? Icons.rss_feed : Icons.inventory_2_outlined),
+                activeIcon: Icon(
+                    isSpectator ? Icons.rss_feed : Icons.inventory_2,
+                    size: 28),
+                label: isSpectator ? 'En Vivo' : 'Inventario',
+              ),
+              if (isSpectator)
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.flash_on),
+                  activeIcon: Icon(Icons.flash_on, size: 28),
+                  label: 'Sabotajes',
+                ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.leaderboard_outlined),
+                activeIcon: Icon(Icons.leaderboard, size: 28),
+                label: 'Ranking',
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (index) {
-                if (player == null || (!player.isFrozen && !player.isBlinded)) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                }
-              },
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: AppTheme.cardBg,
-              selectedItemColor: AppTheme.secondaryPink,
-              unselectedItemColor: Colors.white54,
-              showUnselectedLabels: true,
-              elevation: 0,
-              items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.map),
-                  activeIcon: Icon(Icons.map, size: 28),
-                  label: 'Pistas',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(isSpectator ? Icons.rss_feed : Icons.inventory_2_outlined),
-                  activeIcon: Icon(isSpectator ? Icons.rss_feed : Icons.inventory_2, size: 28),
-                  label: isSpectator ? 'En Vivo' : 'Inventario',
-                ),
-                if (isSpectator)
-                  const BottomNavigationBarItem(
-                    icon: Icon(Icons.flash_on),
-                    activeIcon: Icon(Icons.flash_on, size: 28),
-                    label: 'Sabotajes',
-                  ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.leaderboard_outlined),
-                  activeIcon: Icon(Icons.leaderboard, size: 28),
-                  label: 'Ranking',
-                ),
-              ],
-            ),
-          ),
         ),
-      );
+      ),
+    );
 
     if (isSpectator) {
       content = ChangeNotifierProvider(

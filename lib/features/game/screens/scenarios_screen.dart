@@ -1,14 +1,14 @@
 import 'dart:math' as math;
-import 'dart:io' show Platform; 
-import 'package:flutter/foundation.dart' show kIsWeb; 
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart'; 
-import 'package:geolocator/geolocator.dart'; 
+import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:ui';
 import '../models/scenario.dart';
-import '../providers/event_provider.dart'; 
+import '../providers/event_provider.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../auth/providers/player_inventory_provider.dart'; // NEW
@@ -21,7 +21,7 @@ import '../../../core/theme/app_theme.dart';
 import 'code_finder_screen.dart';
 import 'game_request_screen.dart';
 import '../../auth/screens/avatar_selection_screen.dart';
-import 'event_waiting_screen.dart'; 
+import 'event_waiting_screen.dart';
 import '../models/event.dart'; // Import GameEvent model
 import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
@@ -48,23 +48,24 @@ class ScenariosScreen extends StatefulWidget {
   State<ScenariosScreen> createState() => _ScenariosScreenState();
 }
 
-class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderStateMixin {
+class _ScenariosScreenState extends State<ScenariosScreen>
+    with TickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _hoverController;
   late Animation<Offset> _hoverAnimation;
-  
+
   // New Controllers
   late AnimationController _shimmerController;
   late AnimationController _glitchController;
-  
+
   int _currentPage = 0;
   bool _isLoading = true;
   bool _isProcessing = false; // Prevents double taps
   int _navIndex = 1; // Default to Escenarios (index 1)
-  
+
   // Cache for participant status to show "Entering..." vs "Request Access"
   Map<String, bool> _participantStatusMap = {};
-  
+
   // Cache for ban status to show banned button
   Map<String, String?> _banStatusMap = {}; // NEW
 
@@ -149,7 +150,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+            child:
+                Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
           ),
         ],
       ),
@@ -169,7 +171,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           children: [
             Icon(Icons.description_outlined, color: AppTheme.accentGold),
             const SizedBox(width: 12),
-            const Text('Términos y Condiciones', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Text('Términos y Condiciones',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const SingleChildScrollView(
@@ -182,7 +186,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+            child:
+                Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
           ),
         ],
       ),
@@ -202,7 +207,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           children: [
             Icon(Icons.support_agent_outlined, color: AppTheme.accentGold),
             const SizedBox(width: 12),
-            const Text('Soporte', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const Text('Soporte',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: const Text(
@@ -212,7 +219,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
+            child:
+                Text('Entendido', style: TextStyle(color: AppTheme.accentGold)),
           ),
         ],
       ),
@@ -230,7 +238,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
     _hoverController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
-    )..repeat(reverse: true); 
+    )..repeat(reverse: true);
 
     _hoverAnimation = Tween<Offset>(
       begin: Offset.zero,
@@ -248,10 +256,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
 
     // 3. Glitch Text Animation
     _glitchController = AnimationController(
-        vsync: this, 
-        duration: const Duration(milliseconds: 4000), // Occurs every 4 seconds
+      vsync: this,
+      duration: const Duration(milliseconds: 4000), // Occurs every 4 seconds
     )..repeat();
-
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -261,15 +268,18 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
 
       // CLEANUP: Ensure we are disconnected from any previous game
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final powerProvider = Provider.of<PowerEffectManager>(context, listen: false);
-      
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final powerProvider =
+          Provider.of<PowerEffectManager>(context, listen: false);
+
       debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
       _cleanupGameState();
-      
+
       _loadEvents();
       // Empezar a precargar el video del primer avatar para que sea instantáneo
-      VideoPreloadService().preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
+      VideoPreloadService()
+          .preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
     });
   }
 
@@ -318,29 +328,31 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
 
   /// Cleans up any active game session data to prevent ghost effects or state leaks.
   void _cleanupGameState() {
-      if (!mounted) return;
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final powerProvider = Provider.of<PowerEffectManager>(context, listen: false);
-      
-      debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
-      
-      // Schedule to avoid frame collision during navigation pop
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-          gameProvider.resetState(); 
-          playerProvider.clearGameContext(); 
-          powerProvider.startListening(null, forceRestart: true);
-      });
+    if (!mounted) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final powerProvider =
+        Provider.of<PowerEffectManager>(context, listen: false);
+
+    debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
+
+    // Schedule to avoid frame collision during navigation pop
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      gameProvider.resetState();
+      playerProvider.clearGameContext();
+      powerProvider.startListening(null, forceRestart: true);
+    });
   }
 
   Future<void> _loadEvents() async {
     print("DEBUG: _loadEvents start");
     final eventProvider = Provider.of<EventProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
-    
+    final requestProvider =
+        Provider.of<GameRequestProvider>(context, listen: false);
+
     await eventProvider.fetchEvents();
-    
+
     // Load participation status and ban status for each event
     final userId = playerProvider.currentPlayer?.userId;
     if (userId != null) {
@@ -348,7 +360,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       final Map<String, String?> banMap = {}; // NEW
       for (final event in eventProvider.events) {
         try {
-          final data = await requestProvider.isPlayerParticipant(userId, event.id);
+          final data =
+              await requestProvider.isPlayerParticipant(userId, event.id);
           statusMap[event.id] = data['isParticipant'] as bool? ?? false;
           banMap[event.id] = data['status'] as String?; // NEW: Track ban status
         } catch (e) {
@@ -363,7 +376,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
         });
       }
     }
-    
+
     print("DEBUG: _loadEvents end. Mounted: $mounted");
     if (mounted) {
       setState(() {
@@ -378,12 +391,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
     _hoverController.dispose();
     _shimmerController.dispose();
     _glitchController.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
   }
-
-
-
 
   Future<void> _onScenarioSelected(Scenario scenario) async {
     if (_isProcessing) return;
@@ -410,10 +420,13 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       // Mostrar diálogo de carga
       LoadingOverlay.show(context);
 
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider =
+          Provider.of<GameRequestProvider>(context, listen: false);
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      final inventoryProvider = Provider.of<PlayerInventoryProvider>(context, listen: false); // NEW
+      final inventoryProvider =
+          Provider.of<PlayerInventoryProvider>(context, listen: false); // NEW
 
       final accessService = GameAccessService();
 
@@ -459,19 +472,23 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               if (success) {
                 // CLEANUP: Prevent Inventory Leak
                 if (gameProvider.currentEventId != scenario.id) {
-                   debugPrint('🚫 Event Switch: Cleaning up old state for ${scenario.id}...');
-                   inventoryProvider.resetEventState(); // Clean inventory lists (Provider)
-                   playerProvider.clearCurrentInventory(); // Clean active inventory (Player model)
+                  debugPrint(
+                      '🚫 Event Switch: Cleaning up old state for ${scenario.id}...');
+                  inventoryProvider
+                      .resetEventState(); // Clean inventory lists (Provider)
+                  playerProvider
+                      .clearCurrentInventory(); // Clean active inventory (Player model)
                 }
 
                 await gameProvider.fetchClues(eventId: scenario.id);
                 if (mounted) {
                   Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => HomeScreen(eventId: scenario.id))).then((_) {
-                            _cleanupGameState();
-                          });
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => HomeScreen(eventId: scenario.id)))
+                      .then((_) {
+                    _cleanupGameState();
+                  });
                 }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -504,7 +521,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           // CRITICAL: Clear game context to prevent power effects
           // This sets gamePlayerId = null, which triggers the hard gate in SabotageOverlay
           playerProvider.clearGameContext();
-          
+
           // Navigate directly to spectator mode for banned users
           await gameProvider.fetchClues(eventId: scenario.id);
           if (mounted) {
@@ -539,19 +556,28 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: AppTheme.cardBg,
-                    title: const Text('💰 Evento de Pago', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    content: Text('Este evento cuesta ${scenario.entryFee} 🍀.\n\nTu saldo: $userClovers 🍀', style: const TextStyle(color: Colors.white70)),
+                    title: const Text('💰 Evento de Pago',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                    content: Text(
+                        'Este evento cuesta ${scenario.entryFee} 🍀.\n\nTu saldo: $userClovers 🍀',
+                        style: const TextStyle(color: Colors.white70)),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancelar',
+                              style: TextStyle(color: Colors.white54))),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold, foregroundColor: Colors.black),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.accentGold,
+                            foregroundColor: Colors.black),
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text('PAGAR Y ENTRAR'),
                       ),
                     ],
                   ),
                 );
-                
+
                 if (confirm == true) {
                    setState(() => _isProcessing = true);
                    LoadingOverlay.show(context);
@@ -560,25 +586,33 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                       playerProvider.currentPlayer!.userId, scenario.id, scenario.entryFee
                    );
 
-                   // Artificial delay for specific online join action
-                   await Future.delayed(const Duration(seconds: 2));
-                   
-                   if (!mounted) return;
-                   Navigator.pop(context);
-                   
-                   if (success) {
-                     playerProvider.updateLocalClovers(userClovers - scenario.entryFee);
-                     await playerProvider.refreshProfile();
-                     setState(() { _participantStatusMap[scenario.id] = true; });
-                     
-                     await gameProvider.fetchClues(eventId: scenario.id);
-                     if (mounted) {
-                       Navigator.push(context, MaterialPageRoute(builder: (_) => HomeScreen(eventId: scenario.id)));
-                     }
-                   } else {
-                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error procesando el pago.')));
-                   }
-                   setState(() => _isProcessing = false);
+                  // Artificial delay for specific online join action
+                  await Future.delayed(const Duration(seconds: 2));
+
+                  if (!mounted) return;
+                  Navigator.pop(context);
+
+                  if (success) {
+                    playerProvider
+                        .updateLocalClovers(userClovers - scenario.entryFee);
+                    await playerProvider.refreshProfile();
+                    setState(() {
+                      _participantStatusMap[scenario.id] = true;
+                    });
+
+                    await gameProvider.fetchClues(eventId: scenario.id);
+                    if (mounted) {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  HomeScreen(eventId: scenario.id)));
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Error procesando el pago.')));
+                  }
+                  setState(() => _isProcessing = false);
                 }
               } else {
                 // Insufficient funds
@@ -586,15 +620,29 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: AppTheme.cardBg,
-                    title: const Text('Saldo Insuficiente', style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold)),
-                    content: Text('Este evento cuesta ${scenario.entryFee} 🍀.\nSolo tienes $userClovers 🍀.', style: const TextStyle(color: Colors.white70)),
+                    title: const Text('Saldo Insuficiente',
+                        style: TextStyle(
+                            color: AppTheme.dangerRed,
+                            fontWeight: FontWeight.bold)),
+                    content: Text(
+                        'Este evento cuesta ${scenario.entryFee} 🍀.\nSolo tienes $userClovers 🍀.',
+                        style: const TextStyle(color: Colors.white70)),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cerrar')),
                       ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryPurple),
                         icon: const Icon(Icons.account_balance_wallet),
                         label: const Text('IR A BILLETERA'),
-                        onPressed: () { Navigator.pop(ctx); Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())); },
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const WalletScreen()));
+                        },
                       ),
                     ],
                   ),
@@ -606,13 +654,16 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               
               try {
                 // Create game_player record for free online event
-                await requestProvider.joinFreeOnlineEvent(playerProvider.currentPlayer!.userId, scenario.id);
-                
+                await requestProvider.joinFreeOnlineEvent(
+                    playerProvider.currentPlayer!.userId, scenario.id);
+
                 // Artificial delay for specific online join action
                 await Future.delayed(const Duration(seconds: 2));
-                
-                setState(() { _participantStatusMap[scenario.id] = true; });
-                
+
+                setState(() {
+                  _participantStatusMap[scenario.id] = true;
+                });
+
                 await gameProvider.fetchClues(eventId: scenario.id);
                 if (mounted) {
                   LoadingOverlay.hide(context); // Close loading
@@ -626,18 +677,22 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
           } else {
             // Presencial event: Show CodeFinderScreen (thermometer + QR)
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => CodeFinderScreen(scenario: scenario)),
+              MaterialPageRoute(
+                  builder: (_) => CodeFinderScreen(scenario: scenario)),
             );
           }
           break;
-          
+
         case AccessResultType.needsAvatar:
-           // Should be handled in allowed logic usually, but if separated:
-           Navigator.push(context, MaterialPageRoute(builder: (_) => AvatarSelectionScreen(eventId: scenario.id)));
-           break;
-          
-        case AccessResultType.approvedWait: 
-           break;
+          // Should be handled in allowed logic usually, but if separated:
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => AvatarSelectionScreen(eventId: scenario.id)));
+          break;
+
+        case AccessResultType.approvedWait:
+          break;
 
         case AccessResultType.needsPayment:
           final entryFee = (result.data?['entryFee'] as num?)?.toInt() ?? 0;
@@ -649,8 +704,9 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: AppTheme.cardBg,
-                title: const Text('Confirmar Inscripción', 
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                title: const Text('Confirmar Inscripción',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
                 content: Text(
                   'Este evento tiene un costo de $entryFee 🍀.\n\n'
                   'Tu saldo: $userClovers 🍀\n'
@@ -660,11 +716,12 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                    child: const Text('Cancelar',
+                        style: TextStyle(color: Colors.white54)),
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentGold, 
+                      backgroundColor: AppTheme.accentGold,
                       foregroundColor: Colors.black,
                     ),
                     onPressed: () => Navigator.pop(ctx, true),
@@ -735,15 +792,16 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                }
                setState(() => _isProcessing = false);
             }
-
           } else {
             // Caso 2: Saldo Insuficiente -> Redirigir Wallet
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: AppTheme.cardBg,
-                title: const Text('Saldo Insuficiente', 
-                    style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold)),
+                title: const Text('Saldo Insuficiente',
+                    style: TextStyle(
+                        color: AppTheme.dangerRed,
+                        fontWeight: FontWeight.bold)),
                 content: Text(
                   'Este evento cuesta $entryFee 🍀.\n'
                   'Solo tienes $userClovers 🍀 disponibles.',
@@ -752,7 +810,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                    child: const Text('Cancelar',
+                        style: TextStyle(color: Colors.white54)),
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -786,7 +845,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                 filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: Dialog(
                   backgroundColor: Colors.transparent,
-                  insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  insetPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -821,7 +881,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                               height: 120,
                               decoration: BoxDecoration(
                                 color: AppTheme.secondaryPink.withOpacity(0.05),
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(22)),
                               ),
                             ),
                             Column(
@@ -841,7 +902,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.secondaryPink.withOpacity(0.4),
+                                        color: AppTheme.secondaryPink
+                                            .withOpacity(0.4),
                                         blurRadius: 15,
                                         spreadRadius: 2,
                                       ),
@@ -857,7 +919,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                             ),
                           ],
                         ),
-                        
+
                         const Text(
                           '¡EVENTO LLENO!',
                           style: TextStyle(
@@ -868,14 +930,15 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                           ),
                         ),
                         const SizedBox(height: 20),
-                        
+
                         // Content
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 30),
                           child: Column(
                             children: [
                               Text(
-                                result.message ?? 'El cupo de jugadores activos (${scenario.maxPlayers}) ha sido alcanzado.',
+                                result.message ??
+                                    'El cupo de jugadores activos (${scenario.maxPlayers}) ha sido alcanzado.',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -894,7 +957,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                 ),
                               ),
                               const SizedBox(height: 32),
-                              
+
                               // Main Button
                               SizedBox(
                                 width: double.infinity,
@@ -902,12 +965,16 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                 child: Container(
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [AppTheme.secondaryPink, Color(0xFFFF4081)],
+                                      colors: [
+                                        AppTheme.secondaryPink,
+                                        Color(0xFFFF4081)
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.secondaryPink.withOpacity(0.35),
+                                        color: AppTheme.secondaryPink
+                                            .withOpacity(0.35),
                                         blurRadius: 12,
                                         offset: const Offset(0, 6),
                                       ),
@@ -923,9 +990,11 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                       ),
                                     ),
                                     child: const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.visibility_rounded, color: Colors.white),
+                                        Icon(Icons.visibility_rounded,
+                                            color: Colors.white),
                                         SizedBox(width: 12),
                                         Text(
                                           'MODO ESPECTADOR',
@@ -942,13 +1011,14 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              
+
                               // Cancel Button
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, false),
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.white38,
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12, horizontal: 24),
                                 ),
                                 child: const Text(
                                   'VOLVER AL INICIO',
@@ -981,8 +1051,6 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
             ),
           );
           break;
-
-
       }
     } catch (e, stackTrace) {
       debugPrint('ScenariosScreen: CRITICAL ERROR: $e');
@@ -1078,7 +1146,8 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
             const SizedBox(width: 12),
             const Text(
               'Próximamente',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -1199,15 +1268,17 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       child: ElevatedButton(
         onPressed: () async {
           // CRITICAL: Navigate directly without validation flow
-          final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-          final gameProvider = Provider.of<GameProvider>(context, listen: false);
-          
+          final playerProvider =
+              Provider.of<PlayerProvider>(context, listen: false);
+          final gameProvider =
+              Provider.of<GameProvider>(context, listen: false);
+
           // Clear game context to prevent power effects
           playerProvider.clearGameContext();
-          
+
           // Fetch clues for spectator view
           await gameProvider.fetchClues(eventId: scenario.id);
-          
+
           if (mounted) {
             Navigator.push(
               context,
@@ -1276,7 +1347,7 @@ class _ScenariosScreenState extends State<ScenariosScreen> with TickerProviderSt
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        
+
         final shouldExit = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(

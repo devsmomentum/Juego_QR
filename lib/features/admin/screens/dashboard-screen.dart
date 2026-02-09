@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/player_provider.dart';
@@ -31,8 +32,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Usuarios",
     "Compras",
     "Retiros",
-    "Reportes", 
-    "Configuración" 
+    "Reportes",
+    "Configuración"
   ];
 
   final List<IconData> _icons = [
@@ -59,7 +60,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.cardBg,
-        title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
         content: const Text('¿Estás seguro de que deseas salir?',
             style: TextStyle(color: Colors.white70)),
         actions: [
@@ -76,6 +78,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (shouldLogout == true && context.mounted) {
+      // Reset system UI mode before logout
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       await Provider.of<PlayerProvider>(context, listen: false).logout();
       if (context.mounted) {
         Navigator.of(context).pushReplacement(
@@ -97,7 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           });
         },
       ), // Index 0
-      
+
       // Index 1: Le pasamos el callback aquí
       ChangeNotifierProvider(
         create: (_) => EventCreationProvider(),
@@ -105,20 +109,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onEventCreated: _goToDashboard,
         ),
       ),
-      
+
       const CompetitionsManagementScreen(), // Index 2
-      const UserManagementScreen(),         // Index 3
-      const CloverPlansManagementScreen(),  // Index 4 - Planes Compra
-      const WithdrawalPlansManagementScreen(),  // Index 5 - Planes Retiro
-      const Center(child: Text('Reportes - En desarrollo', style: TextStyle(color: Colors.white54))),  // Index 6 - Reportes
-      const GlobalConfigScreen(),           // Index 7 - Configuración
+      const UserManagementScreen(), // Index 3
+      const CloverPlansManagementScreen(), // Index 4 - Planes Compra
+      const WithdrawalPlansManagementScreen(), // Index 5 - Planes Retiro
+      const Center(
+          child: Text('Reportes - En desarrollo',
+              style: TextStyle(color: Colors.white54))), // Index 6 - Reportes
+      const GlobalConfigScreen(), // Index 7 - Configuración
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
         return Scaffold(
           backgroundColor: AppTheme.darkBg,
-
           body: SafeArea(
             child: Column(
               children: [
@@ -177,10 +182,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       // Información de Usuario
                       Row(
                         children: [
-                          // Ocutar email en pantallas muy pequeñas si es necesario, 
+                          // Ocutar email en pantallas muy pequeñas si es necesario,
                           // pero con Expanded en el titulo deberia bastar.
                           // Usaremos un constrained box para el email si queremos.
-                           if (MediaQuery.of(context).size.width > 600) ...[
+                          if (MediaQuery.of(context).size.width > 600) ...[
                             Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -188,10 +193,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 Text(
                                   "Administrador",
                                   style: TextStyle(
-                                      color: Colors.white, fontWeight: FontWeight.bold),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold),
                                 ),
                                 Text(
-                                  "admin@system.com", 
+                                  "admin@system.com",
                                   style: TextStyle(
                                     color: Colors.white54,
                                     fontSize: 12,
@@ -200,17 +206,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ],
                             ),
                             const SizedBox(width: 12),
-                           ],
+                          ],
                           CircleAvatar(
                             backgroundColor: AppTheme.secondaryPink,
                             radius: 16, // Smaller avatar
                             child: const Text("A",
                                 style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.white, fontWeight: FontWeight.bold)),
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.logout, color: Colors.white54),
+                            icon:
+                                const Icon(Icons.logout, color: Colors.white54),
                             tooltip: "Salir",
                             onPressed: () => _handleLogout(context),
                           ),
@@ -227,7 +235,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   height: 60,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E2342), 
+                    color: const Color(0xFF1E2342),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.2),
@@ -245,37 +253,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       return GestureDetector(
                         onTap: () {
                           // Usamos la lista local 'views' para verificar longitud
-                           if (index < views.length) {
-                               setState(() => _selectedIndex = index);
-                           } else {
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               const SnackBar(content: Text("Módulo en desarrollo"))
-                             );
-                           }
+                          if (index < views.length) {
+                            setState(() => _selectedIndex = index);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text("Módulo en desarrollo")));
+                          }
                         },
                         child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? AppTheme.primaryPurple.withOpacity(0.15)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
-                            border: isSelected ? Border.all(color: AppTheme.primaryPurple.withOpacity(0.5)) : null,
+                            border: isSelected
+                                ? Border.all(
+                                    color:
+                                        AppTheme.primaryPurple.withOpacity(0.5))
+                                : null,
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 _icons[index],
                                 size: 20,
-                                color: isSelected ? AppTheme.primaryPurple : Colors.white54,
+                                color: isSelected
+                                    ? AppTheme.primaryPurple
+                                    : Colors.white54,
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 _titles[index],
                                 style: TextStyle(
-                                  color: isSelected ? AppTheme.primaryPurple : Colors.white70,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isSelected
+                                      ? AppTheme.primaryPurple
+                                      : Colors.white70,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                   fontSize: 14,
                                 ),
                               ),
@@ -295,7 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: IndexedStack(
                       // Usamos la lista local 'views'
                       index: _selectedIndex < views.length ? _selectedIndex : 0,
-                      children: views, 
+                      children: views,
                     ),
                   ),
                 ),
@@ -340,16 +359,16 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
         setState(() {
           _activeUsers = stats.activeUsers.toString();
           _createdEvents = stats.createdEvents.toString();
-          _pendingRequests = stats.pendingRequests.toString(); 
+          _pendingRequests = stats.pendingRequests.toString();
         });
       }
     } catch (e) {
       debugPrint('Error fetching dashboard stats: $e');
       if (mounted) {
-         setState(() {
+        setState(() {
           _activeUsers = "-";
           _createdEvents = "-";
-          _pendingRequests = "-"; 
+          _pendingRequests = "-";
         });
       }
     }
@@ -369,7 +388,10 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
               const Text(
                 "Bienvenido al Panel de Administración",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               const Text(
@@ -382,21 +404,26 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
                 spacing: 20,
                 runSpacing: 20,
                 alignment: WrapAlignment.center,
-            children: [
-              _SummaryCard(
-                  title: "Usuarios Activos", value: _activeUsers, color: Colors.blue),
-              _SummaryCard(
-                  title: "Eventos Creados", value: _createdEvents, color: Colors.orange),
-              _SummaryCard(
-                  title: "Solicitudes Pendientes", 
-                  value: _pendingRequests, 
-                  color: Colors.purple,
-                  onTap: () => widget.onNavigate?.call(2), // Navigate to Competitions (Index 2)
-              ),
+                children: [
+                  _SummaryCard(
+                      title: "Usuarios Activos",
+                      value: _activeUsers,
+                      color: Colors.blue),
+                  _SummaryCard(
+                      title: "Eventos Creados",
+                      value: _createdEvents,
+                      color: Colors.orange),
+                  _SummaryCard(
+                    title: "Solicitudes Pendientes",
+                    value: _pendingRequests,
+                    color: Colors.purple,
+                    onTap: () => widget.onNavigate
+                        ?.call(2), // Navigate to Competitions (Index 2)
+                  ),
+                ],
+              )
             ],
-          )
-        ],
-      ),
+          ),
         ),
       ),
     );
@@ -410,7 +437,10 @@ class _SummaryCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _SummaryCard(
-      {required this.title, required this.value, required this.color, this.onTap});
+      {required this.title,
+      required this.value,
+      required this.color,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -418,27 +448,29 @@ class _SummaryCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: 250,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border(left: BorderSide(color: color, width: 4)),
-        boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0,4))
-        ]
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 8),
-          Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold)),
-        ],
-      ),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+            color: AppTheme.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border(left: BorderSide(color: color, width: 4)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 8),
+            Text(value,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
     );
   }

@@ -28,7 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final gameProvider = Provider.of<GameProvider>(context);
     final player = playerProvider.currentPlayer;
     final isDarkMode = playerProvider.isDarkMode;
-    
+
     if (player == null) {
       return const Scaffold(
         backgroundColor: AppTheme.darkBg,
@@ -37,7 +37,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     }
-    
+
+
     final mainScroll = CustomScrollView(
           slivers: [
             if (!widget.hideScaffold)
@@ -151,80 +152,101 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Stack(
             alignment: Alignment.center,
             children: [
-               SizedBox(
-                 width: 120, height: 120,
-                 child: CircularProgressIndicator(
-                   value: player.experienceProgress,
-                   strokeWidth: 8,
-                   backgroundColor: Colors.white10,
-                   valueColor: const AlwaysStoppedAnimation(AppTheme.accentGold),
-                 ),
-               ),
-               Container(
-                 width: 95, height: 95,
-                 decoration: BoxDecoration(
-                   shape: BoxShape.circle,
-                   gradient: LinearGradient(
-                     colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
-                     begin: Alignment.topLeft,
-                     end: Alignment.bottomRight,
-                   ),
-                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15)]
-                 ),
-                 child: ClipRRect(
-                   borderRadius: BorderRadius.circular(47.5),
-                   child: Builder(
-                     builder: (context) {
-                       final avatarId = player.avatarId;
-                       
-                       // 1. Prioridad: Avatar Local
-                       if (avatarId != null && avatarId.isNotEmpty) {
-                         return Image.asset(
-                           'assets/images/avatars/$avatarId.png',
-                           fit: BoxFit.cover,
-                           errorBuilder: (_, __, ___) => Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white),
-                         );
-                       }
-                       
-                       // 2. Fallback: Foto de perfil (URL)
-                       if (player.avatarUrl != null && player.avatarUrl!.startsWith('http')) {
-                         return Image.network(
-                           player.avatarUrl!,
-                           fit: BoxFit.cover,
-                           errorBuilder: (_, __, ___) => Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white),
-                         );
-                       }
-                       
-                       // 3. Fallback: Icono de profesión
-                       return Icon(_getAvatarIcon(player.profession), size: 55, color: Colors.white);
-                     },
-                   ),
-                 ),
-               ),
-               Positioned(
-                 bottom: 0,
-                 child: Container(
-                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                   decoration: BoxDecoration(
-                     color: AppTheme.accentGold,
-                     borderRadius: BorderRadius.circular(12),
-                     boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black45)]
-                   ),
-                   child: Text("LVL ${player.level}", 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
-                 ),
-               )
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: CircularProgressIndicator(
+                  value: player.experienceProgress,
+                  strokeWidth: 8,
+                  backgroundColor: Colors.white10,
+                  valueColor: const AlwaysStoppedAnimation(AppTheme.accentGold),
+                ),
+              ),
+              Container(
+                width: 95,
+                height: 95,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primaryPurple, AppTheme.secondaryPink],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.5), blurRadius: 15)
+                    ]),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(47.5),
+                  child: Builder(
+                    builder: (context) {
+                      final avatarId = player.avatarId;
+
+                      // 1. Prioridad: Avatar Local
+                      if (avatarId != null && avatarId.isNotEmpty) {
+                        return Image.asset(
+                          'assets/images/avatars/$avatarId.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                              _getAvatarIcon(player.profession),
+                              size: 55,
+                              color: Colors.white),
+                        );
+                      }
+
+                      // 2. Fallback: Foto de perfil (URL)
+                      if (player.avatarUrl != null &&
+                          player.avatarUrl!.startsWith('http')) {
+                        return Image.network(
+                          player.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                              _getAvatarIcon(player.profession),
+                              size: 55,
+                              color: Colors.white),
+                        );
+                      }
+
+                      // 3. Fallback: Icono de profesión
+                      return Icon(_getAvatarIcon(player.profession),
+                          size: 55, color: Colors.white);
+                    },
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: AppTheme.accentGold,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(blurRadius: 8, color: Colors.black45)
+                      ]),
+                  child: Text("LVL ${player.level}",
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Colors.black)),
+                ),
+              )
             ],
           ),
           const SizedBox(height: 20),
           Text(player.name.toUpperCase(), 
             style: TextStyle(color: isDarkMode ? Colors.white : const Color(0xFF1A1A1D), fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 2)),
           const SizedBox(height: 4),
-          Text(player.profession.toUpperCase(), 
-            style: const TextStyle(color: AppTheme.secondaryPink, fontSize: 12, letterSpacing: 4, fontWeight: FontWeight.w300)),
-          
+          Text(player.profession.toUpperCase(),
+              style: const TextStyle(
+                  color: AppTheme.secondaryPink,
+                  fontSize: 12,
+                  letterSpacing: 4,
+                  fontWeight: FontWeight.w300)),
+
           const SizedBox(height: 30),
-          
+
           // Single Stats Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -236,9 +258,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildStatCompact(Icons.emoji_events, "${player.eventsCompleted?.length ?? 0}", "EVENTOS", Colors.cyan, isDarkMode),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Horizontal Divider
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -247,9 +269,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               thickness: 1,
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Edit/Delete Profile Buttons
           Row(
             children: [
@@ -272,9 +294,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 12),
-          
+
           // Support Button
           Row(
             children: [
@@ -362,10 +384,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              
+
               // Nombre
-              const Text("NOMBRE DE USUARIO", 
-                style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+              const Text("NOMBRE DE USUARIO",
+                  style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextField(
                 controller: nameController,
@@ -375,11 +400,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fillColor: Colors.white.withOpacity(0.05),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -388,10 +415,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Correo
-              const Text("CORREO ELECTRÓNICO", 
-                style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+              const Text("CORREO ELECTRÓNICO",
+                  style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               TextField(
                 controller: emailController,
@@ -402,11 +432,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fillColor: Colors.white.withOpacity(0.05),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -414,77 +446,89 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               ElevatedButton(
-                onPressed: isSaving ? null : () async {
-                  final newName = nameController.text.trim();
-                  final newEmail = emailController.text.trim();
-                  
-                  if (newName.isEmpty || newEmail.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Todos los campos son obligatorios")),
-                    );
-                    return;
-                  }
-                  
-                  // Validar palabras inadecuadas
-                  if (InputSanitizer.hasInappropriateContent(newName)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("El nombre contiene palabras no permitidas"),
-                        backgroundColor: AppTheme.dangerRed,
-                      ),
-                    );
-                    return;
-                  }
-                  
-                  setModalState(() => isSaving = true);
-                  
-                  try {
-                    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-                    await playerProvider.updateProfile(
-                      name: newName != player.name ? newName : null,
-                      email: newEmail != player.email ? newEmail : null,
-                    );
-                    
-                    if (mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Perfil actualizado correctamente"),
-                          backgroundColor: AppTheme.successGreen,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      setModalState(() => isSaving = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error: $e"), backgroundColor: AppTheme.dangerRed),
-                      );
-                    }
-                  }
-                },
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        final newName = nameController.text.trim();
+                        final newEmail = emailController.text.trim();
+
+                        if (newName.isEmpty || newEmail.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text("Todos los campos son obligatorios")),
+                          );
+                          return;
+                        }
+
+                        // Validar palabras inadecuadas
+                        if (InputSanitizer.hasInappropriateContent(newName)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  "El nombre contiene palabras no permitidas"),
+                              backgroundColor: AppTheme.dangerRed,
+                            ),
+                          );
+                          return;
+                        }
+
+                        setModalState(() => isSaving = true);
+
+                        try {
+                          final playerProvider = Provider.of<PlayerProvider>(
+                              context,
+                              listen: false);
+                          await playerProvider.updateProfile(
+                            name: newName != player.name ? newName : null,
+                            email: newEmail != player.email ? newEmail : null,
+                          );
+
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text("Perfil actualizado correctamente"),
+                                backgroundColor: AppTheme.successGreen,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            setModalState(() => isSaving = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text("Error: $e"),
+                                  backgroundColor: AppTheme.dangerRed),
+                            );
+                          }
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentGold,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: isSaving 
                   ? const LoadingIndicator(fontSize: 14, color: Colors.black)
                   : const Text("GUARDAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("CANCELAR", style: TextStyle(color: Colors.white54)),
+                child: const Text("CANCELAR",
+                    style: TextStyle(color: Colors.white54)),
               ),
-              
+
               const SizedBox(height: 24),
             ],
           ),
@@ -509,12 +553,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           title: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppTheme.dangerRed, size: 28),
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppTheme.dangerRed, size: 28),
               const SizedBox(width: 12),
               const Flexible(
                 child: Text(
-                  "Borrar Cuenta", 
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  "Borrar Cuenta",
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -526,7 +572,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 const Text(
                   "Esta acción ELIMINARÁ permanentemente:",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -539,7 +588,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 const Text(
                   "Ingresa tu contraseña:",
-                  style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(
+                      color: AppTheme.dangerRed,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -554,25 +606,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     fillColor: Colors.white.withOpacity(0.05),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppTheme.dangerRed.withOpacity(0.3)),
+                      borderSide: BorderSide(
+                          color: AppTheme.dangerRed.withOpacity(0.3)),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                      borderSide:
+                          BorderSide(color: Colors.white.withOpacity(0.1)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: AppTheme.dangerRed),
                     ),
-                    prefixIcon: const Icon(Icons.lock, color: AppTheme.dangerRed, size: 20),
+                    prefixIcon: const Icon(Icons.lock,
+                        color: AppTheme.dangerRed, size: 20),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: Colors.white.withOpacity(0.5),
                         size: 20,
                       ),
                       onPressed: () {
-                        setDialogState(() => obscurePassword = !obscurePassword);
+                        setDialogState(
+                            () => obscurePassword = !obscurePassword);
                       },
                     ),
                   ),
@@ -582,68 +640,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: isDeleting ? null : () {
-                passwordController.dispose();
-                Navigator.pop(ctx);
-              },
-              child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+              onPressed: isDeleting
+                  ? null
+                  : () {
+                      passwordController.dispose();
+                      Navigator.pop(ctx);
+                    },
+              child: const Text("Cancelar",
+                  style: TextStyle(color: Colors.white54)),
             ),
             ElevatedButton(
-              onPressed: isDeleting ? null : () async {
-                final password = passwordController.text.trim();
-                
-                if (password.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Debes ingresar tu contraseña"),
-                      backgroundColor: AppTheme.dangerRed,
-                    ),
-                  );
-                  return;
-                }
+              onPressed: isDeleting
+                  ? null
+                  : () async {
+                      final password = passwordController.text.trim();
 
-                setDialogState(() => isDeleting = true);
+                      if (password.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Debes ingresar tu contraseña"),
+                            backgroundColor: AppTheme.dangerRed,
+                          ),
+                        );
+                        return;
+                      }
 
-                try {
-                  final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-                  await playerProvider.deleteAccount(password);
-                  
-                  if (!ctx.mounted) return;
-                  passwordController.dispose();
-                  Navigator.pop(ctx); // Cerrar diálogo
-                  
-                  // Restablecer modo UI inmersivo antes de navegar
-                  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-                  
-                  // Forzar navegación al login
-                  if (context.mounted) {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-                  }
-                } catch (e) {
-                  if (!ctx.mounted) return;
-                  
-                  setDialogState(() => isDeleting = false);
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Error: $e"),
-                      backgroundColor: AppTheme.dangerRed,
-                    ),
-                  );
-                }
-              },
+                      setDialogState(() => isDeleting = true);
+
+                      try {
+                        final playerProvider =
+                            Provider.of<PlayerProvider>(context, listen: false);
+                        await playerProvider.deleteAccount(password);
+
+                        if (!ctx.mounted) return;
+                        passwordController.dispose();
+                        Navigator.pop(ctx); // Cerrar diálogo
+
+                        // Restablecer modo UI inmersivo antes de navegar
+                        SystemChrome.setEnabledSystemUIMode(
+                            SystemUiMode.immersiveSticky);
+
+                        // Forzar navegación al login
+                        if (context.mounted) {
+                          Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/login', (route) => false);
+                        }
+                      } catch (e) {
+                        if (!ctx.mounted) return;
+
+                        setDialogState(() => isDeleting = false);
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text("Error: $e"),
+                            backgroundColor: AppTheme.dangerRed,
+                          ),
+                        );
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.dangerRed,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: isDeleting
                   ? const SizedBox(
                       height: 16,
                       width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text("Borrar", style: TextStyle(fontWeight: FontWeight.bold)),
+                  : const Text("Borrar",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -659,10 +728,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("SELLOS TEMPORALES", 
-              style: TextStyle(color: AppTheme.accentGold, letterSpacing: 2, fontSize: 12, fontWeight: FontWeight.w900)),
-            Text("${gameProvider.completedClues}/${gameProvider.totalClues}", 
-              style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            const Text("SELLOS TEMPORALES",
+                style: TextStyle(
+                    color: AppTheme.accentGold,
+                    letterSpacing: 2,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900)),
+            Text("${gameProvider.completedClues}/${gameProvider.totalClues}",
+                style: const TextStyle(color: Colors.white38, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 16),
@@ -674,19 +747,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
           ),
           child: gameProvider.clues.isEmpty
-            ? const Center(child: Text("Inicia una misión para recolectar sellos", 
-                style: TextStyle(color: Colors.white24, fontSize: 12)))
-            : ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                itemCount: gameProvider.clues.length,
-                itemBuilder: (context, index) {
-                  final clue = gameProvider.clues[index];
-                  final bool isCollected = clue.isCompleted;
-                  
-                  return _buildStampItem(clue, isCollected, index);
-                },
-              ),
+              ? const Center(
+                  child: Text("Inicia una misión para recolectar sellos",
+                      style: TextStyle(color: Colors.white24, fontSize: 12)))
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  itemCount: gameProvider.clues.length,
+                  itemBuilder: (context, index) {
+                    final clue = gameProvider.clues[index];
+                    final bool isCollected = clue.isCompleted;
+
+                    return _buildStampItem(clue, isCollected, index);
+                  },
+                ),
         ),
       ],
     );
@@ -694,7 +769,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildStampItem(Clue clue, bool isCollected, int index) {
     final gradient = _getStampGradient(index);
-    
+
     return Container(
       width: 75,
       margin: const EdgeInsets.only(right: 15),
@@ -714,14 +789,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isCollected ? null : Colors.black45,
-                      gradient: isCollected ? LinearGradient(colors: gradient) : null,
+                      gradient:
+                          isCollected ? LinearGradient(colors: gradient) : null,
                       border: Border.all(
-                        color: isCollected ? Colors.white : Colors.white10, 
-                        width: isCollected ? 2 : 1
-                      ),
-                      boxShadow: isCollected ? [
-                        BoxShadow(color: gradient[0].withOpacity(0.5), blurRadius: 10, spreadRadius: 1)
-                      ] : null,
+                          color: isCollected ? Colors.white : Colors.white10,
+                          width: isCollected ? 2 : 1),
+                      boxShadow: isCollected
+                          ? [
+                              BoxShadow(
+                                  color: gradient[0].withOpacity(0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 1)
+                            ]
+                          : null,
                     ),
                     child: Icon(
                       _getStampIcon(index),
@@ -734,19 +814,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
           const SizedBox(height: 6),
-          Text("S${index + 1}", 
-            style: TextStyle(
-              fontSize: 10, 
-              color: isCollected ? Colors.white70 : Colors.white10,
-              fontWeight: FontWeight.bold
-            )
-          ),
+          Text("S${index + 1}",
+              style: TextStyle(
+                  fontSize: 10,
+                  color: isCollected ? Colors.white70 : Colors.white10,
+                  fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
-
-
 
   Widget _buildAttributeBar(String label, int value, Color color) {
     double progress = (value / 100).clamp(0.0, 1.0);
@@ -758,18 +834,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.bold)),
-              Text("$value%", style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+              Text("$value%",
+                  style: TextStyle(
+                      color: color, fontSize: 10, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
-               value: progress,
-               backgroundColor: Colors.white.withOpacity(0.05),
-               valueColor: AlwaysStoppedAnimation(color),
-               minHeight: 6,
+              value: progress,
+              backgroundColor: Colors.white.withOpacity(0.05),
+              valueColor: AlwaysStoppedAnimation(color),
+              minHeight: 6,
             ),
           ),
         ],
@@ -794,22 +876,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   IconData _getAvatarIcon(String profession) {
     switch (profession.toLowerCase()) {
-      case 'speedrunner': return Icons.flash_on;
-      case 'strategist': return Icons.psychology;
-      case 'warrior': return Icons.shield;
-      case 'balanced': return Icons.stars;
-      case 'novice': return Icons.explore;
-      default: return Icons.person;
+      case 'speedrunner':
+        return Icons.flash_on;
+      case 'strategist':
+        return Icons.psychology;
+      case 'warrior':
+        return Icons.shield;
+      case 'balanced':
+        return Icons.stars;
+      case 'novice':
+        return Icons.explore;
+      default:
+        return Icons.person;
     }
   }
 
   IconData _getStampIcon(int index) {
-    const icons = [Icons.extension, Icons.lock_open, Icons.history_edu, Icons.warning_amber, Icons.cable, Icons.palette, Icons.visibility, Icons.settings_suggest, Icons.flash_on];
+    const icons = [
+      Icons.extension,
+      Icons.lock_open,
+      Icons.history_edu,
+      Icons.warning_amber,
+      Icons.cable,
+      Icons.palette,
+      Icons.visibility,
+      Icons.settings_suggest,
+      Icons.flash_on
+    ];
     return icons[index % icons.length];
   }
 
   List<Color> _getStampGradient(int index) {
-    const gradients = [[Color(0xFF3B82F6), Color(0xFF06B6D4)], [Color(0xFF06B6D4), Color(0xFF10B981)], [Color(0xFF10B981), Color(0xFF84CC16)], [Color(0xFF84CC16), Color(0xFFF59E0B)], [Color(0xFFF59E0B), Color(0xFFEF4444)], [Color(0xFFEF4444), Color(0xFFEC4899)], [Color(0xFFEC4899), Color(0xFFD946EF)], [Color(0xFFD946EF), Color(0xFF8B5CF6)], [Color(0xFF8B5CF6), Color(0xFF6366F1)]];
+    const gradients = [
+      [Color(0xFF3B82F6), Color(0xFF06B6D4)],
+      [Color(0xFF06B6D4), Color(0xFF10B981)],
+      [Color(0xFF10B981), Color(0xFF84CC16)],
+      [Color(0xFF84CC16), Color(0xFFF59E0B)],
+      [Color(0xFFF59E0B), Color(0xFFEF4444)],
+      [Color(0xFFEF4444), Color(0xFFEC4899)],
+      [Color(0xFFEC4899), Color(0xFFD946EF)],
+      [Color(0xFFD946EF), Color(0xFF8B5CF6)],
+      [Color(0xFF8B5CF6), Color(0xFF6366F1)]
+    ];
     return gradients[index % gradients.length];
   }
 
@@ -939,7 +1047,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 12),
             const Text(
               'Próximamente',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
         ),
