@@ -111,7 +111,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       
                       // Centered Logo
                       Image.asset(
-                        playerProvider.isDarkMode ? 'assets/images/titulocopia.png' : 'assets/images/logocopia2.png',
+                        playerProvider.isDarkMode ? 'assets/images/maphunter_titulo.png' : 'assets/images/logocopia2.png',
                         height: 65,
                         fit: BoxFit.contain,
                       ),
