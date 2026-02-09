@@ -4,11 +4,13 @@ import 'dart:math' as math;
 class AnimatedCyberBackground extends StatefulWidget {
   final Widget? child;
   final Color? gridColor;
+  final Color? vignetteColor;
 
   const AnimatedCyberBackground({
     super.key,
     this.child,
     this.gridColor,
+    this.vignetteColor,
   });
 
   @override
@@ -93,7 +95,7 @@ class _AnimatedCyberBackgroundState extends State<AnimatedCyberBackground>
                 radius: 1.2,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withOpacity(0.5),
+                  (widget.vignetteColor ?? Colors.black).withOpacity(0.4),
                 ],
               ),
             ),

@@ -80,35 +80,28 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       try {
         final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
+        final isDarkMode = playerProvider.isDarkMode;
 
         // Show loading indicator
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) {
-            final Color currentText = _isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
-            final Color currentBrand = _isDarkMode ? const Color(0xFFFECB00) : const Color(0xFF5A189A);
+            final Color currentBrand = const Color(0xFFFECB00); // Siempre Legendary Gold como en dark mode
             
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                   Text(
+                    Text(
                     'Cargando...',
-                    style: TextStyle(
-                      color: _isDarkMode ? Colors.white : const Color(0xFF1A1A1D),
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 18,
                       decoration: TextDecoration.none,
                       fontFamily: 'Inter',
                       letterSpacing: 1.2,
-                      shadows: [
-                        Shadow(
-                          color: _isDarkMode ? Colors.black45 : Colors.white70,
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -246,15 +239,16 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     await showDialog(
       context: context,
       builder: (context) {
+        final isDarkMode = context.read<PlayerProvider>().isDarkMode;
         bool isSending = false;
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // Recalcular colores basados en _isDarkMode actual
-            final Color currentSurface = _isDarkMode ? dSurface1 : lSurface1;
-            final Color currentText = _isDarkMode ? Colors.white : lTextPrimary;
-            final Color currentTextSec = _isDarkMode ? Colors.white70 : lTextSecondary;
-            final Color currentBrand = _isDarkMode ? dGoldMain : lMysticPurple;
+            // Recalcular colores basados en isDarkMode actual
+            final Color currentSurface = isDarkMode ? dSurface1 : lSurface1;
+            final Color currentText = isDarkMode ? Colors.white : lTextPrimary;
+            final Color currentTextSec = isDarkMode ? Colors.white70 : lTextSecondary;
+            final Color currentBrand = isDarkMode ? dGoldMain : lMysticPurple;
 
             return AlertDialog(
               backgroundColor: currentSurface,
@@ -282,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     labelStyle: TextStyle(color: currentTextSec.withOpacity(0.6)),
                     prefixIcon: Icon(Icons.email_outlined, color: currentBrand),
                     filled: true,
-                    fillColor: _isDarkMode ? const Color(0xFF1A1A1D) : const Color(0xFFF2F2F7),
+                    fillColor: isDarkMode ? const Color(0xFF1A1A1D) : const Color(0xFFF2F2F7),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: currentBrand, width: 2),
@@ -314,7 +308,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: _isDarkMode 
+                          colors: isDarkMode 
                               ? [dGoldLight, dGoldMain] 
                               : [const Color(0xFF9D4EDD), lMysticPurple],
                           begin: Alignment.topCenter,
@@ -326,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
-                          foregroundColor: _isDarkMode ? Colors.black : Colors.white,
+                          foregroundColor: isDarkMode ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -364,7 +358,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2, 
-                                  color: _isDarkMode ? Colors.black : Colors.white
+                                  color: isDarkMode ? Colors.black : Colors.white
                                 ),
                               )
                             : const Text('ENVIAR', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -384,6 +378,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   Future<void> _checkPermissions() async {
     LocationPermission permission = await Geolocator.checkPermission();
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final isDarkMode = context.read<PlayerProvider>().isDarkMode;
 
     // Colores dinámicos
     final Color dSurface = const Color(0xFF1A1A1D);
@@ -393,9 +388,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final Color dBrand = const Color(0xFFFECB00);
     final Color lBrand = const Color(0xFF5A189A);
 
-    final Color currentBg = _isDarkMode ? dSurface : lSurface;
-    final Color currentText = _isDarkMode ? dText : lText;
-    final Color currentBrand = _isDarkMode ? dBrand : lBrand;
+    final Color currentBg = isDarkMode ? dSurface : lSurface;
+    final Color currentText = isDarkMode ? dText : lText;
+    final Color currentBrand = isDarkMode ? dBrand : lBrand;
 
     // Si falta algo, mostramos el BottomSheet explicativo antes de pedirlo nativamente
     if (permission == LocationPermission.denied ||
@@ -437,7 +432,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                   height: 55,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: _isDarkMode 
+                      colors: isDarkMode 
                           ? [const Color(0xFFFFF176), const Color(0xFFFECB00)] 
                           : [const Color(0xFF9D4EDD), const Color(0xFF5A189A)],
                       begin: Alignment.topCenter,
@@ -449,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
-                      foregroundColor: _isDarkMode ? Colors.black : Colors.white,
+                      foregroundColor: isDarkMode ? Colors.black : Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -507,10 +502,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  bool _isDarkMode = false; // Inicia en Modo Día
+  // Se eliminó isDarkMode local para usar el de PlayerProvider
 
   @override
   Widget build(BuildContext context) {
+    final playerProvider = context.watch<PlayerProvider>();
+    final isDarkMode = playerProvider.isDarkMode;
+
     // Definición local de la paleta de colores del "Sistema Cromático"
     const Color dSurface0 = Color(0xFF0D0D0F);
     const Color dSurface1 = Color(0xFF1A1A1D);
@@ -528,13 +526,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     const Color lTextPrimary = Color(0xFF1A1A1D);
     const Color lTextSecondary = Color(0xFF4A4A5A);
 
-    final Color currentSurface0 = _isDarkMode ? dSurface0 : lSurface0;
-    final Color currentSurface1 = _isDarkMode ? dSurface1 : lSurface1;
-    final Color currentBrand = _isDarkMode ? dMysticPurple : lMysticPurple;
-    final Color currentBrandDeep = _isDarkMode ? dMysticPurpleDeep : lMysticPurpleDeep;
-    final Color currentBorder = _isDarkMode ? dBorderGray : lBorderGray;
-    final Color currentText = _isDarkMode ? Colors.white : lTextPrimary;
-    final Color currentTextSec = _isDarkMode ? Colors.white70 : lTextSecondary;
+    final Color currentSurface0 = isDarkMode ? dSurface0 : lSurface0;
+    final Color currentSurface1 = isDarkMode ? dSurface1 : lSurface1;
+    final Color currentBrand = isDarkMode ? dMysticPurple : lMysticPurple;
+    final Color currentBrandDeep = isDarkMode ? dMysticPurpleDeep : lMysticPurpleDeep;
+    final Color currentBorder = isDarkMode ? dBorderGray : lBorderGray;
+    final Color currentText = isDarkMode ? Colors.white : lTextPrimary;
+    final Color currentTextSec = isDarkMode ? Colors.white70 : lTextSecondary;
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -603,20 +601,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       alignment: Alignment.topRight,
                                       child: IconButton(
                                         icon: Icon(
-                                          _isDarkMode ? Icons.wb_sunny_outlined : Icons.nightlight_round_outlined,
-                                          color: _isDarkMode ? Colors.white : lMysticPurple,
+                                          isDarkMode ? Icons.wb_sunny_outlined : Icons.nightlight_round_outlined,
+                                          color: isDarkMode ? Colors.white : lMysticPurple,
                                           size: 28,
                                         ),
                                         onPressed: () {
-                                          debugPrint("Toggle presionado: actual=$_isDarkMode");
-                                          setState(() => _isDarkMode = !_isDarkMode);
+                                          debugPrint("Toggle presionado: actual=$isDarkMode");
+                                          playerProvider.toggleDarkMode(!isDarkMode);
                                         },
                                       ),
                                     ),
                                     const Spacer(flex: 1),
                                     // Logo de MapHunter
                                     Image.asset(
-                                      _isDarkMode ? 'assets/images/logo4.1.png' : 'assets/images/logo4.2.png',
+                                      isDarkMode ? 'assets/images/logo4.1.png' : 'assets/images/logo4.2.png',
                                       height: 180,
                                       fit: BoxFit.contain,
                                     ),
@@ -766,7 +764,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           child: Text(
                                             'Regístrate',
                                             style: TextStyle(
-                                              color: _isDarkMode ? dGoldMain : lMysticPurple,
+                                              color: isDarkMode ? dGoldMain : lMysticPurple,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -776,7 +774,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                     const Spacer(flex: 2),
                                     
                                     // Morna Branding
-                                    _buildMornaBranding(isDark: _isDarkMode),
+                                    _buildMornaBranding(isDark: isDarkMode),
                                     const SizedBox(height: 10),
                                   ],
                                 ),
