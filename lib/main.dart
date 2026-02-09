@@ -148,6 +148,9 @@ class _TreasureHuntAppState extends State<TreasureHuntApp> with WidgetsBindingOb
             powerService: PowerService(supabaseClient: supabase),
           );
           
+          // Cargar tema guardado
+          provider.loadTheme();
+          
           // Register cleanup for logout
           authService.onLogout(() async => provider.resetState());
           

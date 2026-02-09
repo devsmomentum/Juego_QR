@@ -45,6 +45,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   StreamSubscription<List<Map<String, dynamic>>>? _profileSubscription;
   Timer? _pollingTimer;
   bool _isSpectatorSession = false; // NEW: Flag for spectator mode choice
+  bool _isDarkMode = false; // Global theme state
   
   List<PowerItem> _shopItems = PowerItem.getShopItems();
   
@@ -52,6 +53,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   List<Player> get allPlayers => _allPlayers;
   bool get isLoggedIn => _currentPlayer != null;
   List<PowerItem> get shopItems => _shopItems;
+  bool get isDarkMode => _isDarkMode;
 
   String? _banMessage;
   String? get banMessage => _banMessage;
@@ -71,6 +73,19 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   
   void clearBanMessage() {
     _banMessage = null;
+    notifyListeners();
+  }
+
+  void toggleDarkMode(bool value) async {
+    _isDarkMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_dark_mode', value);
+  }
+
+  Future<void> loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
     notifyListeners();
   }
 
