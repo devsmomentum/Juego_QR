@@ -85,8 +85,41 @@ Future<void> main() async {
   runApp(const TreasureHuntApp());
 }
 
-class TreasureHuntApp extends StatelessWidget {
+class TreasureHuntApp extends StatefulWidget {
   const TreasureHuntApp({super.key});
+
+  @override
+  State<TreasureHuntApp> createState() => _TreasureHuntAppState();
+}
+
+class _TreasureHuntAppState extends State<TreasureHuntApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Re-apply immersive mode when app resumes
+    if (state == AppLifecycleState.resumed && !kIsWeb) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+  }
+
+  void _forceImmersiveMode() {
+    if (!kIsWeb) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -247,6 +280,9 @@ class TreasureHuntApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
         builder: (context, child) {
+          // Force immersive mode on every rebuild
+          _forceImmersiveMode();
+          
           return AuthMonitor(
             child: ConnectivityMonitor(
               child: GameSessionMonitor( // Monitoreo de reinicio
