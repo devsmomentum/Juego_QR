@@ -117,13 +117,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // 1. Mostrar indicador de carga
         LoadingOverlay.show(context);
 
+        final cedulaToSend = '$_selectedNationalityType${_cedulaController.text.trim()}';
+        
+        // Just send exact user input (sanitized)
+        final phoneToSend = _phoneController.text.trim().replaceAll(' ', '').replaceAll('-', '');
+
+        debugPrint('REGISTER PAYLOAD: Cedula: $cedulaToSend, Phone: $phoneToSend');
+
         // 2. Ejecutar registro
         await playerProvider.register(
           _nameController.text.trim(),
           _emailController.text.trim(),
           _passwordController.text,
-          cedula: '$_selectedNationalityType${_cedulaController.text.trim()}', // Combinar V/E + número
-          phone: '$_selectedPhonePrefix${_phoneController.text.trim()}', // Combinar prefijo + número
+          cedula: cedulaToSend,
+          phone: phoneToSend,
         );
         
         if (!mounted) return;
@@ -348,19 +355,81 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 const SizedBox(height: 30),
 
                                 // Cédula / RIF
-                                TextFormField(
-                                  controller: _cedulaController,
-                                  style: TextStyle(color: currentText),
-                                  decoration: InputDecoration(
-                                    labelText: 'CÉDULA / RIF',
-                                    prefixIcon: const Icon(Icons.badge_outlined),
-                                    hintText: 'V12345678',
-                                    hintStyle: TextStyle(color: currentTextSec.withOpacity(0.3), fontSize: 13),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) return 'Ingresa tu cédula o RIF';
-                                    return null;
-                                  },
+                                // Cédula / RIF (Split V/E - Number)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Selector de Nacionalidad (V/E)
+                                    SizedBox(
+                                      width: 80,
+                                      child: DropdownButtonFormField<String>(
+                                        value: _selectedNationalityType,
+                                        items: _nationalityTypes.map((type) {
+                                          return DropdownMenuItem(
+                                            value: type,
+                                            child: Text(
+                                              type,
+                                              style: TextStyle(color: currentText, fontWeight: FontWeight.bold),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (value) {
+                                          if (value != null) {
+                                            setState(() => _selectedNationalityType = value);
+                                          }
+                                        },
+                                        decoration: InputDecoration(
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                                          filled: true,
+                                          fillColor: currentSurface1,
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: currentBorder, width: 1.5),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: currentBrand, width: 2),
+                                          ),
+                                        ),
+                                        dropdownColor: currentSurface1,
+                                        style: TextStyle(color: currentText),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    
+                                    // Campo Numérico
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _cedulaController,
+                                        style: TextStyle(color: currentText),
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.digitsOnly,
+                                          LengthLimitingTextInputFormatter(9),
+                                        ],
+                                        decoration: InputDecoration(
+                                          labelText: 'CÉDULA/PASAPORTE',
+                                          prefixIcon: const Icon(Icons.badge_outlined),
+                                          hintText: '12345678',
+                                          hintStyle: TextStyle(color: currentTextSec.withOpacity(0.3), fontSize: 13),
+                                          filled: true,
+                                          fillColor: currentSurface1,
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: currentBorder, width: 1.5),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: currentBrand, width: 2),
+                                          ),
+                                        ),
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) return 'Ingresa tu cédula';
+                                          return null;
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 16),
 
@@ -377,6 +446,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   ),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) return 'Ingresa tu teléfono';
+                                    String pattern = r'(^[0-9]{11}$)';
+                                    RegExp regExp = RegExp(pattern);
+                                    if (!regExp.hasMatch(value.trim().replaceAll(' ', '').replaceAll('-', ''))) {
+                                      return 'Ingresa el número completo (Ej: 04121234567)';
+                                    }
                                     return null;
                                   },
                                 ),

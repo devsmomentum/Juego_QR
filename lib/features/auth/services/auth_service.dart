@@ -254,7 +254,7 @@ class AuthService {
       return 'Formato de cédula inválido. Usa V12345678 o E12345678.';
     }
     if (errorMsg.contains('formato de teléfono')) {
-      return 'Formato de teléfono inválido. Usa 0412-1234567.';
+      return 'Formato de teléfono inválido. Usa 04121234567.';
     }
     if (errorMsg.contains('user already registered') ||
         errorMsg.contains('already exists')) {

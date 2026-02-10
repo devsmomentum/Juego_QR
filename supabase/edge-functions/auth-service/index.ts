@@ -74,10 +74,24 @@ serve(async (req) => {
         throw new Error('Email, password and name are required')
       }
 
-      // Validar formato de cédula venezolana (V/E + 6-9 dígitos)
+      // Sanitize inputs removing non-alphanumeric characters (dots, spaces, hyphens)
+      // except for the V/E prefix which is expected in the regex if not separated
+      
+      let sanitizedCedula = cedula;
       if (cedula) {
+        // Remove dots, spaces, hyphens
+        sanitizedCedula = cedula.replace(/[\.\-\s]/g, '').toUpperCase();
+      }
+
+      let sanitizedPhone = phone;
+      if (phone) {
+        sanitizedPhone = phone.replace(/[\.\-\s]/g, '');
+      }
+
+      // Validar formato de cédula venezolana (V/E + 6-9 dígitos)
+      if (sanitizedCedula) {
         const cedulaRegex = /^[VE]\d{6,9}$/i
-        if (!cedulaRegex.test(cedula)) {
+        if (!cedulaRegex.test(sanitizedCedula)) {
           throw new Error('Formato de cédula inválido. Usa V12345678 o E12345678')
         }
 
@@ -85,7 +99,7 @@ serve(async (req) => {
         const { data: existingCedula } = await supabaseClient
           .from('profiles')
           .select('id')
-          .eq('dni', cedula.toUpperCase())
+          .eq('dni', sanitizedCedula)
           .single()
 
         if (existingCedula) {
@@ -94,12 +108,14 @@ serve(async (req) => {
       }
 
       // Validar formato de teléfono venezolano (04XX-XXXXXXX)
-      if (phone) {
-        const phoneDigits = phone.replace('-', '')
-        const phoneRegex = /^04(12|14|24|16|26)\d{7}$/
+      if (sanitizedPhone) {
+        // Ensure only digits remain for phone check
+        const phoneDigits = sanitizedPhone.replace(/\D/g, ''); 
+        // 13/02/2026: Added 22 to match client options
+        const phoneRegex = /^04(12|14|24|16|26|22)\d{7}$/
 
         if (!phoneRegex.test(phoneDigits)) {
-          throw new Error('Formato de teléfono inválido. Usa 0412-1234567')
+          throw new Error('Formato de teléfono inválido. Usa 04121234567')
         }
 
         // Verificar si el teléfono ya existe
@@ -112,6 +128,9 @@ serve(async (req) => {
         if (existingPhone) {
           throw new Error('Este teléfono ya está registrado')
         }
+        
+        // Update the variable to be used in signUp
+        sanitizedPhone = phoneDigits;
       }
 
       const { data, error } = await supabaseClient.auth.signUp({
@@ -120,8 +139,8 @@ serve(async (req) => {
         options: {
           data: {
             name,
-            cedula: cedula ? cedula.toUpperCase() : null,
-            phone: phone ? phone.replace('-', '') : null
+            cedula: sanitizedCedula,
+            phone: sanitizedPhone
           }
         }
       })
@@ -152,10 +171,9 @@ serve(async (req) => {
               email,
               name,
               role: 'user',
-              total_coins: 100,
-              coins: 100,
-              dni: cedula ? cedula.toUpperCase() : null,
-              phone: phone ? phone.replace('-', '') : null
+              clovers: 0,
+              dni: sanitizedCedula,
+              phone: sanitizedPhone
             },
             { onConflict: 'id' }
           )
