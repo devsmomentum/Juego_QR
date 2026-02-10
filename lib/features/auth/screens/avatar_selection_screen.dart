@@ -8,11 +8,17 @@ import '../../game/providers/game_provider.dart';
 import 'story_screen.dart';
 import '../../../core/services/video_preload_service.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../game/screens/game_mode_selector_screen.dart';
 
 class AvatarSelectionScreen extends StatefulWidget {
-  final String eventId;
+  final String? eventId;
 
-  const AvatarSelectionScreen({super.key, required this.eventId});
+  static const List<String> validAvatarIds = [
+    'explorer_m', 'hacker_m', 'warrior_m', 'spec_m',
+    'explorer_f', 'hacker_f', 'warrior_f', 'spec_f',
+  ];
+
+  const AvatarSelectionScreen({super.key, this.eventId});
 
   @override
   State<AvatarSelectionScreen> createState() => _AvatarSelectionScreenState();
@@ -23,12 +29,16 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
   late AnimationController _hoverController;
   late AnimationController _particleController;
   
+  // Video Controllers for seamless transition (Double Buffering)
   VideoPlayerController? _activeController;
-  VideoPlayerController? _loadingController;
-  String? _activeAvatarId;
+  VideoPlayerController? _previousController;
   
+  String? _activeAvatarId;
   int _currentIndex = 0;
   bool _isSaving = false;
+  
+  // Infinite scroll offset
+  static const int _initialPageOffset = 1000;
 
   final List<Map<String, String>> _avatars = [
     {'id': 'explorer_m', 'name': 'EXPLORADOR', 'desc': 'Experto en mapas y brújulas legendarias.'},
@@ -41,7 +51,6 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
     {'id': 'spec_f', 'name': 'ESPECIALISTA', 'desc': 'Tecnología de punta a su servicio.'},
   ];
 
-  // Map de videos por avatar
   final Map<String, String> _avatarVideos = {
     'explorer_m': 'assets/escenarios.avatar/explorer_m_scene.mp4',
     'hacker_m': 'assets/escenarios.avatar/hacker_m_scene.mp4',
@@ -56,7 +65,12 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(viewportFraction: 0.8);
+    // Iniciar en un índice alto para permitir scroll infinito hacia atrás
+    _currentIndex = 0;
+    _pageController = PageController(
+      viewportFraction: 0.8, 
+      initialPage: _initialPageOffset,
+    );
     
     _hoverController = AnimationController(
        vsync: this,
@@ -69,7 +83,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
     )..repeat();
 
     // Cargar video inicial
-    _loadVideoForAvatar(_avatars[_currentIndex]['id']!);
+    _loadVideoForAvatar(_avatars[0]['id']!);
   }
 
   void _loadVideoForAvatar(String avatarId) {
@@ -78,52 +92,66 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
     final videoPath = _avatarVideos[avatarId];
     if (videoPath == null) return;
 
-    // Intentar recuperar el video precargado (esto hará que la primera carga sea instantánea)
-    final preloadedController = VideoPreloadService().getAndReleaseController(videoPath);
+    debugPrint('🎬 AvatarSelection: Loading video for $avatarId -> $videoPath');
+
+    // 1. Move current active to previous (Background layer)
+    final oldActive = _activeController;
     
-    if (preloadedController != null) {
-      if (mounted) {
-        setState(() {
-          _activeController = preloadedController;
-          _activeAvatarId = avatarId;
-          _activeController?.play();
-        });
-      }
-      return;
+    // Si ya teníamos un "previous" pendiente de limpieza, lo limpiamos ahora
+    if (_previousController != null && _previousController != oldActive) {
+      _previousController?.dispose();
     }
+    
+    _previousController = oldActive;
+    _activeController = null; // Clear active while loading new one
 
+    // 2. Load new video
     final newController = VideoPlayerController.asset(videoPath);
-    _loadingController?.dispose();
-    _loadingController = newController;
-
+    
     newController.initialize().then((_) {
       if (mounted) {
+        debugPrint('🎬 AvatarSelection: Video initialized for $avatarId');
         setState(() {
-          // El nuevo ya está listo. Ahora podemos descartar el activo anterior.
-          final oldController = _activeController;
           _activeController = newController;
           _activeAvatarId = avatarId;
-          _loadingController = null;
           
           _activeController?.setLooping(true);
           _activeController?.setVolume(0.0);
           _activeController?.play();
-          
-          // Retrasamos el dispose un poco para asegurar que el frame del nuevo ya se pintó
-          Future.delayed(const Duration(milliseconds: 100), () {
-            oldController?.dispose();
-          });
+        });
+
+        // 3. Clean up previous after transition (DELAYED)
+        // Wait for the fade-in animation (e.g. 1 second) plus a buffer
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted && _previousController != null) {
+            // Solo disponer si no se ha convertido en el activo de nuevo (race condition check)
+            if (_previousController != _activeController) {
+               _previousController?.dispose();
+               _previousController = null;
+               // Trigger rebuild to remove the background layer
+               if (mounted) setState(() {}); 
+            }
+          }
         });
       }
     }).catchError((e) {
-      debugPrint("Error loading video: $e");
+      debugPrint("🛑 AvatarSelection: Error loading video: $e");
+      // En caso de error, intentar restaurar el anterior como activo si existe
+      if (mounted) {
+        setState(() {
+           _activeController = _previousController; 
+           _previousController = null;
+        });
+      }
     });
   }
 
-  // Función para cuando cambia de página
   void _onPageChanged(int index) {
-    setState(() => _currentIndex = index);
-    final avatarId = _avatars[index]['id'];
+    // Calcular índice real basado en módulo
+    final realIndex = index % _avatars.length;
+    setState(() => _currentIndex = realIndex);
+    
+    final avatarId = _avatars[realIndex]['id'];
     if (avatarId != null) {
       _loadVideoForAvatar(avatarId);
     }
@@ -135,7 +163,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
     _hoverController.dispose();
     _particleController.dispose();
     _activeController?.dispose();
-    _loadingController?.dispose();
+    _previousController?.dispose();
     super.dispose();
   }
 
@@ -149,13 +177,20 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
       final gameProvider = context.read<GameProvider>();
       
       await playerProvider.updateAvatar(selectedId);
-      await gameProvider.initializeGameForApprovedUser(playerProvider.currentPlayer!.userId, widget.eventId);
-
-      if (!mounted) return;
       
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => StoryScreen(eventId: widget.eventId)),
-      );
+      if (!mounted) return;
+
+      if (widget.eventId != null) {
+        await gameProvider.initializeGameForApprovedUser(playerProvider.currentPlayer!.userId, widget.eventId!);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => StoryScreen(eventId: widget.eventId!)),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+           MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -166,15 +201,11 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
   }
 
   void _nextPage() {
-    if (_currentIndex < _avatars.length - 1) {
-      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-    }
+    _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
   void _previousPage() {
-    if (_currentIndex > 0) {
-      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-    }
+    _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
   @override
@@ -190,12 +221,27 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
               fit: BoxFit.cover,
             ),
           ),
+          
+          // 2. CAPA DE FONDO (PREVIOUS VIDEO) - Mantiene el último frame visible
+          if (_previousController != null && _previousController!.value.isInitialized)
+            Positioned.fill(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                   width: _previousController!.value.size.width,
+                   height: _previousController!.value.size.height,
+                   child: VideoPlayer(_previousController!),
+                ),
+              ),
+            ),
 
-          // 2. Video de fondo dinámico (Aparece con fundido sobre la imagen)
+          // 3. CAPA ACTIVA (CURRENT VIDEO) - Fade In
+          // Usamos AnimatedOpacity para la transición suave
           Positioned.fill(
             child: AnimatedOpacity(
               opacity: (_activeController != null && _activeController!.value.isInitialized) ? 1.0 : 0.0,
-              duration: const Duration(seconds: 1),
+              duration: const Duration(milliseconds: 800), // Duración del Fade
+              curve: Curves.easeInOut,
               child: (_activeController != null && _activeController!.value.isInitialized) 
                 ? FittedBox(
                     fit: BoxFit.cover,
@@ -209,7 +255,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
             ),
           ),
           
-          // 3. Overlay oscuro constante (Muestra la imagen/video con estilo desde el inicio)
+          // 4. Overlay oscuro constante
           Positioned.fill(
             child: Container(
               color: Colors.black.withOpacity(0.4),
@@ -227,11 +273,11 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
             },
           ),
 
-          // Contenido principal
+          // UI Principal
           SafeArea(
             child: Column(
               children: [
-                // Fila Superior con Botón de Volver
+                // Back Button
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   child: Row(
@@ -254,7 +300,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                 
                 const SizedBox(height: 10),
                 
-                // Header con efecto de brillo
+                // Header
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   decoration: BoxDecoration(
@@ -300,6 +346,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                 ),
                 const SizedBox(height: 30),
                 
+                // Carousel Infinito
                 Expanded(
                   child: Stack(
                     alignment: Alignment.center,
@@ -307,10 +354,13 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                       PageView.builder(
                         controller: _pageController,
                         onPageChanged: _onPageChanged,
-                        itemCount: _avatars.length,
+                        // itemCount: null -> Infinite
                         itemBuilder: (context, index) {
-                          final avatar = _avatars[index];
-                          final isSelected = _currentIndex == index;
+                          // Módulo para ciclo infinito
+                          final realIndex = index % _avatars.length;
+                          final avatar = _avatars[realIndex];
+                          
+                          final isSelected = realIndex == _currentIndex;
                           
                           return AnimatedScale(
                             scale: isSelected ? 1.0 : 0.7,
@@ -320,14 +370,12 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // Solo el avatar flotante (el video ya está de fondo)
                                   AnimatedBuilder(
                                     animation: _hoverController,
                                     builder: (context, child) {
                                       final double offset = isSelected 
                                         ? Curves.easeInOut.transform(_hoverController.value) * 10 
                                         : 0;
-                                        
                                       return Transform.translate(
                                         offset: Offset(0, -offset),
                                         child: child,
@@ -348,8 +396,6 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                                     ),
                                   ),
                                   const SizedBox(height: 30),
-                                  
-                                  // Nombre con efecto de gradiente
                                   ShaderMask(
                                     shaderCallback: (bounds) => isSelected
                                         ? AppTheme.primaryGradient.createShader(bounds)
@@ -373,8 +419,6 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-                                  
-                                  // Descripción
                                   Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 40),
                                     child: Text(
@@ -394,22 +438,18 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                         },
                       ),
                       
-                      // Left Arrow con nuevo diseño
+                      // Flechas siempre visibles
                       Positioned(
                         left: 10,
                         child: _buildArrowButton(
                           icon: Icons.arrow_back_ios_new,
-                          isVisible: _currentIndex > 0,
                           onPressed: _previousPage,
                         ),
                       ),
-                      
-                      // Right Arrow con nuevo diseño
                       Positioned(
                         right: 10,
                         child: _buildArrowButton(
                           icon: Icons.arrow_forward_ios,
-                          isVisible: _currentIndex < _avatars.length - 1,
                           onPressed: _nextPage,
                         ),
                       ),
@@ -417,7 +457,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
                   ),
                 ),
                 
-                // Botón de confirmación con gradiente del login
+                // Confirm Button
                 Padding(
                   padding: const EdgeInsets.all(40),
                   child: Container(
@@ -467,11 +507,8 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
 
   Widget _buildArrowButton({
     required IconData icon,
-    required bool isVisible,
     required VoidCallback? onPressed,
   }) {
-    if (!isVisible) return const SizedBox.shrink();
-    
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -492,7 +529,6 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen> with Tick
   }
 }
 
-// Pintor de partículas flotantes con colores del login
 class ParticlePainter extends CustomPainter {
   final double animationValue;
   

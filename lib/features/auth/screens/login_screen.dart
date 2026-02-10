@@ -7,6 +7,7 @@ import '../providers/player_provider.dart';
 import '../../../shared/models/player.dart';
 import '../../../core/theme/app_theme.dart';
 import 'register_screen.dart';
+import 'avatar_selection_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../game/screens/game_request_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
@@ -136,6 +137,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             MaterialPageRoute(builder: (_) => const DashboardScreen()),
           );
           return;
+        }
+
+        // === NUEVO CHEQUEO DE AVATAR ===
+        // Si el usuario no tiene avatar O tiene uno inválido, lo mandamos a seleccionarlo
+        final currentAvatar = player.avatarId;
+        final isValidAvatar = currentAvatar != null && 
+                              currentAvatar.isNotEmpty && 
+                              AvatarSelectionScreen.validAvatarIds.contains(currentAvatar);
+
+        if (!isValidAvatar) {
+             Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const AvatarSelectionScreen(eventId: null)),
+            );
+            return;
         }
 
         // Solicitar permisos de ubicación antes de navegar
