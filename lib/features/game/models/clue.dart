@@ -20,7 +20,8 @@ enum PuzzleType {
   codeBreaker,
   imageTrivia,
   wordScramble,
-  chargeShaker;
+  chargeShaker,
+  emojiMovie;
 
   String get dbValue => toString().split('.').last;
 
@@ -52,6 +53,8 @@ enum PuzzleType {
         return '🔤 Palabra Misteriosa';
       case PuzzleType.chargeShaker:
         return '🔋 Carga Rápida (Shake)';
+      case PuzzleType.emojiMovie:
+        return '🎬 Adivina la Película (Emojis)';
     }
   }
 
@@ -66,6 +69,7 @@ enum PuzzleType {
       case PuzzleType.snake:
       case PuzzleType.blockFill:
       case PuzzleType.chargeShaker:
+      case PuzzleType.emojiMovie:
         return true;
       default:
         return false;
@@ -100,6 +104,8 @@ enum PuzzleType {
         return 'Ordena las letras para formar la palabra';
       case PuzzleType.chargeShaker:
         return '¡Agita el celular para cargar la batería!';
+      case PuzzleType.emojiMovie:
+        return 'Adivina la película con los emojis';
     }
   }
 }

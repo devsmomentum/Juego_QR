@@ -28,6 +28,7 @@ import '../widgets/minigames/code_breaker_widget.dart';
 import '../widgets/minigames/image_trivia_widget.dart';
 import '../widgets/minigames/word_scramble_widget.dart';
 import '../widgets/minigames/charge_shaker_minigame.dart';
+import '../widgets/minigames/emoji_movie_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
@@ -466,6 +467,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       case PuzzleType.chargeShaker:
         gameWidget =
             ChargeShakerWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.emojiMovie:
+        gameWidget =
+            EmojiMovieWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       default:
         gameWidget = const Center(child: Text("Minijuego no implementado"));
@@ -1036,6 +1041,24 @@ class ChargeShakerWrapper extends StatelessWidget {
       clue,
       onFinish,
       ChargeShakerMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }));
+}
+
+class EmojiMovieWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const EmojiMovieWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      EmojiMovieMinigame(
           clue: clue,
           onSuccess: () {
             onFinish();
