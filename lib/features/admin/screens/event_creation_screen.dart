@@ -789,25 +789,13 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                         ],
                                         const SizedBox(height: 10),
                                         
-                                        // Rewards
-                                        Row(
-                                          children: [
-                                            Expanded(child: TextFormField(
-                                              initialValue: provider.clueForms[provider.currentClueIndex]['xp_reward'].toString(),
-                                              decoration: inputDecoration.copyWith(labelText: 'XP'),
-                                              keyboardType: TextInputType.number,
-                                              style: const TextStyle(color: Colors.white),
-                                              onChanged: (v) => provider.updateClue(provider.currentClueIndex, 'xp_reward', int.tryParse(v) ?? 0),
-                                            )),
-                                            const SizedBox(width: 10),
-                                            Expanded(child: TextFormField(
-                                              initialValue: provider.clueForms[provider.currentClueIndex]['coin_reward'].toString(),
-                                              decoration: inputDecoration.copyWith(labelText: 'Monedas'),
-                                              keyboardType: TextInputType.number,
-                                              style: const TextStyle(color: Colors.white),
-                                              onChanged: (v) => provider.updateClue(provider.currentClueIndex, 'coin_reward', int.tryParse(v) ?? 0),
-                                            )),
-                                          ],
+                                        // Rewards (Coins are now calculated dynamically by server)
+                                        TextFormField(
+                                          initialValue: provider.clueForms[provider.currentClueIndex]['xp_reward'].toString(),
+                                          decoration: inputDecoration.copyWith(labelText: 'XP por Completar'),
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(color: Colors.white),
+                                          onChanged: (v) => provider.updateClue(provider.currentClueIndex, 'xp_reward', int.tryParse(v) ?? 0),
                                         ),
                                         const SizedBox(height: 10),
                                         

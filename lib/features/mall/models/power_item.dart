@@ -98,7 +98,7 @@ class PowerItem {
         name: 'Pantalla Negra',
         description: 'Ciega al rival por 25s',
         type: PowerType.blind,
-        cost: 100,
+        cost: 75, // Tier 2: Blur/Black Screen
         icon: '🕶️',
         color: Colors.black87,
         durationMinutes: 0,
@@ -109,7 +109,7 @@ class PowerItem {
         name: 'Pantalla Borrosa',
         description: 'Aplica un efecto borroso sobre la pantalla de todos los rivales.',
         type: PowerType.blur,
-        cost: 110,
+        cost: 75, // Tier 2: Blur/Black Screen
         icon: '🌫️',
         color: Colors.blueGrey,
         durationMinutes: 0,
@@ -120,7 +120,7 @@ class PowerItem {
         name: 'Vida',
         description: 'Recupera una vida perdida',
         type: PowerType.buff,
-        cost: 50,
+        cost: 40, // Tier 1: Extra Life
         icon: '❤️',
         color: Colors.red,
         durationMinutes: 0,
@@ -141,7 +141,7 @@ class PowerItem {
         name: 'Congelar',
         description: 'Congela al rival por 30s',
         type: PowerType.freeze,
-        cost: 50,
+        cost: 120, // Tier 3: Freeze/Life Steal
         icon: '❄️',
         color: Colors.cyan,
         durationMinutes: 1,
@@ -151,7 +151,7 @@ class PowerItem {
         name: 'Escudo',
         description: 'Bloquea sabotajes por 120s',
         type: PowerType.shield,
-        cost: 150,
+        cost: 40, // Tier 1: Shield/Invisibility
         icon: '🛡️',
         color: Colors.indigo,
         durationMinutes: 2,
@@ -161,7 +161,7 @@ class PowerItem {
         name: 'Robo de Vida',
         description: 'Roba una vida a un rival',
         type: PowerType.lifeSteal,
-        cost: 130,
+        cost: 120, // Tier 3: Freeze/Life Steal
         icon: '🧛',
         color: Colors.redAccent,
         durationMinutes: 0,
@@ -171,7 +171,7 @@ class PowerItem {
         name: 'Invisibilidad',
         description: 'Te vuelve invisible por 45s',
         type: PowerType.stealth,
-        cost: 100,
+        cost: 40, // Tier 1: Shield/Invisibility
         icon: '👻',
         color: Colors.grey,
         durationMinutes: 0,

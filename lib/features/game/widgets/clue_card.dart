@@ -126,33 +126,20 @@ class ClueCard extends StatelessWidget {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.star,
-                              size: 14,
-                              color: AppTheme.accentGold,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${clue.xpReward} XP',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.white70,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Icon(
-                              Icons.monetization_on,
-                              size: 14,
-                              color: AppTheme.accentGold,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${clue.coinReward}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.white70,
-                              ),
-                            ),
+                            
+                            // const Icon(
+                            //   Icons.monetization_on,
+                            //   size: 14,
+                            //   color: AppTheme.accentGold,
+                            // ),
+                            // const SizedBox(width: 4),
+                            // Text(
+                            //   '${clue.coinReward}',
+                            //   style: const TextStyle(
+                            //     fontSize: 12,
+                            //     color: Colors.white70,
+                            //   ),
+                            // ),
                           ],
                         ),
                       ],

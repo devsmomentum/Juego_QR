@@ -30,11 +30,11 @@ class RaceLogicService {
     required List<PowerEffect> activePowers,
     required int totalClues,
   }) {
-    // Normalize current user ID for comparison
-    final normalizedCurrentId = _normalizeId(currentUserId);
+    // Normalize current user ID for comparison (Expects userId)
+    final normalizedCurrentUserId = _normalizeId(currentUserId);
     
-    // 1. Find Me
-    final myIndex = leaderboard.indexWhere((p) => _normalizeId(p.id) == normalizedCurrentId);
+    // 1. Find Me using userId (more robust than generic id)
+    final myIndex = leaderboard.indexWhere((p) => _normalizeId(p.userId) == normalizedCurrentUserId);
     Player? me = myIndex != -1 ? leaderboard[myIndex] : null;
 
     // 2. Sort leaderboard explicitly by progress (completed_clues_count)
@@ -54,14 +54,14 @@ class RaceLogicService {
     });
     
     // Re-find me in sorted list
-    final meSortedIndex = sortedPlayers.indexWhere((p) => _normalizeId(p.id) == normalizedCurrentId);
+    final meSortedIndex = sortedPlayers.indexWhere((p) => _normalizeId(p.userId) == normalizedCurrentUserId);
 
     // 3. Helper to check visibility
     bool isVisible(Player p) {
-      if (_normalizeId(p.id) == normalizedCurrentId) return true; // I always see myself
+      if (_normalizeId(p.userId) == normalizedCurrentUserId) return true; // I always see myself
       // Check active powers for invisibility
       final isStealthed = activePowers.any((e) => 
-          _normalizeId(e.targetId) == _normalizeId(p.id) &&
+          _normalizeId(e.targetId) == _normalizeId(p.id) && // Powers target by GamePlayerID (usually) but let's keep generic ID here as powers use ID
           (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && 
           !e.isExpired
       );
@@ -76,7 +76,7 @@ class RaceLogicService {
     // 5. Apply 10-participant limit: 4 ahead + me + 5 behind
     final filteredRacers = _filterParticipants(
       visibleRacers: visibleRacers,
-      currentUserId: normalizedCurrentId,
+      currentUserId: normalizedCurrentUserId,
     );
 
     // 6. Identify Leader from filtered list
@@ -87,20 +87,22 @@ class RaceLogicService {
     final Set<String> addedIds = {};
     
     // Find my position in filtered list for lane calculation
-    final meFilteredIndex = filteredRacers.indexWhere((p) => _normalizeId(p.id) == normalizedCurrentId);
+    final meFilteredIndex = filteredRacers.indexWhere((p) => _normalizeId(p.userId) == normalizedCurrentUserId);
 
     void addRacer(Player p, int lane) {
-      final normalizedId = _normalizeId(p.id);
-      if (addedIds.contains(normalizedId)) return;
+      // Use UserID for uniqueness check in this context
+      final normalizedUserId = _normalizeId(p.userId);
+      if (addedIds.contains(normalizedUserId)) return;
 
-      final bool isMe = normalizedId == normalizedCurrentId;
-      final bool isLeader = (leader != null && _normalizeId(p.id) == _normalizeId(leader.id));
+      final bool isMe = normalizedUserId == normalizedCurrentUserId;
+      // Leader check also by userId
+      final bool isLeader = (leader != null && _normalizeId(p.userId) == _normalizeId(leader?.userId));
       
       // Calculate visual state
       double opacity = 1.0;
       if (isMe) {
         final amInvisible = activePowers.any((e) => 
-            _normalizeId(e.targetId) == _normalizeId(p.gamePlayerId ?? p.id) && 
+            _normalizeId(e.targetId) == _normalizeId(p.id) && 
             (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && 
             !e.isExpired
         );
@@ -110,9 +112,9 @@ class RaceLogicService {
       IconData? statusIcon;
       Color? statusColor;
       
-      // Check for debuffs on this player
+      // Check for debuffs on this player (Powers use ID/GamePlayerID)
       final activeDebuffs = activePowers.where((e) => 
-          _normalizeId(e.targetId) == normalizedId && !e.isExpired
+          _normalizeId(e.targetId) == _normalizeId(p.id) && !e.isExpired
       ).toList();
       
       // Priority icons
@@ -138,7 +140,7 @@ class RaceLogicService {
         statusColor: statusColor,
       ));
       
-      addedIds.add(normalizedId);
+      addedIds.add(normalizedUserId);
     }
 
     // Add racers with lane calculation based on position relative to me
@@ -161,7 +163,7 @@ class RaceLogicService {
     }
     
     // If me was not in filtered list but exists, add them
-    if (me != null && !addedIds.contains(normalizedCurrentId)) {
+    if (me != null && !addedIds.contains(normalizedCurrentUserId)) {
       addRacer(me, 0);
     }
 

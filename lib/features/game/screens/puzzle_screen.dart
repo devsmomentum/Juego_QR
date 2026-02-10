@@ -643,6 +643,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   // Esto garantiza que podamos navegar incluso si el context padre cambia
   final navigator = Navigator.of(context);
   final rootOverlay = Overlay.of(context);
+  final scaffoldMessenger = ScaffoldMessenger.of(context);
 
   showDialog(
     context: context,
@@ -652,21 +653,22 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     ),
   );
 
-  bool success = false;
+  Map<String, dynamic>? result;
+  int coinsEarned = 0;
 
   try {
     if (clue.id.startsWith('demo_')) {
       gameProvider.completeLocalClue(clue.id);
-      success = true;
+      result = {'success': true}; // Demo mode fallback
     } else {
-      debugPrint('--- COMPLETING CLUE: ${clue.id} (XP: ${clue.xpReward}, Coins: ${clue.coinReward}) ---');
-      success =
-          await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN");
-      debugPrint('--- CLUE COMPLETION RESULT: $success ---');
+      debugPrint('--- COMPLETING CLUE: ${clue.id} (XP: ${clue.xpReward}) ---');
+      result = await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN");
+      coinsEarned = result?['coins_earned'] ?? 0;
+      debugPrint('--- CLUE COMPLETION RESULT: ${result != null}, Coins Earned: $coinsEarned ---');
     }
   } catch (e) {
     debugPrint("Error completando pista: $e");
-    success = false;
+    result = null;
   }
 
   // [FIX] Cerrar spinner usando navigator capturado
@@ -674,7 +676,9 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     navigator.pop();
   }
 
-  if (success) {
+  if (result != null) {
+    // coinsEarned se muestra en el SuccessCelebrationDialog (no SnackBar)
+
     if (playerProvider.currentPlayer != null) {
       debugPrint('--- REFRESHING PROFILE START ---');
       await playerProvider.refreshProfile();
@@ -732,22 +736,26 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   // 1. Mostrar la Animación del Sello Temporal
   // [FIX] Usar Completer para asegurar que onComplete se ejecute una sola vez
   bool sealCompleted = false;
-  await showGeneralDialog(
-    context: context,
-    barrierDismissible: false,
-    pageBuilder: (dialogContext, _, __) => Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.85),
-      body: TimeStampAnimation(
-        index: ((clue.sequenceIndex - 1) % 9) + 1,
-        onComplete: () {
-          if (!sealCompleted && dialogContext.mounted) {
-            sealCompleted = true;
-            Navigator.pop(dialogContext);
-          }
-        },
+  try {
+    await showGeneralDialog(
+      context: navigator.context, // Usar navigator.context, no context raw
+      barrierDismissible: false,
+      pageBuilder: (dialogContext, _, __) => Scaffold(
+        backgroundColor: Colors.black.withOpacity(0.85),
+        body: TimeStampAnimation(
+          index: ((clue.sequenceIndex - 1) % 9) + 1,
+          onComplete: () {
+            if (!sealCompleted && dialogContext.mounted) {
+              sealCompleted = true;
+              Navigator.pop(dialogContext);
+            }
+          },
+        ),
       ),
-    ),
-  );
+    );
+  } catch (e) {
+    debugPrint('Error showing TimeStampAnimation: $e');
+  }
 
   // [FIX] ELIMINADO: Early return por context.mounted
   // El diálogo de celebración DEBE mostrarse siempre después del sello
@@ -776,6 +784,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       clue: clue,
       showNextStep: showNextStep,
       totalClues: clues.length,
+      coinsEarned: coinsEarned, // Valor dinámico del servidor
       onMapReturn: () {
         Navigator.of(dialogContext).pop();
         Future.delayed(const Duration(milliseconds: 100), () {

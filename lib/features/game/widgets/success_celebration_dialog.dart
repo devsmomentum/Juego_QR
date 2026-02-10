@@ -7,6 +7,7 @@ class SuccessCelebrationDialog extends StatefulWidget {
   final Clue clue;
   final bool showNextStep;
   final VoidCallback onMapReturn;
+  final int coinsEarned; // Dynamic coins from server
 
   const SuccessCelebrationDialog({
     super.key,
@@ -14,6 +15,7 @@ class SuccessCelebrationDialog extends StatefulWidget {
     required this.showNextStep,
     required this.onMapReturn,
     this.totalClues = 5, // Default/Placeholder
+    this.coinsEarned = 0, // Default if not provided
   });
 
   final int totalClues;
@@ -144,7 +146,7 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                             children: [
                               _buildRewardBadge(Icons.star, "+${widget.clue.xpReward} XP", AppTheme.accentGold),
                               const SizedBox(width: 15),
-                              _buildRewardBadge(Icons.monetization_on, "+${widget.clue.coinReward}", Colors.amber),
+                              _buildRewardBadge(Icons.monetization_on, "+${widget.coinsEarned}", Colors.amber),
                             ],
                           ),
                           if (widget.showNextStep) ...[

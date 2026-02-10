@@ -33,6 +33,8 @@ class CluesScreen extends StatefulWidget {
 }
 
 class _CluesScreenState extends State<CluesScreen> {
+  // Store reference to avoid unsafe lookup in dispose
+  GameProvider? _gameProviderRef;
   
   @override
   void initState() {
@@ -50,6 +52,7 @@ class _CluesScreenState extends State<CluesScreen> {
       // Continue with normal initialization
       if (mounted) {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
+        _gameProviderRef = gameProvider; // Store reference
         final playerProvider = Provider.of<PlayerProvider>(context, listen: false); // Necesitamos esto
         
         // ADDED: Listener para interrupción inmediata si el juego termina mientras estamos aquí
@@ -82,15 +85,17 @@ class _CluesScreenState extends State<CluesScreen> {
   @override
   void dispose() {
     // Importante: Eliminar listener y detener actualizaciones al salir
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    gameProvider.removeListener(_onGameProviderChange); // Clean up listener
-    gameProvider.stopLeaderboardUpdates();
+    // Use stored reference to avoid unsafe Provider.of during dispose
+    _gameProviderRef?.removeListener(_onGameProviderChange);
+    _gameProviderRef?.stopLeaderboardUpdates();
     super.dispose();
   }
 
   void _onGameProviderChange() {
     if (!mounted) return;
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // Use stored reference instead of Provider.of
+    final gameProvider = _gameProviderRef;
+    if (gameProvider == null) return;
     
     // Si la carrera se completó, forzamos navegación inmediata
     if (gameProvider.isRaceCompleted) {
@@ -203,7 +208,8 @@ class _CluesScreenState extends State<CluesScreen> {
                   // CORRECCIÓN AQUI: Usamos los nuevos parámetros
                   return RaceTrackWidget(
                     leaderboard: game.leaderboard,
-                    currentPlayerId: Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.id ?? '',
+                    // [FIX] Pass userId explicitly to match RaceLogicService expectation
+                    currentPlayerId: Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.userId ?? '',
                     totalClues: game.clues.length,
                   );
                 },

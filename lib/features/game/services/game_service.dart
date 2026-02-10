@@ -161,7 +161,8 @@ class GameService {
   RealtimeChannel subscribeToRaceStatus(
     String eventId, 
     int totalClues,
-    Function(bool isCompleted, String source) onRaceCompleted
+    Function(bool isCompleted, String source) onRaceCompleted,
+    {VoidCallback? onProgressUpdate} // Nuevo callback opcional para actualizaciones
   ) {
     return _supabase
         .channel('public:race:$eventId')
@@ -176,6 +177,11 @@ class GameService {
             value: eventId,
           ),
           callback: (payload) {
+            // Notificar que hubo progreso (para refrescar UI)
+            if (onProgressUpdate != null) {
+              onProgressUpdate();
+            }
+
             final newRecord = payload.newRecord;
             if (totalClues > 0) {
               final int completed = newRecord['completed_clues_count'] ?? newRecord['completed_clues'] ?? 0;
