@@ -14,7 +14,8 @@ class GameSessionMonitor extends StatefulWidget {
   const GameSessionMonitor({super.key, required this.child});
 
   // Static constant to avoid rebuilds of the child if not needed
-  static final GlobalKey<NavigatorState> monitorNavigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> monitorNavigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   State<GameSessionMonitor> createState() => _GameSessionMonitorState();
@@ -28,10 +29,11 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
     super.didChangeDependencies();
     final playerProvider = Provider.of<PlayerProvider>(context);
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    
+
     final currentGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
-    final isBanned = playerProvider.currentPlayer?.status == PlayerStatus.banned;
-    
+    final isBanned =
+        playerProvider.currentPlayer?.status == PlayerStatus.banned;
+
     debugPrint('🕒 GameSessionMonitor: Checking session...');
     debugPrint('   - Last ID: $_lastGamePlayerId');
     debugPrint('   - Current ID: $currentGamePlayerId');
@@ -55,8 +57,8 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
       debugPrint("   - Prev GP ID: $_lastGamePlayerId");
       debugPrint("   - Curr GP ID: null");
       debugPrint("   - Current Playing Event: $currentPlayingEventId");
-      
-      // Si el usuario ya no tiene currentEventId (porque se borró su GP), 
+
+      // Si el usuario ya no tiene currentEventId (porque se borró su GP),
       // pero el monitorNavigator tiene un evento activo, es sospechoso.
       if (currentPlayingEventId != null) {
         shouldKick = true;
@@ -64,8 +66,13 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
     }
 
     // Caso 2: El status cambió a BANNED (Baneo detectado por Stream)
-    if (isBanned && (gameProvider.isGameActive || gameProvider.currentEventId != null)) {
-      debugPrint("🕒 GameSessionMonitor: 🚫 STATUS BANNED DETECTADO.");
+    // ONLY kick banned users if they have an active gamePlayerId (they're trying to play)
+    // Banned users with gamePlayerId == null are spectators and should NOT be kicked
+    if (isBanned &&
+        currentGamePlayerId != null &&
+        (gameProvider.isGameActive || gameProvider.currentEventId != null)) {
+      debugPrint(
+          "🕒 GameSessionMonitor: 🚫 STATUS BANNED DETECTADO (with active gamePlayerId).");
       shouldKick = true;
     }
 
@@ -82,11 +89,12 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // CRITICAL: Exit early if widget was disposed
       if (!mounted) return;
-      
+
       // Limpiar estado del GameProvider de manera segura fuera del ciclo de build
       context.read<GameProvider>().resetState();
 
-      if (rootNavigatorKey.currentState != null && rootNavigatorKey.currentContext != null) {
+      if (rootNavigatorKey.currentState != null &&
+          rootNavigatorKey.currentContext != null) {
         // Volver a la pantalla de escenarios (o la raíz de la app)
         rootNavigatorKey.currentState!.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const ScenariosScreen()),
