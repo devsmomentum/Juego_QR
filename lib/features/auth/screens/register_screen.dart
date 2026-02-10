@@ -449,7 +449,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 TextFormField(
                                   controller: _phoneController,
                                   style: TextStyle(color: currentText),
-                                  keyboardType: TextInputType.phone,
+                                  keyboardType: TextInputType.number, 
+                                  inputFormatters: [
+                                    // Esta es la clave: bloquea cualquier carácter que no sea un dígito
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    // Opcional: limitar a 11 caracteres máximo
+                                    LengthLimitingTextInputFormatter(11),
+                                  ],
                                   decoration: InputDecoration(
                                     labelText: 'TELÉFONO',
                                     prefixIcon: const Icon(Icons.phone_android_outlined),
