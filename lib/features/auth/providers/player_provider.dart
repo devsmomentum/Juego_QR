@@ -134,6 +134,13 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     await _fetchProfile(_currentPlayer!.userId, eventId: eventId);
   }
 
+  /// Reloads the current player's profile data (including wallet).
+  Future<void> reloadProfile() async {
+    if (_currentPlayer == null) return;
+    await _fetchProfile(_currentPlayer!.userId,
+        eventId: _currentPlayer!.currentEventId);
+  }
+
   /// Load shop items configuration from service.
   Future<void> loadShopItems() async {
     try {

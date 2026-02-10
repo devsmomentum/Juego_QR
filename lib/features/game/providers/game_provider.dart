@@ -16,14 +16,19 @@ import '../models/power_effect.dart';
 enum UserEventStatus {
   /// Usuario baneado - bloquear acceso
   banned,
+
   /// Usuario ya está jugando (existe en game_players)
   inGame,
+
   /// Solicitud aprobada, pendiente de inicializar juego (necesita RPC initialize_game_for_user)
   readyToInitialize,
+
   /// Solicitud pendiente de aprobación
   waitingApproval,
+
   /// Solicitud rechazada
   rejected,
+
   /// Sin evento asociado (puede seleccionar uno)
   noEvent,
 }
@@ -60,9 +65,9 @@ class UserEventStatusResult {
   bool get hasNoEvent => status == UserEventStatus.noEvent;
 
   @override
-  String toString() => 'UserEventStatusResult(status: $status, eventId: $eventId, gamePlayerId: $gamePlayerId)';
+  String toString() =>
+      'UserEventStatusResult(status: $status, eventId: $eventId, gamePlayerId: $gamePlayerId)';
 }
-
 
 /// Provider principal que gestiona el estado global del juego.
 ///
@@ -74,7 +79,7 @@ class UserEventStatusResult {
 /// - Gestión de efectos visuales globales (Congelamiento, etc.).
 class GameProvider extends ChangeNotifier implements IResettable {
   final GameService _gameService;
-  
+
   List<Clue> _clues = [];
   List<Player> _leaderboard = [];
   int _currentClueIndex = 0;
@@ -88,7 +93,8 @@ class GameProvider extends ChangeNotifier implements IResettable {
   String? _activeHintText;
   String? _targetPlayerId; // Selected rival for targeting
   List<PowerEffect> _activePowerEffects = [];
-  bool _isPowerActionLoading = false; // Guards against double-clicks during power execution
+  bool _isPowerActionLoading =
+      false; // Guards against double-clicks during power execution
   bool _isFrozen = false; // Estado de congelamiento para minijuegos
 
   List<PowerEffect> get activePowerEffects => _activePowerEffects;
@@ -102,7 +108,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   /// Sets the power action loading state (called by PowerActionDispatcher)
   void setPowerActionLoading(bool value) {
     _isPowerActionLoading = value;
@@ -116,18 +122,19 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   // Timer y Realtime para el ranking
   Timer? _leaderboardTimer;
   RealtimeChannel? _raceStatusChannel;
   RealtimeChannel? _livesSubscription; // Suscripción a vidas globales
-  
+
   List<Clue> get clues => _clues;
   List<Player> get leaderboard => _leaderboard;
-  Clue? get currentClue => _currentClueIndex < _clues.length ? _clues[_currentClueIndex] : null;
-  
+  Clue? get currentClue =>
+      _currentClueIndex < _clues.length ? _clues[_currentClueIndex] : null;
+
   int get currentClueIndex => _currentClueIndex;
-  
+
   bool get isGameActive => _isGameActive;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -139,9 +146,10 @@ class GameProvider extends ChangeNotifier implements IResettable {
   bool get hintActive => _hintActive;
   String? get activeHintText => _activeHintText;
   String? get targetPlayerId => _targetPlayerId;
-  
-  bool get hasCompletedAllClues => totalClues > 0 && completedClues == totalClues;
-  
+
+  bool get hasCompletedAllClues =>
+      totalClues > 0 && completedClues == totalClues;
+
   GameProvider({required GameService gameService}) : _gameService = gameService;
 
   /// Limpia COMPLETAMENTE el estado del juego (Global Reset)
@@ -163,7 +171,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _targetPlayerId = null;
     _activePowerEffects = [];
     _isFrozen = false;
-    
+
     stopLeaderboardUpdates();
     stopLivesSubscription();
     notifyListeners();
@@ -180,7 +188,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
     if (_currentEventId == null) return;
     try {
       final lives = await _gameService.fetchLives(_currentEventId!, userId);
-      
+
       if (lives != null) {
         _lives = lives;
       } else {
@@ -199,7 +207,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   /// Ejecuta la pérdida de una vida (Optimistic UI).
   ///
   /// 1. Reduce la vida localmente de inmediato para feedback instantáneo.
@@ -217,29 +225,32 @@ class GameProvider extends ChangeNotifier implements IResettable {
       debugPrint('[LIVES_DEBUG] loseLife aborted: currentEventId is null');
       return _lives;
     }
-    
+
     try {
-      debugPrint('[LIVES_DEBUG] loseLife called for userId: $userId, eventId: $_currentEventId');
-      
+      debugPrint(
+          '[LIVES_DEBUG] loseLife called for userId: $userId, eventId: $_currentEventId');
+
       // 1. Optimistic Update
       _lives--;
-      debugPrint('[LIVES_DEBUG] Optimistic decrement. New local lives: $_lives');
+      debugPrint(
+          '[LIVES_DEBUG] Optimistic decrement. New local lives: $_lives');
       notifyListeners();
-      
+
       // 2. Ejecutar servicio
       debugPrint('[LIVES_DEBUG] Calling GameService.loseLife...');
-      final remainingLives = await _gameService.loseLife(_currentEventId!, userId);
-      debugPrint('[LIVES_DEBUG] GameService returned. Server lives: $remainingLives');
-      
+      final remainingLives =
+          await _gameService.loseLife(_currentEventId!, userId);
+      debugPrint(
+          '[LIVES_DEBUG] GameService returned. Server lives: $remainingLives');
+
       // 3. Sincronizar verdad
       _lives = remainingLives;
       notifyListeners();
       return _lives;
-
     } catch (e) {
       debugPrint('[LIVES_DEBUG] Error perdiendo vida: $e');
       // Rollback
-      _lives++; 
+      _lives++;
       debugPrint('[LIVES_DEBUG] Rollback. Restored lives to: $_lives');
       notifyListeners();
       return _lives;
@@ -255,7 +266,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   void startLeaderboardUpdates() {
     fetchLeaderboard();
     stopLeaderboardUpdates();
-    
+
     _leaderboardTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_currentEventId != null) {
         _fetchLeaderboardInternal(silent: true);
@@ -282,26 +293,23 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   void subscribeToRaceStatus() {
     if (_currentEventId == null) return;
-    
+
     _raceStatusChannel?.unsubscribe();
-    
+
     _raceStatusChannel = _gameService.subscribeToRaceStatus(
-      _currentEventId!, 
-      totalClues,
-      (completed, source) {
-        _setRaceCompleted(completed, source);
+        _currentEventId!, totalClues, (completed, source) {
+      _setRaceCompleted(completed, source);
       },
       onProgressUpdate: () {
         debugPrint('🏎️ RACE UPDATE: Realtime progress detected, refreshing leaderboard...');
         _fetchLeaderboardInternal(silent: true);
-      }
-    );
+    });
   }
 
   /// Suscribe a cambios en las vidas del jugador en tiempo real.
   /// Cuando la tabla game_players actualice el campo 'lives', el Provider
   /// se actualizará automáticamente sin necesidad de fetch manual.
-  /// 
+  ///
   /// ⚡ BYPASS DE FILTRO: Recibe TODOS los updates de game_players para el evento
   /// y filtra manualmente en el callback para evitar discrepancias de tipos de ID.
   void subscribeToLives(String userId, String eventId) {
@@ -312,17 +320,18 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
     // Cancelar suscripción previa si existe
     _livesSubscription?.unsubscribe();
-    
+
     // Normalizar IDs para comparación robusta (trim + lowercase)
     final String normalizedUserId = userId.toString().trim();
     final String normalizedEventId = eventId.toString().trim();
-    
+
     debugPrint('[LIVES_SYNC] 🔧 Subscribing to Realtime updates');
     debugPrint('[LIVES_SYNC]   User ID: $normalizedUserId');
     debugPrint('[LIVES_SYNC]   Event ID: $normalizedEventId');
     debugPrint('[LIVES_SYNC]   Current lives: $_lives');
-    debugPrint('[LIVES_SYNC]   Channel: lives:$normalizedUserId:$normalizedEventId');
-    
+    debugPrint(
+        '[LIVES_SYNC]   Channel: lives:$normalizedUserId:$normalizedEventId');
+
     _livesSubscription = Supabase.instance.client
         .channel('lives:$normalizedUserId:$normalizedEventId')
         .onPostgresChanges(
@@ -334,60 +343,74 @@ class GameProvider extends ChangeNotifier implements IResettable {
           callback: (payload) {
             final record = payload.newRecord;
             final timestamp = DateTime.now().toIso8601String();
-            
+
             // 🔥 AUDITORÍA COMPLETA: Log de entrada del evento
             debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             debugPrint('[LIVES_SYNC] 🔥 REALTIME EVENT RECEIVED @ $timestamp');
-            
+
             // Extraer y normalizar IDs entrantes
             final incomingUserIdRaw = record['user_id'];
             final incomingEventIdRaw = record['event_id'];
             final incomingLivesRaw = record['lives'];
-            
+
             // Log de tipos para debugging
             debugPrint('[LIVES_SYNC]   📦 Raw Data Types:');
-            debugPrint('[LIVES_SYNC]      user_id: ${incomingUserIdRaw.runtimeType} = $incomingUserIdRaw');
-            debugPrint('[LIVES_SYNC]      event_id: ${incomingEventIdRaw.runtimeType} = $incomingEventIdRaw');
-            debugPrint('[LIVES_SYNC]      lives: ${incomingLivesRaw.runtimeType} = $incomingLivesRaw');
-            
+            debugPrint(
+                '[LIVES_SYNC]      user_id: ${incomingUserIdRaw.runtimeType} = $incomingUserIdRaw');
+            debugPrint(
+                '[LIVES_SYNC]      event_id: ${incomingEventIdRaw.runtimeType} = $incomingEventIdRaw');
+            debugPrint(
+                '[LIVES_SYNC]      lives: ${incomingLivesRaw.runtimeType} = $incomingLivesRaw');
+
             // Normalizar IDs entrantes (manejar UUID objects y Strings)
-            final String incomingUserId = incomingUserIdRaw?.toString().trim() ?? '';
-            final String incomingEventId = incomingEventIdRaw?.toString().trim() ?? '';
-            
+            final String incomingUserId =
+                incomingUserIdRaw?.toString().trim() ?? '';
+            final String incomingEventId =
+                incomingEventIdRaw?.toString().trim() ?? '';
+
             // Comparación con IDs esperados
             debugPrint('[LIVES_SYNC]   🎯 ID Comparison:');
-            debugPrint('[LIVES_SYNC]      Expected user_id: "$normalizedUserId"');
+            debugPrint(
+                '[LIVES_SYNC]      Expected user_id: "$normalizedUserId"');
             debugPrint('[LIVES_SYNC]      Incoming user_id: "$incomingUserId"');
-            debugPrint('[LIVES_SYNC]      User Match: ${incomingUserId == normalizedUserId}');
-            debugPrint('[LIVES_SYNC]      Expected event_id: "$normalizedEventId"');
-            debugPrint('[LIVES_SYNC]      Incoming event_id: "$incomingEventId"');
-            debugPrint('[LIVES_SYNC]      Event Match: ${incomingEventId == normalizedEventId}');
-            
+            debugPrint(
+                '[LIVES_SYNC]      User Match: ${incomingUserId == normalizedUserId}');
+            debugPrint(
+                '[LIVES_SYNC]      Expected event_id: "$normalizedEventId"');
+            debugPrint(
+                '[LIVES_SYNC]      Incoming event_id: "$incomingEventId"');
+            debugPrint(
+                '[LIVES_SYNC]      Event Match: ${incomingEventId == normalizedEventId}');
+
             // Filtrado robusto: Solo procesar si ambos IDs coinciden
             final bool userMatches = incomingUserId == normalizedUserId;
             final bool eventMatches = incomingEventId == normalizedEventId;
-            
+
             if (userMatches && eventMatches) {
               // ✅ MATCH: Este evento es para nuestro usuario
               final int newLives = incomingLivesRaw as int;
               debugPrint('[LIVES_SYNC] ✅ MATCH CONFIRMED - Processing update');
               debugPrint('[LIVES_SYNC]   Old lives: $_lives');
               debugPrint('[LIVES_SYNC]   New lives: $newLives');
-              
+
               // Solo actualizar si el valor cambió
               if (_lives != newLives) {
                 final int oldLives = _lives;
                 _lives = newLives;
-                
-                debugPrint('[LIVES_SYNC]   📢 Lives changed: $oldLives → $newLives');
+
+                debugPrint(
+                    '[LIVES_SYNC]   📢 Lives changed: $oldLives → $newLives');
                 debugPrint('[LIVES_SYNC]   🔔 Calling notifyListeners()...');
-                
+
                 notifyListeners(); // 📢 Esto despierta a la UI
-                
-                debugPrint('[LIVES_SYNC]   ✅ notifyListeners() completed @ ${DateTime.now().toIso8601String()}');
-                debugPrint('[LIVES_SYNC]   💡 UI should rebuild NOW with new value: $newLives');
+
+                debugPrint(
+                    '[LIVES_SYNC]   ✅ notifyListeners() completed @ ${DateTime.now().toIso8601String()}');
+                debugPrint(
+                    '[LIVES_SYNC]   💡 UI should rebuild NOW with new value: $newLives');
               } else {
-                debugPrint('[LIVES_SYNC]   ⚠️ Value unchanged ($newLives), skipping notification');
+                debugPrint(
+                    '[LIVES_SYNC]   ⚠️ Value unchanged ($newLives), skipping notification');
               }
             } else {
               // ⚠️ NO MATCH: Evento filtrado
@@ -399,12 +422,12 @@ class GameProvider extends ChangeNotifier implements IResettable {
                 debugPrint('[LIVES_SYNC]   ❌ Event ID mismatch');
               }
             }
-            
+
             debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           },
         )
         .subscribe();
-    
+
     debugPrint('[LIVES_SYNC] ✅ Subscription activated');
   }
 
@@ -418,18 +441,19 @@ class GameProvider extends ChangeNotifier implements IResettable {
     try {
       final data = await _gameService.getLeaderboard(_currentEventId!);
       _leaderboard = data;
-      
+
       // Fetch active powers in parallel or sequence
-      _activePowerEffects = await _gameService.getActivePowers(_currentEventId!);
-      
+      _activePowerEffects =
+          await _gameService.getActivePowers(_currentEventId!);
+
       // Check for victory in leaderboard data
       for (var player in _leaderboard) {
         if (totalClues > 0 && player.totalXP >= totalClues) {
-           _setRaceCompleted(true, 'Leaderboard Polling');
-           break;
+          _setRaceCompleted(true, 'Leaderboard Polling');
+          break;
         }
       }
-      
+
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching leaderboard: $e');
@@ -437,32 +461,33 @@ class GameProvider extends ChangeNotifier implements IResettable {
   }
 
   // --- FIN GESTIÓN RANKING ---
-  
-  Future<void> fetchClues({String? eventId, bool silent = false, String? userId}) async {
+
+  Future<void> fetchClues(
+      {String? eventId, bool silent = false, String? userId}) async {
     if (eventId != null && eventId != _currentEventId) {
       _currentEventId = eventId;
-      
+
       if (userId != null) {
-        await fetchLives(userId); 
+        await fetchLives(userId);
       } else {
-        _lives = 0; 
+        _lives = 0;
       }
-      _isRaceCompleted = false; 
-      _clues = []; 
+      _isRaceCompleted = false;
+      _clues = [];
       _leaderboard = [];
       _currentClueIndex = 0;
-      
+
       subscribeToRaceStatus();
     }
-    
+
     final idToUse = eventId ?? _currentEventId;
-    
+
     if (!silent) {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
     }
-    
+
     try {
       if (idToUse == null) return;
 
@@ -480,14 +505,13 @@ class GameProvider extends ChangeNotifier implements IResettable {
       }
 
       final fetchedClues = await _gameService.getClues(idToUse);
-      
+
       _clues = fetchedClues;
       _hintActive = false;
       _activeHintText = null;
-      
+
       final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
       _currentClueIndex = (index != -1) ? index : _clues.length;
-      
     } catch (e) {
       _errorMessage = 'Error fetching clues: $e';
     } finally {
@@ -499,16 +523,15 @@ class GameProvider extends ChangeNotifier implements IResettable {
   Future<void> startGame(String eventId) async {
     _isLoading = true;
     notifyListeners();
-    
+
     try {
       await _gameService.startGame(eventId);
-      
+
       // 1. Cargamos pistas y VIDAS
-      await fetchClues(eventId: eventId); 
-      
+      await fetchClues(eventId: eventId);
+
       // 2. Activamos juego
-      _isGameActive = true; 
-      
+      _isGameActive = true;
     } catch (e) {
       debugPrint('Error starting game: $e');
     } finally {
@@ -516,7 +539,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   void unlockClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
@@ -560,11 +583,18 @@ class GameProvider extends ChangeNotifier implements IResettable {
         p.gamePlayerId == targetGamePlayerId || p.id == targetGamePlayerId);
     if (idx != -1) {
       final updated = _leaderboard[idx];
-      final newXp = (updated.totalXP - penalty).clamp(0, totalClues > 0 ? totalClues : updated.totalXP);
+      final newXp = (updated.totalXP - penalty)
+          .clamp(0, totalClues > 0 ? totalClues : updated.totalXP);
       updated.totalXP = newXp;
       notifyListeners();
     }
   }
+
+  // PREMIO GANADO (Si aplica)
+  int? _currentPrizeWon;
+  int? get currentPrizeWon => _currentPrizeWon;
+
+
 
   /// Completa una pista y retorna los datos del servidor incluyendo coins_earned.
   /// Retorna null si falla, o un Map con success, raceCompleted, coins_earned.
@@ -577,31 +607,43 @@ class GameProvider extends ChangeNotifier implements IResettable {
       if (_currentClueIndex >= _clues.length) return null;
       targetId = _clues[_currentClueIndex].id;
     }
-    
+
     // --- ACTUALIZACIÓN OPTIMISTA ---
     int localIndex = _clues.indexWhere((c) => c.id == targetId);
     if (localIndex != -1) {
       _clues[localIndex].isCompleted = true;
       if (localIndex + 1 < _clues.length) {
-        _currentClueIndex = localIndex + 1; 
+        _currentClueIndex = localIndex + 1;
       }
       notifyListeners();
     }
 
     try {
-      final data = await _gameService.completeClue(targetId, answer);
-      
-      // Si data es null pero no hubo excepción, consideramos éxito local
-      // Esto mantiene compatibilidad con Edge Function no desplegado
-      final result = data ?? {'success': true, 'coins_earned': 0};
-      
-      if (result['raceCompleted'] == true || data?['raceCompleted'] == true) {
-        _setRaceCompleted(true, 'Clue Completion');
+      final data = await _gameService.completeClue(targetId, answer,
+          eventId: _currentEventId);
+
+      if (data != null) {
+        // Success
+        // Success
+        if (data['raceCompleted'] == true) {
+          debugPrint("🏆 Race Completed in GameProvider!");
+
+          if (data['prizeAmount'] != null) {
+            _currentPrizeWon = (data['prizeAmount'] as num).toInt();
+            debugPrint("🏆 Prize Stored in Provider: $_currentPrizeWon");
+          } else {
+            _currentPrizeWon = null;
+          }
+
+          _setRaceCompleted(true, 'Clue Completion');
+        }
+
+        await fetchClues(silent: true);
+        fetchLeaderboard();
+        return data;
+      } else {
+        return null;
       }
-      
-      await fetchClues(silent: true); 
-      fetchLeaderboard(); 
-      return result;
     } catch (e) {
       debugPrint('Error completing clue: $e');
       // En caso de error de red, aún retornamos éxito local 
@@ -609,35 +651,35 @@ class GameProvider extends ChangeNotifier implements IResettable {
       return {'success': true, 'coins_earned': 0, 'error': e.toString()};
     }
   }
-  
+
   Future<void> checkRaceStatus() async {
     if (_currentEventId == null) return;
-    
+
     _isRaceCompleted = false;
 
     try {
       final isCompleted = await _gameService.checkRaceStatus(_currentEventId!);
-      
+
       if (isCompleted && totalClues > 0) {
-          _setRaceCompleted(true, 'Server Health Check');
+        _setRaceCompleted(true, 'Server Health Check');
       } else {
-          _setRaceCompleted(false, 'Server Health Check (Falsed or 0 clues)');
+        _setRaceCompleted(false, 'Server Health Check (Falsed or 0 clues)');
       }
     } catch (e) {
       debugPrint('Error checking race status: $e');
     }
   }
-  
+
   Future<bool> skipCurrentClue() async {
     if (_currentClueIndex >= _clues.length) return false;
-    
+
     final clue = _clues[_currentClueIndex];
     _isLoading = true;
     notifyListeners();
-    
+
     try {
       final success = await _gameService.skipClue(clue.id);
-      
+
       if (success) {
         await fetchClues();
         return true;
@@ -652,7 +694,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   void switchToClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1 && !_clues[index].isLocked) {
@@ -660,7 +702,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   void updateLeaderboard(Player player) {
     // Deprecated
   }
@@ -671,7 +713,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   /// Verifica el estado del usuario respecto a eventos.
   /// Sigue una jerarquía estricta de seguridad:
-  /// 
+  ///
   /// Paso 0 (Seguridad): Verificar si está baneado
   /// Paso 1 (Activo): Verificar si ya es game_player
   /// Paso 2 (Solicitud): Verificar estado de game_requests
@@ -707,19 +749,22 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
         switch (status) {
           case 'approved':
-            debugPrint('GameProvider: User has APPROVED request for event $eventId');
+            debugPrint(
+                'GameProvider: User has APPROVED request for event $eventId');
             return UserEventStatusResult(
               status: UserEventStatus.readyToInitialize,
               eventId: eventId,
             );
           case 'pending':
-            debugPrint('GameProvider: User has PENDING request for event $eventId');
+            debugPrint(
+                'GameProvider: User has PENDING request for event $eventId');
             return UserEventStatusResult(
               status: UserEventStatus.waitingApproval,
               eventId: eventId,
             );
           case 'rejected':
-            debugPrint('GameProvider: User has REJECTED request for event $eventId');
+            debugPrint(
+                'GameProvider: User has REJECTED request for event $eventId');
             return UserEventStatusResult(
               status: UserEventStatus.rejected,
               eventId: eventId,
@@ -730,7 +775,6 @@ class GameProvider extends ChangeNotifier implements IResettable {
       // PASO 3: Sin evento asociado
       debugPrint('GameProvider: User has NO_EVENT');
       return const UserEventStatusResult.noEvent();
-
     } catch (e) {
       debugPrint('GameProvider: Error checking user event status: $e');
       // En caso de error, devolvemos noEvent para permitir el flujo normal
@@ -741,21 +785,23 @@ class GameProvider extends ChangeNotifier implements IResettable {
   /// Inicializa el juego para un usuario con solicitud aprobada.
   /// Llama al RPC initialize_game_for_user y espera el resultado.
   /// Retorna true si la inicialización fue exitosa.
-  Future<bool> initializeGameForApprovedUser(String userId, String eventId) async {
-    debugPrint('GameProvider: Initializing game for approved user $userId in event $eventId');
-    
+  Future<bool> initializeGameForApprovedUser(
+      String userId, String eventId) async {
+    debugPrint(
+        'GameProvider: Initializing game for approved user $userId in event $eventId');
+
     _isLoading = true;
     notifyListeners();
 
     try {
       final success = await _gameService.initializeGameForUser(userId, eventId);
-      
+
       if (success) {
         // Configurar el evento actual
         _currentEventId = eventId;
         debugPrint('GameProvider: Game initialized successfully');
       }
-      
+
       return success;
     } catch (e) {
       debugPrint('GameProvider: Error initializing game: $e');
@@ -765,7 +811,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       notifyListeners();
     }
   }
-  
+
   @override
   void dispose() {
     stopLeaderboardUpdates();

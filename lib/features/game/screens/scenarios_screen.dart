@@ -37,6 +37,7 @@ import '../mappers/scenario_mapper.dart'; // NEW
 import '../../../core/enums/user_role.dart';
 import '../../social/screens/profile_screen.dart'; // For navigation
 import '../../social/screens/wallet_screen.dart'; // For wallet navigation
+import 'package:shared_preferences/shared_preferences.dart'; // For prize persistence
 import '../../../shared/widgets/loading_indicator.dart';
 
 
@@ -399,16 +400,34 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     if (_isProcessing) return;
 
     if (scenario.isCompleted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WinnerCelebrationScreen(
-            eventId: scenario.id,
-            playerPosition: 0,
-            totalCluesCompleted: 0,
+      // Get playerProvider BEFORE async gap
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+
+      // RETRIEVE PRIZE from SharedPreferences for completed events
+      final prefs = await SharedPreferences.getInstance();
+      final prizeWon = prefs.getInt('prize_won_${scenario.id}');
+      debugPrint(
+          "🏆 Retrieved prize for completed event ${scenario.id}: $prizeWon");
+
+      // Refresh wallet balance to ensure it's current
+      await playerProvider.reloadProfile();
+      debugPrint(
+          "💰 Wallet refreshed. Balance: ${playerProvider.currentPlayer?.clovers}");
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WinnerCelebrationScreen(
+              eventId: scenario.id,
+              playerPosition: 0,
+              totalCluesCompleted: 0,
+              prizeWon: prizeWon, // PASS RETRIEVED PRIZE
+            ),
           ),
-        ),
-      );
+        );
+      }
       return;
     }
 
@@ -1690,8 +1709,37 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                           const SizedBox(width: 6),
                                                                           Text(scenario.isCompleted ? 'FINALIZADA' : 'MAX ${scenario.maxPlayers}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                                                                         ],
+                                                                          ),
+                                                                        ),
+
+                                                                        // POT DISPLAY (NEW)
+                                                                        if (!scenario.isCompleted &&
+                                                                            scenario.entryFee >
+                                                                                0)
+                                                                          Padding(
+                                                                            padding:
+                                                                                const EdgeInsets.only(left: 8),
+                                                                            child:
+                                                                                Container(
+                                                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                                              decoration: BoxDecoration(
+                                                                                color: AppTheme.accentGold.withOpacity(0.3),
+                                                                                borderRadius: BorderRadius.circular(20),
+                                                                                border: Border.all(color: AppTheme.accentGold.withOpacity(0.8), width: 1),
+                                                                              ),
+                                                                              child: Row(
+                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                children: [
+                                                                                  const Icon(Icons.emoji_events, color: AppTheme.accentGold, size: 14),
+                                                                                  const SizedBox(width: 4),
+                                                                                  Text(
+                                                                                    "${(scenario.currentParticipants * scenario.entryFee * 0.70).toStringAsFixed(0)} 🍀",
+                                                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
+                                                                                  ),
+                                                                                ],
+                                                                              ),
+                                                                        ),
                                                                       ),
-                                                                    ),
                                                                     const SizedBox(height: 12),
                                                                     Text(scenario.name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                                                                     const SizedBox(height: 4),

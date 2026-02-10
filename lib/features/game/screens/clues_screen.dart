@@ -18,15 +18,11 @@ import '../../../shared/widgets/exit_protection_wrapper.dart'; // Protection
 import '../services/clue_navigator_service.dart'; // New Service
 import 'puzzle_screen.dart';
 
-
 class CluesScreen extends StatefulWidget {
   // 1. Recibimos el ID del evento obligatorio
   final String eventId;
 
-  const CluesScreen({
-    super.key, 
-    required this.eventId
-  });
+  const CluesScreen({super.key, required this.eventId});
 
   @override
   State<CluesScreen> createState() => _CluesScreenState();
@@ -44,38 +40,38 @@ class _CluesScreenState extends State<CluesScreen> {
       final prefs = await SharedPreferences.getInstance();
       final String storyKey = 'has_seen_asthoria_story_v3_${widget.eventId}';
       final hasSeenStory = prefs.getBool(storyKey) ?? false;
-      
-      debugPrint("DEBUG: Checking story intro. hasSeenStory: $hasSeenStory for event: ${widget.eventId}");
-      
 
-      
+      debugPrint(
+          "DEBUG: Checking story intro. hasSeenStory: $hasSeenStory for event: ${widget.eventId}");
+
       // Continue with normal initialization
       if (mounted) {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         _gameProviderRef = gameProvider; // Store reference
-        final playerProvider = Provider.of<PlayerProvider>(context, listen: false); // Necesitamos esto
-        
+        final playerProvider = Provider.of<PlayerProvider>(context,
+            listen: false); // Necesitamos esto
+
         // ADDED: Listener para interrupción inmediata si el juego termina mientras estamos aquí
         gameProvider.addListener(_onGameProviderChange);
-        
+
         // ⚠️ CRÍTICO: Usar .userId, NO .id (que devuelve gamePlayerId)
         final userId = playerProvider.currentPlayer?.userId;
 
         // 1. PASAR EL userId ES VITAL para que se carguen las 2 vidas reales
         await gameProvider.fetchClues(
-          eventId: widget.eventId, 
+          eventId: widget.eventId,
           userId: userId, // ✅ Ahora usa el userId correcto de la tabla profiles
         );
-        
+
         // 2. LUEGO comprobar si la carrera ya terminó en el servidor
         await gameProvider.checkRaceStatus();
-        
+
         // 3. Si ya terminó, redirigir
         if (gameProvider.isRaceCompleted && mounted) {
           _navigateToWinnerScreen();
           return;
         }
-        
+
         // 4. FINALMENTE iniciar el polling de ranking
         gameProvider.startLeaderboardUpdates();
       }
@@ -93,10 +89,8 @@ class _CluesScreenState extends State<CluesScreen> {
 
   void _onGameProviderChange() {
     if (!mounted) return;
-    // Use stored reference instead of Provider.of
-    final gameProvider = _gameProviderRef;
-    if (gameProvider == null) return;
-    
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+
     // Si la carrera se completó, forzamos navegación inmediata
     if (gameProvider.isRaceCompleted) {
       debugPrint("⛔ RACE COMPLETED DETECTED IN REALTIME - NAVIGATING AWAY");
@@ -105,42 +99,102 @@ class _CluesScreenState extends State<CluesScreen> {
       _navigateToWinnerScreen(clearStack: true);
     }
   }
-  
-  void _navigateToWinnerScreen({bool clearStack = false}) async {
+
+  bool _isNavigating = false;
+
+  void _navigateToWinnerScreen(
+      {bool clearStack = false, int? prizeAmount}) async {
+    if (_isNavigating) return; // Prevent double navigation
+    _isNavigating = true;
+
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    
-    // Get player's position and completed clues
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    debugPrint("🏆 Navigating to Winner Screen... Syncing Wallet...");
+
+    // Wait for UI to sync (short delay)
+    await Future.delayed(const Duration(seconds: 2));
+
+    // Forzar recarga del perfil (Wallet)
+    debugPrint(
+        "📊 Balance BEFORE reload: ${playerProvider.currentPlayer?.clovers}");
+    await playerProvider.reloadProfile();
+    debugPrint(
+        "🏆 Wallet Synced. New Balance: ${playerProvider.currentPlayer?.clovers}");
+
+    // Get prize: use parameter first, fallback to GameProvider, then persistence
+    int? prizeWon = prizeAmount ?? gameProvider.currentPrizeWon;
+
+    // If still null, try loading from persistence
+    if (prizeWon == null && widget.eventId != null) {
+      final prefs = await SharedPreferences.getInstance();
+      prizeWon = prefs.getInt('prize_won_${widget.eventId}');
+      debugPrint("🏆 Prize loaded from persistence: $prizeWon");
+    }
+
+    debugPrint("🏆 Prize to Pass: $prizeWon");
+    debugPrint(
+        "📊 Current Leaderboard Size: ${gameProvider.leaderboard.length}");
+    if (gameProvider.leaderboard.isNotEmpty) {
+      debugPrint(
+          "📊 Top 3: ${gameProvider.leaderboard.take(3).map((p) => '${p.name} (${p.totalXP} XP)').join(', ')}");
+    }
+
+    // PERSIST PRIZE AMOUNT for later retrieval
+    if (prizeWon != null && prizeWon > 0) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('prize_won_${widget.eventId}', prizeWon);
+      debugPrint("💾 Prize persisted: $prizeWon for event ${widget.eventId}");
+    } else {
+      debugPrint("⚠️ No prize to persist (prizeWon=$prizeWon)");
+    }
+
+    if (!mounted) return;
+
+    // Cerrar diálogo de carga
+    Navigator.pop(context);
+
+    // Calculates position locally as a fallback
     final position = _getPlayerPosition();
     final completedClues = gameProvider.completedClues;
-    
-    if (mounted) {
-      final route = MaterialPageRoute(
-        builder: (_) => WinnerCelebrationScreen(
-          eventId: widget.eventId,
-          playerPosition: position,
-          totalCluesCompleted: completedClues,
-        ),
-      );
+    debugPrint(
+        "🎯 Calculated position: $position (from leaderboard size: ${gameProvider.leaderboard.length})");
 
-      if (clearStack) {
-         // Si es interrupción forzada, borramos TODO el historial hasta llegar aquí y reemplazamos
-         Navigator.of(context).pushAndRemoveUntil(route, (route) => false);
-      } else {
-         // Comportamiento original (solo reemplazar esta vista)
-         Navigator.of(context).pushReplacement(route);
-      }
+    final route = MaterialPageRoute(
+      builder: (_) => WinnerCelebrationScreen(
+        eventId: widget.eventId,
+        playerPosition: position,
+        totalCluesCompleted: completedClues,
+        prizeWon: prizeWon, // PASS PRIZE CORRECTLY
+      ),
+    );
+
+    if (clearStack) {
+      // Si es interrupción forzada, borramos TODO el historial
+      Navigator.of(context).pushAndRemoveUntil(route, (route) => false);
+    } else {
+      // Reemplazo normal
+      Navigator.of(context).pushReplacement(route);
     }
   }
-  
+
   int _getPlayerPosition() {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
-    
+
     final leaderboard = gameProvider.leaderboard;
     if (leaderboard.isEmpty) return 0; // Default to 0 (Unranked) instead of 1
-    
+
     final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
     return index >= 0 ? index + 1 : leaderboard.length + 1;
   }
@@ -150,7 +204,8 @@ class _CluesScreenState extends State<CluesScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(clue.title ?? 'Pista Completada'), // Asumiendo que clue tiene title
+        title: Text(
+            clue.title ?? 'Pista Completada'), // Asumiendo que clue tiene title
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -158,10 +213,12 @@ class _CluesScreenState extends State<CluesScreen> {
             children: [
               const Text(
                 "¡Ya completaste este desafío!",
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                style:
+                    TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
               ),
               const SizedBox(height: 10),
-              Text(clue.description ?? 'Sin descripción'), // Asumiendo que clue tiene description
+              Text(clue.description ??
+                  'Sin descripción'), // Asumiendo que clue tiene description
             ],
           ),
         ),
@@ -184,10 +241,10 @@ class _CluesScreenState extends State<CluesScreen> {
   @override
   Widget build(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context);
-    
+
     return ExitProtectionWrapper(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
+        child: Scaffold(
+      backgroundColor: Colors.transparent,
       body: AnimatedCyberBackground(
         child: Column(
           children: [
@@ -196,10 +253,9 @@ class _CluesScreenState extends State<CluesScreen> {
               child: Container(), // Empty bridge for column spacing
             ),
 
-            
             // Header
             const ProgressHeader(),
-            
+
             // Mini Mapa de Carrera (Mario Kart Style)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -208,14 +264,17 @@ class _CluesScreenState extends State<CluesScreen> {
                   // CORRECCIÓN AQUI: Usamos los nuevos parámetros
                   return RaceTrackWidget(
                     leaderboard: game.leaderboard,
-                    // [FIX] Pass userId explicitly to match RaceLogicService expectation
-                    currentPlayerId: Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.userId ?? '',
+                    currentPlayerId:
+                        Provider.of<PlayerProvider>(context, listen: false)
+                                .currentPlayer
+                                ?.id ??
+                            '',
                     totalClues: game.clues.length,
                   );
                 },
               ),
             ),
-            
+
             // Clues list
             Expanded(
               child: gameProvider.isLoading
@@ -226,7 +285,8 @@ class _CluesScreenState extends State<CluesScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                                const Icon(Icons.error_outline,
+                                    size: 60, color: Colors.red),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Error al cargar pistas',
@@ -234,17 +294,20 @@ class _CluesScreenState extends State<CluesScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 32),
                                   child: Text(
                                     gameProvider.errorMessage!,
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(color: Colors.white70),
+                                    style:
+                                        const TextStyle(color: Colors.white70),
                                   ),
                                 ),
                                 const SizedBox(height: 24),
                                 ElevatedButton(
                                   // Pasamos el ID nuevamente al reintentar por seguridad
-                                  onPressed: () => gameProvider.fetchClues(eventId: widget.eventId),
+                                  onPressed: () => gameProvider.fetchClues(
+                                      eventId: widget.eventId),
                                   child: const Text('Reintentar'),
                                 ),
                               ],
@@ -253,112 +316,129 @@ class _CluesScreenState extends State<CluesScreen> {
                         )
                       : gameProvider.clues.isEmpty
                           ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.explore_off,
-                                size: 80,
-                                color: Colors.white.withOpacity(0.3),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.explore_off,
+                                    size: 80,
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    'No hay pistas disponibles',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
+                                        ?.copyWith(
+                                          color: Colors.white54,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      // Pasamos el ID nuevamente al recargar
+                                      gameProvider.fetchClues(
+                                          eventId: widget.eventId);
+                                    },
+                                    child: const Text('Recargar'),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 20),
-                              Text(
-                                'No hay pistas disponibles',
-                                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  color: Colors.white54,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              ElevatedButton(
-                                onPressed: () {
-                                  // Pasamos el ID nuevamente al recargar
-                                  gameProvider.fetchClues(eventId: widget.eventId);
-                                },
-                                child: const Text('Recargar'),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: gameProvider.clues.length,
-                          itemBuilder: (context, index) {
-                            final clue = gameProvider.clues[index];
-                            final int currentIndex = gameProvider.currentClueIndex;
-                            
-                            // ESTADOS:
-                            // 1. Ya pasó: (índice menor al actual)
-                            final bool isPast = index < currentIndex;
-                            // 2. Futuro: (índice mayor al actual)
-                            final bool isFuture = index > currentIndex;
-                            // 3. Presente: (es el índice actual)
-                            final bool isCurrent = index == currentIndex;
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: gameProvider.clues.length,
+                              itemBuilder: (context, index) {
+                                final clue = gameProvider.clues[index];
+                                final int currentIndex =
+                                    gameProvider.currentClueIndex;
 
-                            if (isCurrent) {
-                              print("DEBUG: Clue $index (Current) - isLocked: ${clue.isLocked}, isCompleted: ${clue.isCompleted}, scanned: ${_scannedClues.contains(clue.id)}");
-                            }
+                                // ESTADOS:
+                                // 1. Ya pasó: (índice menor al actual)
+                                final bool isPast = index < currentIndex;
+                                // 2. Futuro: (índice mayor al actual)
+                                final bool isFuture = index > currentIndex;
+                                // 3. Presente: (es el índice actual)
+                                final bool isCurrent = index == currentIndex;
 
-                            // DETERMINAR SI SE MUESTRA EL CANDADO VISUALMENTE
-                            // Una pista está bloqueada visualmente si es futura O si es la actual y aún tiene isLocked true
-                            final bool showLockIcon = isFuture || (isCurrent && clue.isLocked);
-
-                            return ClueCard(
-                              clue: clue,
-                              // Usamos showLockIcon para que la UI pinte el candado correctamente
-                              isLocked: showLockIcon, 
-                              onTap: () async {
-                                // A. Si es una pista futura, bloqueamos
-                                if (isFuture) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Debes completar la pista anterior primero.")),
-                                  );
-                                  return;
-                                }
-
-                                // B. Si es una pista pasada (completada), mostramos resumen
-                                if (isPast || (isCurrent && clue.isCompleted)) {
-                                  _showCompletedClueDialog(context, clue);
-                                  return;
-                                }
-
-                                // C. Si es la pista ACTUAL (La misión activa)
                                 if (isCurrent) {
-                                  // VERIFICAR VIDAS: Si no tiene vidas, mostrar pantalla de bloqueo
-                                  final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
-                                  final gameProvider = Provider.of<GameProvider>(context, listen: false);
-                                  
-                                  // --- MODO ESPECTADOR: Ver solo info ---
-                                  if (player?.role == 'spectator') {
-                                    // Navegar a la pantalla de puzzle en modo solo lectura
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
-                                    );
-                                    return;
-                                  }
-
-                                  if ((player?.lives ?? 0) <= 0 || gameProvider.lives <= 0) {
-                                     Navigator.push(
-                                        context, 
-                                        MaterialPageRoute(
-                                          builder: (_) => const Scaffold(
-                                            backgroundColor: Colors.black,
-                                            body: NoLivesWidget()
-                                          )
-                                        )
-                                     );
-                                     return;
-                                  }
-
-                                  // Polimorfismo: Delegamos la ejecución a la pista misma
-                                  // Esto reemplaza checks de isOnline y switch de tipos
-                                  ClueNavigatorService.navigateToClue(context, clue);
+                                  print(
+                                      "DEBUG: Clue $index (Current) - isLocked: ${clue.isLocked}, isCompleted: ${clue.isCompleted}, scanned: ${_scannedClues.contains(clue.id)}");
                                 }
+
+                                // DETERMINAR SI SE MUESTRA EL CANDADO VISUALMENTE
+                                // Una pista está bloqueada visualmente si es futura O si es la actual y aún tiene isLocked true
+                                final bool showLockIcon =
+                                    isFuture || (isCurrent && clue.isLocked);
+
+                                return ClueCard(
+                                  clue: clue,
+                                  // Usamos showLockIcon para que la UI pinte el candado correctamente
+                                  isLocked: showLockIcon,
+                                  onTap: () async {
+                                    // A. Si es una pista futura, bloqueamos
+                                    if (isFuture) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                "Debes completar la pista anterior primero.")),
+                                      );
+                                      return;
+                                    }
+
+                                    // B. Si es una pista pasada (completada), mostramos resumen
+                                    if (isPast ||
+                                        (isCurrent && clue.isCompleted)) {
+                                      _showCompletedClueDialog(context, clue);
+                                      return;
+                                    }
+
+                                    // C. Si es la pista ACTUAL (La misión activa)
+                                    if (isCurrent) {
+                                      // VERIFICAR VIDAS: Si no tiene vidas, mostrar pantalla de bloqueo
+                                      final player =
+                                          Provider.of<PlayerProvider>(context,
+                                                  listen: false)
+                                              .currentPlayer;
+                                      final gameProvider =
+                                          Provider.of<GameProvider>(context,
+                                              listen: false);
+
+                                      // --- MODO ESPECTADOR: Ver solo info ---
+                                      if (player?.role == 'spectator') {
+                                        // Navegar a la pantalla de puzzle en modo solo lectura
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  PuzzleScreen(clue: clue)),
+                                        );
+                                        return;
+                                      }
+
+                                      if ((player?.lives ?? 0) <= 0 ||
+                                          gameProvider.lives <= 0) {
+                                        Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (_) => const Scaffold(
+                                                    backgroundColor:
+                                                        Colors.black,
+                                                    body: NoLivesWidget())));
+                                        return;
+                                      }
+
+                                      // Polimorfismo: Delegamos la ejecución a la pista misma
+                                      // Esto reemplaza checks de isOnline y switch de tipos
+                                      ClueNavigatorService.navigateToClue(
+                                          context, clue);
+                                    }
+                                  },
+                                );
                               },
-                            );
-                          },
-                        ),
-            
+                            ),
             ),
           ],
         ),
@@ -399,11 +479,11 @@ class _CluesScreenState extends State<CluesScreen> {
                 onPressed: () async {
                   // --- STRATEGY PATTERN: Clue knows its own unlock requirements ---
                   final isAutoUnlocked = await clue.checkUnlockRequirements();
-                  
+
                   if (isAutoUnlocked) {
-                     Navigator.pop(context); // Cerrar diálogo
-                     _unlockAndProceed(clue); // Desbloqueo directo (Online mode)
-                     return;
+                    Navigator.pop(context); // Cerrar diálogo
+                    _unlockAndProceed(clue); // Desbloqueo directo (Online mode)
+                    return;
                   }
 
                   // Physical clue: requires QR scan
@@ -412,19 +492,22 @@ class _CluesScreenState extends State<CluesScreen> {
                     context,
                     MaterialPageRoute(builder: (_) => const QRScannerScreen()),
                   );
-                  
+
                   if (scannedCode != null) {
-                     // Formato esperado: CLUE:{eventId}:{clueId}
-                     // O simplemente el ID de la pista si es un código simple
-                     // Aquí asumimos validación básica
-                     if (scannedCode.toString().contains(clue.id) || scannedCode.toString().startsWith("CLUE:")) {
-                        // ÉXITO
-                        _unlockAndProceed(clue);
-                     } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Código QR incorrecto para esta misión.")),
-                        );
-                     }
+                    // Formato esperado: CLUE:{eventId}:{clueId}
+                    // O simplemente el ID de la pista si es un código simple
+                    // Aquí asumimos validación básica
+                    if (scannedCode.toString().contains(clue.id) ||
+                        scannedCode.toString().startsWith("CLUE:")) {
+                      // ÉXITO
+                      _unlockAndProceed(clue);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content:
+                                Text("Código QR incorrecto para esta misión.")),
+                      );
+                    }
                   }
                 },
                 icon: const Icon(Icons.qr_code_scanner),
@@ -444,12 +527,11 @@ class _CluesScreenState extends State<CluesScreen> {
     setState(() {
       _scannedClues.add(clue.id);
     });
-    
+
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     gameProvider.unlockClue(clue.id);
-    
+
     // Navegar al minijuego correspondiente
     ClueNavigatorService.navigateToClue(context, clue);
   }
-
 }
