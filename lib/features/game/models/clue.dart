@@ -20,6 +20,11 @@ enum PuzzleType {
   codeBreaker,
   imageTrivia,
   wordScramble,
+  memorySequence,
+  drinkMixer,
+  librarySort,
+  fastNumber,
+  bagShuffle,
   chargeShaker,
   emojiMovie,
   virusTap,
@@ -52,7 +57,7 @@ enum PuzzleType {
       case PuzzleType.imageTrivia:
         return '🖼️ Trivia de Imagen';
       case PuzzleType.wordScramble:
-        return '🔠 Ordenar Palabras';
+        return '🔤🔠 Ordenar Palabras';
       case PuzzleType.chargeShaker:
         return '⚡ Agitar Carga';
       case PuzzleType.emojiMovie:
@@ -61,6 +66,11 @@ enum PuzzleType {
         return '🦠 Virus Tap (Whack-a-Mole)';
       case PuzzleType.droneDodge:
         return '🚁 Drone Esquiva';
+      case PuzzleType.memorySequence: return '🧠 Secuencia de Memoria (Simon)';
+      case PuzzleType.drinkMixer: return '🍹 Cócteles de Neón (Mixer)';
+      case PuzzleType.librarySort: return '📚 Biblioteca de Tonos (Sort)';
+      case PuzzleType.fastNumber: return '⚡ Número Veloz';
+      case PuzzleType.bagShuffle: return '🛍️ El Trile (Bolsas)';
     }
   }
 
@@ -74,6 +84,11 @@ enum PuzzleType {
       case PuzzleType.minesweeper:
       case PuzzleType.snake:
       case PuzzleType.blockFill:
+      case PuzzleType.memorySequence: // Auto-validado al ganar
+      case PuzzleType.drinkMixer:
+      case PuzzleType.librarySort:
+      case PuzzleType.fastNumber:
+      case PuzzleType.bagShuffle:
       case PuzzleType.chargeShaker:
       case PuzzleType.emojiMovie:
       case PuzzleType.virusTap:
@@ -110,6 +125,11 @@ enum PuzzleType {
         return '¿Qué es lo que ves en la imagen?';
       case PuzzleType.wordScramble:
         return 'Ordena las letras para formar la palabra';
+      case PuzzleType.memorySequence: return 'Repite la secuencia de colores correctamente';
+      case PuzzleType.drinkMixer: return 'Mezcla los colores para igualar el cóctel';
+      case PuzzleType.librarySort: return 'Ordena los libros por su tonalidad de color';
+      case PuzzleType.fastNumber: return 'Escribe el número de 5 cifras que aparecerá brevemente';
+      case PuzzleType.bagShuffle: return 'Sigue la bolsa que contiene el color solicitado';
       case PuzzleType.chargeShaker:
         return '¡Agita el celular para cargar la batería!';
       case PuzzleType.emojiMovie:

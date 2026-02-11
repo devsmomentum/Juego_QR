@@ -14,6 +14,8 @@ import 'withdrawal_plans_management_screen.dart';
 import 'global_config_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import 'minigames/sequence_config_screen.dart';
+import 'minigames/drink_mixer_config_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -33,6 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Compras",
     "Retiros",
     "Reportes",
+    "Minijuegos",
     "Configuración"
   ];
 
@@ -44,6 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.local_offer,
     Icons.money_off,
     Icons.bar_chart,
+    Icons.games,
     Icons.settings,
   ];
 
@@ -117,7 +121,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const Center(
           child: Text('Reportes - En desarrollo',
               style: TextStyle(color: Colors.white54))), // Index 6 - Reportes
-      const GlobalConfigScreen(), // Index 7 - Configuración
+      const _MinigamesListView(), // Index 7 - Minijuegos
+      const GlobalConfigScreen(), // Index 8 - Configuración
     ];
 
     return LayoutBuilder(
@@ -421,10 +426,86 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
                         ?.call(2), // Navigate to Competitions (Index 2)
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MinigamesListView extends StatelessWidget {
+  const _MinigamesListView();
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> minigames = [
+      {
+        'title': 'Secuencia de Memoria',
+        'subtitle': 'Juego tipo Simon Dice con colores neón.',
+        'icon': Icons.psychology,
+        'color': Colors.cyanAccent,
+        'screen': const SequenceConfigScreen(),
+      },
+      {
+        'title': 'Cócteles de Neón',
+        'subtitle': 'Mezcla de sabores y colores en el bar.',
+        'icon': Icons.local_bar,
+        'color': Colors.pinkAccent,
+        'screen': const DrinkMixerConfigScreen(),
+      },
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Configuración de Minijuegos",
+            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "Prueba y ajusta los parámetros de los desafíos del juego.",
+            style: TextStyle(color: Colors.white54, fontSize: 16),
+          ),
+          const SizedBox(height: 30),
+          Expanded(
+            child: ListView.builder(
+              itemCount: minigames.length,
+              itemBuilder: (context, index) {
+                final mg = minigames[index];
+                return Card(
+                  color: AppTheme.cardBg,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(20),
+                    leading: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (mg['color'] as Color).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(mg['icon'], color: mg['color']),
+                    ),
+                    title: Text(mg['title'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                    subtitle: Text(mg['subtitle'], style: const TextStyle(color: Colors.white70)),
+                    trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => mg['screen']));
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
