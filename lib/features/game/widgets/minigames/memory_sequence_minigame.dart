@@ -29,7 +29,8 @@ class MemorySequenceMinigame extends StatefulWidget {
 
 class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
   // Configuración
-  int _currentDifficulty = 4; 
+  int _currentDifficulty = 6; 
+  int _lastRandom = -1; // To avoid immediate repeats if possible
   List<int> _sequence = [];
   List<int> _playerInput = [];
   bool _isPlayerTurn = false;
@@ -120,11 +121,19 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
 
   void _nextRound() {
     if (!mounted || _isGameOver) return;
+    
+    // Generar siguiente número evitando repeticiones inmediatas para mayor variedad
+    int nextVal;
+    do {
+      nextVal = Random().nextInt(4);
+    } while (nextVal == _lastRandom && _sequence.isNotEmpty);
+    _lastRandom = nextVal;
+
     setState(() {
       _playerInput = [];
       _isPlayerTurn = false;
       _statusMessage = 'OBSERVA';
-      _sequence.add(Random().nextInt(4));
+      _sequence.add(nextVal);
     });
     _playSequence();
   }
@@ -133,15 +142,19 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     await Future.delayed(const Duration(milliseconds: 1000));
     if (_isGameOver) return;
 
+    // Velocidad progresiva: más rápido a medida que avanza la secuencia
+    int flashDuration = max(250, 600 - (_sequence.length * 30));
+    int pauseDuration = max(100, 200 - (_sequence.length * 15));
+
     for (int i = 0; i < _sequence.length; i++) {
       if (!mounted || _isGameOver) return;
       setState(() => _activeButtonIndex = _sequence[i]);
       HapticFeedback.lightImpact(); 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(Duration(milliseconds: flashDuration));
 
       if (!mounted) return;
       setState(() => _activeButtonIndex = -1);
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: pauseDuration));
     }
 
     if (!mounted || _isGameOver) return;

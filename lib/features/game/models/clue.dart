@@ -20,7 +20,8 @@ enum PuzzleType {
   codeBreaker,
   imageTrivia,
   wordScramble,
-  memorySequence;      
+  memorySequence,
+  drinkMixer;      
 
   String get dbValue => toString().split('.').last;
 
@@ -39,6 +40,7 @@ enum PuzzleType {
       case PuzzleType.imageTrivia: return '🖼️ Desafío Visual (Trivia)';
       case PuzzleType.wordScramble: return '🔤 Palabra Misteriosa';
       case PuzzleType.memorySequence: return '🧠 Secuencia de Memoria (Simon)';
+      case PuzzleType.drinkMixer: return '🍹 Cócteles de Neón (Mixer)';
     }
   }
 
@@ -53,6 +55,7 @@ enum PuzzleType {
       case PuzzleType.snake:
       case PuzzleType.blockFill:
       case PuzzleType.memorySequence: // Auto-validado al ganar
+      case PuzzleType.drinkMixer:
         return true; 
       default:
         return false;
@@ -74,6 +77,7 @@ enum PuzzleType {
       case PuzzleType.imageTrivia: return '¿Qué es lo que ves en la imagen?';
       case PuzzleType.wordScramble: return 'Ordena las letras para formar la palabra';
       case PuzzleType.memorySequence: return 'Repite la secuencia de colores correctamente';
+      case PuzzleType.drinkMixer: return 'Mezcla los colores para igualar el cóctel';
     }
   }
 }
