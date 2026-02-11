@@ -163,12 +163,11 @@ class GameService {
 
   /// Suscribe a los cambios de estado de la carrera.
   /// Retorna el canal de suscripción.
-  RealtimeChannel subscribeToRaceStatus(
-    String eventId, 
-    int totalClues,
-    Function(bool isCompleted, String source) onRaceCompleted,
-    {VoidCallback? onProgressUpdate} // Nuevo callback opcional para actualizaciones
-  ) {
+  RealtimeChannel subscribeToRaceStatus(String eventId, int totalClues,
+      Function(bool isCompleted, String source) onRaceCompleted,
+      {VoidCallback?
+          onProgressUpdate} // Nuevo callback opcional para actualizaciones
+      ) {
     return _supabase
         .channel('public:race:$eventId')
         // 1. Escuchar cambios en jugadores (Progreso individual)
@@ -390,10 +389,27 @@ class GameService {
 
       // 6. Distribuir (Intentar premiar a todos, capturando errores individuales)
 
+      // Calculate base amounts using floor to avoid creating extra tréboles
+      final p1Amount = (totalPot * p1Share).floor();
+      final p2Amount = p2Share > 0 ? (totalPot * p2Share).floor() : 0;
+      final p3Amount = p3Share > 0 ? (totalPot * p3Share).floor() : 0;
+
+      // Calculate remainder and add to 1st place (winner gets the extra)
+      final totalDistributed = p1Amount + p2Amount + p3Amount;
+      final remainder = totalPot.floor() - totalDistributed;
+      final p1Final = p1Amount + remainder;
+
+      debugPrint("🏆 Prize Calculation:");
+      debugPrint("  Total Pot: ${totalPot.floor()}");
+      debugPrint("  1st: $p1Final (base: $p1Amount + remainder: $remainder)");
+      debugPrint("  2nd: $p2Amount");
+      debugPrint("  3rd: $p3Amount");
+      debugPrint("  Total Distributed: ${p1Final + p2Amount + p3Amount}");
+
       // 1er Lugar
       if (leaderboardResponse.isNotEmpty && p1Share > 0) {
         final p1 = leaderboardResponse[0];
-        final amount = (totalPot * p1Share).round();
+        final amount = p1Final;
         final userId = p1['user_id'];
         debugPrint(
             "🏆 1st Place: $userId (Amount: $amount). Status: ${p1['status']}");
@@ -417,7 +433,7 @@ class GameService {
       // 2do Lugar
       if (leaderboardResponse.length > 1 && p2Share > 0) {
         final p2 = leaderboardResponse[1];
-        final amount = (totalPot * p2Share).round();
+        final amount = p2Amount;
         final userId = p2['user_id'];
         debugPrint("🏆 2nd Place: $userId (Amount: $amount)");
 
@@ -436,7 +452,7 @@ class GameService {
       // 3er Lugar
       if (leaderboardResponse.length > 2 && p3Share > 0) {
         final p3 = leaderboardResponse[2];
-        final amount = (totalPot * p3Share).round();
+        final amount = p3Amount;
         final userId = p3['user_id'];
         debugPrint("🏆 3rd Place: $userId (Amount: $amount)");
 
