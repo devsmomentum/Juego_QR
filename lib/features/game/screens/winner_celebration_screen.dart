@@ -5,6 +5,7 @@ import 'dart:math';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'scenarios_screen.dart';
 
 class WinnerCelebrationScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   late ConfettiController _confettiController;
   late int _currentPosition; // Mutable state for position
   bool _isLoading = true; // NEW: Start with loading state
+  Map<String, int> _prizes = {};
 
   @override
   void initState() {
@@ -39,13 +41,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 3));
 
-    // If we already have a valid position, no need to wait for loading
-    if (_currentPosition > 0) {
-      _isLoading = false;
-      if (_currentPosition <= 3) {
-        _confettiController.play();
-      }
-    }
+    // Start loading always to ensure sync
+    _isLoading = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -57,22 +54,22 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       debugPrint(
           "💰 Wallet refreshed on podium. Balance: ${playerProvider.currentPlayer?.clovers}");
 
-      // CRITICAL: Ensure eventId is set in the provider
-      if (gameProvider.currentEventId != widget.eventId) {
-        await gameProvider.fetchClues(eventId: widget.eventId, silent: true);
-      }
+      // Fetch prizes for everyone
+      _fetchPrizes();
 
       // Add listener to self-correct position
       gameProvider.addListener(_updatePositionFromLeaderboard);
 
-      gameProvider.fetchLeaderboard();
+      // Force a fresh fetch
+      await gameProvider.fetchLeaderboard();
 
-      // Try immediate update
+      // Try immediate check
       _updatePositionFromLeaderboard();
 
-      // Safety timeout: If after 5 seconds we still loading, force show content (as unranked if needed)
-      Future.delayed(const Duration(seconds: 5), () {
+      // Safety timeout: If after 8 seconds we still loading, force show content
+      Future.delayed(const Duration(seconds: 8), () {
         if (mounted && _isLoading) {
+          debugPrint("⚠️ Podium timeout: Forcing display with available data.");
           setState(() {
             _isLoading = false;
           });
@@ -81,28 +78,76 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     });
   }
 
+  Future<void> _fetchPrizes() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('prize_distributions')
+          .select('user_id, amount')
+          .eq('event_id', widget.eventId);
+
+      final Map<String, int> loadedPrizes = {};
+      for (final row in response) {
+        if (row['user_id'] != null && row['amount'] != null) {
+          loadedPrizes[row['user_id'].toString()] = row['amount'] as int;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _prizes = loadedPrizes;
+        });
+        debugPrint("🏆 Prizes loaded: $_prizes");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error fetching podium prizes: $e");
+    }
+  }
+
   void _updatePositionFromLeaderboard() {
     if (!mounted) return;
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-    // If leaderboard is still empty and loading, do nothing yet (unless timeout hits)
+    // 1. If loading, keep waiting
     if (gameProvider.leaderboard.isEmpty && gameProvider.isLoading) return;
 
     if (gameProvider.leaderboard.isNotEmpty) {
+      final currentUser = gameProvider.leaderboard.firstWhere(
+          (p) => p.userId == playerProvider.currentPlayer?.userId,
+          orElse: () =>
+              playerProvider.currentPlayer!); // Fallback to avoid crash
+
+      // 2. STRICT CHECK: Does the leaderboard reflect my completed clues?
+      // If the leaderboard says I have fewer clues than I actually completed, it's stale.
+      if (currentUser.completedCluesCount < widget.totalCluesCompleted) {
+        debugPrint(
+            "⏳ Podium Sync: Leaderboard stale (Server: ${currentUser.completedCluesCount} vs Local: ${widget.totalCluesCompleted}). Waiting...");
+        // Do NOT stop loading yet. Trigger another fetch if not loading.
+        if (!gameProvider.isLoading) {
+          // Use a small delay to avoid spamming
+          Future.delayed(const Duration(milliseconds: 500),
+              () => gameProvider.fetchLeaderboard(silent: true));
+        }
+        return;
+      }
+
       final index = gameProvider.leaderboard
           .indexWhere((p) => p.userId == playerProvider.currentPlayer?.userId);
+      final newPos = index >= 0 ? index + 1 : _currentPosition;
 
-      final newPos =
-          index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
+      debugPrint("✅ Podium Sync: Data verified. Rank: $newPos");
 
-      // Update state if changed
-      if (newPos != _currentPosition && newPos > 0) {
-        debugPrint(
-            "🏆 Position Updated from Leaderboard: $_currentPosition -> $newPos");
+      // Verify prizes if not loaded cleanly yet
+      if (_prizes.isEmpty) {
+        _fetchPrizes();
+      }
+
+      // Data is consistent, update and show
+      if (newPos != _currentPosition || _isLoading) {
         setState(() {
           _currentPosition = newPos;
-          _isLoading = false; // Data is ready
+          _isLoading = false;
         });
 
         if (newPos >= 1 && newPos <= 3) {
@@ -110,16 +155,14 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
         } else {
           _confettiController.stop();
         }
-      } else {
-        // Even if position didn't change, we have data, so stop loading
-        if (_isLoading) {
-          setState(() => _isLoading = false);
-        }
       }
     } else {
-      // Leaderboard loaded but empty?
-      if (_isLoading && !gameProvider.isLoading) {
-        setState(() => _isLoading = false);
+      // Leaderboard empty/failed? If we waited long enough (timeout), _isLoading handles it.
+      // But if we are done loading and it's empty, maybe just show?
+      if (!gameProvider.isLoading && _isLoading) {
+        // Wait for timeout or retry? Let's retry once.
+        if (!gameProvider.isLoading)
+          gameProvider.fetchLeaderboard(silent: true);
       }
     }
   }
@@ -296,7 +339,40 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                       ),
                                     ],
                                   ),
-                                  if (widget.prizeWon != null &&
+                                  if (_prizes.containsKey(currentPlayerId)) ...[
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black45,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: const Color(0xFFFFD700)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text("💰",
+                                              style: TextStyle(fontSize: 20)),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "+${_prizes[currentPlayerId]} 🍀",
+                                            style: const TextStyle(
+                                              color: Color(0xFFFFD700),
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              shadows: [
+                                                Shadow(
+                                                    color: Colors.black,
+                                                    blurRadius: 2)
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  ] else if (widget.prizeWon != null &&
                                       widget.prizeWon! > 0) ...[
                                     const SizedBox(height: 10),
                                     Container(
@@ -384,6 +460,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                         2,
                                         60,
                                         Colors.grey,
+                                        _prizes[gameProvider.leaderboard[1].id
+                                            .toString()],
                                       )
                                     else if (gameProvider.leaderboard.length >=
                                         3)
@@ -395,6 +473,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                       1,
                                       90,
                                       const Color(0xFFFFD700),
+                                      _prizes[gameProvider.leaderboard[0].id
+                                          .toString()],
                                     ),
 
                                     // 3rd place
@@ -404,6 +484,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                         3,
                                         50,
                                         const Color(0xFFCD7F32),
+                                        _prizes[gameProvider.leaderboard[2].id
+                                            .toString()],
                                       )
                                     else if (gameProvider.leaderboard.length >=
                                         2)
@@ -526,7 +608,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   }
 
   Widget _buildPodiumPosition(
-      player, int position, double height, Color color) {
+      player, int position, double height, Color color, int? prizeAmount) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -611,6 +693,24 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
           ),
         ),
         const SizedBox(height: 6),
+
+        // PRIZE DISPLAY ON PODIUM
+        if (prizeAmount != null && prizeAmount > 0)
+          Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color, width: 1),
+            ),
+            child: Text(
+              "+$prizeAmount 🍀",
+              style: TextStyle(
+                  color: color, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+
         Container(
           width: 60,
           height: height,

@@ -299,10 +299,10 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _raceStatusChannel = _gameService.subscribeToRaceStatus(
         _currentEventId!, totalClues, (completed, source) {
       _setRaceCompleted(completed, source);
-      },
-      onProgressUpdate: () {
-        debugPrint('🏎️ RACE UPDATE: Realtime progress detected, refreshing leaderboard...');
-        _fetchLeaderboardInternal(silent: true);
+    }, onProgressUpdate: () {
+      debugPrint(
+          '🏎️ RACE UPDATE: Realtime progress detected, refreshing leaderboard...');
+      _fetchLeaderboardInternal(silent: true);
     });
   }
 
@@ -594,11 +594,10 @@ class GameProvider extends ChangeNotifier implements IResettable {
   int? _currentPrizeWon;
   int? get currentPrizeWon => _currentPrizeWon;
 
-
-
   /// Completa una pista y retorna los datos del servidor incluyendo coins_earned.
   /// Retorna null si falla, o un Map con success, raceCompleted, coins_earned.
-  Future<Map<String, dynamic>?> completeCurrentClue(String answer, {String? clueId}) async {
+  Future<Map<String, dynamic>?> completeCurrentClue(String answer,
+      {String? clueId}) async {
     String targetId;
 
     if (clueId != null) {
@@ -646,7 +645,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       }
     } catch (e) {
       debugPrint('Error completing clue: $e');
-      // En caso de error de red, aún retornamos éxito local 
+      // En caso de error de red, aún retornamos éxito local
       // ya que la actualización optimista ya se hizo
       return {'success': true, 'coins_earned': 0, 'error': e.toString()};
     }

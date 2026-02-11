@@ -128,7 +128,7 @@ serve(async (req) => {
         score: entry.score,
         // [FIX] Ensure we pass event-specific progress
         completed_clues_count: entry.completed_clues_count ?? entry.completed_clues ?? 0,
-        completed_clues: entry.completed_clues_count ?? entry.completed_clues ?? 0, 
+        completed_clues: entry.completed_clues_count ?? entry.completed_clues ?? 0,
       }));
 
       return new Response(JSON.stringify(mappedLeaderboard), {
