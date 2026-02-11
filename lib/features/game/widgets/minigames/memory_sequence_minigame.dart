@@ -328,8 +328,14 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
                       
                       const SizedBox(width: 10), // Small gap before flag
                       
-                      // FLAG ICON
-                      const Icon(Icons.flag, color: Colors.redAccent, size: 24),
+                      // FLAG ICON (SURRENDER)
+                      IconButton(
+                        onPressed: _handleGiveUp,
+                        icon: const Icon(Icons.flag, color: Colors.redAccent, size: 24),
+                        tooltip: 'Rendirse',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
                     ],
                   ),
                 ),

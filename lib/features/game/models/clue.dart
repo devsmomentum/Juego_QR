@@ -21,7 +21,8 @@ enum PuzzleType {
   imageTrivia,
   wordScramble,
   memorySequence,
-  drinkMixer;      
+  drinkMixer,
+  librarySort;      
 
   String get dbValue => toString().split('.').last;
 
@@ -41,6 +42,7 @@ enum PuzzleType {
       case PuzzleType.wordScramble: return '🔤 Palabra Misteriosa';
       case PuzzleType.memorySequence: return '🧠 Secuencia de Memoria (Simon)';
       case PuzzleType.drinkMixer: return '🍹 Cócteles de Neón (Mixer)';
+      case PuzzleType.librarySort: return '📚 Biblioteca de Tonos (Sort)';
     }
   }
 
@@ -56,6 +58,7 @@ enum PuzzleType {
       case PuzzleType.blockFill:
       case PuzzleType.memorySequence: // Auto-validado al ganar
       case PuzzleType.drinkMixer:
+      case PuzzleType.librarySort:
         return true; 
       default:
         return false;
@@ -78,6 +81,7 @@ enum PuzzleType {
       case PuzzleType.wordScramble: return 'Ordena las letras para formar la palabra';
       case PuzzleType.memorySequence: return 'Repite la secuencia de colores correctamente';
       case PuzzleType.drinkMixer: return 'Mezcla los colores para igualar el cóctel';
+      case PuzzleType.librarySort: return 'Ordena los libros por su tonalidad de color';
     }
   }
 }
