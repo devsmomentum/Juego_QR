@@ -9,6 +9,7 @@ import '../../../core/utils/error_handler.dart';
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/widgets/loading_overlay.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -175,6 +176,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // Usamos pushReplacementNamed para que no puedan volver atrás
         await Future.delayed(const Duration(milliseconds: 1500));
         if (!mounted) return;
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
 
       } catch (e) {
         if (!mounted) return;
