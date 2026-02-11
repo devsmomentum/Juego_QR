@@ -117,6 +117,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   void _setRaceCompleted(bool completed, String source) {
     if (_isRaceCompleted != completed) {
+      if (completed && totalClues <= 0) {
+        debugPrint(
+            '⚠️ Warning: Race completion ignored because totalClues is 0 or not loaded.');
+        return;
+      }
       debugPrint('--- RACE STATUS CHANGE: $completed (via $source) ---');
       _isRaceCompleted = completed;
       notifyListeners();
@@ -447,10 +452,12 @@ class GameProvider extends ChangeNotifier implements IResettable {
           await _gameService.getActivePowers(_currentEventId!);
 
       // Check for victory in leaderboard data
-      for (var player in _leaderboard) {
-        if (totalClues > 0 && player.totalXP >= totalClues) {
-          _setRaceCompleted(true, 'Leaderboard Polling');
-          break;
+      if (totalClues > 0) {
+        for (var player in _leaderboard) {
+          if (player.totalXP >= totalClues) {
+            _setRaceCompleted(true, 'Leaderboard Polling');
+            break;
+          }
         }
       }
 
@@ -476,8 +483,6 @@ class GameProvider extends ChangeNotifier implements IResettable {
       _clues = [];
       _leaderboard = [];
       _currentClueIndex = 0;
-
-      subscribeToRaceStatus();
     }
 
     final idToUse = eventId ?? _currentEventId;
@@ -515,6 +520,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
     } catch (e) {
       _errorMessage = 'Error fetching clues: $e';
     } finally {
+      // ⚡ CRÍTICO: Suscribirse o actualizar suscripción una vez que totalClues es real
+      subscribeToRaceStatus();
+
       _isLoading = false;
       notifyListeners();
     }
