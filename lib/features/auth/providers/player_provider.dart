@@ -57,6 +57,10 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
 
   String? _banMessage;
   String? get banMessage => _banMessage;
+  
+  // Error handling for powers
+  String? _lastPowerError;
+  String? get lastPowerError => _lastPowerError;
 
   /// Constructor with dependency injection.
   PlayerProvider({
@@ -657,17 +661,30 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     GameProvider? gameProvider,
     bool allowReturnForward = true,
   }) async {
-    if (_currentPlayer == null) return PowerUseResult.error;
-    if (_isProcessing) return PowerUseResult.error;
+    if (_currentPlayer == null) {
+      debugPrint('PlayerProvider: ❌ usePower aborted: _currentPlayer is NULL');
+      return PowerUseResult.error;
+    }
+    if (_isProcessing) {
+      debugPrint('PlayerProvider: ⚠️ usePower aborted: _isProcessing is TRUE (Busy)');
+      return PowerUseResult.error;
+    }
     _isProcessing = true;
+    _lastPowerError = null; // Reset error state
+    debugPrint('PlayerProvider: 🚀 usePower STARTED: $powerSlug -> $targetGamePlayerId');
 
     final casterGamePlayerId = _currentPlayer!.gamePlayerId;
     if (casterGamePlayerId == null || casterGamePlayerId.isEmpty) {
+      debugPrint('PlayerProvider: ❌ usePower aborted: casterGamePlayerId is NULL/Empty');
       _isProcessing = false;
       return PowerUseResult.error;
     }
 
     // --- RACE FINISHED CHECKS ---
+    if (gameProvider != null) {
+       debugPrint('PlayerProvider: 🏁 Checking Race Status. Clues: ${_currentPlayer!.completedCluesCount} / ${gameProvider.totalClues}');
+    }
+
     if (gameProvider != null && gameProvider.totalClues > 0) {
       // 1. Check if I (Caster) have finished
       if (_currentPlayer!.completedCluesCount >= gameProvider.totalClues) {
@@ -767,9 +784,12 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
 
         case PowerUseResultType.error:
         default:
+          _lastPowerError = response.errorMessage ?? "Error desconocido tras ejecución";
+          debugPrint("PlayerProvider: ❌ Power Execution Error: $_lastPowerError");
           return PowerUseResult.error;
       }
     } catch (e) {
+      _lastPowerError = "Excepción al usar poder: $e";
       debugPrint('Error using power: $e');
       rethrow;
     } finally {

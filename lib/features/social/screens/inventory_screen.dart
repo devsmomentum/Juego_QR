@@ -279,6 +279,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final myGamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
 
+    debugPrint('InventoryScreen: _handleItemUse called for ${item.id}');
+    if (myGamePlayerId == null) debugPrint('InventoryScreen: ⚠️ myGamePlayerId is NULL');
+
     // Lista de IDs considerados ofensivos/sabotaje
     // Lo ideal es mover esto a una propiedad `isOffensive` en tu modelo PowerItem
     final offensiveItems = [
@@ -338,6 +341,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           // Esto asegura que se muestren en orden de ranking y solo los del evento
           if (gameProvider.leaderboard.isEmpty &&
               gameProvider.currentEventId == eventId) {
+            debugPrint('InventoryScreen: Leaderboard empty, fetching...');
             await gameProvider.fetchLeaderboard();
           }
           candidates = gameProvider.leaderboard;
@@ -356,6 +360,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
         // Solo se muestran si NO son el usuario actual y NO están invisibles
         return !isMe && !isTargetInvisible;
       }).toList();
+
+        debugPrint('InventoryScreen: Rivals found: ${rivals.length}. Candidates: ${candidates.length}');
 
         if (rivals.isEmpty) {
           showGameSnackBar(context,
@@ -449,6 +455,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 isError: true);
                             return;
                           }
+                          debugPrint('InventoryScreen: 🟢 TARGET SELECTED via BottomSheet: ${rival.name} ($targetGp)');
                           Navigator.pop(modalContext);
                           _executePower(item, targetGp, rival.name,
                               isOffensive: true,
@@ -493,11 +500,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
       required PowerEffectManager effectProvider,
       required GameProvider gameProvider}) async {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    
+    debugPrint('InventoryScreen: ⚡ _executePower START for ${item.id} on $targetName');
+    
+    // Check if mounted before setState
+    if (!mounted) {
+       debugPrint('InventoryScreen: ⚠️ widget unmounted before _executePower could start');
+       return;
+    }
 
     setState(() => _isLoading = true);
 
     PowerUseResult result = PowerUseResult.error;
     try {
+      debugPrint('InventoryScreen: Calling playerProvider.usePower...');
       // Ejecutar lógica en backend
       result = await playerProvider.usePower(
         powerSlug: item.id,
@@ -551,11 +567,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
        // El feedback visual ("¡ATAQUE BLOQUEADO!") ya es manejado por SabotageOverlay
        // via effectProvider.notifyAttackBlocked(), así que solo evitamos el mensaje de error.
        debugPrint("InventoryScreen: Ataque bloqueado, suprimiendo error genérico.");
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+    } else if (result == PowerUseResult.gameFinished) {
+       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Error: No se pudo usar el objeto (¿Sin munición o error de conexión?)'),
+          content: Text('⚠️ No puedes usar poderes porque ya terminaste la carrera.'),
+          backgroundColor: Colors.grey,
+        ),
+      );
+    } else if (result == PowerUseResult.targetFinished) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ El objetivo ya terminó la carrera.'),
+          backgroundColor: Colors.grey,
+        ),
+      );
+    } else {
+      final errorMsg = playerProvider.lastPowerError ?? 'Error: No se pudo usar el objeto (¿Sin munición o error de conexión?)';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
           backgroundColor: AppTheme.dangerRed,
         ),
       );

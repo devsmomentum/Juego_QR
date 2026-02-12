@@ -120,7 +120,7 @@ class Player implements ITargetable {
       level: json['level'] ?? 1,
       experience: json['experience'] ?? 0,
       totalXP: json['total_xp'] ?? 0,
-      completedCluesCount: json['completed_clues_count'] ?? json['completed_clues'] ?? json['total_xp'] ?? 0,
+      completedCluesCount: json['completed_clues_count'] ?? json['completed_clues'] ?? 0,
       profession: json['profession'] ?? 'Novice',
       // [REF] Coins now prioritize active session (game_players) over global profile
       coins: () {
