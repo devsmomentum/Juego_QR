@@ -60,6 +60,13 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       // Add listener to self-correct position
       gameProvider.addListener(_updatePositionFromLeaderboard);
 
+      // FORCE SYNC: Ensure provider knows the event ID
+      if (gameProvider.currentEventId != widget.eventId) {
+        debugPrint("🏆 WinnerScreen: EventID Mismatch (Provider: ${gameProvider.currentEventId} vs Widget: ${widget.eventId}). Fixing...");
+        // Re-initialize provider context for this event without heavy loading UI
+        await gameProvider.fetchClues(eventId: widget.eventId, silent: true);
+      }
+
       // Force a fresh fetch
       await gameProvider.fetchLeaderboard();
 
@@ -123,11 +130,16 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       if (currentUser.completedCluesCount < widget.totalCluesCompleted) {
         debugPrint(
             "⏳ Podium Sync: Leaderboard stale (Server: ${currentUser.completedCluesCount} vs Local: ${widget.totalCluesCompleted}). Waiting...");
-        // Do NOT stop loading yet. Trigger another fetch if not loading.
+        
+        // RETRY LOGIC: If data is stale, we MUST force a refresh, even if isLoading is false.
+        // We use a debounce to avoid spamming.
         if (!gameProvider.isLoading) {
-          // Use a small delay to avoid spamming
-          Future.delayed(const Duration(milliseconds: 500),
-              () => gameProvider.fetchLeaderboard(silent: true));
+           Future.delayed(const Duration(milliseconds: 1000), () {
+              if (mounted) {
+                 debugPrint("🔄 Podium Sync: Retrying fetchLeaderboard...");
+                 gameProvider.fetchLeaderboard(silent: true);
+              }
+           });
         }
         return;
       }
@@ -157,12 +169,14 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
         }
       }
     } else {
-      // Leaderboard empty/failed? If we waited long enough (timeout), _isLoading handles it.
-      // But if we are done loading and it's empty, maybe just show?
+      // Leaderboard empty/failed?
       if (!gameProvider.isLoading && _isLoading) {
-        // Wait for timeout or retry? Let's retry once.
-        if (!gameProvider.isLoading)
-          gameProvider.fetchLeaderboard(silent: true);
+         debugPrint("⚠️ Podium Sync: Leaderboard empty. Retrying...");
+         Future.delayed(const Duration(seconds: 2), () {
+             if (mounted && !gameProvider.isLoading) {
+                 gameProvider.fetchLeaderboard(silent: true);
+             }
+         });
       }
     }
   }
@@ -220,6 +234,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     final gameProvider = Provider.of<GameProvider>(context);
     final playerProvider = Provider.of<PlayerProvider>(context);
     final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+
+    debugPrint("🏆 WinnerScreen Build: eventId=${widget.eventId}, leaderboardSize=${gameProvider.leaderboard.length}, isLoading=${gameProvider.isLoading}, internalIsLoading=$_isLoading");
 
     return WillPopScope(
       onWillPop: () async => false, // Prevent back button
@@ -633,13 +649,23 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                 borderRadius: BorderRadius.circular(25),
                 child: Builder(
                   builder: (context) {
-                    final avatarId = player.avatarId;
+                    // Sanitize avatarId (remove path and extension if present)
+                    String? avatarId = player.avatarId;
+                    if (avatarId != null) {
+                      avatarId = avatarId.split('/').last; // Remove path
+                      avatarId = avatarId.replaceAll('.png', '').replaceAll('.jpg', ''); // Remove extension
+                    }
+
+                    debugPrint("🏆 Podium Avatar Build: Original='${player.avatarId}' -> Sanitized='$avatarId'");
+
                     if (avatarId != null && avatarId.isNotEmpty) {
                       return Image.asset(
                         'assets/images/avatars/$avatarId.png',
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person,
-                            color: Colors.white70, size: 25),
+                        errorBuilder: (_, __, ___) {
+                          debugPrint("⚠️ Failed to load avatar asset: assets/images/avatars/$avatarId.png");
+                          return const Icon(Icons.person, color: Colors.white70, size: 25);
+                        },
                       );
                     }
                     if (player.avatarUrl.isNotEmpty &&

@@ -143,134 +143,38 @@ class AdminService {
   /// Distribuye los premios del bote acumulado a los ganadores.
   ///
   /// Retorna un mapa con los resultados de la distribución.
-  Future<Map<String, dynamic>> distributeCompetitionPrizes(
-      String eventId) async {
+  /// Distribuye los premios del bote acumulado a los ganadores (Server-Side RPC).
+  ///
+  /// Retorna un mapa con los resultados de la distribución.
+  Future<Map<String, dynamic>> distributeCompetitionPrizes(String eventId) async {
     try {
-      debugPrint('AdminService: Distributing prizes for event $eventId');
+      debugPrint('AdminService: Distributing prizes via RPC for event $eventId');
 
-      // 1. Obtener detalles del evento (Entry Fee)
-      final eventResponse = await _supabase
-          .from('events')
-          .select('entry_fee, title')
-          .eq('id', eventId)
-          .single();
+      final response = await _supabase.rpc(
+        'distribute_event_prizes',
+        params: {'p_event_id': eventId},
+      );
 
-      final int entryFee = eventResponse['entry_fee'] ?? 0;
+      debugPrint('AdminService: RPC Response: $response');
 
-      // 2. Contar Participantes (Solo los que han pagado/jugado)
-      // Excluye espectadores y pendientes/rechazados
-      final participantsCountResponse = await _supabase
-          .from('game_players')
-          .count(CountOption.exact)
-          .eq('event_id', eventId)
-          .inFilter('status', ['active', 'banned', 'suspended', 'eliminated']);
-
-      final int count = participantsCountResponse;
-      debugPrint('AdminService: Participants count (paid): $count');
-
-      // 3. Calcular Bote (70% del total)
-      final double totalCollection = (count * entryFee).toDouble();
-      final double totalPot = totalCollection * 0.70;
-
-      debugPrint('AdminService: Total Collection: $totalCollection');
-      debugPrint('AdminService: Pot to distribute (70%): $totalPot');
-
-      if (totalPot <= 0) {
-        return {
-          'success': false,
-          'message':
-              'El bote es 0 (Sin participantes suficientes o evento gratuito)',
-          'pot': 0.0
-        };
-      }
-
-      // 4. Obtener Ranking (Top 3)
-      final List<dynamic> leaderboard = await _gameLeaderboard(eventId);
-
-      if (leaderboard.isEmpty) {
-        return {
-          'success': false,
-          'message': 'No hay jugadores en el ranking para premiar',
-          'pot': totalPot
-        };
-      }
-
-      // 5. Distribuir Premios (Lógica Dinámica de Tiers)
-      final results = <Map<String, dynamic>>[];
-
-      // Tier 1: < 5 Jugadores (1 Ganador - 100% del Bote)
-      // Tier 2: 5-9 Jugadores (2 Ganadores - 70% / 30%)
-      // Tier 3: 10+ Jugadores (3 Ganadores - 50% / 30% / 20%)
-
-      double p1Share = 0.0;
-      double p2Share = 0.0;
-      double p3Share = 0.0;
-      String tierName = "";
-
-      if (count < 5) {
-        // Tier 1
-        tierName = "Tier 1 (<5 Jugadores)";
-        p1Share = 1.00; // 100%
-      } else if (count < 10) {
-        // Tier 2
-        tierName = "Tier 2 (5-9 Jugadores)";
-        p1Share = 0.70; // 70%
-        p2Share = 0.30; // 30%
-      } else {
-        // Tier 3
-        tierName = "Tier 3 (10+ Jugadores)";
-        p1Share = 0.50; // 50%
-        p2Share = 0.30; // 30%
-        p3Share = 0.20; // 20%
-      }
-
-      debugPrint('AdminService: $tierName');
-
-      // 1er Lugar
-      if (leaderboard.isNotEmpty && p1Share > 0) {
-        final p1 = leaderboard[0];
-        final amount = (totalPot * p1Share).round();
-        final userId = p1['user_id'] ?? p1['id'];
-        await _addToWallet(userId, amount);
-        results.add({'place': 1, 'user': p1['name'], 'amount': amount});
-        debugPrint('AdminService: 1st Place ($userId): +$amount');
-      }
-
-      // 2do Lugar
-      if (leaderboard.length > 1 && p2Share > 0) {
-        final p2 = leaderboard[1];
-        final amount = (totalPot * p2Share).round();
-        final userId = p2['user_id'] ?? p2['id'];
-        await _addToWallet(userId, amount);
-        results.add({'place': 2, 'user': p2['name'], 'amount': amount});
-        debugPrint('AdminService: 2nd Place ($userId): +$amount');
-      }
-
-      // 3er Lugar
-      if (leaderboard.length > 2 && p3Share > 0) {
-        final p3 = leaderboard[2];
-        final amount = (totalPot * p3Share).round();
-        final userId = p3['user_id'] ?? p3['id'];
-        await _addToWallet(userId, amount);
-        results.add({'place': 3, 'user': p3['name'], 'amount': amount});
-        debugPrint('AdminService: 3rd Place ($userId): +$amount');
-      }
-
-      // 6. Marcar Evento como Completado
-      await _supabase.from('events').update({
-        'status': 'completed',
-        'completed_at': DateTime.now().toIso8601String()
-      }).eq('id', eventId);
-
+      final data = response as Map<String, dynamic>;
+      
+      // Mapear respuesta del RPC al formato esperado por la UI si es necesario
       return {
-        'success': true,
-        'pot': totalPot,
-        'results': results,
-        'message': 'Premios distribuidos correctamente'
+        'success': data['success'] ?? false,
+        'message': data['message'] ?? (data['success'] ? 'Distribución completada' : 'Error desconocido'),
+        'pot': data['distributable_pot'] ?? 0.0,
+        'results': data['results'] ?? [],
+        'winners_count': data['winners_count'] ?? 0,
       };
+
     } catch (e) {
-      debugPrint('AdminService: Error distributing prizes: $e');
-      rethrow;
+      debugPrint('AdminService: Error distributing prizes via RPC: $e');
+      return {
+          'success': false,
+          'message': 'Error de conexión o RPC: $e',
+          'pot': 0.0
+      };
     }
   }
 
@@ -298,5 +202,20 @@ class AdminService {
     await _supabase
         .from('profiles')
         .update({'clovers': current + amount}).eq('id', userId);
+  }
+
+  Future<bool> checkPrizeDistributionStatus(String eventId) async {
+    try {
+      final count = await _supabase
+          .from('prize_distributions')
+          .count(CountOption.exact)
+          .eq('event_id', eventId)
+          .eq('rpc_success', true);
+          
+      return count > 0;
+    } catch (e) {
+      debugPrint('AdminService: Error checking prize distribution status: $e');
+      return false; // Assume false on error to not block UI
+    }
   }
 }

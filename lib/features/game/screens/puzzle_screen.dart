@@ -31,8 +31,8 @@ import '../widgets/minigames/charge_shaker_minigame.dart';
 import '../widgets/minigames/emoji_movie_minigame.dart';
 import '../widgets/minigames/virus_tap_minigame.dart';
 import '../widgets/minigames/drone_dodge_minigame.dart';
-import '../widgets/minigames/memory_sequence_minigame.dart'; 
-import '../widgets/minigames/drink_mixer_minigame.dart'; 
+import '../widgets/minigames/memory_sequence_minigame.dart';
+import '../widgets/minigames/drink_mixer_minigame.dart';
 import '../widgets/minigames/library_sort_minigame.dart';
 import '../widgets/minigames/fast_number_minigame.dart'; // NEW IMPORT
 import '../widgets/minigames/bag_shuffle_minigame.dart'; // NEW IMPORT
@@ -52,6 +52,7 @@ import '../../../shared/widgets/time_stamp_animation.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../widgets/no_lives_widget.dart';
+import 'waiting_room_screen.dart'; // NEW IMPORT
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -111,9 +112,11 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       }
 
       // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
-      // --- ESCUCHA DE FIN DE CARRERA EN TIEMPO REAL ---
-      Provider.of<GameProvider>(context, listen: false)
-          .addListener(_checkRaceCompletion);
+      final gp = Provider.of<GameProvider>(context, listen: false);
+      gp.addListener(_checkRaceCompletion);
+
+      // Verificación inicial inmediata: ¿La carrera ya terminó?
+      _checkRaceCompletion();
 
       // MOVED: _checkGlobalLivesGameOver monitoring is now started inside _checkLives
       // to avoid race conditions during initialization.
@@ -142,14 +145,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     // Use stored provider or safely access context if active
     final gameProvider = _gameProvider;
 
-    // Si las vidas globales llegaron a 0, forzar salida
+    // Si las vidas globales llegaron a 0, simplemente dejamos que el build reaccione
     if (gameProvider.lives <= 0) {
       debugPrint(
-          '[LIVES_MONITOR] 🔴 Global lives reached 0. Forcing minigame exit.');
-      _finishLegally(); // Marcar como salida legal para evitar penalización
-
-      if (!mounted) return;
-      
+          '[LIVES_MONITOR] 🔴 Global lives reached 0. Showing NoLives overlay.');
+      // No hacemos pop(), el build detectará vidas <= 0 y mostrará NoLivesWidget
+      if (mounted) {
+        setState(() {}); // Forzar rebuild local
+      }
     }
   }
 
@@ -354,8 +357,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         forcedBlock = true;
       }
 
-      if ((gameProvider.lives <= 0 || forcedBlock) && !_legalExit) {
-        // Usar el widget reutilizable que contiene el diseño exacto solicitado
+      if ((gameProvider.lives <= 0 || forcedBlock)) {
+        // Si las vidas son 0, bloqueamos SIEMPRE, a menos que ya estemos navegando (legalExit)
+        // Pero si legalExit es true, probablemente ya deberíamos haber salido.
+        // El problema era que _legalExit bloqueaba la visualización del NoLivesWidget.
         return const NoLivesWidget();
       }
     }
@@ -414,19 +419,24 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
             WordScrambleWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.memorySequence:
-        gameWidget = MemorySequenceWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget =
+            MemorySequenceWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.drinkMixer:
-        gameWidget = DrinkMixerWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget =
+            DrinkMixerWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.librarySort:
-        gameWidget = LibrarySortWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget =
+            LibrarySortWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.fastNumber:
-        gameWidget = FastNumberWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget =
+            FastNumberWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.bagShuffle:
-        gameWidget = BagShuffleWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget =
+            BagShuffleWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.chargeShaker:
         gameWidget =
@@ -690,7 +700,25 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
         playerPosition = 999; // Safe default
       }
 
-      // Navigate to winner celebration screen using captured navigator
+      // 🏆 LOGIC UPDATE: WAITING ROOM vs WINNER SCREEN
+      // If the race is NOT globally completed yet (still active), but user finished -> Waiting Room
+      // If the race IS globally completed -> Winner Screen
+      
+      if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
+         debugPrint("🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
+         if (navigator.mounted) {
+            navigator.pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => WaitingRoomScreen(
+                  eventId: gameProvider.currentEventId ?? '',
+                ),
+              ),
+            );
+         }
+         return;
+      }
+
+      // Navigate to winner celebration screen if race IS completed
       if (navigator.mounted) {
         navigator.pushAndRemoveUntil(
           MaterialPageRoute(
@@ -1005,7 +1033,8 @@ class WordScrambleWrapper extends StatelessWidget {
 class MemorySequenceWrapper extends StatelessWidget {
   final Clue clue;
   final VoidCallback onFinish;
-  const MemorySequenceWrapper({super.key, required this.clue, required this.onFinish});
+  const MemorySequenceWrapper(
+      {super.key, required this.clue, required this.onFinish});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
@@ -1022,7 +1051,8 @@ class MemorySequenceWrapper extends StatelessWidget {
 class DrinkMixerWrapper extends StatelessWidget {
   final Clue clue;
   final VoidCallback onFinish;
-  const DrinkMixerWrapper({super.key, required this.clue, required this.onFinish});
+  const DrinkMixerWrapper(
+      {super.key, required this.clue, required this.onFinish});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
@@ -1039,7 +1069,8 @@ class DrinkMixerWrapper extends StatelessWidget {
 class LibrarySortWrapper extends StatelessWidget {
   final Clue clue;
   final VoidCallback onFinish;
-  const LibrarySortWrapper({super.key, required this.clue, required this.onFinish});
+  const LibrarySortWrapper(
+      {super.key, required this.clue, required this.onFinish});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
@@ -1056,7 +1087,8 @@ class LibrarySortWrapper extends StatelessWidget {
 class FastNumberWrapper extends StatelessWidget {
   final Clue clue;
   final VoidCallback onFinish;
-  const FastNumberWrapper({super.key, required this.clue, required this.onFinish});
+  const FastNumberWrapper(
+      {super.key, required this.clue, required this.onFinish});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
@@ -1073,7 +1105,8 @@ class FastNumberWrapper extends StatelessWidget {
 class BagShuffleWrapper extends StatelessWidget {
   final Clue clue;
   final VoidCallback onFinish;
-  const BagShuffleWrapper({super.key, required this.clue, required this.onFinish});
+  const BagShuffleWrapper(
+      {super.key, required this.clue, required this.onFinish});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,

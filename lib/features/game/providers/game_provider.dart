@@ -117,6 +117,10 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   void _setRaceCompleted(bool completed, String source) {
     if (_isRaceCompleted != completed) {
+      // REMOVED CHECK: if (completed && totalClues <= 0)
+      // Reason: If the event is marked completed globally (via Realtime 'events' table), 
+      // we must respect it even if local clues are not fully loaded (e.g. spectator or late joiner).
+      
       debugPrint('--- RACE STATUS CHANGE: $completed (via $source) ---');
       _isRaceCompleted = completed;
       notifyListeners();
@@ -436,7 +440,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
   }
 
   Future<void> _fetchLeaderboardInternal({bool silent = false}) async {
-    if (_currentEventId == null) return;
+    if (_currentEventId == null) {
+      debugPrint("⚠️ GameProvider: _fetchLeaderboardInternal aborted. _currentEventId is null.");
+      return;
+    }
+    debugPrint("📊 GameProvider: Fetching leaderboard for event $_currentEventId");
 
     try {
       final data = await _gameService.getLeaderboard(_currentEventId!);
@@ -446,13 +454,10 @@ class GameProvider extends ChangeNotifier implements IResettable {
       _activePowerEffects =
           await _gameService.getActivePowers(_currentEventId!);
 
-      // Check for victory in leaderboard data
-      for (var player in _leaderboard) {
-        if (totalClues > 0 && player.totalXP >= totalClues) {
-          _setRaceCompleted(true, 'Leaderboard Polling');
-          break;
-        }
-      }
+      // FIX: Removed legacy client-side race completion logic.
+      // The server (via 'events' table status) is the only source of truth for race completion.
+      // This checking was causing premature "Race Completed" state even if more winners were needed.
+
 
       notifyListeners();
     } catch (e) {
@@ -476,8 +481,6 @@ class GameProvider extends ChangeNotifier implements IResettable {
       _clues = [];
       _leaderboard = [];
       _currentClueIndex = 0;
-
-      subscribeToRaceStatus();
     }
 
     final idToUse = eventId ?? _currentEventId;
@@ -515,6 +518,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
     } catch (e) {
       _errorMessage = 'Error fetching clues: $e';
     } finally {
+      // ⚡ CRÍTICO: Suscribirse o actualizar suscripción una vez que totalClues es real
+      subscribeToRaceStatus();
+
       _isLoading = false;
       notifyListeners();
     }
@@ -624,18 +630,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
       if (data != null) {
         // Success
         // Success
-        if (data['raceCompleted'] == true) {
-          debugPrint("🏆 Race Completed in GameProvider!");
-
-          if (data['prizeAmount'] != null) {
-            _currentPrizeWon = (data['prizeAmount'] as num).toInt();
-            debugPrint("🏆 Prize Stored in Provider: $_currentPrizeWon");
+          // CRITICAL FIX: Only treat as Globally Completed if backend says so (raceCompletedGlobal)
+          // 'raceCompleted' in previous logic might have meant "User Finished".
+          // We rely on 'raceCompletedGlobal' which comes from the RPC.
+          if (data['raceCompletedGlobal'] == true) {
+             debugPrint("🏆 GLOBAL Race Completed confirmed by RPC!");
+             _setRaceCompleted(true, 'Clue Completion (RPC)');
           } else {
-            _currentPrizeWon = null;
+             debugPrint("👤 User finished clues, but Race is NOT globally finished yet.");
+             // Ensure we DO NOT set _isRaceCompleted = true here.
+             // The user should go to Waiting Room.
           }
-
-          _setRaceCompleted(true, 'Clue Completion');
-        }
 
         await fetchClues(silent: true);
         fetchLeaderboard();
@@ -654,7 +659,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   Future<void> checkRaceStatus() async {
     if (_currentEventId == null) return;
 
-    _isRaceCompleted = false;
+    // _isRaceCompleted = false; // REMOVED: Do not reset blindly, let the server response decide.
 
     try {
       final isCompleted = await _gameService.checkRaceStatus(_currentEventId!);
