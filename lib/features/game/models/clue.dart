@@ -28,7 +28,11 @@ enum PuzzleType {
   chargeShaker,
   emojiMovie,
   virusTap,
-  droneDodge;
+  droneDodge,
+  holographicPanels,
+  missingOperator,
+  primeNetwork,
+  percentageCalculation;
 
   String get dbValue => toString().split('.').last;
 
@@ -66,11 +70,24 @@ enum PuzzleType {
         return '🦠 Virus Tap (Whack-a-Mole)';
       case PuzzleType.droneDodge:
         return '🚁 Drone Esquiva';
-      case PuzzleType.memorySequence: return '🧠 Secuencia de Memoria (Simon)';
-      case PuzzleType.drinkMixer: return '🍹 Cócteles de Neón (Mixer)';
-      case PuzzleType.librarySort: return '📚 Biblioteca de Tonos (Sort)';
-      case PuzzleType.fastNumber: return '⚡ Número Veloz';
-      case PuzzleType.bagShuffle: return '🛍️ El Trile (Bolsas)';
+      case PuzzleType.holographicPanels:
+        return '🔢 Paneles Holográficos';
+      case PuzzleType.missingOperator:
+        return '➕ Operador Perdido';
+      case PuzzleType.primeNetwork:
+        return '🕸️ Red de Primos';
+      case PuzzleType.percentageCalculation:
+        return '💯 Porcentajes';
+      case PuzzleType.memorySequence:
+        return '🧠 Secuencia de Memoria (Simon)';
+      case PuzzleType.drinkMixer:
+        return '🍹 Cócteles de Neón (Mixer)';
+      case PuzzleType.librarySort:
+        return '📚 Biblioteca de Tonos (Sort)';
+      case PuzzleType.fastNumber:
+        return '⚡ Número Veloz';
+      case PuzzleType.bagShuffle:
+        return '🛍️ El Trile (Bolsas)';
     }
   }
 
@@ -93,6 +110,10 @@ enum PuzzleType {
       case PuzzleType.emojiMovie:
       case PuzzleType.virusTap:
       case PuzzleType.droneDodge:
+      case PuzzleType.holographicPanels:
+      case PuzzleType.missingOperator:
+      case PuzzleType.primeNetwork:
+      case PuzzleType.percentageCalculation:
         return true;
       default:
         return false;
@@ -125,11 +146,16 @@ enum PuzzleType {
         return '¿Qué es lo que ves en la imagen?';
       case PuzzleType.wordScramble:
         return 'Ordena las letras para formar la palabra';
-      case PuzzleType.memorySequence: return 'Repite la secuencia de colores correctamente';
-      case PuzzleType.drinkMixer: return 'Mezcla los colores para igualar el cóctel';
-      case PuzzleType.librarySort: return 'Ordena los libros por su tonalidad de color';
-      case PuzzleType.fastNumber: return 'Escribe el número de 5 cifras que aparecerá brevemente';
-      case PuzzleType.bagShuffle: return 'Sigue la bolsa que contiene el color solicitado';
+      case PuzzleType.memorySequence:
+        return 'Repite la secuencia de colores correctamente';
+      case PuzzleType.drinkMixer:
+        return 'Mezcla los colores para igualar el cóctel';
+      case PuzzleType.librarySort:
+        return 'Ordena los libros por su tonalidad de color';
+      case PuzzleType.fastNumber:
+        return 'Escribe el número de 5 cifras que aparecerá brevemente';
+      case PuzzleType.bagShuffle:
+        return 'Sigue la bolsa que contiene el color solicitado';
       case PuzzleType.chargeShaker:
         return '¡Agita el celular para cargar la batería!';
       case PuzzleType.emojiMovie:
@@ -138,6 +164,14 @@ enum PuzzleType {
         return 'Elimina 15 virus antes de que acabe el tiempo';
       case PuzzleType.droneDodge:
         return 'Sobrevive 30 segundos esquivando los obstáculos';
+      case PuzzleType.holographicPanels:
+        return 'Selecciona la ecuación con el resultado mayor.';
+      case PuzzleType.missingOperator:
+        return 'Encuentra el operador que falta.';
+      case PuzzleType.primeNetwork:
+        return 'Toca solo los números primos.';
+      case PuzzleType.percentageCalculation:
+        return 'Calcula el porcentaje correcto.';
     }
   }
 }

@@ -36,6 +36,10 @@ import '../widgets/minigames/drink_mixer_minigame.dart';
 import '../widgets/minigames/library_sort_minigame.dart';
 import '../widgets/minigames/fast_number_minigame.dart'; // NEW IMPORT
 import '../widgets/minigames/bag_shuffle_minigame.dart'; // NEW IMPORT
+import '../widgets/minigames/holographic_panels_minigame.dart';
+import '../widgets/minigames/missing_operator_minigame.dart';
+import '../widgets/minigames/prime_network_minigame.dart';
+import '../widgets/minigames/percentage_calculation_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
@@ -454,6 +458,22 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         gameWidget =
             DroneDodgeWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
+      case PuzzleType.holographicPanels:
+        gameWidget = HolographicPanelsWrapper(
+            clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.missingOperator:
+        gameWidget =
+            MissingOperatorWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.primeNetwork:
+        gameWidget =
+            PrimeNetworkWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.percentageCalculation:
+        gameWidget = PercentageCalculationWrapper(
+            clue: widget.clue, onFinish: _finishLegally);
+        break;
       default:
         gameWidget = const Center(child: Text("Minijuego no implementado"));
     }
@@ -703,19 +723,20 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       // 🏆 LOGIC UPDATE: WAITING ROOM vs WINNER SCREEN
       // If the race is NOT globally completed yet (still active), but user finished -> Waiting Room
       // If the race IS globally completed -> Winner Screen
-      
+
       if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
-         debugPrint("🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
-         if (navigator.mounted) {
-            navigator.pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => WaitingRoomScreen(
-                  eventId: gameProvider.currentEventId ?? '',
-                ),
+        debugPrint(
+            "🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
+        if (navigator.mounted) {
+          navigator.pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => WaitingRoomScreen(
+                eventId: gameProvider.currentEventId ?? '',
               ),
-            );
-         }
-         return;
+            ),
+          );
+        }
+        return;
       }
 
       // Navigate to winner celebration screen if race IS completed
@@ -1396,4 +1417,76 @@ Widget _buildMinigameScaffold(
   );
 }
 
-// --- WIDGETS DE SOPORTE PARA ANIMACIONES MOVIDOS A ARCHIVOS EXTERNOS ---
+// --- WRAPPERS FOR NEW MINIGAMES ---
+
+class HolographicPanelsWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const HolographicPanelsWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      HolographicPanelsMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }));
+}
+
+class MissingOperatorWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const MissingOperatorWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      MissingOperatorMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }));
+}
+
+class PrimeNetworkWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const PrimeNetworkWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      PrimeNetworkMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }));
+}
+
+class PercentageCalculationWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const PercentageCalculationWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      PercentageCalculationMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }));
+}

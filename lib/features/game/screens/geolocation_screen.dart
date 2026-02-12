@@ -242,11 +242,10 @@ class _GeolocationScreenState extends State<GeolocationScreen>
   }
 
   String _getProximityText() {
-    if (_currentDistance > 500) return '❄️ MUY LEJOS';
-    if (_currentDistance > 200) return '❄️ LEJOS';
-    if (_currentDistance > 100) return '🌡️ CERCA';
-    if (_currentDistance > 50) return '🔥 MUY CERCA';
-    return '🎯 ¡AQUÍ ES!';
+    if (_currentDistance > 300) return '❄️ FRÍO';
+    if (_currentDistance > 100) return '🌡️ TIBIO';
+    if (_currentDistance > 50) return '🔥 CALIENTE';
+    return '🎯 ¡MUY CERCA!';
   }
 
   Color _getProximityColor() {

@@ -96,6 +96,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   bool _isPowerActionLoading =
       false; // Guards against double-clicks during power execution
   bool _isFrozen = false; // Estado de congelamiento para minijuegos
+  String? _currentUserId; // Check current user ID for leaderboard fetching
 
   List<PowerEffect> get activePowerEffects => _activePowerEffects;
   bool get isPowerActionLoading => _isPowerActionLoading;
@@ -255,7 +256,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
     } catch (e) {
       debugPrint('[LIVES_DEBUG] Error perdiendo vida: $e');
       // Rollback
-      _lives++;
+      // Rollback only if we actually decremented
+      if (_lives < 3) {
+        // Simple check, or just ++
+        _lives++;
+      }
       debugPrint('[LIVES_DEBUG] Rollback. Restored lives to: $_lives');
       notifyListeners();
       return _lives;
@@ -442,13 +447,16 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   Future<void> _fetchLeaderboardInternal({bool silent = false}) async {
     if (_currentEventId == null) {
-      debugPrint("⚠️ GameProvider: _fetchLeaderboardInternal aborted. _currentEventId is null.");
+      debugPrint(
+          "⚠️ GameProvider: _fetchLeaderboardInternal aborted. _currentEventId is null.");
       return;
     }
-    debugPrint("📊 GameProvider: Fetching leaderboard for event $_currentEventId");
+    debugPrint(
+        "📊 GameProvider: Fetching leaderboard for event $_currentEventId");
 
     try {
-      final data = await _gameService.getLeaderboard(_currentEventId!);
+      final data = await _gameService.getLeaderboard(_currentEventId!,
+          currentUserId: _currentUserId);
       _leaderboard = data;
 
       // Fetch active powers in parallel or sequence
@@ -458,7 +466,6 @@ class GameProvider extends ChangeNotifier implements IResettable {
       // FIX: Removed legacy client-side race completion logic.
       // The server (via 'events' table status) is the only source of truth for race completion.
       // This checking was causing premature "Race Completed" state even if more winners were needed.
-
 
       notifyListeners();
     } catch (e) {
@@ -496,6 +503,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       if (idToUse == null) return;
 
       if (userId != null) {
+        _currentUserId = userId;
         debugPrint('═══════════════════════════════════════════');
         debugPrint('[FETCH_CLUES] 🚀 Fetching lives for user: $userId');
         await fetchLives(userId);
