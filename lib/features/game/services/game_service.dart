@@ -84,22 +84,59 @@ class GameService {
   }
 
   /// Obtiene el leaderboard de un evento y lo enriquece con datos de perfiles (Avatars)
-  Future<List<Player>> getLeaderboard(String eventId) async {
+  /// allowCurrentUser: Si se pasa, asegura que este usuario esté incluido en la lista aunque no esté en el top 50.
+  Future<List<Player>> getLeaderboard(String eventId,
+      {String? currentUserId}) async {
     try {
       // 1. Obtener la lista base del ranking desde la tabla game_players (reemplaza vista faltante)
       final List<dynamic> leaderboardData = await _supabase
           .from('game_players')
-          .select('game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status') // Added status for debug
+          .select(
+              'game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status') // Added status for debug
           .eq('event_id', eventId)
-          .neq('status', 'spectator') 
+          .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
           .limit(50);
-      
-      debugPrint("📊 getLeaderboard: eventId=$eventId, found ${leaderboardData.length} entries");
+
+      debugPrint(
+          "📊 getLeaderboard: eventId=$eventId, found ${leaderboardData.length} entries");
+
+      // 1.5. Inyectar al usuario actual si no está en la lista (para que aparezca en la carrera)
+      if (currentUserId != null && leaderboardData.isNotEmpty) {
+        final containsUser = leaderboardData.any((json) {
+          final uid = (json['user_id'] ?? json['id'] ?? '').toString();
+          return uid == currentUserId;
+        });
+
+        if (!containsUser) {
+          debugPrint(
+              "👻 Current user $currentUserId not in Top 50. Fetching separate...");
+          try {
+            final myData = await _supabase
+                .from('game_players')
+                .select(
+                    'game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status')
+                .eq('event_id', eventId)
+                .eq('user_id', currentUserId)
+                .maybeSingle();
+
+            if (myData != null) {
+              leaderboardData.add(myData);
+              debugPrint("👻 Current user added to leaderboard list.");
+            } else {
+              debugPrint(
+                  "⚠️ Current user has NO game_player record for this event.");
+            }
+          } catch (e) {
+            debugPrint("Error fetching current user for leaderboard: $e");
+          }
+        }
+      }
+
       if (leaderboardData.isNotEmpty) {
-           debugPrint("📊 Sample Entry: ${leaderboardData.first}");
+        debugPrint("📊 Sample Entry: ${leaderboardData.first}");
       } else {
-           debugPrint("⚠️ getLeaderboard: NO DATA FOUND for event $eventId");
+        debugPrint("⚠️ getLeaderboard: NO DATA FOUND for event $eventId");
       }
 
       if (leaderboardData.isEmpty) return [];
@@ -135,9 +172,9 @@ class GameService {
         if (profilesMap.containsKey(uid)) {
           final p = profilesMap[uid]!;
           // Priorizar avatar_id del perfil
-          json['avatar_id'] = p['avatar_id'] ?? p['avatarId']; 
+          json['avatar_id'] = p['avatar_id'] ?? p['avatarId'];
           json['avatar_url'] = p['avatar_url']; // Ensure url is also passed
-          
+
           // Si el JSON base no tiene nombre, usa el del perfil
           if (json['name'] == null || json['name'].toString().isEmpty) {
             json['name'] = p['name'];
@@ -284,7 +321,7 @@ class GameService {
 
           // Use provided eventId, fallback to response, then null
           final eventIdToUse = eventId ?? data['eventId'];
-          
+
           if (eventIdToUse != null) {
             final rpcRes = await _registerFinisher(eventIdToUse);
             if (rpcRes != null && rpcRes['success'] == true) {
@@ -315,9 +352,9 @@ class GameService {
       if (userId == null) return null;
 
       debugPrint("🏆 Calling RPC register_race_finisher for $eventId...");
-      
+
       final response = await _supabase.rpc('register_race_finisher', params: {
-        'p_event_id': eventId, 
+        'p_event_id': eventId,
         'p_user_id': userId,
       });
 
@@ -479,6 +516,44 @@ class GameService {
     } catch (e) {
       debugPrint('GameService: Error checking if user is game player: $e');
       return false;
+    }
+  }
+
+  /// Obtiene los datos del minijuego de capitales desde Supabase.
+  Future<List<Map<String, String>>> fetchMinigameCapitals() async {
+    try {
+      final List<dynamic> response =
+          await _supabase.from('minigame_capitals').select('flag, capital');
+
+      return response
+          .map((e) => {
+                'flag': e['flag'].toString(),
+                'capital': e['capital'].toString(),
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('GameService: Error fetching minigame capitals: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene los datos del minijuego verdadero/falso desde Supabase.
+  Future<List<Map<String, dynamic>>> fetchMinigameTrueFalse() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from('minigame_true_false')
+          .select('statement, is_true, correction');
+
+      return response
+          .map((e) => {
+                'statement': e['statement'].toString(),
+                'isTrue': e['is_true'] as bool,
+                'correction': e['correction']?.toString() ?? '',
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('GameService: Error fetching minigame true/false: $e');
+      return [];
     }
   }
 }

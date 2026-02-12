@@ -36,6 +36,14 @@ import '../widgets/minigames/drink_mixer_minigame.dart';
 import '../widgets/minigames/library_sort_minigame.dart';
 import '../widgets/minigames/fast_number_minigame.dart'; // NEW IMPORT
 import '../widgets/minigames/bag_shuffle_minigame.dart'; // NEW IMPORT
+import '../widgets/minigames/holographic_panels_minigame.dart';
+import '../widgets/minigames/missing_operator_minigame.dart';
+import '../widgets/minigames/prime_network_minigame.dart';
+import '../widgets/minigames/percentage_calculation_minigame.dart';
+import '../widgets/minigames/chronological_order_minigame.dart';
+import '../widgets/minigames/capital_cities_minigame.dart';
+import '../widgets/minigames/true_false_minigame.dart';
+import '../widgets/minigames/match_three_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
@@ -454,6 +462,38 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         gameWidget =
             DroneDodgeWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
+      case PuzzleType.holographicPanels:
+        gameWidget = HolographicPanelsWrapper(
+            clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.missingOperator:
+        gameWidget =
+            MissingOperatorWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.primeNetwork:
+        gameWidget =
+            PrimeNetworkWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.percentageCalculation:
+        gameWidget = PercentageCalculationWrapper(
+            clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.chronologicalOrder:
+        gameWidget = ChronologicalOrderWrapper(
+            clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.capitalCities:
+        gameWidget =
+            CapitalCitiesWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.trueFalse:
+        gameWidget =
+            TrueFalseWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
+      case PuzzleType.matchThree:
+        gameWidget =
+            MatchThreeWrapper(clue: widget.clue, onFinish: _finishLegally);
+        break;
       default:
         gameWidget = const Center(child: Text("Minijuego no implementado"));
     }
@@ -703,19 +743,20 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       // 🏆 LOGIC UPDATE: WAITING ROOM vs WINNER SCREEN
       // If the race is NOT globally completed yet (still active), but user finished -> Waiting Room
       // If the race IS globally completed -> Winner Screen
-      
+
       if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
-         debugPrint("🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
-         if (navigator.mounted) {
-            navigator.pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => WaitingRoomScreen(
-                  eventId: gameProvider.currentEventId ?? '',
-                ),
+        debugPrint(
+            "🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
+        if (navigator.mounted) {
+          navigator.pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => WaitingRoomScreen(
+                eventId: gameProvider.currentEventId ?? '',
               ),
-            );
-         }
-         return;
+            ),
+          );
+        }
+        return;
       }
 
       // Navigate to winner celebration screen if race IS completed
@@ -901,7 +942,8 @@ class FlagsWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }));
+          }),
+      isScrollable: true);
 }
 
 class MinesweeperWrapper extends StatelessWidget {
@@ -1027,7 +1069,8 @@ class WordScrambleWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }));
+          }),
+      isScrollable: true);
 }
 
 class MemorySequenceWrapper extends StatelessWidget {
@@ -1153,7 +1196,8 @@ class EmojiMovieWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }));
+          }),
+      isScrollable: true);
 }
 
 class VirusTapWrapper extends StatelessWidget {
@@ -1230,6 +1274,30 @@ String _getMinigameInstruction(Clue clue) {
       return "Captura el número";
     case PuzzleType.bagShuffle:
       return "Sigue la bolsa";
+    case PuzzleType.chargeShaker:
+      return "¡Agita para cargar!";
+    case PuzzleType.emojiMovie:
+      return "Adivina la película";
+    case PuzzleType.virusTap:
+      return "¡Aplasta los virus!";
+    case PuzzleType.droneDodge:
+      return "Esquiva obstáculos";
+    case PuzzleType.holographicPanels:
+      return "Elige el mayor valor";
+    case PuzzleType.missingOperator:
+      return "Completa la ecuación";
+    case PuzzleType.primeNetwork:
+      return "Solo números primos";
+    case PuzzleType.percentageCalculation:
+      return "Calcula el porcentaje";
+    case PuzzleType.chronologicalOrder:
+      return "Ordena por fecha";
+    case PuzzleType.capitalCities:
+      return "Selecciona la capital";
+    case PuzzleType.trueFalse:
+      return "Verdadero o Falso";
+    case PuzzleType.matchThree:
+      return "Combina 3 iguales";
     default:
       // Si es un tipo estándar, verificamos por el título o descripción
       if (clue.riddleQuestion?.contains("código") ?? false)
@@ -1241,7 +1309,8 @@ String _getMinigameInstruction(Clue clue) {
 }
 
 Widget _buildMinigameScaffold(
-    BuildContext context, Clue clue, VoidCallback onFinish, Widget child) {
+    BuildContext context, Clue clue, VoidCallback onFinish, Widget child,
+    {bool isScrollable = false}) {
   final player = Provider.of<PlayerProvider>(context).currentPlayer;
 
   // Envolvemos el minijuego en el countdown
@@ -1345,7 +1414,8 @@ Widget _buildMinigameScaffold(
 
                       // Mapa de Progreso
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
                         child: RaceTrackWidget(
                           leaderboard: game.leaderboard,
                           currentPlayerId: player?.userId ?? '',
@@ -1362,7 +1432,17 @@ Widget _buildMinigameScaffold(
                       Expanded(
                         child: IgnorePointer(
                           ignoring: player != null && player.isFrozen,
-                          child: wrappedChild, // Usamos el hijo con countdown
+                          child: isScrollable
+                              ? LayoutBuilder(builder: (context, constraints) {
+                                  return SingleChildScrollView(
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight),
+                                      child: Center(child: wrappedChild),
+                                    ),
+                                  );
+                                })
+                              : wrappedChild, // Usamos el hijo con countdown
                         ),
                       ),
                     ],
@@ -1397,4 +1477,155 @@ Widget _buildMinigameScaffold(
   );
 }
 
-// --- WIDGETS DE SOPORTE PARA ANIMACIONES MOVIDOS A ARCHIVOS EXTERNOS ---
+// --- WRAPPERS FOR NEW MINIGAMES ---
+
+class HolographicPanelsWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const HolographicPanelsWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      HolographicPanelsMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class MissingOperatorWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const MissingOperatorWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      MissingOperatorMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class PrimeNetworkWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const PrimeNetworkWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      PrimeNetworkMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class PercentageCalculationWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const PercentageCalculationWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      PercentageCalculationMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class ChronologicalOrderWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const ChronologicalOrderWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      ChronologicalOrderMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class CapitalCitiesWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const CapitalCitiesWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      CapitalCitiesMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class TrueFalseWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const TrueFalseWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      TrueFalseMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }),
+      isScrollable: true);
+}
+
+class MatchThreeWrapper extends StatelessWidget {
+  final Clue clue;
+  final VoidCallback onFinish;
+  const MatchThreeWrapper(
+      {super.key, required this.clue, required this.onFinish});
+  @override
+  Widget build(BuildContext context) => _buildMinigameScaffold(
+      context,
+      clue,
+      onFinish,
+      MatchThreeMinigame(
+          clue: clue,
+          onSuccess: () {
+            onFinish();
+            _showSuccessDialog(context, clue);
+          }));
+}

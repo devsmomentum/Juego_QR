@@ -96,10 +96,20 @@ class GameProvider extends ChangeNotifier implements IResettable {
   bool _isPowerActionLoading =
       false; // Guards against double-clicks during power execution
   bool _isFrozen = false; // Estado de congelamiento para minijuegos
+  String? _currentUserId; // Check current user ID for leaderboard fetching
+
+  // Minigame Data from Supabase
+  List<Map<String, String>> _minigameCapitals = [];
+  List<Map<String, dynamic>> _minigameTFStatements = [];
+  bool _isMinigameDataLoading = false;
 
   List<PowerEffect> get activePowerEffects => _activePowerEffects;
   bool get isPowerActionLoading => _isPowerActionLoading;
   bool get isFrozen => _isFrozen;
+
+  List<Map<String, String>> get minigameCapitals => _minigameCapitals;
+  List<Map<String, dynamic>> get minigameTFStatements => _minigameTFStatements;
+  bool get isMinigameDataLoading => _isMinigameDataLoading;
 
   /// Sets the frozen state (called by PowerEffectProvider)
   void setFrozen(bool value) {
@@ -175,6 +185,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _targetPlayerId = null;
     _activePowerEffects = [];
     _isFrozen = false;
+    _minigameCapitals = [];
+    _minigameTFStatements = [];
+    _isMinigameDataLoading = false;
 
     stopLeaderboardUpdates();
     stopLivesSubscription();
@@ -254,7 +267,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
     } catch (e) {
       debugPrint('[LIVES_DEBUG] Error perdiendo vida: $e');
       // Rollback
-      _lives++;
+      // Rollback only if we actually decremented
+      if (_lives < 3) {
+        // Simple check, or just ++
+        _lives++;
+      }
       debugPrint('[LIVES_DEBUG] Rollback. Restored lives to: $_lives');
       notifyListeners();
       return _lives;
@@ -441,13 +458,16 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   Future<void> _fetchLeaderboardInternal({bool silent = false}) async {
     if (_currentEventId == null) {
-      debugPrint("⚠️ GameProvider: _fetchLeaderboardInternal aborted. _currentEventId is null.");
+      debugPrint(
+          "⚠️ GameProvider: _fetchLeaderboardInternal aborted. _currentEventId is null.");
       return;
     }
-    debugPrint("📊 GameProvider: Fetching leaderboard for event $_currentEventId");
+    debugPrint(
+        "📊 GameProvider: Fetching leaderboard for event $_currentEventId");
 
     try {
-      final data = await _gameService.getLeaderboard(_currentEventId!);
+      final data = await _gameService.getLeaderboard(_currentEventId!,
+          currentUserId: _currentUserId);
       _leaderboard = data;
 
       // Fetch active powers in parallel or sequence
@@ -457,7 +477,6 @@ class GameProvider extends ChangeNotifier implements IResettable {
       // FIX: Removed legacy client-side race completion logic.
       // The server (via 'events' table status) is the only source of truth for race completion.
       // This checking was causing premature "Race Completed" state even if more winners were needed.
-
 
       notifyListeners();
     } catch (e) {
@@ -495,6 +514,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       if (idToUse == null) return;
 
       if (userId != null) {
+        _currentUserId = userId;
         debugPrint('═══════════════════════════════════════════');
         debugPrint('[FETCH_CLUES] 🚀 Fetching lives for user: $userId');
         await fetchLives(userId);
@@ -788,24 +808,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   /// Inicializa el juego para un usuario con solicitud aprobada.
   /// Llama al RPC initialize_game_for_user y espera el resultado.
-  /// Retorna true si la inicialización fue exitosa.
   Future<bool> initializeGameForApprovedUser(
       String userId, String eventId) async {
-    debugPrint(
-        'GameProvider: Initializing game for approved user $userId in event $eventId');
-
     _isLoading = true;
     notifyListeners();
 
     try {
       final success = await _gameService.initializeGameForUser(userId, eventId);
-
       if (success) {
-        // Configurar el evento actual
-        _currentEventId = eventId;
+        await fetchClues(eventId: eventId, userId: userId);
         debugPrint('GameProvider: Game initialized successfully');
       }
-
       return success;
     } catch (e) {
       debugPrint('GameProvider: Error initializing game: $e');
@@ -816,10 +829,38 @@ class GameProvider extends ChangeNotifier implements IResettable {
     }
   }
 
+  /// Carga los datos de los minijuegos desde Supabase si no han sido cargados.
+  Future<void> loadMinigameData() async {
+    if (_minigameCapitals.isNotEmpty && _minigameTFStatements.isNotEmpty)
+      return;
+
+    _isMinigameDataLoading = true;
+    notifyListeners();
+
+    try {
+      final results = await Future.wait([
+        _gameService.fetchMinigameCapitals(),
+        _gameService.fetchMinigameTrueFalse(),
+      ]);
+
+      _minigameCapitals = results[0] as List<Map<String, String>>;
+      final tfRaw = results[1] as List<Map<String, dynamic>>;
+      _minigameTFStatements = tfRaw;
+
+      debugPrint(
+          'GameProvider: Loaded ${_minigameCapitals.length} capitals and ${_minigameTFStatements.length} TF statements.');
+    } catch (e) {
+      debugPrint('GameProvider: Error loading minigame data: $e');
+    } finally {
+      _isMinigameDataLoading = false;
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     stopLeaderboardUpdates();
-    stopLivesSubscription(); // ✅ Ahora se cancela correctamente solo al destruir el Provider
+    stopLivesSubscription();
     super.dispose();
   }
 }
