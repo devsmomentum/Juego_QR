@@ -659,7 +659,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   Future<void> checkRaceStatus() async {
     if (_currentEventId == null) return;
 
-    _isRaceCompleted = false;
+    // _isRaceCompleted = false; // REMOVED: Do not reset blindly, let the server response decide.
 
     try {
       final isCompleted = await _gameService.checkRaceStatus(_currentEventId!);

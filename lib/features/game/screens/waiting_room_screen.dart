@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../../game/providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
@@ -21,6 +22,8 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   // Store reference to avoid unsafe lookup in dispose
   GameProvider? _gameProviderRef;
 
+  Timer? _pollingTimer;
+
   @override
   void initState() {
     super.initState();
@@ -36,19 +39,24 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
         gameProvider.addListener(_onGameProviderChange);
         
         // Check immediately
-        // Force check against server just in case
         gameProvider.checkRaceStatus(); 
+
+        // 🟢 START POLLING: Check race status every 5 seconds
+        // This acts as a fallback if Realtime fails
+        _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+           if (mounted) {
+              debugPrint("⏳ WaitingRoom: Polling race status...");
+              gameProvider.checkRaceStatus();
+           }
+        });
       }
     });
   }
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _gameProviderRef?.removeListener(_onGameProviderChange);
-    // Do NOT stop leaderboard updates here, as we might naturally transition to Winner Screen
-    // which also needs them, or we leave them running. 
-    // Actually, WinnerScreen handles its own data fetching usually, but safe to leave or stop?
-    // Let's stop to be clean, WinnerScreen will Init its own.
     _gameProviderRef?.stopLeaderboardUpdates();
     super.dispose();
   }
@@ -134,14 +142,27 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      "Esperando que lleguen los demás ganadores...",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
+                      const Text(
+                        "Esperando resultados finales...",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      // FALLBACK POLLING INDICATOR (Debug/Visual aid)
+                      Consumer<GameProvider>(
+                         builder: (context, gp, _) {
+                            return gp.isLoading 
+                              ? const SizedBox(
+                                  height: 20, 
+                                  width: 20, 
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24)
+                                ) 
+                              : const SizedBox.shrink();
+                         }
+                      )
                   ],
                 ),
               ),
