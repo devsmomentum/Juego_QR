@@ -77,6 +77,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
   XFile? _selectedImage;
   bool _isLoading = false;
+  bool _prizesDistributed = false; // New state
   List<Map<String, dynamic>> _leaderboardData = [];
 
   // Search state for participants tab
@@ -238,7 +239,21 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         debugPrint(
             '🔔 CompetitionDetailScreen: Failed to setup subscription: $e');
       }
+      
+      _checkPrizeStatus(adminService); // Check on init
     });
+  }
+
+  Future<void> _checkPrizeStatus([AdminService? service]) async {
+    try {
+      final adminService = service ?? Provider.of<AdminService>(context, listen: false);
+      final distributed = await adminService.checkPrizeDistributionStatus(widget.event.id);
+      if (mounted) {
+        setState(() => _prizesDistributed = distributed);
+      }
+    } catch (e) {
+      debugPrint('Error checking prize status: $e');
+    }
   }
 
   @override
@@ -635,6 +650,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     Provider.of<GameRequestProvider>(context, listen: false).fetchAllRequests();
     _fetchLeaderboard();
     _fetchPlayerStatuses();
+    _checkPrizeStatus(); // Re-check status on reload
   }
 
   Future<void> _distributePrizes() async {
@@ -1233,19 +1249,26 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             ),
             const SizedBox(height: 20),
 
-            if (_isEventActive) ...[
+            if (_isEventActive || _prizesDistributed) ...[
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: _distributePrizes,
-                  icon: const Icon(Icons.emoji_events, color: Colors.black),
-                  label: const Text("FINALIZAR Y PREMIAR",
+                  onPressed: (_prizesDistributed) ? null : _distributePrizes,
+                  icon: Icon(
+                    _prizesDistributed ? Icons.check_circle : Icons.emoji_events, 
+                    color: _prizesDistributed ? Colors.white38 : Colors.black
+                  ),
+                  label: Text(
+                      _prizesDistributed ? "PREMIOS YA DISTRIBUIDOS" : "FINALIZAR Y PREMIAR",
                       style: TextStyle(
-                          color: Colors.black, fontWeight: FontWeight.bold)),
+                          color: _prizesDistributed ? Colors.white38 : Colors.black, 
+                          fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accentGold,
-                    foregroundColor: Colors.black,
+                    backgroundColor: _prizesDistributed ? Colors.white10 : AppTheme.accentGold,
+                    foregroundColor: _prizesDistributed ? Colors.white38 : Colors.black,
+                    disabledBackgroundColor: Colors.white10,
+                    disabledForegroundColor: Colors.white38,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),

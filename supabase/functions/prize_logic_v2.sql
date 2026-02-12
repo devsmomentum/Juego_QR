@@ -77,66 +77,16 @@ begin
     completed_clues_count = (select count(*) from clues where event_id = p_event_id) -- Asegurar max clues
   where event_id = p_event_id and user_id = p_user_id;
 
-  -- F. Lógica de Premios (Solo si entry_fee > 0)
-  v_prize_amount := 0;
-  if v_entry_fee > 0 then
-      -- Calcular Pot Total (Participantes * Fee * 0.70)
-      -- Usamos una estimación rápida o conteo real. Para atomicidad, mejor conteo real snapshot.
-      select count(*) into v_total_participants
-      from game_players
-      where event_id = p_event_id;
-      
-      v_pot_total := (v_total_participants * v_entry_fee) * 0.70;
-
-      -- Definir Share según posición y cantidad de participantes/ganadores
-      -- Reglas simplificadas o leemos config.
-      -- Implementación robusta:
-      if v_position = 1 then
-          if v_configured_winners = 1 then v_prize_share := 1.0;
-          elsif v_configured_winners = 2 then v_prize_share := 0.70;
-          else v_prize_share := 0.50; -- Default 3 winners
-          end if;
-      elsif v_position = 2 then
-          if v_configured_winners = 2 then v_prize_share := 0.30;
-          else v_prize_share := 0.30;
-          end if;
-      elsif v_position = 3 then
-          v_prize_share := 0.20;
-      else
-          v_prize_share := 0.0;
-      end if;
-
-      v_prize_amount := floor(v_pot_total * v_prize_share);
-
-      -- Ajuste de remanente al 1ro (si es el último ganador, pero complejo en tiempo real)
-      -- Simplificación: El 1ro se lleva el remanente SOLO si ya sabemos el pot exacto, 
-      -- pero como entran dinámicamente, mejor shares fijos.
-      -- Opcional: Si es el 1ro y hay pocos participantes (<5), se lleva el 100% (share 1.0).
-      
-      -- Recalcular share dinámico basado en participantes (Requisito: N <= 5 -> 1 ganador)
-      -- Si el admin configuró 3, pero N=4, el RPC debe respetar la configuración o la recomendación?
-      -- Asumimos que la configuración del Admin MANDA. El Admin debió configurar 1 si N<=5.
-      -- PERO, si el Admin puso 3 y solo entraron 4...
-      -- Fallback lógico: Si v_position > v_total_participants (imposible pero bueno), 
-      -- o reglas de negocio:
-      if v_total_participants <= 5 and v_position > 1 then
-         v_prize_amount := 0; -- Solo 1 ganador si N<=5, aunque config diga 3? 
-         -- Decisión: Respetar Configured Winners del Admin.
-      end if;
-
-      if v_prize_amount > 0 then
-         -- Add Clovers (Reusing update logic logic inside)
-         update profiles
-         set clovers = coalesce(clovers, 0) + v_prize_amount
-         where id = p_user_id;
-         
-         -- Record Distribution
-         insert into prize_distributions 
-         (event_id, user_id, position, amount, pot_total, participants_count, entry_fee, rpc_success)
-         values 
-         (p_event_id, p_user_id, v_position, v_prize_amount, v_pot_total, v_total_participants, v_entry_fee, true);
-      end if;
-  end if;
+  -- F. Lógica de Premios: ELIMINADA para evitar conflictos.
+  -- La distribución de premios se realizará mediante el RPC 'distribute_event_prizes' 
+  -- invocado manualmente por el administrador para asegurar el cálculo correcto del Bote (70%)
+  -- y la cantidad de ganadores configurada.
+  
+  /* 
+  LOGIC MOVED TO: distribute_event_prizes
+  Prizes are no longer distributed here to preventing "shrinking pot" issues 
+  and ensure atomic distribution of the correct % based on total participants.
+  */
 
   -- G. Verificar si el evento debe cerrarse FINALMENTE (Si este fue el último ganador)
   if v_position >= v_configured_winners then
@@ -146,6 +96,9 @@ begin
         winner_id = (case when v_position = 1 then p_user_id else winner_id end), -- Registrar 1ro como winner principal si se desea
         completed_at = now() 
       where id = p_event_id;
+
+      -- AUTO-DISTRIBUTE PRIZES
+      perform distribute_event_prizes(p_event_id);
   end if;
 
   return json_build_object(
