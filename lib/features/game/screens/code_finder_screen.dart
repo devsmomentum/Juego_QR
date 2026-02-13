@@ -1,3 +1,6 @@
+import 'package:provider/provider.dart';
+import '../providers/game_request_provider.dart';
+import '../../auth/providers/player_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -269,15 +272,67 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                    builder: (_) => GameRequestScreen(
-                          eventId: widget.scenario.id,
-                          eventTitle: widget.scenario.name,
-                        )),
-              );
+            onPressed: () async {
+              // Validar si el evento tiene costo
+              if (widget.scenario.entryFee > 0) {
+                 final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: isDarkMode ? AppTheme.dSurface1 : AppTheme.lSurface1,
+                    title: Row(
+                      children: [
+                        const Icon(Icons.monetization_on, color: AppTheme.accentGold),
+                        const SizedBox(width: 10),
+                        Text('Confirmar Solicitud', style: TextStyle(color: isDarkMode ? Colors.white : const Color(0xFF1A1A1D))),
+                      ],
+                    ),
+                    content: Text(
+                      'Este evento tiene un costo de ${widget.scenario.entryFee} 🍀.\n\n'
+                      'Los tréboles se descontarán automáticamente de tu saldo CUANDO el administrador apruebe tu solicitud.',
+                      style: TextStyle(color: isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A)),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('CANCELAR', style: TextStyle(color: isDarkMode ? Colors.white54 : AppTheme.lBrandMain)),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentGold,
+                          foregroundColor: Colors.black,
+                        ),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text("ENTENDIDO, SOLICITAR"),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm != true) return;
+              }
+
+              // Submit request (Action: "allí es donde solicita acceso")
+              final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+              final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+              
+              if (playerProvider.currentPlayer != null) {
+                  await requestProvider.submitRequest(
+                    playerProvider.currentPlayer!, 
+                    widget.scenario.id, 
+                    widget.scenario.maxPlayers
+                  );
+              }
+
+              if (context.mounted) {
+                Navigator.pop(context);
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                      builder: (_) => GameRequestScreen(
+                            eventId: widget.scenario.id,
+                            eventTitle: widget.scenario.name,
+                          )),
+                );
+              }
             },
             child: const Text("SOLICITAR ACCESO"),
           ),

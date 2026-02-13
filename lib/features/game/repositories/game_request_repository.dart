@@ -19,7 +19,12 @@ abstract class IGameRequestRepository {
     String role = 'player',
   });
   Future<void> upgradeSpectatorToPlayer(String gamePlayerId);
-  Future<bool> deductClovers(String userId, int cost);
+  /// Calls the atomic RPC approve_and_pay_event_entry (admin approval + payment).
+  Future<Map<String, dynamic>> approveAndPayEntry(String requestId);
+  /// Calls the atomic RPC join_online_paid_event (self-service for online events).
+  Future<Map<String, dynamic>> joinOnlinePaidEventRPC(String userId, String eventId);
+  /// Calls secure_clover_payment RPC directly (generic atomic clover deduction).
+  Future<Map<String, dynamic>> callSecureCloverPayment(String userId, int amount, String reason);
   Future<int> getCurrentClovers(String userId);
   Future<List<GameRequest>> getAllRequests();
 }
@@ -191,21 +196,43 @@ class GameRequestRepository implements IGameRequestRepository {
   }
 
   @override
-  Future<bool> deductClovers(String userId, int cost) async {
+  Future<Map<String, dynamic>> approveAndPayEntry(String requestId) async {
     try {
-      final currentClovers = await getCurrentClovers(userId);
-      
-      if (currentClovers < cost) {
-        return false;
-      }
-
-      await _supabase.from('profiles').update({
-        'clovers': currentClovers - cost,
-      }).eq('id', userId);
-
-      return true;
+      final result = await _supabase.rpc('approve_and_pay_event_entry', params: {
+        'p_request_id': requestId,
+      });
+      return Map<String, dynamic>.from(result as Map);
     } catch (e) {
-      debugPrint('GameRequestRepository: Error deducting clovers: $e');
+      debugPrint('GameRequestRepository: Error in approveAndPayEntry: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> joinOnlinePaidEventRPC(String userId, String eventId) async {
+    try {
+      final result = await _supabase.rpc('join_online_paid_event', params: {
+        'p_user_id': userId,
+        'p_event_id': eventId,
+      });
+      return Map<String, dynamic>.from(result as Map);
+    } catch (e) {
+      debugPrint('GameRequestRepository: Error in joinOnlinePaidEventRPC: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> callSecureCloverPayment(String userId, int amount, String reason) async {
+    try {
+      final result = await _supabase.rpc('secure_clover_payment', params: {
+        'p_user_id': userId,
+        'p_amount': amount,
+        'p_reason': reason,
+      });
+      return Map<String, dynamic>.from(result as Map);
+    } catch (e) {
+      debugPrint('GameRequestRepository: Error in callSecureCloverPayment: $e');
       rethrow;
     }
   }

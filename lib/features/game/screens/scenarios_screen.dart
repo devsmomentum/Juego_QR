@@ -664,7 +664,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                   setState(() => _isProcessing = true);
                   LoadingOverlay.show(context);
 
-                  final success = await requestProvider.joinOnlinePaidEvent(
+                  final result = await requestProvider.joinOnlinePaidEvent(
                       playerProvider.currentPlayer!.userId,
                       scenario.id,
                       scenario.entryFee);
@@ -673,11 +673,16 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                   await Future.delayed(const Duration(seconds: 2));
 
                   if (!mounted) return;
-                  Navigator.pop(context);
+                  LoadingOverlay.hide(context);
 
+                  final success = result['success'] == true;
                   if (success) {
-                    playerProvider
-                        .updateLocalClovers(userClovers - scenario.entryFee);
+                    final newBalance = (result['new_balance'] as num?)?.toInt();
+                    if (newBalance != null) {
+                      playerProvider.updateLocalClovers(newBalance);
+                    } else {
+                      playerProvider.updateLocalClovers(userClovers - scenario.entryFee);
+                    }
                     await playerProvider.refreshProfile();
                     setState(() {
                       _participantStatusMap[scenario.id] = true;
@@ -692,8 +697,11 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                   HomeScreen(eventId: scenario.id)));
                     }
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Error procesando el pago.')));
+                    final error = result['error'] ?? 'Error desconocido';
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(error == 'PAYMENT_FAILED'
+                            ? 'Saldo insuficiente al procesar el pago.'
+                            : 'Error procesando el pago.')));
                   }
                   setState(() => _isProcessing = false);
                 }
@@ -788,77 +796,65 @@ class _ScenariosScreenState extends State<ScenariosScreen>
           final userClovers = playerProvider.currentPlayer?.clovers ?? 0;
 
           if (userClovers >= entryFee) {
-            // Caso 1: Tiene saldo suficiente -> Confirmar y Pagar
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: AppTheme.cardBg,
-                title: const Text('Confirmar Inscripción',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                content: Text(
-                  'Este evento tiene un costo de $entryFee 🍀.\n\n'
-                  'Tu saldo: $userClovers 🍀\n'
-                  'Despues del pago: ${userClovers - entryFee} 🍀',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancelar',
-                        style: TextStyle(color: Colors.white54)),
+            if (scenario.type == 'online') {
+              // ── ONLINE PAID: Atomic payment + join via RPC ──
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: AppTheme.cardBg,
+                  title: const Text('Confirmar Inscripción',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                  content: Text(
+                    'Este evento tiene un costo de $entryFee 🍀.\n\n'
+                    'Tu saldo: $userClovers 🍀\n'
+                    'Despues del pago: ${userClovers - entryFee} 🍀',
+                    style: const TextStyle(color: Colors.white70),
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentGold,
-                      foregroundColor: Colors.black,
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancelar',
+                          style: TextStyle(color: Colors.white54)),
                     ),
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('PAGAR Y ENTRAR'),
-                  ),
-                ],
-              ),
-            );
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentGold,
+                        foregroundColor: Colors.black,
+                      ),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('PAGAR Y ENTRAR'),
+                    ),
+                  ],
+                ),
+              );
 
-            if (confirm == true) {
-              // Procesar Pago
-              setState(() => _isProcessing = true);
-              LoadingOverlay.show(context);
+              if (confirm == true) {
+                setState(() => _isProcessing = true);
+                LoadingOverlay.show(context);
 
-              // Usar función apropiada según tipo de evento
-              final bool success;
-              if (scenario.type == 'online') {
-                // Online: Pago + inscripción directa (sin esperar admin)
-                success = await requestProvider.joinOnlinePaidEvent(
+                final joinResult = await requestProvider.joinOnlinePaidEvent(
                     playerProvider.currentPlayer!.userId,
                     scenario.id,
                     entryFee);
-              } else {
-                // Presencial: Solo pago (luego pasa por flujo de solicitud)
-                success = await requestProvider.processEventPayment(
-                    playerProvider.currentPlayer!.userId,
-                    scenario.id,
-                    entryFee);
-              }
 
-              if (!mounted) return;
-              LoadingOverlay.hide(context); // Close loading overlay
+                if (!mounted) return;
+                LoadingOverlay.hide(context);
 
-              if (success) {
-                // Actualizar saldo localmente para reflejar cambio inmediato
-                playerProvider.updateLocalClovers(userClovers - entryFee);
-                await playerProvider.refreshProfile();
+                if (joinResult['success'] == true) {
+                  final newBalance = (joinResult['new_balance'] as num?)?.toInt();
+                  if (newBalance != null) {
+                    playerProvider.updateLocalClovers(newBalance);
+                  } else {
+                    playerProvider.updateLocalClovers(userClovers - entryFee);
+                  }
+                  await playerProvider.refreshProfile();
 
-                // Actualizar mapa de participación
-                setState(() {
-                  _participantStatusMap[scenario.id] =
-                      (scenario.type == 'online');
-                });
+                  setState(() {
+                    _participantStatusMap[scenario.id] = true;
+                  });
 
-                // Navegar al flujo correcto según tipo de evento
-                if (mounted) {
-                  if (scenario.type == 'online') {
-                    // Online: Ir directo a la carrera (ya está inscrito)
+                  if (mounted) {
                     final gameProvider =
                         Provider.of<GameProvider>(context, listen: false);
                     await gameProvider.fetchClues(eventId: scenario.id);
@@ -867,23 +863,25 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                       MaterialPageRoute(
                           builder: (_) => HomeScreen(eventId: scenario.id)),
                     );
-                  } else {
-                    // Presencial: Mostrar termómetro primero -> QR -> Solicitar Acceso
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => CodeFinderScreen(scenario: scenario)),
-                    );
                   }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text(joinResult['error'] == 'PAYMENT_FAILED'
+                            ? 'Saldo insuficiente al procesar.'
+                            : 'Error al inscribirse. Intenta de nuevo.')),
+                  );
                 }
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content:
-                          Text('Error procesando el pago. Intenta de nuevo.')),
-                );
+                setState(() => _isProcessing = false);
               }
-              setState(() => _isProcessing = false);
+            } else {
+              // ── ON-SITE PAID: Navigate directly to CodeFinder ──
+              // Payment warning and request submission will happen AFTER scanning the QR code.
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => CodeFinderScreen(scenario: scenario)),
+              );
             }
           } else {
             // Caso 2: Saldo Insuficiente -> Redirigir Wallet
@@ -2056,6 +2054,27 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                   ],
                                                                 ),
                                                               ),
+                                                              // COST DISPLAY (separate pill next to status)
+                                                              if (!scenario.isCompleted && scenario.entryFee > 0)
+                                                                Padding(
+                                                                  padding: const EdgeInsets.only(left: 6),
+                                                                  child: Container(
+                                                                    padding: const EdgeInsets.symmetric(
+                                                                        horizontal: 8, vertical: 6),
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors.black54,
+                                                                      borderRadius: BorderRadius.circular(20),
+                                                                      border: Border.all(color: Colors.white24),
+                                                                    ),
+                                                                    child: Text(
+                                                                      "${scenario.entryFee} 🍀",
+                                                                      style: const TextStyle(
+                                                                          color: AppTheme.accentGold,
+                                                                          fontWeight: FontWeight.bold,
+                                                                          fontSize: 12),
+                                                                    ),
+                                                                  ),
+                                                                ),
 
                                                               // POT DISPLAY (NEW)
                                                               if (!scenario
@@ -2197,9 +2216,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                                 true
                                                                             ? const Text(
                                                                                 "ENTRAR")
-                                                                            : Text(scenario.entryFee == 0
-                                                                                ? "INSCRIBETE (GRATIS)"
-                                                                                : "INSCRIBETE (${scenario.entryFee} 🍀)"),
+                                                                            : const Text("PARTICIPAR"),
                                                                   ),
                                                                 ),
                                                                 if (!scenario.isCompleted &&
