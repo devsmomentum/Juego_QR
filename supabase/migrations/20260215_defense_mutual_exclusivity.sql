@@ -184,11 +184,7 @@ BEGIN
                     WHERE target_id = v_aoe_target_id 
                       AND power_slug IN ('shield', 'return', 'invisibility');
                     
-                    -- Log Block
-                    INSERT INTO public.combat_events (event_id, attacker_id, target_id, power_id, power_slug, result_type)
-                    VALUES (v_event_id, p_caster_id, v_aoe_target_id, v_power_id, p_power_slug, 'shield_blocked');
-                    
-                    -- Handle Return (only return reflects, shield/invisibility just block)
+                    -- Handle Return vs Shield/Invisibility
                     IF v_aoe_defense_slug = 'return' THEN
                          v_aoe_returned := true;
                          v_aoe_final_caster := v_aoe_target_id;
@@ -199,6 +195,10 @@ BEGIN
                          
                          SELECT name INTO v_aoe_returned_by_name FROM public.profiles 
                          WHERE id = (SELECT user_id FROM public.game_players WHERE id = v_aoe_target_id);
+                    ELSE
+                        -- Log standard block (Shield or Invisibility)
+                        INSERT INTO public.combat_events (event_id, attacker_id, target_id, power_id, power_slug, result_type)
+                        VALUES (v_event_id, p_caster_id, v_aoe_target_id, v_power_id, p_power_slug, 'shield_blocked');
                     END IF;
                 END IF;
 
