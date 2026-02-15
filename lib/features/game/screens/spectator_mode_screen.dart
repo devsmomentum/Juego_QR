@@ -504,8 +504,25 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       builder: (context) {
         return Consumer<GameProvider>(
           builder: (context, gameProvider, child) {
+            final activePowers = gameProvider.activePowerEffects;
             final players = gameProvider.leaderboard
-                .where((p) => p.gamePlayerId != null && p.gamePlayerId!.isNotEmpty)
+                .where((p) {
+                   if (p.gamePlayerId == null || p.gamePlayerId!.isEmpty) return false;
+                   
+                   // Invisibility Check
+                   if (p.isInvisible) return false;
+                   
+                   final isStealthed = activePowers.any((e) {
+                      final targetId = e.targetId.trim().toLowerCase();
+                      final userId = p.userId.trim().toLowerCase();
+                      final gpId = p.gamePlayerId!.trim().toLowerCase();
+                      
+                      final isMatch = (targetId == userId || targetId == gpId);
+                      return isMatch && (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && !e.isExpired;
+                   });
+                   
+                   return !isStealthed;
+                })
                 .toList();
 
             return Dialog(

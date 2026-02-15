@@ -67,10 +67,11 @@ class RaceLogicService {
         return true; // I always see myself
 
       // Check active powers for invisibility
+      // FIX: Check against BOTH userId and gamePlayerId to ensure we catch all cases
       final isStealthed = activePowers.any((e) {
         final targetId = _normalizeId(e.targetId);
-        final playerId = _normalizeId(p.id);
-        final playerGameId = _normalizeId(p.gamePlayerId);
+        final playerId = _normalizeId(p.userId); // Use userId (UUID)
+        final playerGameId = _normalizeId(p.gamePlayerId); // Use gamePlayerId (INT)
         
         // Match against EITHER id or gamePlayerId
         final isMatch = (targetId == playerId || targetId == playerGameId);
