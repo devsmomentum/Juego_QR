@@ -18,6 +18,7 @@ import '../../../shared/widgets/exit_protection_wrapper.dart'; // Protection
 import '../services/clue_navigator_service.dart'; // New Service
 import 'puzzle_screen.dart';
 import 'waiting_room_screen.dart'; // NEW IMPORT
+import '../providers/power_effect_provider.dart'; // SHIELD FIX
 
 class CluesScreen extends StatefulWidget {
   // 1. Recibimos el ID del evento obligatorio
@@ -81,6 +82,19 @@ class _CluesScreenState extends State<CluesScreen> {
 
         // 4. FINALMENTE iniciar el polling de ranking
         gameProvider.startLeaderboardUpdates();
+
+        // 5. SHIELD CONSISTENCY FIX: Iniciar escucha de eventos de poderes
+        final powerEffectProvider = Provider.of<PowerEffectProvider>(context, listen: false);
+        final gamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
+        
+        if (gamePlayerId != null) {
+          debugPrint("🛡️ CluesScreen: Initializing PowerEffectProvider for $gamePlayerId");
+          powerEffectProvider.startListening(gamePlayerId, eventId: widget.eventId);
+        } else {
+           debugPrint("⚠️ CluesScreen: gamePlayerId is NULL. Attempting to sync inventory to recover it...");
+           // Intento de recuperación: Sync de inventario trae el ID
+           await playerProvider.syncRealInventory(effectProvider: powerEffectProvider);
+        }
       }
     });
   }

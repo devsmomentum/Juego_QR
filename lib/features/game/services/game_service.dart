@@ -92,11 +92,40 @@ class GameService {
       final List<dynamic> leaderboardData = await _supabase
           .from('game_players')
           .select(
-              'game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status') // Added status for debug
+              'game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status, is_protected') // Added is_protected
           .eq('event_id', eventId)
           .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
           .limit(50);
+
+      // --- INVISIBILITY FILTER --- 
+      // Fetch currently invisible players to exclude them from the list
+      try {
+        final invisiblePlayers = await _supabase
+           .from('active_powers')
+           .select('target_id')
+           .eq('event_id', eventId)
+           .eq('power_slug', 'invisibility')
+           .gt('expires_at', DateTime.now().toUtc().toIso8601String());
+        
+        final Set<String> invisibleIds = invisiblePlayers.map((e) => e['target_id']?.toString() ?? '').toSet();
+        
+        if (invisibleIds.isNotEmpty) {
+           // Remove invisible players from the main list (unless it's ME checking my own rank?)
+           // Requirement: "demás usuarios pueden verlo... debería de no aparecer"
+           // Usually I should still see MYSELF even if invisible.
+           leaderboardData.removeWhere((p) {
+              final pid = p['game_player_id']?.toString() ?? p['id']?.toString();
+              // Keep myself visible to me
+              final uid = p['user_id']?.toString();
+              if (currentUserId != null && uid == currentUserId) return false;
+              
+              return invisibleIds.contains(pid);
+           });
+        }
+      } catch (e) {
+        debugPrint('Error filtering invisible players: $e');
+      }
 
       debugPrint(
           "📊 getLeaderboard: eventId=$eventId, found ${leaderboardData.length} entries");
@@ -458,7 +487,7 @@ class GameService {
     try {
       final response = await _supabase
           .from('game_players')
-          .select('id, event_id, lives, completed_clues_count')
+          .select('id, event_id, lives, completed_clues_count, is_protected')
           .eq('user_id', userId)
           .order('joined_at', ascending: false)
           .limit(1)

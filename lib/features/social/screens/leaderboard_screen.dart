@@ -4,6 +4,8 @@ import '../../game/providers/game_provider.dart';
 import 'package:treasure_hunt_rpg/core/theme/app_theme.dart';
 import '../widgets/leaderboard_card.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../shared/models/player.dart';
+import '../../auth/providers/player_provider.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -38,6 +40,35 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final Color currentText = isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
     final Color currentTextSec = isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A);
     final Color currentSurface = isDarkMode ? AppTheme.dSurface1 : AppTheme.lSurface1;
+    final currentUserGameId = gameProvider.targetPlayerId; 
+    
+    // FILTER LOGIC FOR INVISIBILITY
+    final activePowers = gameProvider.activePowerEffects;
+    final currentUserId = Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.userId ?? '';
+
+    bool isVisible(Player p) {
+       // Always see myself
+       if (p.userId == currentUserId) return true;
+
+       // Check active powers for invisibility
+       final isStealthed = activePowers.any((e) {
+          final target = e.targetId.trim().toLowerCase();
+          final pid = p.id.trim().toLowerCase();
+          final pgid = (p.gamePlayerId ?? '').trim().toLowerCase();
+          
+          final isMatch = (target == pid || target == pgid);
+          return isMatch && (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && !e.isExpired;
+       });
+
+       if (isStealthed) return false;
+       if (p.isInvisible) return false;
+       
+       return true;
+    }
+
+    final filteredLeaderboard = leaderboard.where(isVisible).toList();
+    // Re-assign to use filtered list for UI
+    final displayLeaderboard = filteredLeaderboard;
     
     return AnimatedCyberBackground(
       child: Stack(
@@ -58,7 +89,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             child: Column(
               children: [
             // Winner Celebration Section
-            if (leaderboard.isNotEmpty && leaderboard[0].totalXP >= gameProvider.totalClues && gameProvider.totalClues > 0)
+            if (displayLeaderboard.isNotEmpty && displayLeaderboard[0].totalXP >= gameProvider.totalClues && gameProvider.totalClues > 0)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -83,7 +114,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      "¡FELICIDADES ${leaderboard[0].name.toUpperCase()}!",
+                      "¡FELICIDADES ${displayLeaderboard[0].name.toUpperCase()}!",
                       style: const TextStyle(
                         color: AppTheme.accentGold,
                         fontWeight: FontWeight.w900,
@@ -164,7 +195,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ),
             
             // Top 3 Podium
-            if (leaderboard.length >= 3)
+            if (displayLeaderboard.length >= 3)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 padding: const EdgeInsets.all(20),
@@ -178,21 +209,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   children: [
                     // 2nd place
                     _buildPodiumPosition(
-                      leaderboard[1],
+                      displayLeaderboard[1],
                       2,
                       80,
                       Colors.grey,
                     ),
                     // 1st place
                     _buildPodiumPosition(
-                      leaderboard[0],
+                      displayLeaderboard[0],
                       1,
                       100,
                       AppTheme.accentGold,
                     ),
                     // 3rd place
                     _buildPodiumPosition(
-                      leaderboard[2],
+                      displayLeaderboard[2],
                       3,
                       70,
                       const Color(0xFFCD7F32),
@@ -202,17 +233,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ),
             
             // Si hay menos de 3, mostrar mensaje o lista simple
-            if (leaderboard.isEmpty)
+            if (displayLeaderboard.isEmpty)
                Expanded(child: Center(child: Text("Cargando ranking...", style: TextStyle(color: currentTextSec)))),
 
             // Rest of the leaderboard
-            if (leaderboard.isNotEmpty)
+            if (displayLeaderboard.isNotEmpty)
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: leaderboard.length,
+                itemCount: displayLeaderboard.length,
                 itemBuilder: (context, index) {
-                  final player = leaderboard[index];
+                  final player = displayLeaderboard[index];
                   return LeaderboardCard(
                     player: player,
                     rank: index + 1,

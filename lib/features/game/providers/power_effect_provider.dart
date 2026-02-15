@@ -83,25 +83,24 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
   String? get returnedPowerSlug => _returnedPowerSlug;
 
   // --- MUTUAL EXCLUSIVITY FOR DEFENSE POWERS ---
-  bool get isDefenseActive => _shieldArmed || _returnArmed || isEffectActive('invisibility') || isEffectActive('shield');
+  // Now simpler: _shieldArmed is the truthful 'isProtected' state from DB
+  bool get isDefenseActive => _shieldArmed || _returnArmed || isEffectActive('shield') || isEffectActive('return') || isEffectActive('invisibility');
   
   String? get activeDefensePower {
-      if (_shieldArmed || isEffectActive('shield')) return 'shield';
+      if (_shieldArmed) return 'shield'; // Generic protection (could be return too, but shield implies protection)
+      if (isEffectActive('shield')) return 'shield';
       if (_returnArmed) return 'return';
+      if (isEffectActive('return')) return 'return'; // Fallback
       if (isEffectActive('invisibility')) return 'invisibility';
-      if (isEffectActive('extra_life')) return 'extra_life'; 
+      // if (isEffectActive('extra_life')) return 'extra_life'; 
       return null;
   }
 
   bool canActivateDefensePower(String powerSlug) {
-      if (activeDefensePower == null) return true;
-      // If the SAME power is active, we might allow extending it (depending on game rules), 
-      // but usually for defense it's a toggle or one-shot. 
-      // The requirement says: "Solo puede haber un (1) poder de defensa activo a la vez."
-      // So if any is active, we cannot activate another (unless it is the same one to refresh? 
-      // User says: "Si uno está activo: Ese poder muestra 'Activo'; los otros dos muestran 'Poder de defensa en uso' (deshabilitados)."
-      // proper check:
-      return activeDefensePower == powerSlug; 
+      // STRICT EXCLUSIVITY: If any defense is active, NO defense power can be used.
+      // logic: isDefenseActive checks isProtected (synced from DB) or local states.
+      if (isDefenseActive) return false;
+      return true;
   }
 
 
@@ -196,32 +195,12 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
   }
 
   Future<void> armShield() async {
-    _shieldArmed = true;
-    _shieldLastArmedAt = DateTime.now(); // Start grace period
-    _returnArmed = false; // Mutual exclusivity
-    debugPrint('🛡️ Shield ARMED - Ready to block one attack');
-    try {
-      final duration = await _repository.getPowerDuration(powerSlug: 'shield');
-      if (_cachedShieldPowerId == null) {
-         try {
-           // We can rely on resolveSlug for ID if needed, but for now we might skip ID caching here
-           // or add getPowerIdBySlug to repo. 
-           // For simplicity in this step, we just use duration.
-         } catch(e) { debugPrint('🛡️ FAILED to cache Shield ID: $e'); }
-      }
-      // SHIELD FIX: Always use long duration locally (365 days)
-      // The shield should only break when attacked, not by time.
-      const longDuration = Duration(days: 365);
-      final expiresAt = DateTime.now().toUtc().add(longDuration);
-      
-      applyEffect(slug: 'shield', duration: longDuration, expiresAt: expiresAt);
-    } catch (e) {
-      debugPrint('Error arming shield: $e');
-      // Fallback
-      const longDuration = Duration(days: 365);
-      applyEffect(slug: 'shield', duration: longDuration, expiresAt: DateTime.now().toUtc().add(longDuration));
-    }
+    // Optimistic UI Update (will be confirmed by game_players stream)
+    _shieldArmed = true; 
+    _shieldLastArmedAt = DateTime.now(); 
+    _returnArmed = false; 
     notifyListeners();
+    debugPrint('🛡️ Shield ACTIVATING (Waiting for server confirmation)');
   }
 
   void configureLifeStealVictimHandler(Future<void> Function(String effectId, String? casterGamePlayerId, String targetGamePlayerId) handler) {
@@ -264,6 +243,34 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
     _listeningForId = myGamePlayerId;
     _listeningForEventId = eventId;
     _sessionStartTime = DateTime.now().toUtc();
+
+    debugPrint('🛡️ PowerEffectProvider STARTING LISTENING: localId=$myGamePlayerId, eventId=$eventId');
+
+    // 0. Listen for Game Player Updates (PROTECTION STATE) - SHIELD CONSISTENCY FIX
+    _repository.getGamePlayerStream(playerId: myGamePlayerId)
+        .listen((Map<String, dynamic>? player) {
+           if (player != null) {
+              // DEBUG: Check if column exists
+              if (!player.containsKey('is_protected')) {
+                 debugPrint('⚠️ [PROTECTION-SYNC] Payload missing is_protected column! Keys: ${player.keys.toList()}');
+                 // Do NOT overwrite optimistic state if column is missing
+                 return;
+              }
+
+              final bool isProtected = player['is_protected'] ?? false;
+              if (_shieldArmed != isProtected) {
+                 _shieldArmed = isProtected;
+                 // Mutual Exclusivity: If protected, ensure Return is off
+                 if (_shieldArmed) _returnArmed = false; 
+                 notifyListeners();
+                 debugPrint('🛡️ [PROTECTION-SYNC] Shield State Updated: $_shieldArmed');
+              }
+           } else {
+             debugPrint('🛡️ [STREAM] game_players returned NULL for id=$myGamePlayerId');
+           }
+        }, onError: (e) {
+             debugPrint('🛑 PowerEffectProvider game_players stream error: $e');
+        });
 
     // 1. Listen for Active Powers
     _subscription = _repository.getActivePowersStream(targetId: myGamePlayerId)
@@ -358,6 +365,7 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
              debugPrint('[COMBAT] ↩️ RETURN ACTIVATED! Syncing local state.');
             
             _returnArmed = false;
+            _shieldArmed = false; // ⚡ CRITICAL FIX: Backend consumes is_protected, so we must specificially clear it locally to unblock UI
             _removeEffect('return');
             
             // EXTRACT DATA FOR FEEDBACK
@@ -593,28 +601,15 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
        // 2. `combat_events` stream for feedback animations (shield_blocked, reflected)
 
        // --- SHIELD SYNC (Server-Side Removal) ---
-       // If shield is active locally, but missing from the incoming stream, 
-       // it means the server consumed it (or it expired/was removed).
-       // We must remove it locally to update the UI immediately.
+       // [REFACTORED] Now handled by game_players stream via is_protected.
+       // We DO NOT disable shield here based on active_powers presence.
+       // The is_protected flag is the source of truth.
+       
+       /* 
        if (_shieldArmed && !shieldBrokenInBatch && isEffectActive('shield')) {
-           bool shieldInStream = filtered.any((e) {
-               final s = e['power_slug'] ?? e['slug']; // handle both formats
-               return s == 'shield';
-           });
-           
-           if (!shieldInStream) {
-               debugPrint('[SHIELD] 🛡️ Shield missing from stream (consumed/expired) -> Removing local effect.');
-               // GRACE PERIOD: If we just armed it (< 5s ago), don't remove it yet.
-               // It might take a moment to appear in the stream.
-               if (_shieldLastArmedAt != null && DateTime.now().difference(_shieldLastArmedAt!).inSeconds < 5) {
-                   debugPrint('[SHIELD] ⏳ Grace period active (armed ${_shieldLastArmedAt}), keeping local shield.');
-               } else {
-                   debugPrint('[SHIELD] 🛡️ Shield missing from stream (consumed/expired) -> Removing local effect.');
-                   _shieldArmed = false;
-                   _removeEffect('shield');
-               }
-           }
+           // ... (Legacy logic removed) ...
        }
+       */
        
        // --- INTERCEPTION LOGIC ---
        // Shield interception is now handled Server-Side (execute_combat_power.sql).

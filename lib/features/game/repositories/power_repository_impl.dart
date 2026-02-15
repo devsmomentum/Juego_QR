@@ -33,7 +33,16 @@ class PowerRepositoryImpl implements PowerRepository {
         .stream(primaryKey: ['id'])
         .eq('target_id', targetId)
         .order('created_at', ascending: false)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false); // Note: Keep existing weird ordering if it was there, or clean it up.
+  }
+
+  @override
+  Stream<Map<String, dynamic>?> getGamePlayerStream({required String playerId}) {
+    return _supabase
+        .from('game_players')
+        .stream(primaryKey: ['id'])
+        .eq('id', playerId)
+        .map((data) => data.isNotEmpty ? data.first : null);
   }
 
   @override

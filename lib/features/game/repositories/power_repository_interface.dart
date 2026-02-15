@@ -10,6 +10,9 @@ abstract class PowerRepository {
   /// Stream of combat events (shield blocks, reflections, etc.)
   Stream<List<Map<String, dynamic>>> getCombatEventsStream({required String targetId});
 
+  /// Stream of specific game player updates (for is_protected sync)
+  Stream<Map<String, dynamic>?> getGamePlayerStream({required String playerId});
+
   /// Resolves a power slug from a power effect object/map
   Future<String?> resolveEffectSlug(Map<String, dynamic> effect);
 

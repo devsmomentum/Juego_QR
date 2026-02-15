@@ -642,8 +642,10 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
       // Configure PowerEffectProvider
 
       debugPrint('[DEBUG] 🎯 Configuring PowerEffectProvider...');
-      effectProvider
-          ?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
+      // REMOVED: Redundant and causes race condition (undoes optimistic update).
+      // PowerEffectProvider manages its own state via startListening() stream.
+      // effectProvider
+      //    ?.setShielded(_currentPlayer!.status == PlayerStatus.shielded);
       // effectProvider?.configureReturnHandler - REMOVED: Return logic is now handled by strategies
 
       debugPrint(
