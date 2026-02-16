@@ -885,6 +885,13 @@ class _WalletScreenState extends State<WalletScreen> {
     final bankCode = method['bank_code'] ?? '???';
     final phone = method['phone_number'] ?? '???';
 
+    // Combined future: check rate validity AND load plans in parallel
+    final configService = AppConfigService(supabaseClient: Supabase.instance.client);
+    final combinedFuture = Future.wait([
+      WithdrawalPlanService(supabaseClient: Supabase.instance.client).fetchActivePlans(),
+      configService.isBcvRateValid(),
+    ]);
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -918,10 +925,8 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
             content: SizedBox(
               width: double.maxFinite,
-              child: FutureBuilder<List<WithdrawalPlan>>(
-                future: WithdrawalPlanService(
-                  supabaseClient: Supabase.instance.client,
-                ).fetchActivePlans(),
+              child: FutureBuilder<List<dynamic>>(
+                future: combinedFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
@@ -942,7 +947,9 @@ class _WalletScreenState extends State<WalletScreen> {
                     );
                   }
 
-                  final plans = snapshot.data ?? [];
+                  final plans = (snapshot.data?[0] as List<WithdrawalPlan>?) ?? [];
+                  final isRateValid = (snapshot.data?[1] as bool?) ?? false;
+
                   if (plans.isEmpty) {
                     return const SizedBox(
                       height: 100,
@@ -959,6 +966,30 @@ class _WalletScreenState extends State<WalletScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── FAIL-SAFE: Maintenance Banner ──
+                      if (!isRateValid) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 22),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'El sistema de cambio está en mantenimiento temporal. Los retiros no están disponibles en este momento.',
+                                  style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       const Text(
                         'Selecciona cuántos tréboles quieres retirar:',
                         style: TextStyle(color: Colors.white70),
@@ -968,87 +999,92 @@ class _WalletScreenState extends State<WalletScreen> {
                       ...plans.map((plan) {
                         final isSelected = selectedPlanId == plan.id;
                         return GestureDetector(
-                          onTap: () => setState(() => selectedPlanId = plan.id),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppTheme.secondaryPink.withOpacity(0.2)
-                                  : Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
+                          onTap: isRateValid
+                              ? () => setState(() => selectedPlanId = plan.id)
+                              : null, // Disable selection when rate is stale
+                          child: Opacity(
+                            opacity: isRateValid ? 1.0 : 0.5,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
                                 color: isSelected
-                                    ? AppTheme.secondaryPink
-                                    : Colors.white.withOpacity(0.1),
-                                width: isSelected ? 2 : 1,
+                                    ? AppTheme.secondaryPink.withOpacity(0.2)
+                                    : Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppTheme.secondaryPink
+                                      : Colors.white.withOpacity(0.1),
+                                  width: isSelected ? 2 : 1,
+                                ),
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                // Icon
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.secondaryPink.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      plan.icon ?? '💸',
-                                      style: const TextStyle(fontSize: 24),
+                              child: Row(
+                                children: [
+                                  // Icon
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.secondaryPink.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        plan.icon ?? '💸',
+                                        style: const TextStyle(fontSize: 24),
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Info
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  const SizedBox(width: 12),
+                                  // Info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          plan.name,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Costo: ${plan.cloversCost} 🍀',
+                                          style: const TextStyle(
+                                            color: Colors.white60,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Amount
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        plan.name,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        plan.formattedAmountUsd,
+                                        style: TextStyle(
+                                          color: isSelected ? AppTheme.secondaryPink : Colors.white,
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 16,
+                                          fontSize: 18,
                                         ),
                                       ),
-                                      Text(
-                                        'Costo: ${plan.cloversCost} 🍀',
-                                        style: const TextStyle(
-                                          color: Colors.white60,
-                                          fontSize: 14,
-                                        ),
+                                      const Text(
+                                        'USD',
+                                        style: TextStyle(color: Colors.white54, fontSize: 12),
                                       ),
                                     ],
                                   ),
-                                ),
-                                // Amount
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      plan.formattedAmountUsd,
-                                      style: TextStyle(
-                                        color: isSelected ? AppTheme.secondaryPink : Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    const Text(
-                                      'USD',
-                                      style: TextStyle(color: Colors.white54, fontSize: 12),
-                                    ),
+                                  // Check
+                                  if (isSelected) ...[
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.check_circle, color: AppTheme.secondaryPink),
                                   ],
-                                ),
-                                // Check
-                                if (isSelected) ...[
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.check_circle, color: AppTheme.secondaryPink),
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         );
@@ -1068,22 +1104,31 @@ class _WalletScreenState extends State<WalletScreen> {
                 onPressed: _isLoading ? null : () => Navigator.pop(ctx),
                 child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
               ),
-              ElevatedButton(
-                onPressed: (_isLoading || selectedPlanId == null)
-                    ? null
-                    : () async {
-                        setState(() => _isLoading = true);
-                        await _processWithdrawalWithPlan(context, selectedPlanId!, method);
-                        if (mounted) {
-                          setState(() => _isLoading = false);
-                          Navigator.pop(ctx);
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.secondaryPink,
-                  disabledBackgroundColor: Colors.grey.withOpacity(0.3),
-                ),
-                child: const Text('Confirmar Retiro', style: TextStyle(color: Colors.white)),
+              FutureBuilder<List<dynamic>>(
+                future: combinedFuture,
+                builder: (context, snapshot) {
+                  final isRateValid = (snapshot.data?[1] as bool?) ?? false;
+                  return ElevatedButton(
+                    onPressed: (_isLoading || selectedPlanId == null || !isRateValid)
+                        ? null
+                        : () async {
+                            setState(() => _isLoading = true);
+                            await _processWithdrawalWithPlan(context, selectedPlanId!, method);
+                            if (mounted) {
+                              setState(() => _isLoading = false);
+                              Navigator.pop(ctx);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.secondaryPink,
+                      disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                    ),
+                    child: Text(
+                      isRateValid ? 'Confirmar Retiro' : 'En Mantenimiento',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  );
+                },
               ),
             ],
           );

@@ -78,7 +78,7 @@ serve(async (req) => {
     // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
     const { data: configData, error: configError } = await supabaseAdmin
       .from("app_config")
-      .select("value")
+      .select("value, updated_at")
       .eq("key", "bcv_exchange_rate")
       .single();
 
@@ -88,6 +88,40 @@ serve(async (req) => {
         "No se pudo obtener la tasa de cambio. Contacte a soporte.",
       );
     }
+
+    // ── FAIL-SAFE: "26 Hour Rule" ──────────────────────────────────────────
+    // If the BCV rate hasn't been updated in 26 hours (1 day + 2h grace),
+    // block ALL withdrawals to protect the treasury from stale exchange rates.
+    const STALE_THRESHOLD_MS = 26 * 60 * 60 * 1000; // 26 hours in ms
+    const updatedAt = configData.updated_at
+      ? new Date(configData.updated_at)
+      : null;
+    const now = new Date();
+
+    if (
+      !updatedAt ||
+      now.getTime() - updatedAt.getTime() > STALE_THRESHOLD_MS
+    ) {
+      const hoursAgo = updatedAt
+        ? (
+            (now.getTime() - updatedAt.getTime()) /
+            (1000 * 60 * 60)
+          ).toFixed(1)
+        : "N/A";
+      console.error(
+        `[api_withdraw_funds] ⛔ FAIL-SAFE TRIGGERED: BCV rate is STALE. ` +
+          `Last update: ${updatedAt?.toISOString() ?? "NEVER"} (${hoursAgo}h ago)`,
+      );
+      throw new Error(
+        "El sistema de cambio está en mantenimiento temporal. " +
+          "La tasa de cambio no está actualizada. Intente más tarde.",
+      );
+    }
+
+    console.log(
+      `[api_withdraw_funds] ✅ BCV rate freshness OK. Last update: ${updatedAt.toISOString()}`,
+    );
+    // ── END FAIL-SAFE ──────────────────────────────────────────────────────
 
     // Parse the exchange rate (stored as jsonb string like "56.50")
     const bcvRate = parseFloat(configData.value);

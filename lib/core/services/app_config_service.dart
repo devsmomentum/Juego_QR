@@ -39,6 +39,34 @@ class AppConfigService {
     }
   }
 
+  /// Checks if the BCV exchange rate is fresh (updated within 26 hours).
+  /// Returns FALSE if the rate is stale or on any error (fail-safe).
+  /// Used by the UI to show maintenance banners and disable withdrawal buttons.
+  Future<bool> isBcvRateValid() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('updated_at')
+          .eq('key', 'bcv_exchange_rate')
+          .maybeSingle();
+
+      if (response == null || response['updated_at'] == null) return false;
+
+      final updatedAt = DateTime.parse(response['updated_at'] as String);
+      final now = DateTime.now().toUtc();
+      final hoursSinceUpdate = now.difference(updatedAt).inHours;
+
+      debugPrint(
+        '[AppConfigService] BCV rate age: ${hoursSinceUpdate}h '
+        '(threshold: 26h, valid: ${hoursSinceUpdate < 26})',
+      );
+      return hoursSinceUpdate < 26;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error checking rate validity: $e');
+      return false; // Fail-safe: assume stale on error
+    }
+  }
+
   /// Updates the BCV exchange rate.
   /// Only admins can perform this operation (enforced by RLS).
   Future<bool> updateExchangeRate(double rate) async {
