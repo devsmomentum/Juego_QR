@@ -42,7 +42,12 @@ import 'package:shared_preferences/shared_preferences.dart'; // For prize persis
 import '../../../shared/widgets/loading_indicator.dart';
 
 class ScenariosScreen extends StatefulWidget {
-  const ScenariosScreen({super.key});
+  final bool isOnline;
+  
+  const ScenariosScreen({
+    super.key,
+    this.isOnline = false, // Default to false (Presential)
+  });
 
   @override
   State<ScenariosScreen> createState() => _ScenariosScreenState();
@@ -375,7 +380,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     final requestProvider =
         Provider.of<GameRequestProvider>(context, listen: false);
 
-    await eventProvider.fetchEvents();
+    await eventProvider.fetchEvents(type: widget.isOnline ? 'online' : 'on_site');
 
     // Load participation status and ban status for each event
     final userId = playerProvider.currentPlayer?.userId;

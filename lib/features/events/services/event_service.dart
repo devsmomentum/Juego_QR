@@ -209,10 +209,18 @@ class EventService {
   }
 
   // Obtener eventos
-  Future<List<GameEvent>> fetchEvents() async {
+  Future<List<GameEvent>> fetchEvents({String? type}) async {
     try {
-      // 1. Fetch all events
-      final response = await _supabase.from('events').select();
+      // 1. Fetch events with optional filter
+      var query = _supabase.from('events').select();
+      
+      if (type != null) {
+        query = query.eq('type', type);
+      }
+      
+      // Default sort: Newest first (Descending Date)
+      // This ensures "Finished" events and active ones are ordered by creation/start date
+      final response = await query.order('date', ascending: false);
       final List<dynamic> eventsData = response as List;
 
       // 2. Fetch participant counts for these events

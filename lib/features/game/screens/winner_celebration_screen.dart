@@ -7,6 +7,7 @@ import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'scenarios_screen.dart';
+import 'game_mode_selector_screen.dart';
 
 class WinnerCelebrationScreen extends StatefulWidget {
   final String eventId;
@@ -556,7 +557,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                   Navigator.of(context).pushAndRemoveUntil(
                                     MaterialPageRoute(
                                         builder: (_) =>
-                                            const ScenariosScreen()),
+                                            GameModeSelectorScreen()),
                                     (route) => false,
                                   );
                                 },

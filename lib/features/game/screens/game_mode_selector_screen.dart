@@ -140,7 +140,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         color: AppTheme.dGoldMain, // Dorado
                         onTap: () {
                            // Navegar a escenarios (flujo normal)
-                           Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen()));
+                           Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen(isOnline: false)));
                         },
                       ),
                       
@@ -154,7 +154,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         color: const Color(0xFF00F0FF), // Azul Cyber / Cyan
                         onTap: () {
                            // Navegar a escenarios o input de PIN
-                           Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen()));
+                           Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen(isOnline: true)));
                         }, 
                       ),
                     ],
