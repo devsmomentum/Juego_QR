@@ -8,6 +8,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
 import '../widgets/inventory_item_card.dart';
 import '../../mall/screens/mall_screen.dart';
+import '../../mall/screens/store_detail_screen.dart'; // IMPORT AGREGADO
+import '../../mall/models/mall_store.dart'; // IMPORT AGREGADO
 import '../../../shared/utils/game_ui_utils.dart';
 import '../../game/providers/power_interfaces.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -268,18 +270,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           final isOnline = Provider.of<AppModeProvider>(context, listen: false).isOnlineMode;
+          
           if (isOnline) {
-             // BYPASS: Directo a la tienda (quemada o provider)
-             // Asumiendo que MallScreen maneja la logica o tiene un parametro
-             // El prompt dice "Navega directamente a StoreScreen(storeId: defaultStoreId)"
-             // Voy a asumir que MallScreen tiene un check o que debo navegar a StoreScreen directo.
-             // Voy a revisar mall_screen antes de finalizar este cambio.
-             Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen())); 
+             // MODO ONLINE: Navegación Directa a Tienda Global (Virtual)
+             // Creamos una tienda virtual en vuelo para acceder al catálogo global
+             final virtualStore = MallStore(
+               id: 'virtual_global',
+               name: 'Tienda Global',
+               description: 'Catálogo de poderes disponibles para el evento online.',
+               imageUrl: 'asset/images/personajesgrupal.png', // Placeholder Cyberpunk
+               qrCodeData: 'SKIP_QR',
+               products: [], // Lista vacía fuerza a cargar el catálogo completo por defecto en StoreDetailScreen
+             );
+
+             Navigator.push(
+               context, 
+               MaterialPageRoute(builder: (_) => StoreDetailScreen(store: virtualStore))
+             );
           } else {
+             // MODO PRESENCIAL: Flujo normal (Lista de Tiendas -> QR)
              Navigator.push(context, MaterialPageRoute(builder: (_) => const MallScreen()));
           }
         },
-        label: const Text('Ir al Mall'),
+        label: Text(Provider.of<AppModeProvider>(context).isOnlineMode ? 'Mall' : 'Ir al Mall'),
         icon: const Icon(Icons.store),
         backgroundColor: AppTheme.accentGold,
       ),

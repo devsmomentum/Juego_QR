@@ -10,6 +10,7 @@ import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 import 'scenarios_screen.dart';
 import 'game_request_screen.dart'; // Mantener import por si se usa en futuro
+import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
 
 class GameModeSelectorScreen extends StatefulWidget {
   const GameModeSelectorScreen({super.key});
@@ -139,6 +140,9 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         icon: Icons.location_on_outlined,
                         color: AppTheme.dGoldMain, // Dorado
                         onTap: () {
+                           // ACTUALIZAR PROVIDER GLOBAL
+                           context.read<AppModeProvider>().setMode(GameMode.presencial);
+                           
                            // Navegar a escenarios (flujo normal)
                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen(isOnline: false)));
                         },
@@ -153,6 +157,9 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         icon: Icons.wifi,
                         color: const Color(0xFF00F0FF), // Azul Cyber / Cyan
                         onTap: () {
+                           // ACTUALIZAR PROVIDER GLOBAL
+                           context.read<AppModeProvider>().setMode(GameMode.online);
+
                            // Navegar a escenarios o input de PIN
                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen(isOnline: true)));
                         }, 
