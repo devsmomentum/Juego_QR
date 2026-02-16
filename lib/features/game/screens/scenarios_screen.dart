@@ -72,6 +72,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   // Cache for participant status to show "Entering..." vs "Request Access"
   Map<String, bool> _participantStatusMap = {};
 
+  // Cache for user role to determine button state (Player vs Spectator)
+  Map<String, String> _eventRoleMap = {}; // NEW
+
   // Cache for ban status to show banned button
   Map<String, String?> _banStatusMap = {}; // NEW
 
@@ -387,21 +390,38 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     if (userId != null) {
       final Map<String, bool> statusMap = {};
       final Map<String, String?> banMap = {}; // NEW
+      final Map<String, String> roleMap = {}; // NEW - Role tracking
+
       for (final event in eventProvider.events) {
         try {
           final data =
               await requestProvider.isPlayerParticipant(userId, event.id);
           statusMap[event.id] = data['isParticipant'] as bool? ?? false;
           banMap[event.id] = data['status'] as String?; // NEW: Track ban status
+          
+          // Determine Role
+          final status = data['status'] as String?;
+          final isParticipant = data['isParticipant'] as bool? ?? false;
+          
+          if (status == 'spectator') {
+             roleMap[event.id] = 'spectator';
+          } else if (isParticipant) {
+             roleMap[event.id] = 'player';
+          } else {
+             roleMap[event.id] = 'none';
+          }
+
         } catch (e) {
           statusMap[event.id] = false;
           banMap[event.id] = null; // NEW
+          roleMap[event.id] = 'none';
         }
       }
       if (mounted) {
         setState(() {
           _participantStatusMap = statusMap;
           _banStatusMap = banMap; // NEW
+          _eventRoleMap = roleMap; // NEW
         });
       }
     }
@@ -2217,103 +2237,101 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                               const SizedBox(
                                                                   height: 10),
                                                               // CONDITIONAL BUTTON RENDERING based on banned status
-                                                              if (_banStatusMap[
-                                                                          scenario
-                                                                              .id] ==
-                                                                      'banned' ||
-                                                                  _banStatusMap[
-                                                                          scenario
-                                                                              .id] ==
-                                                                      'suspended')
-                                                                // Show banned button
+                                                              if (_banStatusMap[scenario.id] == 'banned' || 
+                                                                  _banStatusMap[scenario.id] == 'suspended')
+                                                                // 1. BANNED/SUSPENDED -> Show Red Button
                                                                 Center(
                                                                   child: SizedBox(
                                                                     width: 250,
-                                                                    child: _buildBannedButton(
-                                                                        scenario),
+                                                                    child: _buildBannedButton(scenario),
                                                                   ),
                                                                 )
-                                                              else ...[
-                                                                // Show normal buttons
+                                                              else if (_eventRoleMap[scenario.id] == 'spectator')
+                                                                // 2. SPECTATOR -> Show "MODO ESPECTADOR" Main Button
                                                                 Center(
                                                                   child: SizedBox(
                                                                     width: 250,
-                                                                    child:
-                                                                        ElevatedButton(
-                                                                      onPressed: () =>
-                                                                          _onScenarioSelected(
-                                                                              scenario),
+                                                                    child: ElevatedButton(
+                                                                      onPressed: () => _onSpectatorSelected(scenario),
                                                                       style: ElevatedButton.styleFrom(
-                                                                          backgroundColor:
-                                                                              currentAction,
-                                                                          foregroundColor: (isDarkMode && currentAction == AppTheme.dGoldMain)
-                                                                              ? Colors
-                                                                                  .black
-                                                                              : Colors
-                                                                                  .white,
-                                                                          shape: RoundedRectangleBorder(
-                                                                              borderRadius:
-                                                                                  BorderRadius.circular(20))),
-                                                                      child: scenario
-                                                                              .isCompleted
-                                                                          ? const Text(
-                                                                              "VER PODIO", style: TextStyle(fontWeight: FontWeight.bold))
-                                                                          : _participantStatusMap[scenario.id] ==
-                                                                                  true
-                                                                              ? const Text(
-                                                                                  "ENTRAR", style: TextStyle(fontWeight: FontWeight.bold))
-                                                                              : Text(scenario.entryFee == 0
-                                                                                  ? "INSCRIBETE (GRATIS)"
-                                                                                  : "INSCRIBETE (${scenario.entryFee} 🍀)", style: const TextStyle(fontWeight: FontWeight.bold)),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                if (!scenario.isCompleted &&
-                                                                    _participantStatusMap[scenario.id] != true) ...[
-                                                                  const SizedBox(
-                                                                      height:
-                                                                          8),
-                                                                  Center(
-                                                                    child: SizedBox(
-                                                                      width: 250,
-                                                                      child:
-                                                                          TextButton(
-                                                                        onPressed:
-                                                                            () =>
-                                                                                _onSpectatorSelected(scenario),
-                                                                        style: TextButton
-                                                                            .styleFrom(
-                                                                          foregroundColor:
-                                                                              Colors.white,
-                                                                          side: const BorderSide(
-                                                                              color:
-                                                                                  Colors.white30),
-                                                                          shape: RoundedRectangleBorder(
-                                                                              borderRadius:
-                                                                                  BorderRadius.circular(20)),
-                                                                          backgroundColor:
-                                                                              Colors.black26,
+                                                                        backgroundColor: Colors.transparent, // Glass style
+                                                                        foregroundColor: Colors.white,
+                                                                        side: const BorderSide(color: Colors.white60, width: 1.5),
+                                                                        shape: RoundedRectangleBorder(
+                                                                          borderRadius: BorderRadius.circular(20)
                                                                         ),
-                                                                        child:
-                                                                            const Row(
-                                                                          mainAxisAlignment:
-                                                                              MainAxisAlignment.center,
-                                                                          children: [
-                                                                            Icon(
-                                                                                Icons.visibility,
-                                                                                size: 16),
-                                                                            SizedBox(
-                                                                                width: 8),
-                                                                            Text(
-                                                                                "MODO ESPECTADOR",
-                                                                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                                                          ],
-                                                                        ),
+                                                                        elevation: 0,
+                                                                      ),
+                                                                      child: const Row(
+                                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                                        children: [
+                                                                           Icon(Icons.visibility),
+                                                                           SizedBox(width: 8),
+                                                                           Text("MODO ESPECTADOR", style: TextStyle(fontWeight: FontWeight.bold)),
+                                                                        ],
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                ],
-                                                              ],
+                                                                )
+                                                              else
+                                                                // 3. PLAYER OR NONE -> Show Standard Logic
+                                                                Column(
+                                                                  children: [
+                                                                     // Main Action Button (Enter/Register)
+                                                                     Center(
+                                                                      child: SizedBox(
+                                                                        width: 250,
+                                                                        child: ElevatedButton(
+                                                                          onPressed: () => _onScenarioSelected(scenario),
+                                                                          style: ElevatedButton.styleFrom(
+                                                                              backgroundColor: currentAction,
+                                                                              foregroundColor: (isDarkMode && currentAction == AppTheme.dGoldMain)
+                                                                                  ? Colors.black
+                                                                                  : Colors.white,
+                                                                              shape: RoundedRectangleBorder(
+                                                                                  borderRadius: BorderRadius.circular(20))),
+                                                                          child: scenario.isCompleted
+                                                                              ? const Text("VER PODIO", style: TextStyle(fontWeight: FontWeight.bold))
+                                                                              : _participantStatusMap[scenario.id] == true
+                                                                                  ? const Text("ENTRAR", style: TextStyle(fontWeight: FontWeight.bold)) // Already Player
+                                                                                  : Text(scenario.entryFee == 0
+                                                                                      ? "INSCRIBETE (GRATIS)"
+                                                                                      : "INSCRIBETE (${scenario.entryFee} 🍀)", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                    
+                                                                    // Spectator Link (Only if NOT a participant yet)
+                                                                    if (!scenario.isCompleted && 
+                                                                        _participantStatusMap[scenario.id] != true) ...[
+                                                                       const SizedBox(height: 8),
+                                                                       Center(
+                                                                         child: SizedBox(
+                                                                           width: 250,
+                                                                           child: TextButton(
+                                                                             onPressed: () => _onSpectatorSelected(scenario),
+                                                                             style: TextButton.styleFrom(
+                                                                               foregroundColor: Colors.white,
+                                                                               side: const BorderSide(color: Colors.white30),
+                                                                               shape: RoundedRectangleBorder(
+                                                                                   borderRadius: BorderRadius.circular(20)),
+                                                                               backgroundColor: Colors.black26,
+                                                                             ),
+                                                                             child: const Row(
+                                                                               mainAxisAlignment: MainAxisAlignment.center,
+                                                                               children: [
+                                                                                 Icon(Icons.visibility, size: 16),
+                                                                                 SizedBox(width: 8),
+                                                                                 Text("MODO ESPECTADOR",
+                                                                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                                               ],
+                                                                             ),
+                                                                           ),
+                                                                         ),
+                                                                       ),
+                                                                    ],
+                                                                  ],
+                                                                ),
                                                             ],
                                                           ),
                                                         ),
