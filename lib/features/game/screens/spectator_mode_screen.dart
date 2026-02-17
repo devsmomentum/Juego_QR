@@ -499,6 +499,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   }
 
   void _showSabotageDialog(String powerSlug, int count) {
+    final isDefense = ['shield', 'return', 'invisibility'].contains(powerSlug);
+    
     showDialog(
       context: context,
       builder: (context) {
@@ -509,8 +511,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                 .where((p) {
                    if (p.gamePlayerId == null || p.gamePlayerId!.isEmpty) return false;
                    
-                   // Invisibility Check
-                   if (p.isInvisible) return false;
+                   // Invisibility Check - Don't show invisible targets for ATTACKS
+                   if (!isDefense && p.isInvisible) return false;
                    
                    final isStealthed = activePowers.any((e) {
                       final targetId = e.targetId.trim().toLowerCase();
@@ -521,7 +523,10 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                       return isMatch && (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && !e.isExpired;
                    });
                    
-                   return !isStealthed;
+                   // If attacking, respect invisibility
+                   if (!isDefense && isStealthed) return false;
+                   
+                   return true;
                 })
                 .toList();
 
@@ -530,13 +535,18 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1A1F3A), Color(0xFF0A0E27)],
+                  gradient: LinearGradient(
+                    colors: isDefense 
+                        ? [const Color(0xFF1A3A1F), const Color(0xFF0A270E)] // Green for Support
+                        : [const Color(0xFF1A1F3A), const Color(0xFF0A0E27)], // Blue/Dark for Attack
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 2),
+                  border: Border.all(
+                    color: isDefense ? Colors.greenAccent.withOpacity(0.5) : Colors.redAccent.withOpacity(0.5), 
+                    width: 2
+                  ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -547,9 +557,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'SABOTEAR JUGADOR',
-                      style: const TextStyle(
-                        color: Colors.redAccent,
+                      isDefense ? 'ENVIAR AYUDA' : 'SABOTEAR JUGADOR',
+                      style: TextStyle(
+                        color: isDefense ? Colors.greenAccent : Colors.redAccent,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
@@ -558,7 +568,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Elige una víctima para ${_getPowerName(powerSlug)}',
+                      isDefense 
+                          ? 'Elige un aliado para enviar ${_getPowerName(powerSlug)}'
+                          : 'Elige una víctima para ${_getPowerName(powerSlug)}',
                       style: const TextStyle(color: Colors.white70, fontSize: 14),
                       textAlign: TextAlign.center,
                     ),
