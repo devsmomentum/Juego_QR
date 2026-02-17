@@ -301,8 +301,8 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
 
     // 3. Listen for Combat Events
     _combatEventsSubscription = _repository.getCombatEventsStream(targetId: myGamePlayerId)
-        .listen((List<Map<String, dynamic>> data) {
-           _handleCombatEvents(data);
+        .listen((List<Map<String, dynamic>> data) async {
+           await _handleCombatEvents(data);
         }, onError: (e) {
            debugPrint('PowerEffectProvider combat_events stream error: $e');
         });
@@ -325,7 +325,7 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
     });
   }
 
-  void _handleCombatEvents(List<Map<String, dynamic>> data) {
+  Future<void> _handleCombatEvents(List<Map<String, dynamic>> data) async {
     if (data.isEmpty) return;
     
     // Check duplication/timing
@@ -430,7 +430,14 @@ class PowerEffectProvider extends ChangeNotifier implements PowerEffectReader, P
        
        debugPrint('[COMBAT] 🎁 GIFT RECEIVED! Power: $giftPowerSlug from $attackerId');
        
-       final gifterName = _resolveGifterName(attackerId);
+       String gifterName = 'Un espectador';
+       if (attackerId != null) {
+          final name = await _repository.getGifterName(gamePlayerId: attackerId);
+          if (name != null && name.isNotEmpty) {
+             gifterName = name;
+          }
+       }
+       
        final powerDisplayName = _getPowerDisplayName(giftPowerSlug);
        
        _feedbackStreamController.add(PowerFeedbackEvent(

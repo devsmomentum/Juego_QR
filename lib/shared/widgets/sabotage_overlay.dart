@@ -445,20 +445,20 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   // ... resto de métodos ...
   String _resolvePlayerNameFromLeaderboard(String? casterGamePlayerId) {
     if (casterGamePlayerId == null || casterGamePlayerId.isEmpty)
-      return 'Un rival';
+      return 'Un espectador';
     
     // Use cached ref instead of context.read
     final gameProvider = _gameProviderRef;
-    if (gameProvider == null) return 'Un rival';
+    if (gameProvider == null) return 'Un espectador';
     
     final match = gameProvider.leaderboard.whereType<Player>().firstWhere(
           (p) =>
               p.gamePlayerId == casterGamePlayerId ||
               p.id == casterGamePlayerId,
           orElse: () =>
-              Player(userId: '', name: 'Un rival', email: '', avatarUrl: ''),
+              Player(userId: '', name: 'Un espectador', email: '', avatarUrl: ''),
         );
-    return match.name.isNotEmpty ? match.name : 'Un rival';
+    return match.name.isNotEmpty ? match.name : 'Un espectador';
   }
 
   @override

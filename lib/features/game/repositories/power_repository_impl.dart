@@ -138,4 +138,23 @@ class PowerRepositoryImpl implements PowerRepository {
       debugPrint('[PowerRepository] deactivateDefense error: $e');
     }
   }
+
+  @override
+  Future<String?> getGifterName({required String gamePlayerId}) async {
+    try {
+      final res = await _supabase
+          .from('game_players')
+          .select('user_id, profiles(name)')
+          .eq('id', gamePlayerId)
+          .maybeSingle();
+      
+      if (res == null) return null;
+      
+      final profile = res['profiles'] as Map<String, dynamic>?;
+      return profile?['name']?.toString();
+    } catch (e) {
+      debugPrint('[PowerRepository] getGifterName error: $e');
+      return null;
+    }
+  }
 }

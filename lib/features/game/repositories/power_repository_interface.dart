@@ -30,4 +30,8 @@ abstract class PowerRepository {
   /// Deactivates the current defense power for the given player.
   /// Clears is_protected and removes expired defense rows from active_powers.
   Future<void> deactivateDefense({required String gamePlayerId});
+
+  /// Fetches the name of a player/spectator from their gamePlayerId.
+  /// Needed for gift notifications when the sender is not in the local leaderboard (spectators).
+  Future<String?> getGifterName({required String gamePlayerId});
 }
