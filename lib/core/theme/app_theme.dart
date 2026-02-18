@@ -42,6 +42,10 @@ class AppTheme {
   static const Color secondaryPink = Color(0xFFD42AB3);
   static const Color warningOrange = Color(0xFFFF9F43);
   static const Color neonGreen = Color(0xFF00D9A3);
+  
+  // Aliases for compatibility
+  static const Color surfaceDark = dSurface1;
+  static const Color accentGreen = neonGreen;
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primaryPurple, secondaryPink],

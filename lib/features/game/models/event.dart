@@ -22,6 +22,7 @@ class GameEvent {
   final int configuredWinners; // NEW: Controls how many people get prizes (1, 2, or 3)
   final int pot; // NEW: Total accumulated pot from DB
   final Map<String, dynamic> spectatorConfig; // NEW: Spectator pricing
+  final int betTicketPrice; // NEW: Price per bet
 
   GameEvent({
     required this.id,
@@ -45,6 +46,7 @@ class GameEvent {
     this.configuredWinners = 3,
     this.pot = 0, // NEW: Initialize
     this.spectatorConfig = const {}, // NEW
+    this.betTicketPrice = 100, // NEW
   });
 
   LatLng get location => LatLng(latitude, longitude);
@@ -76,6 +78,7 @@ class GameEvent {
       configuredWinners: (json['configured_winners'] as num?)?.toInt() ?? 3,
       pot: (json['pot'] as num?)?.toInt() ?? 0, // NEW: Read from DB
       spectatorConfig: json['spectator_config'] != null ? Map<String, dynamic>.from(json['spectator_config']) : {}, // NEW
+      betTicketPrice: (json['bet_ticket_price'] as num?)?.toInt() ?? 100, // NEW
     );
   }
 

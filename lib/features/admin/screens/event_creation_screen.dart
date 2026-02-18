@@ -448,16 +448,29 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   },
                                 );
 
-                            if (provider.eventType == 'online') {
-                                // If Online, show Players field AND Price field (no location)
-                                return Column(
-                                  children: [
-                                    playersField,
-                                    const SizedBox(height: 20),
-                                    TextFormField(
+                            final Widget bettingField = TextFormField(
+                                  initialValue: provider.betTicketPrice.toString(),
+                                  decoration: inputDecoration.copyWith(
+                                    labelText: 'Precio Apuesta',
+                                    suffixText: '🍀',
+                                    helperText: 'Default: 100',
+                                  ),
+                                  style: const TextStyle(color: Colors.white),
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  validator: (v) {
+                                      if (v == null || v.isEmpty) return 'Requerido';
+                                      return null;
+                                  },
+                                  onChanged: (v) {
+                                    if (v.isNotEmpty) provider.setBetTicketPrice(int.tryParse(v) ?? 100);
+                                  },
+                                );
+
+                            final Widget entryFeeField = TextFormField(
                                       initialValue: provider.entryFee?.toString() ?? '',
                                       decoration: inputDecoration.copyWith(
-                                        labelText: 'Precio Entrada (Tréboles)',
+                                        labelText: 'Precio Entrada',
                                         suffixText: '🍀',
                                         helperText: '0 para GRATIS',
                                       ),
@@ -474,6 +487,20 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       onChanged: (v) {
                                         provider.setEntryFee(v.isEmpty ? null : (int.tryParse(v)));
                                       },
+                                    );
+
+                            if (provider.eventType == 'online') {
+                                // If Online, show Players field AND Price fields (no location)
+                                return Column(
+                                  children: [
+                                    playersField,
+                                    const SizedBox(height: 20),
+                                    Row(
+                                      children: [
+                                        Expanded(child: entryFeeField),
+                                        const SizedBox(width: 20),
+                                        Expanded(child: bettingField),
+                                      ],
                                     ),
                                   ],
                                 );
@@ -487,53 +514,29 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   const SizedBox(height: 20),
                                   playersField, 
                                   const SizedBox(height: 20),
-                                  TextFormField(
-                                    initialValue: provider.entryFee?.toString() ?? '',
-                                    decoration: inputDecoration.copyWith(
-                                      labelText: 'Precio Entrada (Tréboles)',
-                                      suffixText: '🍀',
-                                      helperText: '0 para GRATIS',
-                                    ),
-                                    style: const TextStyle(color: Colors.white),
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                    validator: (v) {
-                                      if (v == null || v.isEmpty) return 'Requerido'; // Forces explicit '0' or value
-                                      return null;
-                                    },
-                                    onChanged: (v) {
-                                        provider.setEntryFee(v.isEmpty ? null : (int.tryParse(v)));
-                                    },
-                                  ),
+                                  entryFeeField,
+                                  const SizedBox(height: 20),
+                                  bettingField,
                                 ],
                               );
                             } else {
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              return Column(
                                 children: [
-                                  Expanded(flex: 2, child: locationWidget),
-                                  const SizedBox(width: 20),
-                                  Expanded(child: playersField), 
-                                  const SizedBox(width: 20),
-                                  Expanded(
-                                    child: TextFormField(
-                                      initialValue: provider.entryFee?.toString() ?? '',
-                                      decoration: inputDecoration.copyWith(
-                                        labelText: 'Precio Entrada (Tréboles)',
-                                        suffixText: '🍀',
-                                        helperText: '0 para GRATIS',
-                                      ),
-                                      style: const TextStyle(color: Colors.white),
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                      validator: (v) {
-                                        if (v == null || v.isEmpty) return 'Requerido'; // Forces explicit '0' or value
-                                        return null;
-                                      },
-                                      onChanged: (v) {
-                                        provider.setEntryFee(v.isEmpty ? null : (int.tryParse(v)));
-                                      },
-                                    ),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(flex: 2, child: locationWidget),
+                                      const SizedBox(width: 20),
+                                      Expanded(child: playersField), 
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Row(
+                                    children: [
+                                      Expanded(child: entryFeeField),
+                                      const SizedBox(width: 20),
+                                      Expanded(child: bettingField),
+                                    ],
                                   ),
                                 ],
                               );
