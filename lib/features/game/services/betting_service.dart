@@ -33,7 +33,7 @@ class BettingService {
     try {
       final response = await _supabase
           .from('bets')
-          .select('id, racer_id, amount, created_at')
+          .select('id, racer_id, amount, created_at, profiles:racer_id(name)')
           .eq('event_id', eventId)
           .eq('user_id', userId);
 
