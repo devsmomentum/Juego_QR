@@ -802,6 +802,72 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         backgroundColor: AppTheme.darkBg,
         title: Text(widget.event.title),
         actions: [
+          if (widget.event.status == 'pending')
+            IconButton(
+              icon: const Icon(Icons.play_arrow_rounded,
+                  color: Colors.greenAccent, size: 30),
+              tooltip: "Forzar Inicio (Ya!)",
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppTheme.cardBg,
+                    title: const Text("¿Iniciar Evento Ahora?",
+                        style: TextStyle(color: Colors.white)),
+                    content: const Text(
+                      "El evento pasará a estado 'active' inmediatamente, permitiendo que los jugadores entren y vean las pistas, sin importar la fecha programada.",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text("Cancelar"),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text("INICIAR",
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm != true) return;
+
+                setState(() => _isLoading = true);
+                try {
+                  await Provider.of<EventProvider>(context, listen: false)
+                      .updateEventStatus(widget.event.id, 'active');
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('🚀 ¡Evento iniciado correctamente!'),
+                          backgroundColor: Colors.green),
+                    );
+                    Navigator.pop(context); // Close screen or refresh?
+                    // Better to just refresh state or let the provider notify listeners
+                    // But since status changed, the UI might need a full reload or just setState
+                    // We are listening to provider changes in the parent list, but here?
+                    // The widget.event is final, so it won't update automatically unless we navigate back
+                    // or re-fetch.
+                    // Let's pop to list to be safe and simple.
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text('Error al iniciar: $e'),
+                          backgroundColor: Colors.red),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
+                }
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
             tooltip: "Reiniciar Competencia",
