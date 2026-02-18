@@ -12,12 +12,16 @@ import '../models/race_view_data.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../mall/models/power_item.dart';
+import '../models/event.dart';
 import '../providers/power_effect_provider.dart';
 import '../../../core/services/effect_timer_service.dart';
 import '../repositories/power_repository_impl.dart';
 import '../strategies/power_strategy_factory.dart';
 import '../../events/services/event_service.dart';
 import '../widgets/betting_modal.dart';
+import '../widgets/spectator_participants_list.dart';
+import '../../../shared/models/player.dart';
+import '../../social/widgets/leaderboard_card.dart';
 
 
 class SpectatorModeScreen extends StatefulWidget {
@@ -32,6 +36,7 @@ class SpectatorModeScreen extends StatefulWidget {
 class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   int _selectedTab = 0; // 0: Actividad, 1: Apuestas, 2: Tienda
   late PowerEffectProvider _powerEffectProvider;
+  late Stream<GameEvent> _eventStream;
 
   @override
   void initState() {
@@ -42,7 +47,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       timerService: EffectTimerService(),
       strategyFactory: PowerStrategyFactory(supabase),
     );
-
+    
+    _eventStream = EventService(supabase).getEventStream(widget.eventId);
+    
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final playerProvider =
@@ -125,127 +132,91 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
     return ChangeNotifierProvider(
       create: (_) => SpectatorFeedProvider(widget.eventId),
-      child: Theme(
-        data: AppTheme.darkTheme,
-        child: Scaffold(
-          backgroundColor: isDarkMode ? const Color(0xFF0A0E27) : Colors.black,
-          appBar: AppBar(
-            backgroundColor: AppTheme.cardBg,
-            elevation: 0,
-            title: Row(
-              children: [
-                const Icon(Icons.visibility, color: AppTheme.secondaryPink),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: const Text(
-                    'MODO ESPECTADOR',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.circle, color: Colors.red, size: 8),
-                      SizedBox(width: 4),
-                      Text(
-                        'EN VIVO',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          body: Stack(
-            children: [
-              Positioned.fill(
-                child: Image.asset(
-                  isDarkMode
-                      ? 'assets/images/fotogrupalnoche.png'
-                      : 'assets/images/personajesgrupal.png',
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                ),
-              ),
-              Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.6),
-                ),
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    // Banner de Victoria
-                    _buildVictoryBanner(),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0A0E27),
+        body: StreamBuilder<GameEvent>(
+          stream: _eventStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: AppTheme.secondaryPink));
+            }
+            
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+            }
+            
+            if (!snapshot.hasData) {
+               return const Center(child: Text('Evento no encontrado', style: TextStyle(color: Colors.white)));
+            }
 
-                    // Vista de la carrera (Cabezal dinámico - Ajustado para evitar overflow)
-                    SizedBox(
-                      height: 300,
-                      child: _buildRaceView(),
-                    ),
+            final event = snapshot.data!;
+            
+            return SafeArea(
+              child: Column(
+                children: [
 
-                    // Sección inferior con tabs (Más espacio para interacción)
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBg.withOpacity(0.9),
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(30),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 20,
-                              offset: const Offset(0, -5),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            // El tab de inventario ahora es una pequeña franja superior si estamos en Actividad
-                            if (_selectedTab == 0) _buildMiniInventoryHeader(),
+                  
+                  // 2. Body Condicional
+                  Expanded(
+                    child: Column(
+                      children: [
+                           // Banner de Victoria (Solo si terminó)
+                           if (event.isCompleted) _buildVictoryBanner(),
+                           
+                           // B. Carrera en Curso / Finalizada (Race Tracker siempre visible)
+                           SizedBox(
+                             height: 300, 
+                             child: _buildRaceView(),
+                           ),
 
-                            // Tabs selector principal
-                            _buildTabSelector(),
-
-                            // Contenido del tab
-                            Expanded(
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 300),
-                                child: _selectedTab == 2
-                                    ? _buildStoreView()
-                                    : _selectedTab == 1
-                                        ? _buildBettingView()
-                                        : _buildLiveFeed(),
+                        // C. Tabs Section (Siempre visible, pero adaptada)
+                        // Si es pending, quizás queramos ver menos cosas, pero mantendremos consistencia
+                        Expanded(
+                          flex: 4,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppTheme.cardBg.withOpacity(0.9),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(30),
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.4),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, -5),
+                                ),
+                              ],
                             ),
-                          ],
+                            child: Column(
+                              children: [
+                                // El tab de inventario ahora es una pequeña franja superior si estamos en Actividad
+                                if (_selectedTab == 0) _buildMiniInventoryHeader(),
+          
+                                // Tabs selector principal
+                                _buildTabSelector(),
+                                
+                                // Contenido del tab
+                                Expanded(
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 300),
+                                    child: _selectedTab == 2
+                                        ? _buildStoreView()
+                                        : _selectedTab == 1
+                                            ? _rankingView()
+                                            : _buildLiveFeed(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -375,8 +346,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
           ),
           Expanded(
             child: _buildTab(
-              icon: Icons.monetization_on,
-              label: 'Apuestas',
+              icon: Icons.list_alt,
+              label: 'Ranking',
               isSelected: _selectedTab == 1,
               onTap: () => setState(() => _selectedTab = 1),
             ),
@@ -861,7 +832,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
     );
   }
 
-  Widget _buildBettingView() {
+  Widget _rankingView() {
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -869,11 +840,11 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.monetization_on,
+              const Icon(Icons.people,
                   color: AppTheme.accentGold, size: 20),
               const SizedBox(width: 8),
               const Text(
-                'APUESTAS EN VIVO',
+                'RANKING',
                 style: TextStyle(
                   color: AppTheme.accentGold,
                   fontWeight: FontWeight.bold,
@@ -882,6 +853,18 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                 ),
               ),
               const Spacer(),
+              ElevatedButton(
+                onPressed: () => _showBetDialog(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentGold,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                child: const Text('Apostar'),
+              ),
+              const SizedBox(width: 16),
               Consumer<PlayerProvider>(
                 builder: (context, playerProvider, child) {
                   final clovers = playerProvider.currentPlayer?.clovers ?? 0;
@@ -911,18 +894,41 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Apuesta por el ganador de la carrera. Monto fijo: 100 tréboles.',
-            style: TextStyle(color: Colors.white54, fontSize: 12),
-          ),
           const SizedBox(height: 16),
           Expanded(
             child: Consumer<GameProvider>(
               builder: (context, gameProvider, child) {
-                final players = gameProvider.leaderboard;
+                final leaderboard = gameProvider.leaderboard;
 
-                if (players.isEmpty) {
+                // --- INVISIBILITY FILTER LOGIC ---
+                final activePowers = gameProvider.activePowerEffects;
+                final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+                final currentUserId = playerProvider.currentPlayer?.userId ?? '';
+
+                bool isVisible(Player p) {
+                    // Always see myself
+                    if (p.userId == currentUserId) return true;
+
+                    // Check active powers for invisibility
+                    final isStealthed = activePowers.any((e) {
+                        final target = e.targetId.trim().toLowerCase();
+                        final pid = p.id.trim().toLowerCase();
+                        final pgid = (p.gamePlayerId ?? '').trim().toLowerCase();
+                        
+                        final isMatch = (target == pid || target == pgid);
+                        return isMatch && (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && !e.isExpired;
+                    });
+
+                    if (isStealthed) return false;
+                    if (p.isInvisible) return false;
+                    
+                    return true;
+                }
+
+                final displayLeaderboard = leaderboard.where(isVisible).toList();
+                // ---------------------------------
+
+                if (displayLeaderboard.isEmpty) {
                   return Center(
                     child: Text(
                       'No hay jugadores activos',
@@ -931,54 +937,61 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                   );
                 }
 
-                return ListView.builder(
-                  itemCount: players.length,
-                  itemBuilder: (context, index) {
-                    final player = players[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.1)),
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor:
-                              AppTheme.secondaryPink.withOpacity(0.2),
-                          backgroundImage: player.avatarUrl.isNotEmpty
-                              ? NetworkImage(player.avatarUrl)
-                              : null,
-                          child: player.avatarUrl.isEmpty
-                              ? Text(player.name[0].toUpperCase(),
-                                  style: const TextStyle(color: Colors.white))
-                              : null,
+                return Column(
+                  children: [
+                    // Top 3 Podium
+                    if (displayLeaderboard.length >= 3)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        title: Text(
-                          player.name,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          'Nivel ${player.level} • XP: ${player.totalXP}',
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12),
-                        ),
-                        trailing: ElevatedButton(
-                          onPressed: () => _showBetDialog(player.name, 100),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.accentGold,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                          child: const Text('Apostar'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // 2nd place
+                            _buildPodiumPosition(
+                              displayLeaderboard[1],
+                              2,
+                              70,
+                              Colors.grey,
+                            ),
+                            // 1st place
+                            _buildPodiumPosition(
+                              displayLeaderboard[0],
+                              1,
+                              90,
+                              AppTheme.accentGold,
+                            ),
+                            // 3rd place
+                            _buildPodiumPosition(
+                              displayLeaderboard[2],
+                              3,
+                              60,
+                              const Color(0xFFCD7F32),
+                            ),
+                          ],
                         ),
                       ),
-                    );
-                  },
+                    
+                    // List of Players
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: displayLeaderboard.length,
+                        itemBuilder: (context, index) {
+                          final player = displayLeaderboard[index];
+                          return LeaderboardCard(
+                             player: player,
+                             rank: index + 1,
+                             isTopThree: index < 3,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -988,7 +1001,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
     );
   }
 
-  void _showBetDialog(String playerName, int amount) {
+  void _showBetDialog() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1418,5 +1431,124 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       default:
         return slug;
     }
+  }
+  Widget _buildPodiumPosition(Player player, int position, double height, Color color) {
+    const Color currentText = Colors.white;
+    const Color currentTextSec = Colors.white70;
+
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: color, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.4),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: Builder(
+                  builder: (context) {
+                    final avatarId = player.avatarId;
+                    
+                    // 1. Prioridad: Avatar Local
+                    if (avatarId != null && avatarId.isNotEmpty) {
+                      return Image.asset(
+                        'assets/images/avatars/$avatarId.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.person, color: Colors.white70, size: 30)),
+                      );
+                    }
+                    
+                    // 2. Fallback: Foto de perfil (URL)
+                    if (player.avatarUrl.isNotEmpty && player.avatarUrl.startsWith('http')) {
+                      return Image.network(
+                        player.avatarUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.person, color: Colors.white70, size: 30)),
+                      );
+                    }
+                    
+                    // 3. Fallback: Icono genérico
+                    return const Center(child: Icon(Icons.person, color: Colors.white70, size: 30));
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$position',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 80,
+          child: Text(
+            player.name,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: currentText,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Lvl ${player.level}',
+          style: const TextStyle(
+            fontSize: 11,
+            color: currentTextSec,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: 80,
+          height: height,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.2),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Center(
+            child: Text(
+              '${player.totalXP} Pistas',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

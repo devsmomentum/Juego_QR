@@ -416,4 +416,31 @@ class EventService {
       }
     }
   }
+
+  // --- REALTIME STREAMS ---
+
+  /// Escucha cambios en tiempo real de un evento específico
+  Stream<GameEvent> getEventStream(String eventId) {
+    return _supabase
+        .from('events')
+        .stream(primaryKey: ['id'])
+        .eq('id', eventId)
+        .map((data) {
+          if (data.isEmpty) {
+            // Si no hay datos (ej. borrado), lanzar error o manejarlo
+            throw Exception('Evento no encontrado');
+          }
+          final eventData = data.first;
+          
+          // Mapeamos manualmente para usar nuestro helper
+          // Necesitamos el conteo de participantes también, pero en Stream es complejo hacer joins.
+          // Por simplicidad en SpectatorMode, asumiremos que currentParticipants viene del stream 
+          // (si la BD lo actualiza) o lo ignoramos si solo nos importa el status.
+          // Para ser precisos, el spectator mode usa `currentParticipants` solo pre-carrera?
+          // La vista de lista de participantes podría necesitarlo.
+          // Haremos un "best guess" mapeando lo que llegue.
+          
+          return _mapJsonToEvent(eventData);
+        });
+  }
 }
