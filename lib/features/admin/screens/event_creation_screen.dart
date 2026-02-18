@@ -968,11 +968,10 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                             ),
                           ),
                           const SizedBox(height: 30),
-                        ] else if (provider.eventType == 'online') ...[
-                           // --- Power Prices Configuration (Online Only) ---
-                           const Text("Configuración de Precios (Tienda)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.accentGold)),
+                          // --- Configuración de Precios para Espectadores (ALWAYS VISIBLE) ---
+                           const Text("Precios para Espectadores", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.accentGold)),
                            const SizedBox(height: 10),
-                           const Text("Personaliza el costo de los poderes para este evento.", style: TextStyle(color: Colors.white54, fontSize: 14)),
+                           const Text("Personaliza el costo de los poderes para los espectadores en este evento.", style: TextStyle(color: Colors.white54, fontSize: 14)),
                            const SizedBox(height: 20),
                            
                            LayoutBuilder(
@@ -989,7 +988,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                  itemCount: PowerItem.getShopItems().length,
                                  itemBuilder: (context, index) {
                                    final power = PowerItem.getShopItems()[index];
-                                   final currentPrice = provider.powerPrices[power.id] ?? power.cost;
+                                   final currentPrice = provider.spectatorPrices[power.id] ?? power.cost;
                                    
                                    return Container(
                                      decoration: BoxDecoration(
@@ -1037,7 +1036,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                onChanged: (v) {
                                                   final val = int.tryParse(v);
                                                   if (val != null) {
-                                                     provider.setPowerPrice(power.id, val);
+                                                     provider.setSpectatorPrice(power.id, val);
                                                   }
                                                },
                                             ),

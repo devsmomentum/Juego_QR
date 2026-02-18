@@ -40,8 +40,8 @@ class EventCreationProvider extends ChangeNotifier {
   // Tiendas
   List<Map<String, dynamic>> _pendingStores = [];
   
-  // Power Prices (Online)
-  Map<String, int> _powerPrices = {};
+  // Spectator Prices (All Modes)
+  Map<String, int> _spectatorPrices = {};
 
   // Control
   bool _isLoading = false;
@@ -65,7 +65,7 @@ class EventCreationProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get clueForms => _clueForms;
   int get currentClueIndex => _currentClueIndex;
   List<Map<String, dynamic>> get pendingStores => _pendingStores;
-  Map<String, int> get powerPrices => _powerPrices;
+  Map<String, int> get spectatorPrices => _spectatorPrices;
   bool get isLoading => _isLoading;
   String get eventId => _eventId;
   bool get isFormValid => _isFormValid;
@@ -117,10 +117,10 @@ class EventCreationProvider extends ChangeNotifier {
     _isFormValid = false;
     _eventType = 'on_site';
     
-    // Initialize default power prices
-    _powerPrices = {};
+    // Initialize default spectator prices
+    _spectatorPrices = {};
     for (var item in PowerItem.getShopItems()) {
-       _powerPrices[item.id] = item.cost;
+       _spectatorPrices[item.id] = item.cost;
     }
     
     notifyListeners();
@@ -351,10 +351,10 @@ class EventCreationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Power Prices Logic ---
-  void setPowerPrice(String powerId, int price) {
+  // --- Spectator Prices Logic ---
+  void setSpectatorPrice(String powerId, int price) {
     if (price < 0) return;
-    _powerPrices[powerId] = price;
+    _spectatorPrices[powerId] = price;
     notifyListeners();
   }
 
@@ -426,6 +426,7 @@ class EventCreationProvider extends ChangeNotifier {
         imageFileName: _selectedImage!.name,
         entryFee: _entryFee ?? 0, // Validated to be non-null above
         configuredWinners: _configuredWinners,
+        spectatorConfig: _spectatorPrices, // NEW
       );
 
       // Update PIN state for UI feedback (domain service may have auto-generated it)
@@ -454,7 +455,9 @@ class EventCreationProvider extends ChangeNotifier {
             try {
                final defaultStore = EventDomainService.createDefaultOnlineStore(
                  createdEventId,
-                 customPrices: _powerPrices, // PASSING CUSTOM PRICES
+                 // customPrices: _spectatorPrices, // OLD: Used to set store prices directly
+                 // NEW: Store keeps default prices for Players. Spectators use spectator_config override.
+                 customPrices: null, 
                );
                // We pass null for imageFile as we don't have one selected
                await storeProvider.createStore(defaultStore, null);

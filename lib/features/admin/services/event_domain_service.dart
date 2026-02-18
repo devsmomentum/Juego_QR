@@ -132,6 +132,7 @@ class EventDomainService {
     int? entryFee, // Changed to int to match GameEvent
     CurrencyType currency = CurrencyType.treboles,
     int configuredWinners = 3, // NEW: Default to 3
+    Map<String, dynamic> spectatorConfig = const {}, // NEW
   }) {
     final isOnline = eventType == 'online';
     final finalPin = isOnline ? generatePin(isOnline: true) : pin;
@@ -160,6 +161,7 @@ class EventDomainService {
       type: eventType,
       entryFee: entryFee ?? 0,
       configuredWinners: configuredWinners,
+      spectatorConfig: spectatorConfig,
     );
   }
 

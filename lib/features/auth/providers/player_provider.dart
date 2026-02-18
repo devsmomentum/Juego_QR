@@ -146,29 +146,46 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   }
 
   /// Load shop items configuration from service.
+  /// Load shop items configuration from service.
   Future<void> loadShopItems() async {
     try {
       final configs = await _powerService.getPowerConfigs();
+      
+      // NEW: Fetch Spectator Prices if applicable
+      Map<String, dynamic> spectatorPrices = {};
+      if (_isSpectatorSession && _currentPlayer?.currentEventId != null) {
+         spectatorPrices = await _powerService.getSpectatorConfig(_currentPlayer!.currentEventId!);
+      }
+
+      // Refresh base items to ensure clean slate
+      _shopItems = PowerItem.getShopItems();
 
       _shopItems = _shopItems.map((item) {
         final matches = configs.where((d) => d['slug'] == item.id);
         final config = matches.isNotEmpty ? matches.first : null;
+        
+        // Base logic for duration updates
+        int duration = item.durationSeconds;
+        String newDesc = item.description;
 
         if (config != null) {
-          final int duration = (config['duration'] as num?)?.toInt() ?? 0;
+           duration = (config['duration'] as num?)?.toInt() ?? 0;
+           if (duration > 0) {
+             newDesc = newDesc.replaceAll(RegExp(r'\b\d+\s*s\b'), '${duration}s');
+           }
+        }
+        
+        // NEW: Spectator Price Override
+        int finalCost = item.cost;
+        if (_isSpectatorSession && spectatorPrices.containsKey(item.id)) {
+           finalCost = (spectatorPrices[item.id] as num).toInt();
+        }
 
-          String newDesc = item.description;
-          if (duration > 0) {
-            newDesc =
-                newDesc.replaceAll(RegExp(r'\b\d+\s*s\b'), '${duration}s');
-          }
-
-          return item.copyWith(
+        return item.copyWith(
             durationSeconds: duration,
             description: newDesc,
-          );
-        }
-        return item;
+            cost: finalCost, // Apply override
+        );
       }).toList();
 
       notifyListeners();
@@ -366,6 +383,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     if (_currentPlayer != null) {
       _currentPlayer =
           _currentPlayer!.copyWith(role: isSpectator ? 'spectator' : 'user');
+      loadShopItems(); // Reload prices for new role
       notifyListeners();
     }
   }
@@ -1007,6 +1025,8 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
       }
 
       _currentPlayer = finalPlayer;
+      // Reload prices for new event/role context
+      loadShopItems(); 
       debugPrint(
           '🔍 PlayerProvider: notifyListeners(). gamePlayerId: ${_currentPlayer?.gamePlayerId}, eventId: ${_currentPlayer?.currentEventId}, role: ${_currentPlayer?.role}');
       notifyListeners();

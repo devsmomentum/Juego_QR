@@ -61,6 +61,7 @@ class EventService {
             'type': event.type,
             'entry_fee': event.entryFee, // NEW: Persistence fix
             'configured_winners': event.configuredWinners,
+            'spectator_config': event.spectatorConfig, // NEW: Persist spectator prices
           })
           .select()
           .single();
@@ -156,6 +157,7 @@ class EventService {
             'type': event.type,
             'entry_fee': event.entryFee, // NEW: Persistence fix
             'configured_winners': event.configuredWinners,
+            'spectator_config': event.spectatorConfig, // NEW: Persist spectator prices
           })
           .eq('id', event.id)
           .select()
