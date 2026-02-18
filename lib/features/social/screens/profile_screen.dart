@@ -11,6 +11,7 @@ import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import 'wallet_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
+import '../../game/screens/game_mode_selector_screen.dart';
 import '../../../core/utils/input_sanitizer.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/utils/global_keys.dart';
@@ -125,43 +126,201 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showLogoutDialog(PlayerProvider playerProvider) {
-    showDialog(
+    final isDarkMode = playerProvider.isDarkMode;
+    final Color surfaceColor = isDarkMode
+        ? Colors.black.withOpacity(0.75)
+        : Colors.white.withOpacity(0.85);
+    final Color textColor = isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
+    final Color textSecColor =
+        isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A);
+    final Color accentColor =
+        isDarkMode ? AppTheme.dGoldMain : AppTheme.lBrandMain;
+
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor:
-            Provider.of<PlayerProvider>(context, listen: false).isDarkMode
-                ? AppTheme.cardBg
-                : Colors.white,
-        title: Text('Cerrar Sesión',
-            style: TextStyle(
-                color: Provider.of<PlayerProvider>(context, listen: false)
-                        .isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1A1A1D))),
-        content: Text(
-          '¿Estás seguro que deseas cerrar sesión?',
-          style: TextStyle(
-              color:
-                  Provider.of<PlayerProvider>(context, listen: false).isDarkMode
-                      ? Colors.white70
-                      : const Color(0xFF4A4A5A)),
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: anim1, curve: Curves.easeOut),
+          child: ScaleTransition(
+            scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+            child: child,
+          ),
+        );
+      },
+      pageBuilder: (context, _, __) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: accentColor.withOpacity(0.4),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withOpacity(0.15),
+                        blurRadius: 30,
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Icon with glow
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  accentColor.withOpacity(0.2),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                            child: Icon(Icons.games_rounded,
+                                color: accentColor, size: 40),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '¿Qué deseas hacer?',
+                            style: TextStyle(
+                                color: textColor,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: 40,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: [
+                                accentColor.withOpacity(0.3),
+                                accentColor,
+                                accentColor.withOpacity(0.3)
+                              ]),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Puedes cambiar de modo de juego o cerrar tu sesión.',
+                            style: TextStyle(
+                                color: textSecColor, fontSize: 14, height: 1.4),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          // CAMBIAR MODO
+                          _buildGradientButton(
+                            icon: Icons.swap_horiz_rounded,
+                            label: 'CAMBIAR MODO',
+                            gradientColors: isDarkMode
+                                ? [AppTheme.dGoldMain, const Color(0xFFE5A700)]
+                                : [
+                                    AppTheme.lBrandMain,
+                                    const Color(0xFF7B2CBF)
+                                  ],
+                            textColor: isDarkMode ? Colors.black : Colors.white,
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const GameModeSelectorScreen()),
+                                (route) => false,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          // CERRAR SESIÓN
+                          _buildGradientButton(
+                            icon: Icons.logout_rounded,
+                            label: 'CERRAR SESIÓN',
+                            gradientColors: [
+                              AppTheme.dangerRed,
+                              const Color(0xFFB71C1C)
+                            ],
+                            textColor: Colors.white,
+                            onTap: () {
+                              Navigator.pop(context);
+                              playerProvider.logout();
+                              // AuthMonitor handles navigation to LoginScreen
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text('Cancelar',
+                                style: TextStyle(
+                                    color: textSecColor.withOpacity(0.5),
+                                    fontSize: 13)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGradientButton({
+    required IconData icon,
+    required String label,
+    required List<Color> gradientColors,
+    required Color textColor,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: gradientColors),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors.first.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+        child: ElevatedButton.icon(
+          icon: Icon(icon, size: 20),
+          label: Text(label,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            foregroundColor: textColor,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx); // Close dialog
-              playerProvider.logout();
-              // AuthMonitor will handle navigation
-            },
-            child: const Text('Salir',
-                style: TextStyle(color: AppTheme.dangerRed)),
-          ),
-        ],
+          onPressed: onTap,
+        ),
       ),
     );
   }

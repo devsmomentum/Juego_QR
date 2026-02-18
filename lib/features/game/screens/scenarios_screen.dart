@@ -86,59 +86,225 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final isDarkMode = playerProvider.isDarkMode;
 
-    final Color currentSurface =
-        isDarkMode ? AppTheme.dSurface1 : AppTheme.lSurface1;
-    final Color currentText =
-        isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
-    final Color currentTextSec =
-        isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A);
+    _showPremiumExitDialog(
+      title: '¿Qué deseas hacer?',
+      subtitle: 'Puedes cambiar de modo de juego o cerrar tu sesión.',
+      isDarkMode: isDarkMode,
+      options: [
+        _DialogOption(
+          icon: Icons.swap_horiz_rounded,
+          label: 'CAMBIAR MODO',
+          gradientColors: isDarkMode
+              ? [AppTheme.dGoldMain, const Color(0xFFE5A700)]
+              : [AppTheme.lBrandMain, const Color(0xFF7B2CBF)],
+          textColor: isDarkMode ? Colors.black : Colors.white,
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+              (route) => false,
+            );
+          },
+        ),
+        _DialogOption(
+          icon: Icons.logout_rounded,
+          label: 'CERRAR SESIÓN',
+          gradientColors: [AppTheme.dangerRed, const Color(0xFFB71C1C)],
+          textColor: Colors.white,
+          onTap: () {
+            Navigator.pop(context);
+            playerProvider.logout();
+            // AuthMonitor handles navigation to LoginScreen
+          },
+        ),
+      ],
+    );
+  }
 
-    showDialog(
+  /// Reusable premium dialog with glassmorphism and game-style buttons.
+  void _showPremiumExitDialog({
+    required String title,
+    required String subtitle,
+    required bool isDarkMode,
+    required List<_DialogOption> options,
+  }) {
+    final Color surfaceColor = isDarkMode
+        ? Colors.black.withOpacity(0.75)
+        : Colors.white.withOpacity(0.85);
+    final Color textColor = isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
+    final Color textSecColor =
+        isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A);
+    final Color accentColor =
+        isDarkMode ? AppTheme.dGoldMain : AppTheme.lBrandMain;
+
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: currentSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppTheme.dangerRed.withOpacity(0.5)),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.logout, color: AppTheme.dangerRed),
-            const SizedBox(width: 12),
-            Text('Cerrar Sesión',
-                style:
-                    TextStyle(color: currentText, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text(
-          '¿Estás seguro que deseas cerrar sesión?',
-          style: TextStyle(color: currentTextSec),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancelar',
-                style: TextStyle(color: currentTextSec.withOpacity(0.6))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.dangerRed,
-              foregroundColor: Colors.white,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: anim1, curve: Curves.easeOut),
+          child: ScaleTransition(
+            scale: CurvedAnimation(
+              parent: anim1,
+              curve: Curves.easeOutBack,
             ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await playerProvider.logout();
-              if (mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
-            child: const Text('SALIR'),
+            child: child,
           ),
-        ],
-      ),
+        );
+      },
+      pageBuilder: (context, _, __) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: accentColor.withOpacity(0.4),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withOpacity(0.15),
+                        blurRadius: 30,
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Icon with glow
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  accentColor.withOpacity(0.2),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.games_rounded,
+                              color: accentColor,
+                              size: 40,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Title
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          // Accent line
+                          Container(
+                            width: 40,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  accentColor.withOpacity(0.3),
+                                  accentColor,
+                                  accentColor.withOpacity(0.3)
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Subtitle
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: textSecColor,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          // Option buttons
+                          ...options.map((opt) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                          colors: opt.gradientColors),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: opt.gradientColors.first
+                                              .withOpacity(0.3),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton.icon(
+                                      icon: Icon(opt.icon, size: 20),
+                                      label: Text(opt.label,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              letterSpacing: 1)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        foregroundColor: opt.textColor,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14)),
+                                      ),
+                                      onPressed: opt.onTap,
+                                    ),
+                                  ),
+                                ),
+                              )),
+                          // Cancel
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(
+                              'Cancelar',
+                              style: TextStyle(
+                                color: textSecColor.withOpacity(0.5),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1569,39 +1735,39 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       onPopInvoked: (didPop) async {
         if (didPop) return;
 
-        final shouldExit = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: isDarkMode ? AppTheme.dSurface1 : Colors.white,
-            title: Text('¿Salir de MapHunter?',
-                style: TextStyle(color: currentText)),
-            content: Text(
-              '¿Estás seguro que deseas salir de la aplicación?',
-              style: TextStyle(
-                  color: isDarkMode ? Colors.white70 : Colors.black87),
+        _showPremiumExitDialog(
+          title: '¿Qué deseas hacer?',
+          subtitle: 'Puedes cambiar de modo de juego o salir de la aplicación.',
+          isDarkMode: isDarkMode,
+          options: [
+            _DialogOption(
+              icon: Icons.swap_horiz_rounded,
+              label: 'CAMBIAR MODO',
+              gradientColors: isDarkMode
+                  ? [AppTheme.dGoldMain, const Color(0xFFE5A700)]
+                  : [AppTheme.lBrandMain, const Color(0xFF7B2CBF)],
+              textColor: isDarkMode ? Colors.black : Colors.white,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                      builder: (_) => const GameModeSelectorScreen()),
+                  (route) => false,
+                );
+              },
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text('Cancelar',
-                    style: TextStyle(
-                        color: isDarkMode ? Colors.white54 : Colors.grey)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.dangerRed,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('SALIR'),
-              ),
-            ],
-          ),
+            _DialogOption(
+              icon: Icons.exit_to_app_rounded,
+              label: 'SALIR DE LA APP',
+              gradientColors: [AppTheme.dangerRed, const Color(0xFFB71C1C)],
+              textColor: Colors.white,
+              onTap: () {
+                Navigator.pop(context);
+                SystemNavigator.pop();
+              },
+            ),
+          ],
         );
-
-        if (shouldExit == true) {
-          SystemNavigator.pop();
-        }
       },
       child: AnimatedCyberBackground(
         child: Stack(
@@ -2578,4 +2744,21 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       ),
     );
   }
+}
+
+/// Simple data class for premium dialog options.
+class _DialogOption {
+  final IconData icon;
+  final String label;
+  final List<Color> gradientColors;
+  final Color textColor;
+  final VoidCallback onTap;
+
+  const _DialogOption({
+    required this.icon,
+    required this.label,
+    required this.gradientColors,
+    required this.textColor,
+    required this.onTap,
+  });
 }
