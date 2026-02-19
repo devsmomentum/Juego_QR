@@ -238,17 +238,22 @@ class EventCreationProvider extends ChangeNotifier {
 
       if (isDesktop) {
         // Use file_picker on desktop for better compatibility
+        // Changed from FileType.custom to FileType.image to prevent Windows freeze
+        debugPrint("Opening Desktop FilePicker (FileType.image)...");
         final result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
+          type: FileType.image,
           allowedExtensions: ['jpg', 'jpeg', 'png'],
           allowMultiple: false,
         );
+        debugPrint("FilePicker closed. Result: ${result != null ? 'Selected' : 'Cancelled'}");
 
         if (result != null && result.files.isNotEmpty) {
           final file = result.files.first;
           if (file.path != null) {
+            // Strict extension check retained from strict business rule
             final error = _validateImageFormat(file.name);
             if (error != null) return error;
+            
             _selectedImage = XFile(file.path!);
             checkFormValidity();
             notifyListeners();
