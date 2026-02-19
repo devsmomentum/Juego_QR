@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../game/models/event.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 
 class EventWaitingScreen extends StatefulWidget {
   final GameEvent event;
@@ -27,6 +28,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen> with SingleTick
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
 
+
+
   @override
   void initState() {
     super.initState();
@@ -41,13 +44,53 @@ class _EventWaitingScreenState extends State<EventWaitingScreen> with SingleTick
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
+
+    _setupRealtimeSubscription();
+  }
+
+  RealtimeChannel? _eventChannel;
+
+  void _setupRealtimeSubscription() {
+    try {
+      debugPrint("🔍 Setting up realtime subscription for event: ${widget.event.id}");
+      _eventChannel = Supabase.instance.client
+          .channel('public:events:${widget.event.id}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'events',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'id',
+              value: widget.event.id,
+            ),
+            callback: (payload) {
+              debugPrint("🔔 Event update received: ${payload.newRecord}");
+              final newStatus = payload.newRecord['status'];
+              if (newStatus == 'active') {
+                debugPrint("✅ Event is now ACTIVE! Triggering navigation...");
+                if (mounted) {
+                   _timer?.cancel();
+                   WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) widget.onTimerFinished();
+                   });
+                }
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint("❌ Error setting up realtime subscription: $e");
+    }
   }
 
   void _calculateTime() {
     // PRIORIDAD AL ESTADO: Si el evento ya está activo o completado, omitir cuenta regresiva
     if (widget.event.status == 'active' || widget.event.status == 'completed') {
       _timer?.cancel();
-      widget.onTimerFinished();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onTimerFinished();
+      });
       return;
     }
 
@@ -72,12 +115,15 @@ class _EventWaitingScreenState extends State<EventWaitingScreen> with SingleTick
       }
     } else {
       _timer?.cancel();
-      widget.onTimerFinished();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onTimerFinished();
+      });
     }
   }
 
   @override
   void dispose() {
+    _eventChannel?.unsubscribe();
     _timer?.cancel();
     _controller.dispose();
     super.dispose();
