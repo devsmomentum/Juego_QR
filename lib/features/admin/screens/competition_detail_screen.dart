@@ -24,6 +24,7 @@ import '../../mall/providers/store_provider.dart';
 import '../widgets/store_edit_dialog.dart';
 import '../widgets/clue_form_dialog.dart';
 import '../../mall/models/mall_store.dart';
+import '../widgets/competition_financials_widget.dart';
 
 class CompetitionDetailScreen extends StatefulWidget {
   final GameEvent event;
@@ -178,7 +179,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
 
     _tabController.addListener(() {
       setState(() {}); // Rebuild to show/hide FAB
@@ -944,6 +945,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           tabs: const [
             Tab(text: "Detalles"),
             Tab(text: "Participantes"),
+            Tab(text: "Finanzas"),
             Tab(text: "Pistas de Juego"),
             Tab(text: "Tiendas"),
           ],
@@ -956,6 +958,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           children: [
             _buildDetailsTab(),
             _buildParticipantsTab(),
+            CompetitionFinancialsWidget(event: widget.event),
             _buildCluesTab(),
             _buildStoresTab(),
           ],
@@ -974,7 +977,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         widget.event.date.isUtc ? widget.event.date : widget.event.date.toUtc();
     final nowUtc = now.toUtc();
 
-    return widget.event.isActive || nowUtc.isAfter(eventDate);
+    // Si el evento está activo O completado, bloqueamos la edición.
+    return widget.event.isActive || widget.event.status == 'completed' || nowUtc.isAfter(eventDate);
   }
 
   Widget? _getFAB() {

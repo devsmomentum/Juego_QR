@@ -291,4 +291,48 @@ class AdminService {
       return [];
     }
   }
+
+  /// Obtiene los resultados financieros finales de un evento.
+  /// Llama al RPC `get_event_financial_results`.
+  Future<Map<String, dynamic>> getEventFinancialResults(String eventId) async {
+    debugPrint('💰 AdminService: Getting financial results for $eventId');
+    try {
+      // Intentar llamar al RPC optimizado
+      try {
+        debugPrint('💰 AdminService: Trying RPC get_event_financial_results...');
+        final response = await _supabase.rpc('get_event_financial_results', params: {
+          'p_event_id': eventId,
+        });
+        debugPrint('💰 AdminService: RPC Success: $response');
+        return Map<String, dynamic>.from(response);
+      } catch (rpcError) {
+        debugPrint('💰 AdminService: RPC get_event_financial_results failed/missing ($rpcError). Falling back to basic fetch.');
+        
+        // Fallback: Fetch basic prize distribution info locally if RPC fails
+        final distributionData = await _supabase
+            .from('prize_distributions')
+            .select('results, created_at')
+            .eq('event_id', eventId)
+            .eq('rpc_success', true)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+            
+        debugPrint('💰 AdminService: Distribution info found: $distributionData');
+
+        final eventData = await _supabase.from('events').select('pot').eq('id', eventId).single();
+        final pot = eventData['pot'] ?? 0;
+        debugPrint('💰 AdminService: Fallback pot: $pot');
+
+        return {
+          'status': 'completed',
+          'pot': pot,
+          'results': distributionData != null ? distributionData['results'] : [],
+        };
+      }
+    } catch (e) {
+      debugPrint('💰 AdminService: Critical error getting financial results: $e');
+      return {'pot': 0, 'results': []};
+    }
+  }
 }
