@@ -807,225 +807,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showDeleteConfirmation() {
-// [FIX] Controller lifecycle managed manually to prevent "used after disposed" error
-    final passwordController = TextEditingController();
-    bool isDeleting = false;
-    bool obscurePassword = true;
-    const Color currentRed = Color(0xFFE33E5D);
-    const Color cardBg = Color(0xFF151517);
-
     showDialog(
       context: context,
-      barrierDismissible: !isDeleting,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: currentRed.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: currentRed.withOpacity(0.5), width: 1),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: currentRed, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: currentRed.withOpacity(0.1),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            color: currentRed, size: 28),
-                        const SizedBox(width: 12),
-                        const Flexible(
-                          child: Text(
-                            "Borrar Cuenta",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "Esta acción ELIMINARÁ permanentemente:",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "• Todo tu progreso\n"
-                      "• Tus items y monedas\n"
-                      "• Tu historial de eventos\n"
-                      "• Todos tus datos",
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "Ingresa tu contraseña:",
-                      style: TextStyle(
-                          color: currentRed,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: obscurePassword,
-                      enabled: !isDeleting,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: "Contraseña",
-                        hintStyle:
-                            TextStyle(color: Colors.white.withOpacity(0.3)),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              BorderSide(color: currentRed.withOpacity(0.3)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              BorderSide(color: Colors.white.withOpacity(0.1)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: currentRed),
-                        ),
-                        prefixIcon:
-                            const Icon(Icons.lock, color: currentRed, size: 20),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.white.withOpacity(0.5),
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            setDialogState(
-                                () => obscurePassword = !obscurePassword);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed:
-                                isDeleting ? null : () => Navigator.pop(ctx),
-                            child: const Text("Cancelar",
-                                style: TextStyle(color: Colors.white54)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: isDeleting
-                                ? null
-                                : () async {
-                                    final password =
-                                        passwordController.text.trim();
-                                    if (password.isEmpty) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                "Debes ingresar tu contraseña"),
-                                            backgroundColor: currentRed),
-                                      );
-                                      return;
-                                    }
-                                    setDialogState(() => isDeleting = true);
-                                    try {
-                                      final playerProvider =
-                                          Provider.of<PlayerProvider>(context,
-                                              listen: false);
-                                      // [FIX] Limpiar efectos de sabotaje ANTES del borrado
-                                      if (context.mounted) {
-                                        context
-                                            .read<PowerEffectProvider>()
-                                            .resetState();
-                                      }
-                                      await playerProvider
-                                          .deleteAccount(password);
-                                      if (!ctx.mounted) return;
-                                      if (playerProvider.isLoggedIn) {
-                                        Navigator.pop(ctx);
-                                      } else {
-                                        // Logged out successfully - dialog dies with route
-                                      }
-                                      SystemChrome.setEnabledSystemUIMode(
-                                          SystemUiMode.immersiveSticky);
-                                      if (context.mounted) {
-                                        Navigator.of(context)
-                                            .pushNamedAndRemoveUntil(
-                                                '/login', (route) => false);
-                                      }
-                                    } catch (e) {
-                                      if (!ctx.mounted) return;
-                                      setDialogState(() => isDeleting = false);
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                            content: Text("Error: $e"),
-                                            backgroundColor: currentRed),
-                                      );
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: currentRed,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: isDeleting
-                                ? const SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white))
-                                : const Text("Borrar",
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ).then((_) {
-      // [FIX] Dispose controller ONLY after dialog is closed
-      passwordController.dispose();
-    });
+      barrierDismissible: false, // Prevent accidental dismissal while deleting
+      builder: (context) => const _DeleteAccountDialog(),
+    );
   }
 
   Widget _buildGoldenCloversSection(
@@ -1547,5 +1333,225 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+}
+
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog({super.key});
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isDeleting = false;
+  bool _obscurePassword = true;
+
+  static const Color currentRed = Color(0xFFE33E5D);
+  static const Color cardBg = Color(0xFF151517);
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: currentRed.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: currentRed.withOpacity(0.5), width: 1),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: currentRed, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: currentRed.withOpacity(0.1),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        color: currentRed, size: 28),
+                    const SizedBox(width: 12),
+                    const Flexible(
+                      child: Text(
+                        "Borrar Cuenta",
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "Esta acción ELIMINARÁ permanentemente:",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "• Todo tu progreso\n"
+                  "• Tus items y monedas\n"
+                  "• Tu historial de eventos\n"
+                  "• Todos tus datos",
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "Ingresa tu contraseña:",
+                  style: TextStyle(
+                      color: currentRed,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  enabled: !_isDeleting,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: "Contraseña",
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: currentRed.withOpacity(0.3)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: currentRed),
+                    ),
+                    prefixIcon:
+                        const Icon(Icons.lock, color: currentRed, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.white.withOpacity(0.5),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed:
+                            _isDeleting ? null : () => Navigator.pop(context),
+                        child: const Text("Cancelar",
+                            style: TextStyle(color: Colors.white54)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isDeleting ? null : _handleDelete,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: currentRed,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isDeleting
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Text("Borrar",
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleDelete() async {
+    final password = _passwordController.text.trim();
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Debes ingresar tu contraseña"),
+            backgroundColor: currentRed),
+      );
+      return;
+    }
+
+    setState(() => _isDeleting = true);
+
+    try {
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+
+      // Limpiar efectos de sabotaje ANTES del borrado
+      if (mounted) {
+        context.read<PowerEffectProvider>().resetState();
+      }
+
+      await playerProvider.deleteAccount(password);
+
+      if (!mounted) return;
+
+      if (playerProvider.isLoggedIn) {
+        // Si sigue logueado, es que falló algo sin lanzar excepción (raro pero posible)
+        Navigator.pop(context);
+      } else {
+        // Logged out successfully
+        Navigator.pop(context); // Close dialog
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/login', (route) => false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: currentRed),
+      );
+    }
   }
 }
