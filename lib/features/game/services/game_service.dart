@@ -267,15 +267,8 @@ class GameService {
               onProgressUpdate();
             }
 
-            final newRecord = payload.newRecord;
-            if (totalClues > 0) {
-              final int completed = newRecord['completed_clues_count'] ??
-                  newRecord['completed_clues'] ??
-                  0;
-              if (completed >= totalClues) {
-                onRaceCompleted(true, 'Realtime Subscription');
-              }
-            }
+            // REMOVED: Do not complete race locally based on individual progress.
+            // Race completion is now ONLY authoritative via the 'events' table status.
           },
         )
         // 2. Escuchar cambios en el evento (Finalización Global)
