@@ -2346,16 +2346,63 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                 CrossAxisAlignment
                                                                     .start,
                                                             children: [
-                                                              Text(
-                                                                  scenario.name,
-                                                                  style: const TextStyle(
-                                                                      color: Colors
-                                                                          .white,
-                                                                      fontSize:
-                                                                          22,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold)),
+                                                              GestureDetector(
+                                                                onTap: () {
+                                                                  showDialog(
+                                                                    context:
+                                                                        context,
+                                                                    builder:
+                                                                        (ctx) =>
+                                                                            AlertDialog(
+                                                                      backgroundColor:
+                                                                          AppTheme
+                                                                              .dSurface1,
+                                                                      shape: RoundedRectangleBorder(
+                                                                          borderRadius: BorderRadius.circular(
+                                                                              20),
+                                                                          side:
+                                                                              BorderSide(color: AppTheme.dGoldMain.withOpacity(0.5))),
+                                                                      title: Text(
+                                                                          scenario
+                                                                              .name,
+                                                                          style: const TextStyle(
+                                                                              color: Colors.white,
+                                                                              fontWeight: FontWeight.bold)),
+                                                                      content:
+                                                                          SingleChildScrollView(
+                                                                        child: Text(
+                                                                            scenario
+                                                                                .description,
+                                                                            style:
+                                                                                const TextStyle(color: Colors.white70)),
+                                                                      ),
+                                                                      actions: [
+                                                                        TextButton(
+                                                                          onPressed: () =>
+                                                                              Navigator.pop(ctx),
+                                                                          child: const Text(
+                                                                              'Cerrar',
+                                                                              style: TextStyle(color: AppTheme.dGoldMain)),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  );
+                                                                },
+                                                                child: Text(
+                                                                    scenario
+                                                                        .name,
+                                                                    maxLines: 1,
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                    style: const TextStyle(
+                                                                        color: Colors
+                                                                            .white,
+                                                                        fontSize:
+                                                                            22,
+                                                                        fontWeight:
+                                                                            FontWeight.bold)),
+                                                              ),
                                                               const SizedBox(
                                                                   height: 4),
                                                               Text(
