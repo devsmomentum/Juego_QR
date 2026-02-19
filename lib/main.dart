@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Importar dotenv
 import 'package:supabase_flutter/supabase_flutter.dart'; // Importar Supabase
+import 'dart:ui'; // For Helper -> PointerDeviceKind
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 // Imports existentes
@@ -310,6 +311,14 @@ class _TreasureHuntAppState extends State<TreasureHuntApp>
             title: 'MapHunter',
             navigatorKey: rootNavigatorKey,
             debugShowCheckedModeBanner: false,
+            scrollBehavior: const MaterialScrollBehavior().copyWith(
+              dragDevices: {
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.touch,
+                PointerDeviceKind.stylus,
+                PointerDeviceKind.unknown
+              },
+            ),
             theme: isDarkMode ? AppTheme.darkTheme : AppTheme.lightTheme,
             builder: (context, child) {
               _forceImmersiveMode();
