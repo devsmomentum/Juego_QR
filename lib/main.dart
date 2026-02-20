@@ -335,10 +335,10 @@ class _TreasureHuntAppState extends State<TreasureHuntApp>
               );
             },
 
-            // 5. LÓGICA PRINCIPAL:
-            // Si estamos en WEB -> Muestra la pantalla de Login de Admin
-            // Si estamos en MÓVIL o WINDOWS (para pruebas) -> Muestra el Splash Screen normal para usuarios
-            home: kIsWeb ? const AdminLoginScreen() : const SplashScreen(),
+            // 5. LÓGICA PRINCIPAL Unificada:
+            // Tanto Web como Móvil inician con el Splash Screen.
+            // El LoginScreen manejará la redirección de Admins al Dashboard.
+            home: const SplashScreen(),
           );
         },
       ),

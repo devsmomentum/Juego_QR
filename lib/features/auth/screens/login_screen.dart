@@ -658,7 +658,11 @@ class _LoginScreenState extends State<LoginScreen>
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 24.0, vertical: 20.0),
-                            child: AutofillGroup(
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 400),
+                                child: AutofillGroup(
                               child: Form(
                                 key: _formKey,
                                 child: Column(
@@ -895,6 +899,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                             ),
+                          ),
+                        ),
                           ),
                         ),
                       ),
