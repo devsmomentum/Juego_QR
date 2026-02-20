@@ -18,6 +18,7 @@ import 'minigames/sequence_config_screen.dart';
 import 'minigames/drink_mixer_config_screen.dart';
 import 'audit_logs_screen.dart';
 import 'sponsors_management_screen.dart';
+import 'online_automation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -33,6 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Dashboard",
     "Crear Evento",
     "Competencias",
+    "Modo Online",
     "Usuarios",
     "Compras",
     "Retiros",
@@ -47,6 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.dashboard,
     Icons.add_circle_outline,
     Icons.emoji_events,
+    Icons.cloud_done,
     Icons.people,
     Icons.local_offer,
     Icons.money_off,
@@ -121,9 +124,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
 
       const CompetitionsManagementScreen(), // Index 2
-      const UserManagementScreen(), // Index 3
-      const CloverPlansManagementScreen(), // Index 4 - Planes Compra
-      const WithdrawalPlansManagementScreen(), // Index 5 - Planes Retiro
+      const OnlineAutomationScreen(), // Index 3 - Modo Online
+      const UserManagementScreen(), // Index 4
+      const CloverPlansManagementScreen(), // Index 5 - Planes Compra
+      const WithdrawalPlansManagementScreen(), // Index 6 - Planes Retiro
       const Center(
           child: Text('Reportes - En desarrollo',
               style: TextStyle(color: Colors.white54))), // Index 6 - Reportes
