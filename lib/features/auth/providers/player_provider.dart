@@ -362,6 +362,10 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     // For now, clear it.
     _banMessage = null;
 
+    // CRITICAL: Reset spectator flag so the next login (even a different user, e.g. admin)
+    // does not inherit a stale spectator-role override from a previous session.
+    _isSpectatorSession = false;
+
     notifyListeners();
   }
 
@@ -391,10 +395,17 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   void setSpectatorRole(bool isSpectator) {
     _isSpectatorSession = isSpectator;
     if (_currentPlayer != null) {
-      _currentPlayer =
-          _currentPlayer!.copyWith(role: isSpectator ? 'spectator' : 'user');
-      loadShopItems(); // Reload prices for new role
-      notifyListeners();
+      if (isSpectator) {
+        // Override role to 'spectator' for the duration of spectator mode.
+        _currentPlayer = _currentPlayer!.copyWith(role: 'spectator');
+        loadShopItems();
+        notifyListeners();
+      } else {
+        // Restore the actual role from DB instead of hardcoding 'user'.
+        // This prevents admins (or any non-user role) from losing their real role
+        // when spectator mode is cleared.
+        reloadProfile();
+      }
     }
   }
 
