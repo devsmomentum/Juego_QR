@@ -1,4 +1,4 @@
-```
+
 #!/bin/bash
 # 1. Descargar Flutter
 git clone https://github.com/flutter/flutter.git -b stable /tmp/flutter
@@ -22,4 +22,3 @@ EOF
 
 # 5. Compilar para web
 flutter build web --release
-```
