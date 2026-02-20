@@ -72,13 +72,15 @@ class AppConfigService {
   Future<bool> updateExchangeRate(double rate) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      
-      await _supabase.from('app_config').upsert({
-        'key': 'bcv_exchange_rate',
-        'value': rate,
-        'updated_at': DateTime.now().toIso8601String(),
-        'updated_by': userId,
-      });
+
+      await _supabase
+          .from('app_config')
+          .update({
+            'value': rate,
+            'updated_at': DateTime.now().toIso8601String(),
+            'updated_by': userId?.toString(),
+          })
+          .eq('key', 'bcv_exchange_rate');
 
       debugPrint('[AppConfigService] Exchange rate updated to $rate');
       return true;
@@ -120,13 +122,15 @@ class AppConfigService {
   Future<bool> updateGatewayFeePercentage(double fee) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      
-      await _supabase.from('app_config').upsert({
-        'key': 'gateway_fee_percentage',
-        'value': fee,
-        'updated_at': DateTime.now().toIso8601String(),
-        'updated_by': userId,
-      });
+
+      await _supabase
+          .from('app_config')
+          .update({
+            'value': fee,
+            'updated_at': DateTime.now().toIso8601String(),
+            'updated_by': userId?.toString(),
+          })
+          .eq('key', 'gateway_fee_percentage');
 
       debugPrint('[AppConfigService] Gateway fee updated to $fee%');
       return true;

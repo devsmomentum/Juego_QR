@@ -76,11 +76,16 @@ serve(async (req) => {
     );
 
     // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
-    const { data: configData, error: configError } = await supabaseAdmin
+     // Use order+limit instead of .single() so duplicate rows during DB cleanup
+    // don't throw a 406 error and block all withdrawals.
+    const { data: configRows, error: configError } = await supabaseAdmin
       .from("app_config")
       .select("value, updated_at")
       .eq("key", "bcv_exchange_rate")
-      .single();
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    const configData = configRows?.[0] ?? null;
 
     if (configError || !configData) {
       console.error("Exchange rate fetch error:", configError);

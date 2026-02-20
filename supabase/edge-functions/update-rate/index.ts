@@ -229,19 +229,20 @@ serve(async (req) => {
         .from("app_config")
         .select("value")
         .eq("key", "bcv_exchange_rate")
-        .single();
+        .maybeSingle();
 
       const oldRate = currentConfig ? parseFloat(currentConfig.value) : null;
 
-      // UPDATE
+      // UPDATE – use update().eq() instead of upsert() to avoid any
+      // conflict resolution issues. The row is always seeded by migration.
       const { error: updateError } = await supabaseAdmin
         .from("app_config")
-        .upsert({
-          key: "bcv_exchange_rate",
+        .update({
           value: newRate,
           updated_at: new Date().toISOString(),
-          updated_by: null, 
-        });
+          updated_by: null,
+        })
+        .eq("key", "bcv_exchange_rate");
 
       if (updateError) throw new Error(updateError.message);
 
