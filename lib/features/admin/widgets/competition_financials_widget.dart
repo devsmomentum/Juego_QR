@@ -205,19 +205,19 @@ class _CompetitionFinancialsWidgetState
          final pot = data['pot'] ?? 0;
          
          // Logic to handle different RPC return structures
-         List<dynamic> winnersResults = [];
-         
-         if (data['results'] != null) {
-            winnersResults = data['results'] as List<dynamic>;
-         } else if (data['distribution'] != null) {
-            // If the RPC returned a 'distribution' object which contains 'results'
-            final distribution = data['distribution'] as Map<String, dynamic>;
-            if (distribution['results'] != null) {
-               winnersResults = distribution['results'] as List<dynamic>;
-            }
+         List<dynamic> podium = [];
+         List<dynamic> bettors = [];
+
+         if (data['podium'] != null) {
+            podium = data['podium'] as List<dynamic>;
+         } else if (data['results'] != null) {
+             // Fallback for old structure
+            podium = data['results'] as List<dynamic>;
          }
 
-         // If data['results'] is null, check distributed prizes log. 
+         if (data['bettors'] != null) {
+            bettors = data['bettors'] as List<dynamic>;
+         }
          
          return SingleChildScrollView(
            padding: const EdgeInsets.all(16),
@@ -232,9 +232,10 @@ class _CompetitionFinancialsWidgetState
                ),
                const SizedBox(height: 20),
                
-               const Text("Ganadores del Evento", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+               // --- PODIUM SECTION ---
+               const Text("🏆 Podio de Ganadores", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                const SizedBox(height: 10),
-               if (winnersResults.isEmpty)
+               if (podium.isEmpty)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16.0),
@@ -261,32 +262,99 @@ class _CompetitionFinancialsWidgetState
                     ),
                   )
                else
-                 ...winnersResults.map((r) => Card(
+                 ...podium.map((r) {
+                   final avatarId = r['avatar_id'] as String?;
+                   return Card(
                    color: Colors.white10,
                    child: ListTile(
                      leading: CircleAvatar(
-                       backgroundColor: r['place'] == 1 ? Colors.amber : Colors.grey,
-                       child: Text('${r['place']}'),
+                       backgroundColor: r['rank'] == 1 ? Colors.amber : (r['rank'] == 2 ? Colors.grey : Colors.brown),
+                       // Use text as fallback if no image logic yet, but if avatarId is present we could use it
+                       // safely assuming we don't have the avatar assets logic here imported, fallback to rank
+                       child: Text('${r['rank']}'),
                      ),
-                     title: Text('${r['user']}', style: const TextStyle(color: Colors.white)),
-                     trailing: Text('+${r['amount']} 🍀', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                     title: Text('${r['name']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                     subtitle: Text('Posición #${r['rank']}', style: const TextStyle(color: Colors.white54)),
+                     trailing: Column(
+                       mainAxisAlignment: MainAxisAlignment.center,
+                       crossAxisAlignment: CrossAxisAlignment.end,
+                       children: [
+                         const Text('Premio', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                         Text('+${r['amount']} 🍀', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                       ],
+                     ),
                    ),
-                 )).toList(),
+                 );
+                 }).toList(),
                  
                const SizedBox(height: 30),
                const Divider(color: Colors.white24),
                const SizedBox(height: 10),
                
-               // Here we would list the Bet Winners (Apostadores que ganaron)
-               // This requires precise data from the RPC.
-               const Text("Dividendos de Apuestas", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+               // --- BETTORS SECTION ---
+               const Text("📊 Desglose de Apuestas", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                const SizedBox(height: 10),
-               const Center(
-                 child: Text(
-                   "Detalle de ganancia por apostador disponible en reporte detallado.",
-                   style: TextStyle(color: Colors.white38, fontStyle: FontStyle.italic),
-                 ),
-               )
+               
+               if (bettors.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(
+                      child: Text(
+                        "No hubieron apuestas en este evento.",
+                        style: TextStyle(color: Colors.white38, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  )
+               else
+                 ...bettors.map((b) {
+                    final int net = b['net'] ?? 0;
+                    final bool isWinner = net > 0;
+                    final int totalWon = b['total_won'] ?? 0;
+                    
+                    return Card(
+                      color: isWinner ? Colors.green.withOpacity(0.1) : Colors.white.withOpacity(0.05),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                         leading: CircleAvatar(
+                           backgroundColor: Colors.blueGrey,
+                           child: Text((b['name'] as String).substring(0, 1).toUpperCase()),
+                         ),
+                         title: Text('${b['name']}', style: const TextStyle(color: Colors.white)),
+                         subtitle: Text('${b['bets_count']} apuesta(s)', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                         trailing: Row(
+                           mainAxisSize: MainAxisSize.min,
+                           children: [
+                             Column(
+                               crossAxisAlignment: CrossAxisAlignment.end,
+                               mainAxisAlignment: MainAxisAlignment.center,
+                               children: [
+                                  const Text('Apostado', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                                  Text('${b['total_bet']} 🍀', style: const TextStyle(color: Colors.white70)),
+                               ],
+                             ),
+                             const SizedBox(width: 16),
+                             Column(
+                               crossAxisAlignment: CrossAxisAlignment.end,
+                               mainAxisAlignment: MainAxisAlignment.center,
+                               children: [
+                                  const Text('Ganancia', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                                  Text(
+                                    totalWon > 0 ? '+$totalWon 🍀' : '0 🍀', 
+                                    style: TextStyle(
+                                      color: totalWon > 0 ? Colors.greenAccent : Colors.white30, 
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16
+                                    )
+                                  ),
+                               ],
+                             ),
+                           ],
+                         ),
+                      ),
+                    );
+                 }).toList(),
+                 
+               const SizedBox(height: 50),
              ],
            ),
          );
