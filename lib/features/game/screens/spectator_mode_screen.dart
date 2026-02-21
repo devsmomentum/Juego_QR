@@ -19,6 +19,7 @@ import '../repositories/power_repository_impl.dart';
 import '../strategies/power_strategy_factory.dart';
 import '../../events/services/event_service.dart';
 import '../widgets/betting_modal.dart';
+import '../../auth/screens/avatar_selection_screen.dart';
 import '../widgets/spectator_participants_list.dart';
 import '../../../shared/models/player.dart';
 import '../../social/widgets/leaderboard_card.dart';
@@ -132,8 +133,11 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Read actual mode for background images only
     final playerProvider = Provider.of<PlayerProvider>(context);
-    final isDarkMode = playerProvider.isDarkMode;
+    final actualDarkMode = playerProvider.isDarkMode;
+    // FORCED DARK: All UI elements always use dark cyberpunk styling
+    final isDarkMode = true;
 
     return ChangeNotifierProvider(
       create: (_) => SpectatorFeedProvider(widget.eventId),
@@ -187,6 +191,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          fontFamily: 'Orbitron',
                           fontFamily: 'Orbitron',
                         ),
                       ),
@@ -293,8 +298,113 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
             );
           },
         ),
+        ), // close PopScope
       ),
     );
+  }
+  void _confirmExit() {
+    const Color currentRed = Color(0xFFE33E5D);
+    const Color cardBg = Color(0xFF151517);
+
+    showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: currentRed.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: currentRed.withOpacity(0.5), width: 1),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: currentRed, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: currentRed.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: currentRed, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: currentRed,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '¿Salir del Modo Espectador?',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Si tienes apuestas activas, seguirán vigentes. '
+                  'Podrás volver a entrar en cualquier momento.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text(
+                          'CANCELAR',
+                          style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: currentRed,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'SALIR',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ).then((shouldExit) {
+      if (shouldExit == true && mounted) {
+        Navigator.pop(context);
+      }
+    });
   }
 
   Widget _buildVictoryBanner() {
@@ -357,7 +467,17 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
         if (gameProvider.isLoading) {
           return const Center(
-            child: CircularProgressIndicator(color: AppTheme.secondaryPink),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.accentGold),
+                SizedBox(height: 16),
+                Text(
+                  'Cargando...',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
           );
         }
 
@@ -399,6 +519,144 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _showTutorialDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: AppTheme.secondaryPink.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.2)),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D0D14),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.5), width: 1.5),
+            ),
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.secondaryPink.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.3)),
+                        ),
+                        child: const Icon(Icons.visibility, color: AppTheme.secondaryPink, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'MODO ESPECTADOR',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'Orbitron',
+                          fontSize: 14,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  _buildTutorialSection(
+                    '👁️ ¿Qué es el Modo Espectador?',
+                    'Observa la carrera en tiempo real sin participar. '
+                    'Podrás ver el progreso de cada jugador, las pistas resueltas '
+                    'y los eventos que ocurren durante el juego.',
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTutorialSection(
+                    '⚡ Poderes y Sabotajes',
+                    'Compra poderes en la Tienda usando tréboles. '
+                    'Usa tus poderes para sabotear jugadores (congelar, difuminar, etc.) '
+                    'o enviar ayuda (escudos, invisibilidad). '
+                    'Toca un poder de tu inventario para usarlo.',
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTutorialSection(
+                    '🎰 Apuestas',
+                    'Apuesta 100 tréboles por el jugador que crees que ganará la carrera. '
+                    'Si tu jugador gana, ¡recibirás el doble de tu apuesta! '
+                    'Las apuestas se realizan con tréboles (moneda premium).',
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTutorialSection(
+                    '🍀 Tréboles',
+                    'Los tréboles son la moneda del juego. '
+                    'Puedes recargarlos desde la Wallet. '
+                    'Úsalos para comprar poderes y apostar.',
+                  ),
+
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.secondaryPink,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text(
+                        'ENTENDIDO',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Orbitron',
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTutorialSection(String title, String description) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppTheme.secondaryPink,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 
@@ -451,7 +709,13 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          gradient: isSelected ? AppTheme.primaryGradient : null,
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [AppTheme.secondaryPink, Color(0xFF9B1E8A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
           borderRadius: BorderRadius.circular(15),
         ),
         child: Row(
@@ -522,13 +786,13 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                       margin: const EdgeInsets.only(right: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryPurple.withOpacity(0.3),
+                        color: AppTheme.secondaryPink.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: AppTheme.primaryPurple.withOpacity(0.5)),
+                            color: AppTheme.secondaryPink.withOpacity(0.4)),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.primaryPurple.withOpacity(0.1),
+                            color: AppTheme.secondaryPink.withOpacity(0.1),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1218,7 +1482,11 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
+                      gradient: const LinearGradient(
+                        colors: [AppTheme.secondaryPink, Color(0xFF9B1E8A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -1283,12 +1551,12 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppTheme.primaryPurple.withOpacity(0.3),
-            AppTheme.cardBg.withOpacity(0.5),
+            AppTheme.secondaryPink.withOpacity(0.2),
+            const Color(0xFF0D0D14).withOpacity(0.6),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.4)),
       ),
       child: Material(
         color: Colors.transparent,

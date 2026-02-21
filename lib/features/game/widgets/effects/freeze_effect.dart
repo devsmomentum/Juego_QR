@@ -31,8 +31,8 @@ class _FreezeEffectState extends State<FreezeEffect>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
+    final isDarkMode = true /* always dark UI */;
+    
     return Material(
       color: Colors.transparent,
       child: AbsorbPointer(

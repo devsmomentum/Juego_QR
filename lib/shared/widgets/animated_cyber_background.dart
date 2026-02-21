@@ -59,7 +59,7 @@ class _AnimatedCyberBackgroundState extends State<AnimatedCyberBackground>
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
     final color = widget.gridColor ?? const Color(0xFF6366F1); // Always use dark mode color
 
     return Stack(

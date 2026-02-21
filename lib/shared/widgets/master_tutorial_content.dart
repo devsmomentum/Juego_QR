@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/auth/providers/player_provider.dart' as import_player;
 import 'cyber_tutorial_overlay.dart';
 
 class MasterTutorialContent {
@@ -11,7 +13,7 @@ class MasterTutorialContent {
             title: "¡BIENVENIDO AGENTE!",
             description: "Estás dentro del Protocolo Asthoria. Tu objetivo: recolectar los Tréboles Dorados antes que tus rivales.",
             icon: Icons.security,
-            visual: _buildWelcomeVisual(),
+            visual: _buildWelcomeVisual(context),
           ),
           TutorialStep(
             title: "ESTA ES TU BASE",
@@ -170,7 +172,16 @@ class MasterTutorialContent {
   }
 
   // Visual builders unchanged or adjusted to focus on gameplay
-  static Widget _buildWelcomeVisual() {
+  static Widget _buildWelcomeVisual(BuildContext context) {
+    // Intentar obtener el avatar del usuario actual desde el Provider
+    String? avatarId;
+    try {
+      final playerProvider = Provider.of<import_player.PlayerProvider>(context, listen: false);
+      avatarId = playerProvider.currentPlayer?.avatarId;
+    } catch (e) {
+      debugPrint("MasterTutorialContent: Error fetching player provider: $e");
+    }
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -182,7 +193,39 @@ class MasterTutorialContent {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          const Icon(Icons.qr_code_scanner, color: AppTheme.accentGold, size: 80),
+          // Aura de fondo
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.accentGold.withOpacity(0.2),
+                  blurRadius: 40,
+                  spreadRadius: 10,
+                ),
+              ],
+            ),
+          ),
+          // Avatar o Icono por defecto
+          if (avatarId != null && avatarId.isNotEmpty)
+            Image.asset(
+              'assets/images/avatars/$avatarId.png',
+              height: 140,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.person,
+                color: AppTheme.accentGold,
+                size: 80,
+              ),
+            )
+          else
+            const Icon(
+              Icons.qr_code_scanner,
+              color: AppTheme.accentGold,
+              size: 80,
+            ),
           Positioned(
             bottom: 20,
             child: Container(
@@ -190,8 +233,17 @@ class MasterTutorialContent {
               decoration: BoxDecoration(
                 color: AppTheme.accentGold.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
               ),
-              child: const Text("ANALIZANDO SISTEMA...", style: TextStyle(color: AppTheme.accentGold, fontSize: 10, fontWeight: FontWeight.bold)),
+              child: const Text(
+                "IDENTIDAD CONFIRMADA",
+                style: TextStyle(
+                  color: AppTheme.accentGold,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
           ),
         ],

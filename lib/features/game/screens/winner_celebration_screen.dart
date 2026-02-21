@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
@@ -13,6 +14,7 @@ import '../services/betting_service.dart';
 import '../widgets/spectator_betting_pot_widget.dart';
 import '../widgets/sponsor_banner.dart';
 import 'package:intl/intl.dart';
+import '../../auth/screens/login_screen.dart';
 
 class WinnerCelebrationScreen extends StatefulWidget {
   final String eventId;
@@ -35,6 +37,9 @@ class WinnerCelebrationScreen extends StatefulWidget {
 
 class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   late ConfettiController _confettiController;
+  late ConfettiController _fireworkLeftController;
+  late ConfettiController _fireworkRightController;
+  late ConfettiController _fireworkCenterController;
   late int _currentPosition; // Mutable state for position
   bool _isLoading = true; // NEW: Start with loading state
   Map<String, int> _prizes = {};
@@ -54,7 +59,13 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     debugPrint("🏆 WinnerCelebrationScreen INIT: Prize = ${widget.prizeWon}");
     _currentPosition = widget.playerPosition;
     _confettiController =
-        ConfettiController(duration: const Duration(seconds: 3));
+        ConfettiController(duration: const Duration(seconds: 10));
+    _fireworkLeftController =
+        ConfettiController(duration: const Duration(seconds: 2));
+    _fireworkRightController =
+        ConfettiController(duration: const Duration(seconds: 2));
+    _fireworkCenterController =
+        ConfettiController(duration: const Duration(seconds: 2));
 
     // Start loading always to ensure sync
     _isLoading = true;
@@ -304,6 +315,7 @@ Future<void> _fetchPrizes() async {
 
         if (newPos >= 1 && newPos <= 3) {
           _confettiController.play();
+          _startFireworks();
         } else {
           _confettiController.stop();
         }
@@ -321,6 +333,39 @@ Future<void> _fetchPrizes() async {
     }
   }
 
+  void _startFireworks() {
+    // Staggered firework bursts for a spectacular effect
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _fireworkCenterController.play();
+    });
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) _fireworkLeftController.play();
+    });
+    Future.delayed(const Duration(milliseconds: 1300), () {
+      if (mounted) _fireworkRightController.play();
+    });
+    // Second wave
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted) _fireworkCenterController.play();
+    });
+    Future.delayed(const Duration(milliseconds: 3000), () {
+      if (mounted) _fireworkRightController.play();
+    });
+    Future.delayed(const Duration(milliseconds: 3500), () {
+      if (mounted) _fireworkLeftController.play();
+    });
+    // Third wave
+    Future.delayed(const Duration(milliseconds: 5000), () {
+      if (mounted) _fireworkLeftController.play();
+    });
+    Future.delayed(const Duration(milliseconds: 5500), () {
+      if (mounted) _fireworkCenterController.play();
+    });
+    Future.delayed(const Duration(milliseconds: 6000), () {
+      if (mounted) _fireworkRightController.play();
+    });
+  }
+
   @override
   void dispose() {
     // Remove listener safely
@@ -330,6 +375,9 @@ Future<void> _fetchPrizes() async {
     } catch (_) {}
 
     _confettiController.dispose();
+    _fireworkLeftController.dispose();
+    _fireworkRightController.dispose();
+    _fireworkCenterController.dispose();
     super.dispose();
   }
 
@@ -369,11 +417,110 @@ Future<void> _fetchPrizes() async {
     }
   }
 
+  void _showLogoutDialog() {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    const Color currentRed = Color(0xFFE33E5D);
+    const Color cardBg = Color(0xFF151517);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: currentRed.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: currentRed.withOpacity(0.5), width: 1),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: currentRed, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: currentRed.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: currentRed, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    color: currentRed,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Cerrar Sesión',
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '¿Estás seguro que deseas cerrar sesión?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('CANCELAR', style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await playerProvider.logout();
+                          if (mounted) {
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                              (route) => false,
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: currentRed,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('SALIR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context);
     final playerProvider = Provider.of<PlayerProvider>(context);
-    final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+    final currentPlayerId = playerProvider.currentPlayer?.userId ?? playerProvider.currentPlayer?.id ?? '';
+    final isNightImage = playerProvider.isDarkMode;
 
     // Determine if user participated
     final isParticipant = _currentPosition > 0;
@@ -381,14 +528,50 @@ Future<void> _fetchPrizes() async {
     return WillPopScope(
       onWillPop: () async => false, // Prevent back button
       child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: AppTheme.darkGradient,
-          ),
-          child: Stack(
-            children: [
-              // Confetti overlay
+        backgroundColor: AppTheme.dSurface0,
+        body: Stack(
+          children: [
+            // BACKGROUND IMAGE (day/night)
+            Positioned.fill(
+              child: isNightImage
+                  ? Opacity(
+                      opacity: 0.5,
+                      child: Image.asset(
+                        'assets/images/hero.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                      ),
+                    )
+                  : Stack(
+                      children: [
+                        Image.asset(
+                          'assets/images/loginclaro.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                        Container(color: Colors.black.withOpacity(0.3)),
+                      ],
+                    ),
+            ),
+            // Dark overlay for readability
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.4),
+                      Colors.black.withOpacity(0.7),
+                      Colors.black.withOpacity(0.5),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+              // Confetti overlay - main rain
               Align(
                 alignment: Alignment.topCenter,
                 child: ConfettiWidget(
@@ -396,9 +579,10 @@ Future<void> _fetchPrizes() async {
                   blastDirection: pi / 2, // Down
                   maxBlastForce: 5,
                   minBlastForce: 2,
-                  emissionFrequency: 0.05,
-                  numberOfParticles: 20,
-                  gravity: 0.3,
+                  emissionFrequency: 0.03,
+                  numberOfParticles: 30,
+                  gravity: 0.2,
+                  shouldLoop: true,
                   colors: const [
                     Colors.green,
                     Colors.blue,
@@ -406,6 +590,69 @@ Future<void> _fetchPrizes() async {
                     Colors.orange,
                     Colors.purple,
                     Color(0xFFFFD700),
+                    Colors.cyan,
+                    Colors.redAccent,
+                  ],
+                ),
+              ),
+              // Firework - Left burst
+              Align(
+                alignment: const Alignment(-0.8, 0.3),
+                child: ConfettiWidget(
+                  confettiController: _fireworkLeftController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  maxBlastForce: 25,
+                  minBlastForce: 10,
+                  emissionFrequency: 0.0,
+                  numberOfParticles: 40,
+                  gravity: 0.15,
+                  particleDrag: 0.05,
+                  colors: const [
+                    Color(0xFFFFD700),
+                    Colors.orange,
+                    Colors.redAccent,
+                    Colors.yellowAccent,
+                  ],
+                ),
+              ),
+              // Firework - Right burst
+              Align(
+                alignment: const Alignment(0.8, 0.2),
+                child: ConfettiWidget(
+                  confettiController: _fireworkRightController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  maxBlastForce: 25,
+                  minBlastForce: 10,
+                  emissionFrequency: 0.0,
+                  numberOfParticles: 40,
+                  gravity: 0.15,
+                  particleDrag: 0.05,
+                  colors: const [
+                    Colors.cyan,
+                    Colors.blue,
+                    Colors.purpleAccent,
+                    Colors.greenAccent,
+                  ],
+                ),
+              ),
+              // Firework - Center burst
+              Align(
+                alignment: const Alignment(0.0, -0.2),
+                child: ConfettiWidget(
+                  confettiController: _fireworkCenterController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  maxBlastForce: 30,
+                  minBlastForce: 12,
+                  emissionFrequency: 0.0,
+                  numberOfParticles: 50,
+                  gravity: 0.12,
+                  particleDrag: 0.05,
+                  colors: const [
+                    Color(0xFFFFD700),
+                    Colors.pink,
+                    Colors.white,
+                    Colors.amber,
+                    Colors.deepPurple,
                   ],
                 ),
               ),
@@ -905,7 +1152,7 @@ Future<void> _fetchPrizes() async {
     final int completedClues = winner['completed_clues_count'] ?? 0;
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Stack(
           alignment: Alignment.center,
@@ -988,52 +1235,38 @@ Future<void> _fetchPrizes() async {
         ),
         const SizedBox(height: 6),
         SizedBox(
-          width: 60,
+          width: 80,
           child: Text(
             name,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
             textAlign: TextAlign.center,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
 
-        // PRIZE DISPLAY ON PODIUM
-        if (prizeAmount != null && prizeAmount > 0)
-          Container(
-            margin: const EdgeInsets.only(bottom: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color, width: 1),
-            ),
-            child: Text(
-              "+$prizeAmount 🍀",
-              style: TextStyle(
-                  color: color, fontSize: 10, fontWeight: FontWeight.bold),
-            ),
-          ),
-
+        // Pedestal bar with position number at the bottom
         Container(
-          width: 60,
-          height: height,
+          width: double.infinity,
+          height: barHeight,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [color.withOpacity(0.4), color.withOpacity(0.1)],
+              colors: [
+                color.withOpacity(0.45),
+                color.withOpacity(0.12),
+              ],
             ),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             border: Border(
               top: BorderSide(color: color, width: 2),
-              left: BorderSide(color: color.withOpacity(0.5), width: 1),
-              right: BorderSide(color: color.withOpacity(0.5), width: 1),
+              left: BorderSide(color: color.withOpacity(0.3), width: 0.5),
+              right: BorderSide(color: color.withOpacity(0.3), width: 0.5),
             ),
           ),
           child: Center(
@@ -1051,3 +1284,79 @@ Future<void> _fetchPrizes() async {
     );
   }
 }
+
+/// Custom painter that draws a laurel wreath around the avatar matching the reference design
+class _LaurelWreathPainter extends CustomPainter {
+  final Color color;
+
+  _LaurelWreathPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width / 2) - 2;
+
+    final stemPaint = Paint()
+      ..color = color.withOpacity(0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8;
+
+    final leafPaint = Paint()
+      ..color = color.withOpacity(0.85)
+      ..style = PaintingStyle.fill;
+
+    // Draw U-shaped stem arc (open at the top) - brought closer to avatar
+    final rect = Rect.fromCircle(center: center, radius: radius * 0.68);
+    // Start at ~1:30 o'clock and sweep through the bottom to ~10:30 o'clock
+    canvas.drawArc(rect, -4/14 * pi, 22/14 * pi, false, stemPaint);
+
+    // Draw leaves in a circular "clock" distribution with a gap at the top
+    final int totalLeaves = 14; 
+    for (int i = 0; i < totalLeaves; i++) {
+      // Skip the top 3 positions to leave it open at the top (11, 12, 1 o'clock)
+      if (i == 0 || i == 1 || i == totalLeaves - 1) continue;
+      
+      // Distribute evenly around the circle
+      final angle = (2 * pi * i / totalLeaves) - pi / 2;
+      
+      _drawReferenceLeaf(canvas, center, radius * 0.68, angle, leafPaint, isOuter: true);
+      _drawReferenceLeaf(canvas, center, radius * 0.68, angle, leafPaint, isOuter: false);
+    }
+  }
+
+  void _drawReferenceLeaf(
+      Canvas canvas, Offset center, double radius, double angle, Paint paint,
+      {required bool isOuter}) {
+    final x = center.dx + radius * cos(angle);
+    final y = center.dy + radius * sin(angle);
+
+    canvas.save();
+    canvas.translate(x, y);
+
+    // Point leaf radially with a strong tilt to the right (+0.5 radians)
+    double rotation = isOuter ? angle + 0.5 : angle + pi + 0.5;
+    
+    canvas.rotate(rotation + pi / 2);
+
+    // Make inner leaves slightly smaller for better aesthetics
+    final scale = isOuter ? 1.0 : 0.75;
+    canvas.scale(scale, scale);
+
+    final path = Path();
+    final len = 13.0;
+    final width = 5.0;
+
+    // Pointed oval leaf (wider in middle, sharp tip)
+    path.moveTo(0, 0);
+    path.quadraticBezierTo(width * 1.2, -len * 0.45, 0, -len); // Outer curve
+    path.quadraticBezierTo(-width * 1.2, -len * 0.45, 0, 0); // Inner curve
+    path.close();
+
+    canvas.drawPath(path, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+

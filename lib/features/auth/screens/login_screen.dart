@@ -273,51 +273,53 @@ class _LoginScreenState extends State<LoginScreen>
             const Color currentBrand = dGoldMain;
 
             return AlertDialog(
-              backgroundColor: currentSurface,
-              surfaceTintColor: Colors.transparent, // CRÍTICO: Evita tinte azul
+              backgroundColor: const Color(0xFF1A1A1D),
+              surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: Text(
-                'Recuperar Contraseña',
-                style:
-                    TextStyle(color: currentText, fontWeight: FontWeight.bold),
+                borderRadius: BorderRadius.circular(24),
+                side: const BorderSide(color: dGoldMain, width: 2),
+              ),
+              title: const Text(
+                'RECUPERAR ACCESO',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Orbitron',
+                  fontSize: 18,
+                  letterSpacing: 1.5,
+                ),
               ),
               content: Form(
                 key: formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña.',
-                      style: TextStyle(color: currentTextSec),
+                    const Text(
+                      'Ingresa tu email de cazador y recibirás el enlace de restauración:',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: emailController,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        labelText: 'Email',
-                        labelStyle:
-                            TextStyle(color: currentTextSec.withOpacity(0.6)),
-                        prefixIcon: const Icon(Icons.email_outlined,
-                            color: currentBrand), // Use constant brand color
+                        labelText: 'EMAIL DEL GREMIO',
+                        labelStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+                        prefixIcon: const Icon(Icons.alternate_email, color: dGoldMain),
                         filled: true,
-                        fillColor:
-                            const Color(0xFF2A2A2E), // Dark input background
+                        fillColor: const Color(0xFF2A2A2E).withOpacity(0.8),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: currentBrand, width: 2),
+                          borderSide: const BorderSide(color: dGoldMain, width: 2),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                              color: currentTextSec.withOpacity(0.2)),
+                          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
                         ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty)
-                          return 'Ingresa tu email';
+                        if (value == null || value.isEmpty) return 'Ingresa tu email';
                         if (!value.contains('@')) return 'Email inválido';
                         return null;
                       },
@@ -325,81 +327,76 @@ class _LoginScreenState extends State<LoginScreen>
                   ],
                 ),
               ),
-              actionsPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               actions: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed:
-                          isSending ? null : () => Navigator.pop(context),
-                      child: Text('CANCELAR',
-                          style: TextStyle(color: currentTextSec)),
+                TextButton(
+                  onPressed: isSending ? null : () => Navigator.pop(context),
+                  child: const Text('CANCELAR', style: TextStyle(color: Colors.white54, letterSpacing: 1)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [dGoldLight, dGoldMain],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [dGoldLight, dGoldMain],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: dGoldMain.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor:
-                              Colors.black, // Dark text on gold button
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: isSending
-                            ? null
-                            : () async {
-                                if (formKey.currentState!.validate()) {
-                                  setDialogState(() => isSending = true);
-                                  try {
-                                    await context
-                                        .read<PlayerProvider>()
-                                        .resetPassword(
-                                            emailController.text.trim());
-                                    if (!mounted) return;
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Enlace enviado. Revisa tu correo.'),
-                                        backgroundColor: AppTheme.accentGold,
-                                      ),
-                                    );
-                                  } catch (e) {
-                                    setDialogState(() => isSending = false);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(ErrorHandler
-                                            .getFriendlyErrorMessage(e)),
-                                        backgroundColor: AppTheme.dangerRed,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                        child: isSending
-                            ? const LoadingIndicator(
-                                fontSize: 10,
-                                showMessage: false,
-                                color: Colors.black // Black indicator on gold
-                                )
-                            : const Text('ENVIAR',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  ],
+                    onPressed: isSending
+                        ? null
+                        : () async {
+                            if (formKey.currentState!.validate()) {
+                              setDialogState(() => isSending = true);
+                              try {
+                                await context
+                                    .read<PlayerProvider>()
+                                    .resetPassword(emailController.text.trim());
+                                if (!mounted) return;
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Transmisión enviada. Revisa tu correo.'),
+                                    backgroundColor: AppTheme.accentGold,
+                                  ),
+                                );
+                              } catch (e) {
+                                setDialogState(() => isSending = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(ErrorHandler.getFriendlyErrorMessage(e)),
+                                    backgroundColor: AppTheme.dangerRed,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    child: isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                            ),
+                          )
+                        : const Text('ENVIAR ENLACE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                  ),
                 ),
               ],
             );
@@ -587,6 +584,7 @@ class _LoginScreenState extends State<LoginScreen>
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
+          hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
           prefixIconColor: isDarkMode ? currentBrand : dGoldMain,
           suffixIconColor: Colors.white70,
           enabledBorder: OutlineInputBorder(
@@ -928,16 +926,16 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
         const SizedBox(width: 12),
+        // Logo Morna (más grande)
+        Image.asset(
+          'assets/images/morna_logo.png',
+          height: 38,
+        ),
+        const SizedBox(width: 12),
         // Imagen JD.PNG
         Image.asset(
           'assets/images/jd.PNG',
-          height: 30, // Ajustado para que se vea bien junto al logo de Morna
-        ),
-        const SizedBox(width: 12),
-        // Logo Morna
-        Image.asset(
-          'assets/images/morna_logo.png',
-          height: 18,
+          height: 30,
         ),
       ],
     );

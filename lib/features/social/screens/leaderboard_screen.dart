@@ -37,10 +37,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget build(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context);
     final leaderboard = gameProvider.leaderboard;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final Color currentText = isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
-    final Color currentTextSec = isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A);
-    final Color currentSurface = isDarkMode ? AppTheme.dSurface1 : AppTheme.lSurface1;
+    final isDarkMode = true; // UI always dark-styled
+    const Color currentText = Colors.white;
+    const Color currentTextSec = Colors.white70;
+    const Color currentSurface = AppTheme.dSurface1;
     final currentUserGameId = gameProvider.targetPlayerId; 
     
     // FILTER LOGIC FOR INVISIBILITY
@@ -76,7 +76,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         children: [
           Positioned.fill(
             child: Image.asset(
-              isDarkMode ? 'assets/images/fotogrupalnoche.png' : 'assets/images/personajesgrupal.png',
+              Provider.of<PlayerProvider>(context).isDarkMode ? 'assets/images/fotogrupalnoche.png' : 'assets/images/personajesgrupal.png',
               fit: BoxFit.cover,
               alignment: Alignment.center,
             ),

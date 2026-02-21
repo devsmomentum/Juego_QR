@@ -40,7 +40,7 @@ class RaceTrackWidget extends StatelessWidget {
     final effectProvider = Provider.of<PowerEffectManager>(context);
     final gameProvider = Provider.of<GameProvider>(context);
 
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
     final Color currentText =
         isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
     final Color currentTextSec =
@@ -431,7 +431,7 @@ class _RacerAvatarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
     const Color currentText = Colors.white; // Explicitly white for that premium look
     const Color currentTextSec = Colors.white70; // Always white for consistency
 
