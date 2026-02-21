@@ -622,7 +622,7 @@ class _GameRequestScreenState extends State<GameRequestScreen>
   }
 
   void _showRequestStatusDialog(GameRequest request) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
     final Color currentOrange =
         const Color(0xFFFF9800); // Naranja de conexión perdida
     final Color cardBg = const Color(0xFF151517); // Fondo muy oscuro
@@ -939,33 +939,50 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceEvenly,
                                       children: [
-                                        // Welcome Avatar Icon (Compacto)
                                         Container(
                                           width: 85,
                                           height: 85,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: const LinearGradient(
-                                              colors: [
-                                                Color(0xFF9D4EDD),
-                                                Color(0xFFC77DFF)
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: const Color(0xFF9D4EDD)
-                                                    .withOpacity(0.5),
-                                                blurRadius: 15,
-                                                spreadRadius: 3,
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(42.5),
+                                            child: BackdropFilter(
+                                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withOpacity(0.35),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white.withOpacity(0.2),
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                child: Builder(
+                                                  builder: (context) {
+                                                    final avatarId = player?.avatarId;
+                                                    if (avatarId != null && avatarId.isNotEmpty) {
+                                                      return Image.asset(
+                                                        'assets/images/avatars/$avatarId.png',
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __, ___) => const Icon(
+                                                            Icons.person,
+                                                            size: 55,
+                                                            color: Colors.white),
+                                                      );
+                                                    }
+                                                    if (player?.avatarUrl != null && player!.avatarUrl!.startsWith('http')) {
+                                                      return Image.network(
+                                                        player.avatarUrl!,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __, ___) => const Icon(
+                                                            Icons.person,
+                                                            size: 55,
+                                                            color: Colors.white),
+                                                      );
+                                                    }
+                                                    return const Icon(Icons.person, size: 55, color: Colors.white);
+                                                  },
+                                                ),
                                               ),
-                                            ],
-                                          ),
-                                          child: const Icon(
-                                            Icons.account_circle,
-                                            size: 70,
-                                            color: Colors.white,
+                                            ),
                                           ),
                                         ),
 

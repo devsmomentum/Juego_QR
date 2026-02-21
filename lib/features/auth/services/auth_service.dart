@@ -301,6 +301,9 @@ class AuthService {
     if (errorMsg.contains('rate limit') || errorMsg.contains('too many requests')) {
       return 'Demasiados intentos. Por favor espera unos minutos antes de intentar de nuevo.';
     }
+    if (errorMsg.contains('422') || errorMsg.contains('different from the old password')) {
+      return 'La nueva contraseña debe ser diferente a la anterior.';
+    }
     if (errorMsg.contains('suspendida') || errorMsg.contains('banned')) {
       return 'Tu cuenta ha sido suspendida permanentemente.';
     }

@@ -80,7 +80,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
   // The default user role for scenario selection
   UserRole get role => UserRole.player;
-  bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  bool get isDarkMode => true /* always dark UI */;
 
   void _showLogoutDialog() {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
@@ -412,10 +412,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               icon: Icons.map_outlined,
             ),
             TutorialStep(
-              title: "TABERNA Y LOCALES",
+              title: "MODOS DE JUEGO",
               description:
-                  "En la pestaña 'Local' podrás ver comercios aliados, ofertas exclusivas y puntos de interés cercanos.",
-              icon: Icons.storefront_outlined,
+                  "En la pestaña 'Modos' podrás elegir entre jugar de forma presencial u online.",
+              icon: Icons.sports_esports_outlined,
             ),
             TutorialStep(
               title: "TU CARTERA",
@@ -550,7 +550,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   }
 
   Future<void> _onScenarioSelected(Scenario scenario) async {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
     if (_isProcessing) return;
 
     if (scenario.isCompleted) {
@@ -1274,12 +1274,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
           Provider.of<PlayerProvider>(context, listen: false);
 
       // Diálogo de carga
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => const Center(
-            child: CircularProgressIndicator(color: AppTheme.accentGold)),
-      );
+      LoadingOverlay.show(context);
 
       // 1. Set role to spectator (local)
       playerProvider.setSpectatorRole(true);
@@ -1340,38 +1335,92 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   }
 
   void _showComingSoonDialog(String featureName) {
+    const Color purpleAccent = Color(0xFF9D4EDD);
+    const Color cardBg = Color(0xFF151517);
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.construction, color: AppTheme.accentGold),
-            const SizedBox(width: 12),
-            const Text(
-              'Próximamente',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: purpleAccent.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: purpleAccent.withOpacity(0.5), width: 1),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: purpleAccent, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: purpleAccent.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-          ],
-        ),
-        content: Text(
-          'La sección "$featureName" estará disponible muy pronto. ¡Mantente atento a las actualizaciones!',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Entendido',
-              style: TextStyle(color: AppTheme.accentGold),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: purpleAccent, width: 2),
+                    color: purpleAccent.withOpacity(0.1),
+                  ),
+                  child: const Icon(Icons.construction, color: purpleAccent, size: 32),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Próximamente',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Orbitron',
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'La sección "$featureName" estará disponible muy pronto. ¡Mantente atento a las actualizaciones!',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: purpleAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'ENTENDIDO',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1398,7 +1447,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildNavItem(0, Icons.storefront_outlined, 'Local'),
+                  _buildNavItem(0, Icons.sports_esports_outlined, 'Modos'),
                   _buildNavItem(1, Icons.explore_outlined, 'Escenarios'),
                   _buildNavItem(2, Icons.account_balance_wallet_outlined, 'Wallet'),
                   _buildNavItem(3, Icons.person_outline, 'Perfil'),
@@ -1684,7 +1733,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               body: IndexedStack(
                 index: _navIndex,
                 children: [
-                  _buildComingSoonContent('Local'),
+                   _buildLocalSection(),
                   _buildScenariosContent(scenarios),
                   const WalletScreen(hideScaffold: true),
                   const ProfileScreen(hideScaffold: true),
@@ -1692,6 +1741,154 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocalSection() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        children: [
+          const Text(
+            "MODOS",
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.dGoldMain,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "¿Cómo deseas jugar hoy?",
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 40),
+          _buildModeCard(
+            title: "MODO PRESENCIAL",
+            description: "Aventura real con GPS y códigos QR.",
+            icon: Icons.location_on_outlined,
+            color: AppTheme.dGoldMain,
+            onTap: () {
+              context.read<AppModeProvider>().setMode(GameMode.presencial);
+              setState(() => _navIndex = 1);
+              _loadEvents();
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildModeCard(
+            title: "MODO ONLINE",
+            description: "Juega desde cualquier lugar con PIN.",
+            icon: Icons.wifi,
+            color: const Color(0xFF00F0FF),
+            onTap: () {
+              context.read<AppModeProvider>().setMode(GameMode.online);
+              setState(() => _navIndex = 1);
+              _loadEvents();
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildModeCard(
+            title: "MODO LOCAL",
+            description: "Juega en casa con amigos. Próximamente.",
+            icon: Icons.home_outlined,
+            color: const Color(0xFF9D4EDD),
+            onTap: () => _showComingSoonDialog("Modo Local"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(4), // Space for double border effect
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: color.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF150826).withOpacity(0.5),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: color.withOpacity(0.6),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.1),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withOpacity(0.1),
+                      border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+                    ),
+                    child: Icon(icon, color: color, size: 26),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'Orbitron',
+                            fontSize: 15,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.6), size: 24),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1714,15 +1911,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-              title == 'Local'
-                  ? "UN MODO DE JUEGO PARA JUGAR EN CASA"
-                  : "PRÓXIMAMENTE",
-              style: const TextStyle(
-                color: Colors.white70, // Always use dark mode color
-                letterSpacing: 2, // Simplified: was conditional
+          const Text(
+              "PRÓXIMAMENTE",
+              style: TextStyle(
+                color: Colors.white70,
+                letterSpacing: 2,
                 fontWeight: FontWeight.bold,
-                fontSize: 14, // Simplified: was conditional
+                fontSize: 14,
               )),
           const SizedBox(height: 40),
           ElevatedButton(
@@ -2157,6 +2352,16 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                             ),
                                                           ),
                                                         ),
+                                                        // EN CURSO / Countdown - Positioned at top of image
+                                                        if (scenario.date != null && !scenario.isCompleted)
+                                                          Positioned(
+                                                            top: 16,
+                                                            left: 0,
+                                                            right: 0,
+                                                            child: Center(
+                                                              child: ScenarioCountdown(targetDate: scenario.date!),
+                                                            ),
+                                                          ),
                                                         Align(
                                                           alignment: Alignment.bottomCenter,
                                                           child: SingleChildScrollView(
@@ -2188,11 +2393,6 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                     child: Row(
                                                                       mainAxisSize: MainAxisSize.min,
                                                                       children: [
-                                                                        if (scenario.date != null && !scenario.isCompleted)
-                                                                          ScenarioCountdown(targetDate: scenario.date!),
-                                                                        
-                                                                        if (scenario.date != null && !scenario.isCompleted)
-                                                                          const SizedBox(width: 8),
                                                                         
                                                                         // BADGE: MAX PLAYERS
                                                                         Container(

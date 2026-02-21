@@ -219,32 +219,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _showTermsDialog(bool isDarkMode) {
     const Color dSurface1 = Color(0xFF1A1A1D);
-    const Color lSurface1 = Color(0xFFFFFFFF);
-    const Color lTextPrimary = Color(0xFF1A1A1D);
+    const Color dMysticPurple = Color(0xFF7B2CBF);
+    const Color dBorderGray = Color(0xFF3D3D4D);
+    const Color dGoldMain = Color(0xFFFECB00);
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? dSurface1 : lSurface1,
+        backgroundColor: dSurface1,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          "Términos y Condiciones", 
-          style: TextStyle(color: isDarkMode ? Colors.white : lTextPrimary, fontWeight: FontWeight.bold)
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: isDarkMode ? dMysticPurple.withOpacity(0.6) : dGoldMain, 
+            width: 2.0
+          ),
         ),
-        content: SingleChildScrollView(
-          child: Text(
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n\n"
-            "1. Uso del servicio...\n"
-            "2. Privacidad de datos...\n"
-            "3. Responsabilidades...",
-            style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87),
+        title: const Text(
+          "Términos y Condiciones", 
+          style: TextStyle(
+            color: Colors.white, 
+            fontWeight: FontWeight.bold, 
+            fontFamily: 'Orbitron',
+            fontSize: 18,
+            letterSpacing: 1.2,
+          )
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Al unirte a MapHunter, aceptas las siguientes reglas del gremio:\n\n"
+                "• Tu cuenta es personal e intransferible.\n"
+                "• El uso de hacks o GPS falsos resultará en baneo permanente.\n"
+                "• Los premios ganados están sujetos a verificación de identidad.\n"
+                "• Respetar a otros cazadores en las ubicaciones físicas.\n\n"
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+                style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+              ),
+            ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("Cerrar", style: TextStyle(color: isDarkMode ? Colors.white70 : lTextPrimary)),
+            child: const Text(
+              "ENTENDIDO", 
+              style: TextStyle(
+                color: dMysticPurple, 
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              )
+            ),
           ),
         ],
       ),
@@ -292,6 +319,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           filled: true,
           fillColor: const Color(0xFF2A2A2E).withOpacity(0.8), // Force dark background
           labelStyle: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
+          hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
           prefixIconColor: isDarkMode ? dGoldMain : dGoldMain, // Always gold for consistency
           suffixIconColor: Colors.white70,
           enabledBorder: OutlineInputBorder(
@@ -504,21 +532,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 const SizedBox(height: 16),
 
-                                // Email
-                                TextFormField(
-                                  controller: _emailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  style: const TextStyle(color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    labelText: 'EMAIL',
-                                    prefixIcon: Icon(Icons.email_outlined),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) return 'Ingresa tu email';
-                                    final emailRegex = RegExp(r'^[\w\.\-]+@[\w\.\-]+\.[a-zA-Z]{2,}$');
-                                    if (!emailRegex.hasMatch(value.trim())) return 'Formato de email inválido';
-                                    return null;
-                                  },
+                                // Email con sugerencias de dominio
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextFormField(
+                                      controller: _emailController,
+                                      keyboardType: TextInputType.emailAddress,
+                                      style: const TextStyle(color: Colors.white),
+                                      decoration: const InputDecoration(
+                                        labelText: 'EMAIL',
+                                        prefixIcon: Icon(Icons.email_outlined),
+                                      ),
+                                      onChanged: (value) => setState(() {}),
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) return 'Ingresa tu email';
+                                        final emailRegex = RegExp(r'^[\w\.\-]+@[\w\.\-]+\.[a-zA-Z]{2,}$');
+                                        if (!emailRegex.hasMatch(value.trim())) return 'Formato de email inv\u00e1lido';
+                                        return null;
+                                      },
+                                    ),
+                                    Builder(
+                                      builder: (context) {
+                                        final text = _emailController.text;
+                                        final hasAt = text.contains('@');
+                                        final afterAt = hasAt ? text.split('@').last : '';
+                                        final domainData = <String, Map<String, dynamic>>{
+                                          'gmail.com': {'color': const Color(0xFFEA4335), 'icon': Icons.mail},
+                                          'hotmail.com': {'color': const Color(0xFF0078D4), 'icon': Icons.cloud},
+                                          'outlook.com': {'color': const Color(0xFF00BCF2), 'icon': Icons.business},
+                                        };
+                                        final domains = domainData.keys.toList();
+                                        final showSuggestions = hasAt && !domains.any((d) => afterAt == d);
+                                        if (!showSuggestions) return const SizedBox.shrink();
+                                        final prefix = text.split('@').first;
+                                        final filtered = domains.where((d) => afterAt.isEmpty || d.startsWith(afterAt)).toList();
+                                        if (filtered.isEmpty) return const SizedBox.shrink();
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 10),
+                                          child: Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: filtered.map((domain) {
+                                              return GestureDetector(
+                                                onTap: () {
+                                                  _emailController.text = '$prefix@$domain';
+                                                  _emailController.selection = TextSelection.fromPosition(
+                                                    TextPosition(offset: _emailController.text.length),
+                                                  );
+                                                  setState(() {});
+                                                },
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: Colors.grey.shade300),
+                                                  ),
+                                                  child: Text(
+                                                    '@$domain',
+                                                    style: TextStyle(
+                                                      color: Colors.grey.shade800,
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 16),
 

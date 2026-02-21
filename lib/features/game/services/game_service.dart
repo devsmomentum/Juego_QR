@@ -92,7 +92,7 @@ class GameService {
       final List<dynamic> leaderboardData = await _supabase
           .from('game_players')
           .select(
-              'game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status, is_protected') // Added is_protected
+              'game_player_id:id, user_id, coins, completed_clues_count, status, is_protected')
           .eq('event_id', eventId)
           .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
@@ -144,7 +144,7 @@ class GameService {
             final myData = await _supabase
                 .from('game_players')
                 .select(
-                    'game_player_id:id, user_id, coins, completed_clues:completed_clues_count, status')
+                    'game_player_id:id, user_id, coins, completed_clues_count, status')
                 .eq('event_id', eventId)
                 .eq('user_id', currentUserId)
                 .maybeSingle();
@@ -169,6 +169,7 @@ class GameService {
 
       if (leaderboardData.isNotEmpty) {
         debugPrint("📊 Sample Entry: ${leaderboardData.first}");
+        debugPrint("📊 Sample completed_clues_count: ${leaderboardData.first['completed_clues_count']}");
       } else {
         debugPrint("⚠️ getLeaderboard: NO DATA FOUND for event $eventId");
       }
@@ -199,8 +200,11 @@ class GameService {
 
         // Normalización de IDs obligatoria
         if (json['id'] == null) json['id'] = uid;
-        if (json['total_xp'] == null)
-          json['total_xp'] = json['completed_clues'];
+        // Map completed_clues_count to all expected keys
+        final int clueCount = json['completed_clues_count'] ?? json['completed_clues'] ?? 0;
+        json['total_xp'] = clueCount;
+        json['completed_clues'] = clueCount;
+        json['completed_clues_count'] = clueCount;
 
         // Inyectar datos del perfil si existen
         if (profilesMap.containsKey(uid)) {

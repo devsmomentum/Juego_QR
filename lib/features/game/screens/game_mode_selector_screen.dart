@@ -63,15 +63,16 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
+    final isNightImage = Provider.of<PlayerProvider>(context).isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? AppTheme.dSurface0 : AppTheme.lSurface0,
+      backgroundColor: AppTheme.dSurface0,
       body: Stack(
         children: [
           // BACKGROUND (Mismo que Login)
           Positioned.fill(
-            child: isDarkMode
+            child: isNightImage
                 ? Opacity(
                     opacity: 0.7,
                     child: Image.asset(
@@ -175,6 +176,20 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ScenariosScreen(isOnline: true)));
                         }, 
                       ),
+
+                      const SizedBox(height: 24),
+                      
+                      // MODO LOCAL
+                      _buildModeCard(
+                        title: "MODO LOCAL",
+                        description:
+                            "Juega en casa con amigos. Un modo diseñado para disfrutar sin desplazamientos.",
+                        icon: Icons.home_outlined,
+                        color: const Color(0xFF9D4EDD), // Morado Cyber
+                        onTap: () {
+                           _showComingSoonDialog("Modo Local");
+                        }, 
+                      ),
                     ],
                   ),
                 ),
@@ -245,6 +260,97 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showComingSoonDialog(String featureName) {
+    const Color purpleAccent = Color(0xFF9D4EDD);
+    const Color cardBg = Color(0xFF151517);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: purpleAccent.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: purpleAccent.withOpacity(0.5), width: 1),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: purpleAccent, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: purpleAccent.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: purpleAccent, width: 2),
+                    color: purpleAccent.withOpacity(0.1),
+                  ),
+                  child: const Icon(Icons.construction, color: purpleAccent, size: 32),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Próximamente',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Orbitron',
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'El "$featureName" estará listo muy pronto. ¡Estamos trabajando para brindarte la mejor experiencia!',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: purpleAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'ENTENDIDO',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

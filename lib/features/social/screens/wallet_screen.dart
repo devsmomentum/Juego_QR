@@ -30,6 +30,8 @@ import '../../../core/services/app_config_service.dart';
 import '../../wallet/models/transaction_item.dart';
 import '../../wallet/repositories/transaction_repository.dart';
 import '../../wallet/widgets/transaction_card.dart';
+import '../../wallet/providers/payment_method_provider.dart';
+import '../../wallet/widgets/edit_payment_method_dialog.dart';
 
 class WalletScreen extends StatefulWidget {
   final bool hideScaffold;
@@ -52,6 +54,14 @@ class _WalletScreenState extends State<WalletScreen> {
   void initState() {
     super.initState();
     _loadRecentTransactions();
+    _loadPaymentMethods();
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    final userId = Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.userId;
+    if (userId != null) {
+      await Provider.of<PaymentMethodProvider>(context, listen: false).loadMethods(userId);
+    }
   }
 
   Future<void> _loadRecentTransactions() async {
@@ -89,9 +99,9 @@ class _WalletScreenState extends State<WalletScreen> {
             children: [
               // Custom AppBar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
                 child: SizedBox(
-                  height: 80,
+                  height: 60,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -111,11 +121,16 @@ class _WalletScreenState extends State<WalletScreen> {
                           ),
                         ),
                       
-                      // Always use dark mode logo
-                      Image.asset(
-                        'assets/images/maphunter_titulo.png',
-                        height: 65,
-                        fit: BoxFit.contain,
+                      // WALLET TITLE - Restored to center
+                      const Text(
+                        'WALLET',
+                        style: TextStyle(
+                          color: AppTheme.accentGold,
+                          fontFamily: 'Orbitron',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                        ),
                       ),
                     ],
                   ),
@@ -124,9 +139,11 @@ class _WalletScreenState extends State<WalletScreen> {
 
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const SizedBox(height: 10),
                       // Balance Card with Custom Clover Icon - GLASSMORPISM STYLE
                       ClipRRect(
                         borderRadius: BorderRadius.circular(34),
@@ -168,22 +185,29 @@ class _WalletScreenState extends State<WalletScreen> {
                                           fontFamily: 'Orbitron',
                                         ),
                                       ),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            cloverBalance.toString(),
-                                            style: TextStyle(
-                                              color: isDarkMode ? Colors.white : Colors.black87,
-                                              fontSize: 42,
-                                              fontWeight: FontWeight.w900,
-                                            ),
+                                      Flexible(
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerRight,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                cloverBalance.toString(),
+                                                style: TextStyle(
+                                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                                  fontSize: 42,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                "🍀",
+                                                style: TextStyle(fontSize: 28),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            "🍀",
-                                            style: const TextStyle(fontSize: 28),
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ],
                                   ),

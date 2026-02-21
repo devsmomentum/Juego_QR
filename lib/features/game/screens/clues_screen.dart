@@ -230,7 +230,7 @@ class _CluesScreenState extends State<CluesScreen> {
 
   // NUEVO MÉTODO: Muestra la pista en modo "Solo Lectura"
   void _showCompletedClueDialog(BuildContext context, dynamic clue) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = true /* always dark UI */;
     final Color currentCard = isDarkMode ? AppTheme.dSurface1 : AppTheme.lSurface1;
     final Color currentText = isDarkMode ? Colors.white : const Color(0xFF1A1A1D);
 

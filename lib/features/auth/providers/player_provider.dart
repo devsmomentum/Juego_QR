@@ -46,6 +46,8 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Timer? _pollingTimer;
   bool _isSpectatorSession = false; // NEW: Flag for spectator mode choice
   bool _isDarkMode = false; // Global theme state
+  bool _isAutoTheme = true; // Auto theme based on Venezuela time
+  Timer? _themeTimer; // Timer to periodically check time
   
   List<PowerItem> _shopItems = PowerItem.getShopItems();
 
@@ -54,6 +56,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   bool get isLoggedIn => _currentPlayer != null;
   List<PowerItem> get shopItems => _shopItems;
   bool get isDarkMode => _isDarkMode;
+  bool get isAutoTheme => _isAutoTheme;
 
   String? _banMessage;
   String? get banMessage => _banMessage;
@@ -80,16 +83,64 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     notifyListeners();
   }
 
+  /// Toggle dark mode manually — disables auto theme.
   void toggleDarkMode(bool value) async {
     _isDarkMode = value;
+    _isAutoTheme = false; // Manual override disables auto
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_dark_mode', value);
+    await prefs.setBool('is_auto_theme', false);
+  }
+
+  /// Reset to automatic theme based on Venezuela time.
+  void resetToAutoTheme() async {
+    _isAutoTheme = true;
+    _applyVenezuelaTime();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_auto_theme', true);
+    await prefs.remove('is_dark_mode');
+  }
+
+  /// Get current Venezuela hour (UTC-4).
+  int _getVenezuelaHour() {
+    final utcNow = DateTime.now().toUtc();
+    final venezuelaTime = utcNow.subtract(const Duration(hours: 4));
+    return venezuelaTime.hour;
+  }
+
+  /// Apply theme based on Venezuela time: day = 6AM-6PM, night = 6PM-6AM.
+  void _applyVenezuelaTime() {
+    final hour = _getVenezuelaHour();
+    final shouldBeDark = hour < 6 || hour >= 18; // Night: 6PM - 6AM
+    if (_isDarkMode != shouldBeDark) {
+      _isDarkMode = shouldBeDark;
+      notifyListeners();
+    }
+  }
+
+  /// Start periodic timer to check Venezuela time (every 5 minutes).
+  void _startThemeTimer() {
+    _themeTimer?.cancel();
+    _themeTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (_isAutoTheme) {
+        _applyVenezuelaTime();
+      }
+    });
   }
 
   Future<void> loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+    _isAutoTheme = prefs.getBool('is_auto_theme') ?? true; // Default: auto
+    
+    if (_isAutoTheme) {
+      _applyVenezuelaTime();
+    } else {
+      _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+    }
+    
+    _startThemeTimer();
     notifyListeners();
   }
 
