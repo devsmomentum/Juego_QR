@@ -39,6 +39,9 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   bool _isLoading = true; // NEW: Start with loading state
   Map<String, int> _prizes = {};
 
+  // Podium Winners Data (from game_players.final_placement)
+  List<Map<String, dynamic>> _podiumWinners = [];
+
   // Unified Results Data
   GameEvent? _eventDetails;
   int _totalBettingWinners = 0;
@@ -100,7 +103,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     });
   }
 
-  Future<void> _fetchPrizes() async {
+Future<void> _fetchPrizes() async {
     try {
       final supabase = Supabase.instance.client;
       final response = await supabase
@@ -111,7 +114,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       final Map<String, int> loadedPrizes = {};
       for (final row in response) {
         if (row['user_id'] != null && row['amount'] != null) {
-          loadedPrizes[row['user_id'].toString()] = row['amount'] as int;
+          // Solución: Usar "as num" y luego toInt() evita crashes si Supabase manda un double
+          loadedPrizes[row['user_id'].toString()] = (row['amount'] as num).toInt();
         }
       }
 
@@ -160,6 +164,14 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
           _eventDetails = event;
           _totalBettingWinners = results[0] as int;
           _myBettingResult = results[1] as Map<String, dynamic>;
+        });
+      }
+
+      // Fetch podium winners AFTER event details are available
+      await _fetchPodiumWinners();
+
+      if (mounted) {
+        setState(() {
           _isLoadingEventData = false;
         });
       }
@@ -170,6 +182,72 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
           _isLoadingEventData = false;
         });
       }
+    }
+  }
+
+  /// Fetches podium winners directly from game_players.final_placement
+  /// filtered by event_id and limited to configuredWinners.
+  Future<void> _fetchPodiumWinners() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final int maxWinners = _eventDetails?.configuredWinners ?? 3;
+
+      // Query game_players with final_placement set, ordered by placement
+      final List<dynamic> topPlayers = await supabase
+          .from('game_players')
+          .select('user_id, final_placement, completed_clues_count')
+          .eq('event_id', widget.eventId)
+          .not('final_placement', 'is', null)
+          .neq('status', 'spectator')
+          .order('final_placement', ascending: true)
+          .limit(maxWinners);
+
+      debugPrint("🏆 Podium: Found ${topPlayers.length} finishers (max: $maxWinners)");
+
+      if (topPlayers.isEmpty) {
+        if (mounted) setState(() => _podiumWinners = []);
+        return;
+      }
+
+      // Fetch profiles for these users
+      final List<String> userIds =
+          topPlayers.map((p) => p['user_id'].toString()).toList();
+
+      Map<String, Map<String, dynamic>> profilesMap = {};
+      if (userIds.isNotEmpty) {
+        final profiles = await supabase
+            .from('profiles')
+            .select('id, name, avatar_id, avatar_url')
+            .inFilter('id', userIds);
+
+        for (var p in profiles) {
+          profilesMap[p['id'] as String] = p;
+        }
+      }
+
+      // Build podium data
+      final List<Map<String, dynamic>> winners = [];
+      for (var p in topPlayers) {
+        final uid = p['user_id'] as String;
+        final profile = profilesMap[uid] ?? {};
+        winners.add({
+          'user_id': uid,
+          'name': profile['name'] ?? 'Jugador',
+          'avatar_id': profile['avatar_id'],
+          'avatar_url': profile['avatar_url'] ?? '',
+          'final_placement': (p['final_placement'] as num).toInt(),
+          'completed_clues_count': (p['completed_clues_count'] as num?)?.toInt() ?? 0,
+        });
+      }
+
+      if (mounted) {
+        setState(() {
+          _podiumWinners = winners;
+        });
+        debugPrint("🏆 Podium winners loaded: ${winners.map((w) => '${w['name']}=#${w['final_placement']}').join(', ')}");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error fetching podium winners: $e");
     }
   }
 
@@ -447,8 +525,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                             ),
                           ),
 
-                        // PODIUM SECTION
-                        if (gameProvider.leaderboard.isNotEmpty)
+                        // PODIUM SECTION (Based on game_players.final_placement)
+                        if (_podiumWinners.isNotEmpty)
                           Container(
                             margin: const EdgeInsets.only(bottom: 24),
                             padding: const EdgeInsets.all(20),
@@ -470,50 +548,53 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    // 2nd place
-                                    if (gameProvider.leaderboard.length >= 2)
-                                      _buildPodiumPosition(
-                                        gameProvider.leaderboard[1],
-                                        2,
-                                        60,
-                                        Colors.grey,
-                                        _prizes[gameProvider.leaderboard[1].id
-                                            .toString()],
-                                      )
-                                    else if (gameProvider.leaderboard.length >=
-                                        3)
-                                      const SizedBox(width: 60),
+                                Builder(builder: (context) {
+                                  // Find winners by placement
+                                  final first = _podiumWinners.firstWhere(
+                                      (w) => w['final_placement'] == 1,
+                                      orElse: () => {});
+                                  final second = _podiumWinners.firstWhere(
+                                      (w) => w['final_placement'] == 2,
+                                      orElse: () => {});
+                                  final third = _podiumWinners.firstWhere(
+                                      (w) => w['final_placement'] == 3,
+                                      orElse: () => {});
+                                  final maxWinners = _eventDetails?.configuredWinners ?? 3;
 
-                                    // 1st place
-                                    _buildPodiumPosition(
-                                      gameProvider.leaderboard[0],
-                                      1,
-                                      90,
-                                      const Color(0xFFFFD700),
-                                      _prizes[gameProvider.leaderboard[0].id
-                                          .toString()],
-                                    ),
+                                  return Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // 2nd place
+                                      if (maxWinners >= 2 && second.isNotEmpty)
+                                        _buildPodiumPositionFromMap(
+                                          second, 2, 60, Colors.grey,
+                                          _prizes[second['user_id']],
+                                        )
+                                      else if (maxWinners >= 2)
+                                        const SizedBox(width: 60),
 
-                                    // 3rd place
-                                    if (gameProvider.leaderboard.length >= 3)
-                                      _buildPodiumPosition(
-                                        gameProvider.leaderboard[2],
-                                        3,
-                                        50,
-                                        const Color(0xFFCD7F32),
-                                        _prizes[gameProvider.leaderboard[2].id
-                                            .toString()],
-                                      )
-                                    else if (gameProvider.leaderboard.length >=
-                                        2)
-                                      const SizedBox(width: 60),
-                                  ],
-                                ),
+                                      // 1st place
+                                      if (first.isNotEmpty)
+                                        _buildPodiumPositionFromMap(
+                                          first, 1, 90,
+                                          const Color(0xFFFFD700),
+                                          _prizes[first['user_id']],
+                                        ),
+
+                                      // 3rd place
+                                      if (maxWinners >= 3 && third.isNotEmpty)
+                                        _buildPodiumPositionFromMap(
+                                          third, 3, 50,
+                                          const Color(0xFFCD7F32),
+                                          _prizes[third['user_id']],
+                                        )
+                                      else if (maxWinners >= 3)
+                                        const SizedBox(width: 60),
+                                    ],
+                                  );
+                                }),
                               ],
                             ),
                           ),
@@ -603,7 +684,9 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                   Expanded(
                                     child: _buildStatItem(
                                       "GANADORES",
-                                      "${_eventDetails?.configuredWinners ?? 1}",
+                                      _prizes.isNotEmpty 
+                                          ? "${_prizes.length}" 
+                                          : "${_eventDetails?.configuredWinners ?? 1}",
                                       Icons.emoji_events,
                                       Colors.white,
                                     ),
@@ -813,8 +896,14 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     }
   }
 
-  Widget _buildPodiumPosition(
-      player, int position, double height, Color color, int? prizeAmount) {
+  /// Builds a podium position from a Map (from _podiumWinners)
+  Widget _buildPodiumPositionFromMap(
+      Map<String, dynamic> winner, int position, double height, Color color, int? prizeAmount) {
+    final String name = winner['name'] ?? 'Jugador';
+    final String? rawAvatarId = winner['avatar_id']?.toString();
+    final String avatarUrl = winner['avatar_url']?.toString() ?? '';
+    final int completedClues = winner['completed_clues_count'] ?? 0;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -840,16 +929,16 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                 child: Builder(
                   builder: (context) {
                     // Sanitize avatarId (remove path and extension if present)
-                    String? avatarId = player.avatarId;
+                    String? avatarId = rawAvatarId;
                     if (avatarId != null) {
-                      avatarId = avatarId.split('/').last; // Remove path
+                      avatarId = avatarId.split('/').last;
                       avatarId = avatarId
                           .replaceAll('.png', '')
-                          .replaceAll('.jpg', ''); // Remove extension
+                          .replaceAll('.jpg', '');
                     }
 
                     debugPrint(
-                        "🏆 Podium Avatar Build: Original='${player.avatarId}' -> Sanitized='$avatarId'");
+                        "🏆 Podium Avatar Build: Original='$rawAvatarId' -> Sanitized='$avatarId'");
 
                     if (avatarId != null && avatarId.isNotEmpty) {
                       return Image.asset(
@@ -863,10 +952,9 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                         },
                       );
                     }
-                    if (player.avatarUrl.isNotEmpty &&
-                        player.avatarUrl.startsWith('http')) {
+                    if (avatarUrl.isNotEmpty && avatarUrl.startsWith('http')) {
                       return Image.network(
-                        player.avatarUrl,
+                        avatarUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const Icon(Icons.person,
                             color: Colors.white70, size: 25),
@@ -902,7 +990,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
         SizedBox(
           width: 60,
           child: Text(
-            player.name,
+            name,
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -950,7 +1038,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
           ),
           child: Center(
             child: Text(
-              '${player.totalXP}',
+              '$completedClues',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
