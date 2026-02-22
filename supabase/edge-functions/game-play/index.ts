@@ -81,8 +81,12 @@ serve(async (req) => {
           isCompleted = false;
         }
 
+        // Strip riddle_answer before sending to client — answer validation
+        // happens server-side in the "complete-clue" handler.
+        const { riddle_answer, ...safeClue } = clue;
+
         processedClues.push({
-          ...clue,
+          ...safeClue,
           is_completed: isCompleted,
           isCompleted: isCompleted, // Frontend expects camelCase
           is_locked: isLocked,

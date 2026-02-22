@@ -49,8 +49,10 @@ serve(async (req) => {
       // Merge progress into clues
       const cluesWithProgress = clues.map((clue: any) => {
         const p = progress.find((p: any) => p.clue_id === clue.id)
+        // Strip riddle_answer before sending to client
+        const { riddle_answer, ...safeClue } = clue;
         return {
-          ...clue,
+          ...safeClue,
           isLocked: p ? p.is_locked : true, // Default locked if no progress
           isCompleted: p ? p.is_completed : false,
         }
