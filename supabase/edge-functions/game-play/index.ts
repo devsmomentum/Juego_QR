@@ -41,8 +41,13 @@ serve(async (req) => {
     if (path === "get-clues") {
       const { eventId } = await req.json();
 
-      // 1. Traer todas las pistas del evento
-      const { data: clues, error: cluesError } = await supabaseClient
+      // 1. Traer todas las pistas del evento usando service_role
+      //    (las políticas SELECT públicas de clues fueron eliminadas por seguridad)
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      );
+      const { data: clues, error: cluesError } = await supabaseAdmin
         .from("clues")
         .select("*")
         .eq("event_id", eventId)
