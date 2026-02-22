@@ -59,18 +59,32 @@ class TransactionCard extends StatelessWidget {
     // Humanize and Clean Description (Removing technical IDs)
     String displayDescription = item.description;
     
-    // 1. Common Translations and Clean Replacements
+    // 1. Map specific DB descriptions to user-friendly labels
     final lowerDesc = displayDescription.toLowerCase();
-    if (lowerDesc.contains('event entry')) {
+    
+    // --- Specific descriptions from wallet_ledger (highest priority) ---
+    if (lowerDesc.contains('comisión por ataque')) {
+      displayDescription = 'COMISIÓN POR ATAQUE';
+    } else if (lowerDesc.contains('premio') || lowerDesc.contains('podio') || lowerDesc.contains('prize')) {
+      displayDescription = 'PREMIO OBTENIDO';
+    } else if (lowerDesc.contains('apuesta') || lowerDesc.contains('bet payout') || lowerDesc.contains('ganancia apuesta')) {
+      displayDescription = 'GANANCIA DE APUESTA';
+    } else if (lowerDesc.contains('spectator_buy') || lowerDesc.contains('compra espectador')) {
+      displayDescription = 'COMPRA DE PODER';
+    } else if (lowerDesc.contains('event entry') || lowerDesc.contains('entrada')) {
       displayDescription = 'ENTRADA A EVENTO';
     } else if (lowerDesc.contains('winnings')) {
       displayDescription = 'PREMIO OBTENIDO';
-    } else if (lowerDesc.contains('purchase')) {
+    } else if (lowerDesc.contains('clover_payment') && item.amount < 0) {
+      displayDescription = 'PAGO CON TRÉBOLES';
+    // --- Generic purchase (clover orders pending/failed) ---
+    } else if (lowerDesc.contains('compra de tréboles') || lowerDesc.contains('purchase')) {
       displayDescription = 'COMPRA DE TRÉBOLES';
-    } else if (item.type == 'deposit') {
-      displayDescription = 'RECARGA DE SALDO';
     } else if (item.type == 'withdrawal') {
       displayDescription = 'RETIRO DE SALDO';
+    // --- Deposit fallback: only for truly generic entries ---
+    } else if (item.type == 'deposit' && (lowerDesc == 'recarga' || lowerDesc.isEmpty || lowerDesc == 'transacción')) {
+      displayDescription = 'RECARGA DE SALDO';
     } else {
       // 2. Generic Cleaning: Remove anything that looks like a long ID (#123, UUIDs, etc.)
       displayDescription = displayDescription
