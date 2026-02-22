@@ -6,6 +6,7 @@ import '../models/game_request.dart';
 abstract class IGameRequestRepository {
   Future<GameRequest?> getRequestForPlayer(String playerId, String eventId);
   Future<Map<String, dynamic>> getPlayerParticipation(String playerId, String eventId);
+  Future<List<Map<String, dynamic>>> getAllUserParticipations(String playerId);
   Future<String?> getPlayerStatus(String playerId, String eventId);
   Future<int> getParticipantCount(String eventId);
   Future<void> createRequest(String userId, String eventId);
@@ -88,6 +89,20 @@ class GameRequestRepository implements IGameRequestRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> getAllUserParticipations(String playerId) async {
+    try {
+      final response = await _supabase
+          .from('game_players')
+          .select('event_id, id, status')
+          .eq('user_id', playerId);
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      debugPrint('GameRequestRepository: Error checking all participations: $e');
+      rethrow;
+    }
+  }
+
+  @override
   Future<String?> getPlayerStatus(String playerId, String eventId) async {
     try {
       final data = await _supabase
@@ -111,9 +126,10 @@ class GameRequestRepository implements IGameRequestRepository {
           .from('game_players')
           .select('id')
           .eq('event_id', eventId)
-          .neq('status', 'spectator');
+          .neq('status', 'spectator')
+          .count(CountOption.exact);
 
-      return (response as List).length;
+      return response.count ?? 0;
     } catch (e) {
       debugPrint('GameRequestRepository: Error counting participants: $e');
       rethrow;

@@ -124,6 +124,16 @@ void clearLocalRequests() {
     }
   }
 
+  /// Fetches all event participations for a player in a single query
+  Future<List<Map<String, dynamic>>> getAllUserParticipations(String playerId) async {
+    try {
+      return await _repository.getAllUserParticipations(playerId);
+    } catch (e) {
+      debugPrint('Error checking all player participations: $e');
+      return [];
+    }
+  }
+
   /// Get player status for a specific event
   Future<String?> getPlayerStatus(String playerId, String eventId) async {
     try {

@@ -238,19 +238,22 @@ class EventService {
       final List<dynamic> eventsData = response as List;
 
       // 2. Fetch participant counts for these events
-      // Optimized: one query to get counts for all active events
-      final participantCounts = await _supabase
-          .from('game_players')
-          .select('event_id')
-          .neq('status', 'spectator');
-      // Count everyone who is NOT a spectator.
-      // This includes active, inGame, finished, etc.
-
+      // Optimized: one count query per event concurrently, instead of downloading all rows
       final Map<String, int> countsMap = {};
-      for (var row in participantCounts) {
-        final eid = row['event_id'] as String;
-        countsMap[eid] = (countsMap[eid] ?? 0) + 1;
-      }
+      await Future.wait(eventsData.map((data) async {
+        final eid = data['id'] as String;
+        try {
+          final response = await _supabase
+              .from('game_players')
+              .select('id')
+              .eq('event_id', eid)
+              .neq('status', 'spectator')
+              .count(CountOption.exact);
+          countsMap[eid] = response.count ?? 0;
+        } catch (e) {
+          countsMap[eid] = 0;
+        }
+      }));
 
       return eventsData.map((data) {
         final String id = data['id'];

@@ -316,6 +316,7 @@ class _TreasureHuntAppState extends State<TreasureHuntApp>
           return MaterialApp(
             title: 'MapHunter',
             navigatorKey: rootNavigatorKey,
+            navigatorObservers: [routeObserver],
             debugShowCheckedModeBanner: false,
             scrollBehavior: const MaterialScrollBehavior().copyWith(
               dragDevices: {

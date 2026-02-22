@@ -40,6 +40,8 @@ import '../../social/screens/profile_screen.dart'; // For navigation
 import '../../social/screens/wallet_screen.dart'; // For wallet navigation
 import 'package:shared_preferences/shared_preferences.dart'; // For prize persistence
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/utils/global_keys.dart'; // To access routeObserver
+
 
 class ScenariosScreen extends StatefulWidget {
   final bool isOnline;
@@ -54,7 +56,8 @@ class ScenariosScreen extends StatefulWidget {
 }
 
 class _ScenariosScreenState extends State<ScenariosScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
+
   late PageController _pageController;
   late AnimationController _hoverController;
   late Animation<Offset> _hoverAnimation;
@@ -590,6 +593,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Subscribe to route observer to detect when returning to this screen
+    routeObserver.subscribe(this, ModalRoute.of(context) as ModalRoute<void>);
 
     // Precargar imágenes de fondo para transiciones suaves
     precacheImage(
@@ -597,6 +602,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     precacheImage(
         const AssetImage('assets/images/fotogrupalnoche.png'), context);
   }
+
 
   Future<void> _checkFirstTime() async {
     final prefs = await SharedPreferences.getInstance();
@@ -663,7 +669,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   }
 
   Future<void> _loadEvents() async {
+    if (!mounted) return;
     print("DEBUG: _loadEvents start");
+    setState(() => _isLoading = true);
+
     final eventProvider = Provider.of<EventProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final requestProvider =
@@ -678,27 +687,37 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       final Map<String, String?> banMap = {}; // NEW
       final Map<String, String> roleMap = {}; // NEW - Role tracking
 
-      for (final event in eventProvider.events) {
-        try {
-          final data =
-              await requestProvider.isPlayerParticipant(userId, event.id);
-          statusMap[event.id] = data['isParticipant'] as bool? ?? false;
-          banMap[event.id] = data['status'] as String?; // NEW: Track ban status
+      // Fetch all participations in a single query to prevent N+1 bottleneck
+      try {
+        final allParticipations =
+            await requestProvider.getAllUserParticipations(userId);
 
-          // Determine Role
-          final status = data['status'] as String?;
-          final isParticipant = data['isParticipant'] as bool? ?? false;
+        // Pre-fill defaults
+        for (final event in eventProvider.events) {
+          statusMap[event.id] = false;
+          banMap[event.id] = null;
+          roleMap[event.id] = 'none';
+        }
+
+        // Apply actual data
+        for (final participation in allParticipations) {
+          final eventId = participation['event_id'] as String;
+          final status = participation['status'] as String?;
+
+          statusMap[eventId] = true;
+          banMap[eventId] = status;
 
           if (status == 'spectator') {
-            roleMap[event.id] = 'spectator';
-          } else if (isParticipant) {
-            roleMap[event.id] = 'player';
+            roleMap[eventId] = 'spectator';
           } else {
-            roleMap[event.id] = 'none';
+            roleMap[eventId] = 'player';
           }
-        } catch (e) {
+        }
+      } catch (e) {
+        debugPrint('Error loading all participations: $e');
+        for (final event in eventProvider.events) {
           statusMap[event.id] = false;
-          banMap[event.id] = null; // NEW
+          banMap[event.id] = null;
           roleMap[event.id] = 'none';
         }
       }
@@ -749,6 +768,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this); // Unsubscribe from route observer
     _pageController.dispose();
     _hoverController.dispose();
     _shimmerController.dispose();
@@ -756,6 +776,14 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
   }
+
+  @override
+  void didPopNext() {
+    // This is called when the top route has been popped off, and this route shows up.
+    debugPrint("🔄 ScenariosScreen: didPopNext - Refreshing data...");
+    _loadEvents();
+  }
+
 
   Future<void> _onScenarioSelected(Scenario scenario) async {
     final isDarkMode = true /* always dark UI */;
@@ -1713,8 +1741,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       // SELECTED STATE - Restored Cyberpunk Style
       return GestureDetector(
         onTap: () {
+          // Refresh data if switching to Scenarios tab (index 1) from another tab
+          if (index == 1 && _navIndex != 1) {
+            _loadEvents();
+          }
           setState(() => _navIndex = index);
         },
+
         child: Container(
           width: 85,
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1771,8 +1804,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       // UNSELECTED STATE
       return GestureDetector(
         onTap: () {
+          // Refresh data if switching to Scenarios tab (index 1) from another tab
+          if (index == 1 && _navIndex != 1) {
+            _loadEvents();
+          }
           setState(() => _navIndex = index);
         },
+
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           color: Colors.transparent,
