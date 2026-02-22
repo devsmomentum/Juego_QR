@@ -2764,7 +2764,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                               const Icon(Icons.workspace_premium, color: AppTheme.accentGold, size: 14),
                                                                               const SizedBox(width: 4),
                                                                               Text(
-                                                                                "BOTÍN: ${(scenario.currentParticipants * scenario.entryFee * 0.70).toStringAsFixed(0)} 🍀",
+                                                                                "BOTÍN: ${(scenario.pot * 0.70).toStringAsFixed(0)} 🍀",
                                                                                 style: const TextStyle(
                                                                                   color: AppTheme.accentGold,
                                                                                   fontWeight: FontWeight.bold,

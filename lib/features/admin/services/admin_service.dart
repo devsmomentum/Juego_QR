@@ -365,20 +365,14 @@ class AdminService {
       try {
         final eventData = await _supabase
             .from('events')
-            .select('entry_fee, configured_winners')
+            .select('pot, configured_winners')
             .eq('id', eventId)
             .single();
-        final entryFee = (eventData['entry_fee'] as num?)?.toInt() ?? 0;
         
-        // Count participants (same formula as distribute_event_prizes)
-        final participantCount = await _supabase
-            .from('game_players')
-            .count(CountOption.exact)
-            .eq('event_id', eventId)
-            .neq('status', 'spectator');
-        
-        pot = ((participantCount * entryFee) * 0.70).toInt();
-        debugPrint('💰 Calculated pot: $pot (participants: $participantCount, fee: $entryFee)');
+        // Use actual pot from DB (accumulated from real payments)
+        final dbPot = (eventData['pot'] as num?)?.toInt() ?? 0;
+        pot = (dbPot * 0.70).toInt();
+        debugPrint('💰 Pot from DB: $dbPot, distributable (70%): $pot');
       } catch (e) {
         debugPrint('💰 Error calculating pot: $e');
       }
