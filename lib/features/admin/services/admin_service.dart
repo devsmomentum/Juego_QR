@@ -207,9 +207,9 @@ class AdminService {
         .single();
     final int current = res['clovers'] ?? 0;
     // Update
-    await _supabase
-        .from('profiles')
-        .update({'clovers': current + amount}).eq('id', userId);
+    await _supabase.rpc('admin_credit_clovers', params: {
+      'p_user_id': userId, 'p_amount': amount, 'p_reason': 'admin_credit',
+    });
   }
 
   Future<bool> checkPrizeDistributionStatus(String eventId) async {

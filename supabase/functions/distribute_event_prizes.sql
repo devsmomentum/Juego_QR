@@ -22,6 +22,12 @@ DECLARE
   v_distribution_results JSONB[] := ARRAY[]::JSONB[];
   v_shares NUMERIC[];
 BEGIN
+
+-- Agregar al inicio del cuerpo (después de BEGIN):
+IF (auth.role() != 'service_role') AND (NOT public.is_admin(auth.uid())) THEN
+    RETURN json_build_object('success', false, 'message', 
+        'Access Denied: Only administrators can distribute prizes.');
+END IF;
   -- 1. Lock Event & Get Details
   SELECT * INTO v_event_record FROM events WHERE id = p_event_id FOR UPDATE;
   

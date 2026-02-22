@@ -16,7 +16,7 @@ class SpectatorBettingPotWidget extends StatefulWidget {
 
 class _SpectatorBettingPotWidgetState extends State<SpectatorBettingPotWidget> {
   late BettingService _bettingService;
-  late RealtimeChannel _subscription;
+  Timer? _pollTimer;
   int _currentPot = 0;
   bool _isLoading = true;
 
@@ -25,12 +25,15 @@ class _SpectatorBettingPotWidgetState extends State<SpectatorBettingPotWidget> {
     super.initState();
     _bettingService = BettingService(Supabase.instance.client);
     _fetchPot();
-    _subscribe();
+    // Poll every 10 seconds — lightweight RPC call (single aggregated row).
+    // Replaces Realtime subscription which no longer delivers other users'
+    // bet events after the permissive RLS policy was removed.
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchPot());
   }
 
   @override
   void dispose() {
-    _subscription.unsubscribe();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
@@ -42,12 +45,6 @@ class _SpectatorBettingPotWidgetState extends State<SpectatorBettingPotWidget> {
         _isLoading = false;
       });
     }
-  }
-
-  void _subscribe() {
-    _subscription = _bettingService.subscribeToBets(widget.eventId, () {
-      _fetchPot(); // Refresh on any change
-    });
   }
 
   Future<void> _showDebugInfo() async {
@@ -76,7 +73,7 @@ class _SpectatorBettingPotWidgetState extends State<SpectatorBettingPotWidget> {
     final formattedPot = NumberFormat.currency(locale: "es_CO", symbol: "", decimalDigits: 0).format(_currentPot);
 
     return GestureDetector(
-      onLongPress: _showDebugInfo, // Hidden debug feature
+      onLongPress: _showDebugInfo,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(12),

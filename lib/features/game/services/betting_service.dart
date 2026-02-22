@@ -46,21 +46,18 @@ class BettingService {
     }
   }
   /// Obtiene el monto total apostado en el evento (POTE).
+  /// Usa el RPC `get_event_betting_stats` (SECURITY DEFINER) para obtener
+  /// datos agregados sin necesidad de leer filas individuales de `bets`.
   Future<int> getEventBettingPot(String eventId) async {
     try {
-      final response = await _supabase
-          .from('bets')
-          .select('amount')
-          .eq('event_id', eventId);
-
-      final List<dynamic> bets = response;
-      int totalPot = 0;
-      for (var bet in bets) {
-        totalPot += (bet['amount'] as num).toInt();
-      }
-      return totalPot;
+      final response = await _supabase.rpc(
+        'get_event_betting_stats',
+        params: {'p_event_id': eventId},
+      );
+      final data = Map<String, dynamic>.from(response);
+      return (data['total_pot'] as num?)?.toInt() ?? 0;
     } catch (e) {
-      debugPrint('BettingService: Error fetching pot: $e');
+      debugPrint('BettingService: Error fetching pot via RPC: $e');
       return 0;
     }
   }
@@ -99,18 +96,18 @@ class BettingService {
     }
   }
 
-  /// Obtiene el número total de ganadores de apuestas (personas que apostaron al ganador).
-  Future<int> getTotalBettingWinners(String eventId, String winnerId) async {
+  /// Obtiene el número total de apuestas en un evento.
+  /// Usa el RPC seguro para no depender de lectura directa de `bets`.
+  Future<int> getTotalBetsCount(String eventId) async {
     try {
-      final response = await _supabase
-          .from('bets')
-          .count(CountOption.exact)
-          .eq('event_id', eventId)
-          .eq('racer_id', winnerId);
-      
-      return response;
+      final response = await _supabase.rpc(
+        'get_event_betting_stats',
+        params: {'p_event_id': eventId},
+      );
+      final data = Map<String, dynamic>.from(response);
+      return (data['total_bets'] as num?)?.toInt() ?? 0;
     } catch (e) {
-      debugPrint('BettingService: Error counting winners: $e');
+      debugPrint('BettingService: Error counting bets: $e');
       return 0;
     }
   }
