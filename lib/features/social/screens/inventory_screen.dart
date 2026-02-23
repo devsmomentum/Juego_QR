@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/models/player.dart';
@@ -105,136 +106,116 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 SafeArea(
                   child: Column(
                     children: [
-                      // Header
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Row(
-                          children: [
-                            // Cyberpunk Back Button
-                            Padding(
-                              padding: const EdgeInsets.only(right: 16.0),
-                              child: GestureDetector(
-                                onTap: () => Navigator.of(context).pop(),
-                                child: Container(
-                                  width: 42,
-                                  height: 42,
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color:
-                                          AppTheme.accentGold.withOpacity(0.3),
-                                      width: 1.0,
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Row(
+                      children: [
+
+
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Inventario',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'Orbitron',
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
                                     ),
-                                  ),
-                                  child: Container(
                                     decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: const Color(0xFF0D0D0F),
-                                      border: Border.all(
-                                        color: AppTheme.accentGold,
-                                        width: 2.0,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppTheme.accentGold
-                                              .withOpacity(0.5),
-                                          blurRadius: 8,
-                                          spreadRadius: 1,
+                                      gradient: AppTheme.goldGradient,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.monetization_on,
+                                          size: 16,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${player.coins}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ],
                                     ),
-                                    child: const Icon(
-                                      Icons.arrow_back,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
                                   ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0D0D0F).withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppTheme.secondaryPink.withOpacity(0.6),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.secondaryPink.withOpacity(0.1),
+                                    blurRadius: 12,
+                                  ),
+                                ],
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(13),
+                                  border: Border.all(
+                                    color: AppTheme.secondaryPink.withOpacity(0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.inventory_2,
+                                      color: AppTheme.secondaryPink,
+                                      size: 28,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${player.inventory.length}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Inventario',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w900,
-                                      fontFamily: 'Orbitron',
-                                      letterSpacing: 1.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          gradient: AppTheme.goldGradient,
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.monetization_on,
-                                              size: 16,
-                                              color: Colors.white,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '${player.coins}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color:
-                                    const Color(0xFF1A1A1D), // Explicitly dark
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: AppTheme.secondaryPink
-                                        .withOpacity(0.2)),
-                              ),
-                              child: Column(
-                                children: [
-                                  const Icon(
-                                    Icons.inventory_2,
-                                    color: AppTheme.secondaryPink,
-                                    size: 28,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${player.inventory.length}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
 
                       // Inventory items grid
                       Expanded(
