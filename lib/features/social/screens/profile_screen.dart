@@ -618,9 +618,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showEditProfileSheet(dynamic player) {
+    final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: player.name);
     final emailController = TextEditingController(text: player.email);
+    final phoneController = TextEditingController(
+        text: player.phone ?? '');
     bool isSaving = false;
+
+    // Registration-matching banned words
+    final bannedWords = [
+      'admin', 'root', 'moderator', 'tonto', 'estupido',
+      'idiota', 'groseria', 'puto', 'mierda',
+    ];
+
+    InputDecoration _fieldDecoration(String label, IconData icon) {
+      return InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+            color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold),
+        prefixIcon: Icon(icon, color: AppTheme.accentGold, size: 20),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppTheme.accentGold),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
+        errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 11),
+      );
+    }
 
     showModalBottomSheet(
       context: context,
@@ -637,169 +674,277 @@ class _ProfileScreenState extends State<ProfileScreen> {
             right: 24,
             top: 24,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                "EDITAR PERFIL",
-                style: TextStyle(
-                  color: AppTheme.accentGold,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    "EDITAR PERFIL",
+                    style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
 
-              // Nombre
-              const Text("NOMBRE DE USUARIO",
-                  style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.accentGold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Correo
-              const Text("CORREO ELECTRÓNICO",
-                  style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: emailController,
-                style: const TextStyle(color: Colors.white),
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.accentGold),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              ElevatedButton(
-                onPressed: isSaving
-                    ? null
-                    : () async {
-                        final newName = nameController.text.trim();
-                        final newEmail = emailController.text.trim();
-
-                        if (newName.isEmpty || newEmail.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content:
-                                    Text("Todos los campos son obligatorios")),
-                          );
-                          return;
+                  // Nombre
+                  TextFormField(
+                    controller: nameController,
+                    style: const TextStyle(color: Colors.white),
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(50),
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]')),
+                    ],
+                    decoration: _fieldDecoration(
+                        'NOMBRE COMPLETO', Icons.person_outline),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Ingresa tu nombre';
+                      }
+                      if (!value.trim().contains(' ')) {
+                        return 'Ingresa Nombre y Apellido';
+                      }
+                      final lowerName = value.toLowerCase();
+                      for (final word in bannedWords) {
+                        if (lowerName.contains(word)) {
+                          return 'El nombre contiene palabras no permitidas';
                         }
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
 
-                        // Validar palabras inadecuadas
-                        if (InputSanitizer.hasInappropriateContent(newName)) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  "El nombre contiene palabras no permitidas"),
-                              backgroundColor: AppTheme.dangerRed,
-                            ),
-                          );
-                          return;
-                        }
+                  // Correo
+                  TextFormField(
+                    controller: emailController,
+                    style: const TextStyle(color: Colors.white),
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: _fieldDecoration(
+                        'CORREO ELECTRÓNICO', Icons.email_outlined),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Ingresa tu email';
+                      }
+                      final emailRegex =
+                          RegExp(r'^[\w.\-]+@[\w.\-]+\.[a-zA-Z]{2,}$');
+                      if (!emailRegex.hasMatch(value.trim())) {
+                        return 'Formato de email inválido';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
 
-                        setModalState(() => isSaving = true);
+                  // Teléfono
+                  TextFormField(
+                    controller: phoneController,
+                    style: const TextStyle(color: Colors.white),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(11),
+                    ],
+                    decoration: _fieldDecoration(
+                        'TELÉFONO (04XX...)', Icons.phone_android_outlined),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Ingresa tu teléfono';
+                      }
+                      if (value.length < 11) {
+                        return 'Ingresa el número completo (11 dígitos)';
+                      }
+                      final prefixRegex =
+                          RegExp(r'^04(12|14|24|16|26|22)');
+                      if (!prefixRegex.hasMatch(value)) {
+                        return 'Prefijo inválido (ej: 0412...)';
+                      }
+                      return null;
+                    },
+                  ),
 
-                        try {
-                          final playerProvider = Provider.of<PlayerProvider>(
-                              context,
-                              listen: false);
-                          await playerProvider.updateProfile(
-                            name: newName != player.name ? newName : null,
-                            email: newEmail != player.email ? newEmail : null,
-                          );
+                  const SizedBox(height: 24),
 
-                          if (mounted) {
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text("Perfil actualizado correctamente"),
-                                backgroundColor: AppTheme.successGreen,
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            setModalState(() => isSaving = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text("Error: $e"),
-                                  backgroundColor: AppTheme.dangerRed),
-                            );
-                          }
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: isSaving
-                    ? const LoadingIndicator(fontSize: 14, color: Colors.black)
-                    : const Text("GUARDAR CAMBIOS",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ElevatedButton(
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+
+                            final newName = nameController.text.trim();
+                            final newEmail =
+                                emailController.text.trim().toLowerCase();
+                            final newPhone = phoneController.text.trim();
+
+                            // Check if email is changing
+                            final emailIsChanging =
+                                newEmail != (player.email ?? '').toLowerCase();
+
+                            // Force sending the email if it hasn't been verified yet
+                            final sendEmail = emailIsChanging || !player.emailVerified;
+
+                            // Show confirmation dialog if email changes
+                            if (emailIsChanging) {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (dialogCtx) => AlertDialog(
+                                  backgroundColor: const Color(0xFF1A1A1D),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: BorderSide(
+                                      color: AppTheme.accentGold
+                                          .withOpacity(0.5),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  title: const Row(
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded,
+                                          color: AppTheme.accentGold),
+                                      SizedBox(width: 8),
+                                      Text("Cambio de Email",
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16)),
+                                    ],
+                                  ),
+                                  content: const Text(
+                                    "Al cambiar tu correo, se enviará un email de verificación. "
+                                    "No podrás participar en eventos hasta que lo verifiques.\n\n"
+                                    "¿Deseas continuar?",
+                                    style: TextStyle(
+                                        color: Colors.white70, fontSize: 14),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialogCtx, false),
+                                      child: const Text("CANCELAR",
+                                          style: TextStyle(
+                                              color: Colors.white54)),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialogCtx, true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.accentGold,
+                                        foregroundColor: Colors.black,
+                                      ),
+                                      child: const Text("SÍ, CAMBIAR"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed != true) return;
+                            }
+
+                            setModalState(() => isSaving = true);
+
+                            try {
+                              final playerProvider =
+                                  Provider.of<PlayerProvider>(context,
+                                      listen: false);
+                              final emailChanged =
+                                  await playerProvider.updateProfile(
+                                name: newName != player.name
+                                    ? newName
+                                    : null,
+                                email: sendEmail ? newEmail : null,
+                                phone: newPhone != (player.phone ?? '')
+                                    ? newPhone
+                                    : null,
+                              );
+
+                              if (mounted) {
+                                Navigator.pop(ctx);
+
+                                if (emailChanged) {
+                                  ScaffoldMessenger.of(this.context)
+                                      .showSnackBar(
+                                    SnackBar(
+                                      content: const Row(
+                                        children: [
+                                          Icon(
+                                              Icons
+                                                  .mark_email_read_outlined,
+                                              color: Colors.white),
+                                          SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              "Se envió un email de verificación a tu nuevo correo. "
+                                              "Verifícalo para continuar jugando.",
+                                              style: TextStyle(fontSize: 13),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: Colors.orange,
+                                      duration:
+                                          const Duration(seconds: 6),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
+                                      margin: const EdgeInsets.all(16),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(this.context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          "Perfil actualizado correctamente"),
+                                      backgroundColor:
+                                          AppTheme.successGreen,
+                                    ),
+                                  );
+                                }
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                setModalState(() => isSaving = false);
+                                ScaffoldMessenger.of(this.context)
+                                    .showSnackBar(
+                                  SnackBar(
+                                      content: Text("Error: $e"),
+                                      backgroundColor: AppTheme.dangerRed),
+                                );
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accentGold,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: isSaving
+                        ? const LoadingIndicator(
+                            fontSize: 14, color: Colors.black)
+                        : const Text("GUARDAR CAMBIOS",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("CANCELAR",
+                        style: TextStyle(color: Colors.white54)),
+                  ),
+
+                  const SizedBox(height: 24),
+                ],
               ),
-
-              const SizedBox(height: 12),
-
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text("CANCELAR",
-                    style: TextStyle(color: Colors.white54)),
-              ),
-
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
         ),
       ),

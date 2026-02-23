@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import '../models/scenario.dart';
 import '../providers/event_provider.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../../social/screens/profile_screen.dart';
 import '../../auth/providers/player_inventory_provider.dart'; // NEW
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
@@ -125,6 +127,67 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   }
 
   void _showJoinOptionDialog(Scenario scenario) {
+    // --- EMAIL VERIFICATION GATE ---
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final player = playerProvider.currentPlayer;
+    if (player != null && !player.emailVerified) {
+      _showPremiumExitDialog(
+        title: 'VERIFICACIÓN REQUERIDA',
+        subtitle:
+            'Debes verificar tu correo electrónico antes de participar en eventos. '
+            'Revisa tu bandeja de entrada.',
+        isDarkMode: true,
+        options: [
+          _DialogOption(
+            icon: Icons.edit_outlined,
+            label: 'EDITAR CORREO',
+            gradientColors: [AppTheme.dGoldMain, const Color(0xFFE5A700)],
+            textColor: Colors.black,
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to profile screen to edit email
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+          _DialogOption(
+            icon: Icons.refresh_rounded,
+            label: 'YA VERIFIQUÉ',
+            gradientColors: [AppTheme.dBrandMain, const Color(0xFF7B2CBF)],
+            textColor: Colors.white,
+            onTap: () async {
+              Navigator.pop(context);
+              // Consult the profile from DB via provider to check if email was verified
+              await playerProvider.reloadProfile();
+              if (mounted) {
+                final updatedPlayer = playerProvider.currentPlayer;
+                if (updatedPlayer != null && updatedPlayer.emailVerified) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('¡Email verificado! Ya puedes participar.'),
+                      backgroundColor: AppTheme.successGreen,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Tu email aún no está verificado. Revisa tu bandeja.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      );
+      return;
+    }
+
     // FORCED TO TRUE: Scenarios screen is always dark
     const isDarkMode = true;
     final isPaid = scenario.entryFee > 0;
@@ -2010,18 +2073,103 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                 bottom: true,
                 child: _buildBottomNavBar(),
               ),
-              body: IndexedStack(
-                index: _navIndex,
-                children: [
-                   _buildLocalSection(),
-                  _buildScenariosContent(scenarios),
-                  const WalletScreen(hideScaffold: true),
-                  const ProfileScreen(hideScaffold: true),
-                ],
-              ),
+              body: (playerProvider.currentPlayer != null &&
+                      !playerProvider.currentPlayer!.emailVerified &&
+                      _navIndex != 3)
+                  ? _buildVerificationBlock()
+                  : IndexedStack(
+                      index: _navIndex,
+                      children: [
+                        _buildLocalSection(),
+                        _buildScenariosContent(scenarios),
+                        const WalletScreen(hideScaffold: true),
+                        const ProfileScreen(hideScaffold: true),
+                      ],
+                    ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildVerificationBlock() {
+    final currentAction = AppTheme.dGoldMain;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.mark_email_unread_outlined, color: AppTheme.accentGold, size: 80),
+          const SizedBox(height: 24),
+          const Text(
+            "VERIFICACIÓN REQUERIDA",
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              color: AppTheme.accentGold,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "Debes verificar tu correo electrónico antes de acceder a las diferentes secciones.\n\nRevisa tu bandeja de entrada o dirígete a tu perfil para actualizar o reenviar el enlace de verificación.",
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 15,
+              height: 1.5,
+              fontWeight: FontWeight.w400,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+          ElevatedButton.icon(
+            onPressed: () => setState(() => _navIndex = 3),
+            icon: const Icon(Icons.person),
+            label: const Text('IR A MI PERFIL'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: currentAction,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: () async {
+              final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+              
+              // Just consult the provider which re-fetches from DB
+              await playerProvider.reloadProfile();
+              if (mounted) {
+                final updatedPlayer = playerProvider.currentPlayer;
+                if (updatedPlayer != null && updatedPlayer.emailVerified) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Email verificado correctamente. ¡Bienvenido!"),
+                      backgroundColor: AppTheme.successGreen,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Aún no has verificado tu email."),
+                      backgroundColor: AppTheme.dangerRed,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('YA VERIFIQUÉ'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white70,
+            ),
+          ),
+        ],
       ),
     );
   }

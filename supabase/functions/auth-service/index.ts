@@ -352,7 +352,7 @@ serve(async (req) => {
 
     // --- UPDATE PROFILE ---
     if (path === "update-profile") {
-      const { name, dni, phone } = await req.json();
+      const { name, phone, email, cedula } = await req.json();
 
       // Authorization Check
       const authHeader = req.headers.get("Authorization");
@@ -380,28 +380,220 @@ serve(async (req) => {
         throw new Error("Invalid or expired session");
       }
 
-      // Prepare update object
-      const updates: any = {};
-      if (name) updates.name = name;
-      if (dni) updates.dni = dni;
-      if (phone) updates.phone = phone;
+      // --- VALIDATIONS (mirror registration rules) ---
 
-      if (Object.keys(updates).length === 0) {
+      // Banned words for name
+      const bannedWords = [
+        "admin",
+        "root",
+        "moderator",
+        "tonto",
+        "estupido",
+        "idiota",
+        "groseria",
+        "puto",
+        "mierda",
+      ];
+
+      // Validate name
+      if (name !== undefined && name !== null) {
+        const trimmedName = String(name).trim();
+        if (trimmedName.length === 0) {
+          throw new Error("El nombre no puede estar vacío");
+        }
+        if (trimmedName.length > 50) {
+          throw new Error("El nombre no puede exceder 50 caracteres");
+        }
+        if (!trimmedName.includes(" ")) {
+          throw new Error("Ingresa Nombre y Apellido");
+        }
+        const lowerName = trimmedName.toLowerCase();
+        for (const word of bannedWords) {
+          if (lowerName.includes(word)) {
+            throw new Error("El nombre contiene palabras no permitidas");
+          }
+        }
+      }
+
+      // Validate phone (Venezuelan format)
+      let sanitizedPhone: string | undefined = undefined;
+      if (phone !== undefined && phone !== null) {
+        const phoneDigits = String(phone).replace(/\D/g, "");
+        const phoneRegex = /^04(12|14|24|16|26|22)\d{7}$/;
+        if (!phoneRegex.test(phoneDigits)) {
+          throw new Error(
+            "Formato de teléfono inválido. Usa 04121234567",
+          );
+        }
+
+        // Check uniqueness (excluding current user)
+        const { data: existingPhone } = await userSupabase
+          .from("profiles")
+          .select("id")
+          .eq("phone", phoneDigits)
+          .neq("id", user.id)
+          .maybeSingle();
+
+        if (existingPhone) {
+          throw new Error("Este teléfono ya está registrado");
+        }
+
+        sanitizedPhone = phoneDigits;
+      }
+
+      // Validate cedula (Venezuelan format)
+      let sanitizedCedula: string | undefined = undefined;
+      if (cedula !== undefined && cedula !== null) {
+        let cleanCedula = String(cedula).replace(/[\.\-\s]/g, "").toUpperCase();
+        const cedulaRegex = /^[VE]\d{6,9}$/i;
+        if (!cedulaRegex.test(cleanCedula)) {
+          throw new Error("Formato de cédula inválido. Usa V12345678 o E12345678");
+        }
+
+        // Check uniqueness (excluding current user by joining with auth id)
+        const { data: existingCedula } = await userSupabase
+          .from("profiles")
+          .select("id")
+          .eq("dni", cleanCedula)
+          .neq("id", user.id)
+          .maybeSingle();
+
+        if (existingCedula) {
+          throw new Error("Esta cédula ya está registrada");
+        }
+
+        sanitizedCedula = cleanCedula;
+      }
+
+      // 1. Fetch current profile to check if email is verified
+      const { data: currentProfile, error: currentProfileError } = await userSupabase
+        .from("profiles")
+        .select("email_verified")
+        .eq("id", user.id)
+        .single();
+        
+      if (currentProfileError || !currentProfile) {
+        throw new Error("No se pudo cargar el perfil actual");
+      }
+      
+      const isEmailVerified = currentProfile.email_verified === true;
+
+      // Validate email
+      let emailChanged = false;
+      if (email !== undefined && email !== null) {
+        const trimmedEmail = String(email).trim().toLowerCase();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+        if (!emailRegex.test(trimmedEmail)) {
+          throw new Error("Formato de email inválido");
+        }
+
+        // Only process if email actually changed OR if it hasn't been verified yet.
+        console.log("Email check:", { trimmedEmail, userEmail: user.email, isEmailVerified });
+        if (trimmedEmail !== user.email || !isEmailVerified) {
+          
+          const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+          const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+          if (trimmedEmail !== user.email) {
+            // --- NEW EMAIL ADDRESS ---
+            // Direct call to GoTrue user endpoint with the user's JWT.
+            // This triggers the native "Confirm Email Change" email template.
+            const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: authHeader,
+                apikey: ANON_KEY,
+              },
+              body: JSON.stringify({ email: trimmedEmail }),
+            });
+
+            const result = await response.json();
+            console.log("PUT /auth/v1/user response:", response.status, JSON.stringify(result));
+
+            if (!response.ok) {
+              const errMsg = result.msg || result.message || "Error desconocido";
+              throw new Error("Error al actualizar el email: " + errMsg);
+            }
+          } else if (!isEmailVerified) {
+            // --- SAME EMAIL, NOT VERIFIED ---
+            // Resend the "Confirm Email Change" email
+            const response = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: ANON_KEY,
+              },
+              body: JSON.stringify({ type: "email_change", email: trimmedEmail }),
+            });
+
+            if (!response.ok) {
+              const result = await response.json();
+              console.error("Error resending verification email:", result);
+              const errMsg = result.msg || result.message || "Error desconocido";
+              throw new Error("Error al reenviar el correo de verificación: " + errMsg);
+            }
+          }
+
+          // Mark email as unverified in profiles
+          await userSupabase
+            .from("profiles")
+            .update({
+              email: trimmedEmail,
+              email_verified: false,
+            })
+            .eq("id", user.id);
+
+          emailChanged = true;
+        }
+      }
+
+      // Prepare profile table updates (name, phone)
+      const profileUpdates: Record<string, unknown> = {};
+      if (name !== undefined && name !== null) {
+        profileUpdates.name = String(name).trim();
+      }
+      if (sanitizedPhone !== undefined) {
+        profileUpdates.phone = sanitizedPhone;
+      }
+      if (sanitizedCedula !== undefined) {
+        profileUpdates.dni = sanitizedCedula;
+      }
+
+      let profileData = null;
+      if (Object.keys(profileUpdates).length > 0) {
+        const { data, error } = await userSupabase
+          .from("profiles")
+          .update(profileUpdates)
+          .eq("id", user.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        profileData = data;
+      } else if (!emailChanged) {
         throw new Error("No fields to update");
       }
 
-      const { data, error } = await userSupabase
-        .from("profiles")
-        .update(updates)
-        .eq("id", user.id)
-        .select()
-        .single();
+      // If only email changed, fetch profile for response
+      if (!profileData) {
+        const { data } = await userSupabase
+          .from("profiles")
+          .select()
+          .eq("id", user.id)
+          .single();
+        profileData = data;
+      }
 
-      if (error) throw error;
-
-      return new Response(JSON.stringify(data), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ ...profileData, emailChanged }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
     }
 
     // --- ADD PAYMENT METHOD ---

@@ -324,32 +324,34 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
-  Future<void> updateProfile(
-      {String? name, String? email, String? cedula, String? phone}) async {
-    if (_currentPlayer == null) return;
-    try {
-      await _authService.updateProfile(
-        _currentPlayer!.userId,
-        name: name,
-        email: email,
-        cedula: cedula,
-        phone: phone,
-      );
+  Future<bool> updateProfile(
+    {String? name, String? email, String? phone, String? cedula}) async {
+  if (_currentPlayer == null) return false;
+  try {
+    final emailChanged = await _authService.updateProfile(
+      _currentPlayer!.userId,
+      name: name,
+      email: email,
+      phone: phone,
+      cedula: cedula,
+    );
 
-      // Actualizar localmente
-      _currentPlayer = _currentPlayer!.copyWith(
-        name: name,
-        email: email,
-        cedula: cedula,
-        phone: phone,
-      );
+    // Actualizar localmente
+    _currentPlayer = _currentPlayer!.copyWith(
+      name: name,
+      email: email,
+      phone: phone,
+      cedula: cedula,
+      emailVerified: emailChanged ? false : null,
+    );
 
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error updating profile in provider: $e');
-      rethrow;
-    }
+    notifyListeners();
+    return emailChanged;
+  } catch (e) {
+    debugPrint('Error updating profile in provider: $e');
+    rethrow;
   }
+}
 
   Future<void> addPaymentMethod({required String bankCode}) async {
     try {

@@ -28,6 +28,7 @@ class Player implements ITargetable {
   final String? phone;
   final String? documentType; // Added for Payment Profile
   final bool isProtected; // SHIELD CONSISTENCY FIX
+  final bool emailVerified; // Whether email has been verified
   Map<String, dynamic> stats;
   final DateTime? createdAt;
 
@@ -59,6 +60,7 @@ class Player implements ITargetable {
     this.documentType,
     this.createdAt,
     this.isProtected = false,
+    this.emailVerified = true,
   })  : _avatarUrl = avatarUrl ?? '',
         inventory = inventory ?? [],
         stats = stats ??
@@ -168,6 +170,7 @@ class Player implements ITargetable {
       phone: json['phone'],
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
       isProtected: json['is_protected'] ?? false,
+      emailVerified: json['email_verified'] ?? true,
     );
   }
 
@@ -305,6 +308,7 @@ class Player implements ITargetable {
     String? documentType,
     DateTime? createdAt,
     bool? isProtected,
+    bool? emailVerified,
   }) {
     return Player(
       userId: userId ?? this.userId,
@@ -334,6 +338,7 @@ class Player implements ITargetable {
       documentType: documentType ?? this.documentType,
       createdAt: createdAt ?? this.createdAt,
       isProtected: isProtected ?? this.isProtected,
+      emailVerified: emailVerified ?? this.emailVerified,
     );
   }
 }

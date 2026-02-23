@@ -221,35 +221,34 @@ class AuthService {
   }
 
   /// Actualiza la información del perfil del usuario.
-  Future<void> updateProfile(String userId,
-      {String? name, String? email, String? cedula, String? phone}) async {
+  /// Returns true if email was changed (requires verification).
+  Future<bool> updateProfile(String userId,
+      {String? name, String? email, String? phone, String? cedula}) async {
     try {
-      // 1. Actualizar datos en la tabla profiles (DNI, Phone, etc.)
-      if (name != null || cedula != null || phone != null) {
-        // Pass cedula as string directly to 'dni'
-        final response = await _supabase.functions.invoke(
-          'auth-service/update-profile',
-          body: {
-            if (name != null) 'name': name.trim(),
-            if (cedula != null) 'dni': cedula,
-            if (phone != null) 'phone': phone.trim(),
-          },
-          method: HttpMethod.post,
-        );
+      // Route ALL fields through the edge function (including email)
+      final body = <String, dynamic>{};
+      
+      if (name != null) body['name'] = name.trim();
+      if (email != null) body['email'] = email.trim();
+      if (phone != null) body['phone'] = phone.trim();
+      if (cedula != null) body['cedula'] = cedula.trim();
 
-        if (response.status != 200) {
-          final error = response.data['error'] ??
-              'Error desconocido al actualizar perfil';
-          throw error;
-        }
+      if (body.isEmpty) return false;
+
+      final response = await _supabase.functions.invoke(
+        'auth-service/update-profile',
+        body: body,
+        method: HttpMethod.post,
+      );
+
+      if (response.status != 200) {
+        final error = response.data['error'] ??
+            'Error desconocido al actualizar perfil';
+        throw error;
       }
 
-      // 2. Actualizar email en Supabase Auth si se provee
-      if (email != null) {
-        await _supabase.auth.updateUser(
-          UserAttributes(email: email.trim()),
-        );
-      }
+      final bool emailChanged = response.data['emailChanged'] == true;
+      return emailChanged;
     } catch (e) {
       debugPrint('AuthService: Error updating profile: $e');
       throw _handleAuthError(e);
