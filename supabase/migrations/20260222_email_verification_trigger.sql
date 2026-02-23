@@ -1,38 +1,33 @@
--- Create a function to keep public.profiles.email_verified in sync with auth.users.email_confirmed_at
-CREATE OR REPLACE FUNCTION public.sync_email_verification_status()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.handle_user_email_update()
+RETURNS trigger AS $$
 BEGIN
-  -- When email_confirmed_at changes from NULL to a timestamp
-  IF OLD.email_confirmed_at IS DISTINCT FROM NEW.email_confirmed_at THEN
-    IF NEW.email_confirmed_at IS NOT NULL THEN
-      UPDATE public.profiles
-      SET email_verified = TRUE
-      WHERE id = NEW.id;
-    ELSE
-      -- When email_confirmed_at changes from a timestamp to NULL
-      UPDATE public.profiles
-      SET email_verified = FALSE
-      WHERE id = NEW.id;
-    END IF;
-  END IF;
+  -- Using WARNING so Supabase doesn't filter it out of the Postgres Logs
+  RAISE WARNING '⚡ [EMAIL_TEST] Trigger fired for ID: %', NEW.id;
+  RAISE WARNING '⚡ [EMAIL_TEST] OLD email: % | NEW email: %', OLD.email, NEW.email;
+  RAISE WARNING '⚡ [EMAIL_TEST] OLD change: % | NEW change: %', OLD.email_change, NEW.email_change;
 
-  -- CRITICAL SECURITY FIX: 
-  -- If a verified user changes their email address but Supabase leaves the old 
-  -- email_confirmed_at timestamp untouched (common in single-factor setups),
-  -- we must explicitly invalidate the session since it's a new unverified string.
-  IF OLD.email IS DISTINCT FROM NEW.email AND OLD.email_confirmed_at IS NOT DISTINCT FROM NEW.email_confirmed_at THEN
-     UPDATE public.profiles
-     SET email_verified = FALSE
-     WHERE id = NEW.id;
-  END IF;
+  IF (OLD.email IS DISTINCT FROM NEW.email) OR 
+     (OLD.email_change IS DISTINCT FROM NEW.email_change AND (NEW.email_change IS NULL OR NEW.email_change = '')) THEN
+    
+    RAISE WARNING '✅ [EMAIL_TEST] Condition met! Updating public.profiles...';
+    
+    UPDATE public.profiles
+    SET
+      email_verified = true,
+      email = NEW.email
+    WHERE id = NEW.id;
 
+  ELSE
+    RAISE WARNING '❌ [EMAIL_TEST] No email change detected in this specific update.';
+  END IF;
+  
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Create the trigger on the auth.users table
-DROP TRIGGER IF EXISTS on_auth_user_email_verification ON auth.users;
-CREATE TRIGGER on_auth_user_email_verification
-  AFTER UPDATE OF email_confirmed_at, email ON auth.users
+DROP TRIGGER IF EXISTS on_auth_user_email_update ON auth.users;
+
+CREATE TRIGGER on_auth_user_email_update
+  AFTER UPDATE ON auth.users
   FOR EACH ROW
-  EXECUTE FUNCTION public.sync_email_verification_status();
+  EXECUTE FUNCTION public.handle_user_email_update();
