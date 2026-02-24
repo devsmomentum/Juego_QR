@@ -461,18 +461,15 @@ class _RacerAvatarWidget extends StatelessWidget {
     final double topPosition =
         (compact ? 40 : 60) + laneOffset - (avatarSize / 2);
 
+    final bool isFinished =
+        totalClues > 0 && vm.data.completedCluesCount >= totalClues;
+
     return Positioned(
       left: maxScroll * progress,
       top: topPosition,
-      child: ColorFiltered(
-        // Apply darken filter if player finished race
-        colorFilter:
-            (totalClues > 0 && vm.data.completedCluesCount >= totalClues)
-                ? const ColorFilter.mode(Colors.black54, BlendMode.darken)
-                : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
-        child: Opacity(
-          opacity: vm.opacity,
-          child: Column(
+      child: Opacity(
+        opacity: vm.opacity,
+        child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (vm.isMe || isSelected)
@@ -606,6 +603,17 @@ class _RacerAvatarWidget extends StatelessWidget {
                       ),
                     ),
 
+                    // Finished-race dark overlay (circle only, no rectangle)
+                    if (isFinished)
+                      Container(
+                        width: avatarSize,
+                        height: avatarSize,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
+                      ),
+
                     // Status Icon Overlay
                     if (vm.statusIcon != null)
                       Container(
@@ -668,7 +676,7 @@ class _RacerAvatarWidget extends StatelessWidget {
             ],
           ),
         ),
-      ),
+
     );
   }
 
