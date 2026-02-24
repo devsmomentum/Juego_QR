@@ -226,36 +226,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               ),
             ),
 
-          // Botón Simular Escaneo
-          if (true)
-            Positioned(
-              bottom: 160,
-              left: 24,
-              right: 24,
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    final fakeCode = widget.expectedClueId != null 
-                        ? "CLUE:${widget.expectedClueId}" 
-                        : "DEV_SKIP_CODE";
-                    Navigator.pop(context, fakeCode);
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppTheme.accentGold.withOpacity(0.6)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    foregroundColor: AppTheme.accentGold,
-                    backgroundColor: Colors.black.withOpacity(0.4),
-                  ),
-                  icon: const Icon(Icons.qr_code, size: 18),
-                  label: const Text(
-                    'SIMULAR ESCANEO',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

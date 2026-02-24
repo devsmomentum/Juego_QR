@@ -282,113 +282,6 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                       width: 1.5,
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.lock_open, color: AppTheme.accentGold, size: 36),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'VERIFICAR CÓDIGO',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          fontFamily: 'Orbitron',
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Ingresa el PIN de 6 dígitos',
-                        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
-                      ),
-                      const SizedBox(height: 24),
-                      // 6 digit PIN fields
-                      Row(
-                        children: List.generate(6, (index) {
-                          return Expanded(
-                            child: Container(
-                              margin: EdgeInsets.only(right: index < 5 ? 6 : 0),
-                              height: 50,
-                              child: TextField(
-                                controller: pinControllers[index],
-                                focusNode: focusNodes[index],
-                                textAlign: TextAlign.center,
-                                textCapitalization: TextCapitalization.characters,
-                                keyboardType: TextInputType.text,
-                                maxLength: 1,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                decoration: InputDecoration(
-                                  counterText: '',
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                                  filled: true,
-                                  fillColor: Colors.white.withOpacity(0.05),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: AppTheme.accentGold, width: 2),
-                                  ),
-                                ),
-                                onChanged: (value) {
-                                  setDialogState(() => errorText = null);
-                                  if (value.isNotEmpty && index < 5) {
-                                    focusNodes[index + 1].requestFocus();
-                                  }
-                                  // Auto-submit when all 6 digits entered
-                                  final pin = pinControllers.map((c) => c.text).join();
-                                  if (pin.length == 6) {
-                                    submitPin();
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                      if (errorText != null) ...[
-                        const SizedBox(height: 12),
-                        Text(errorText!, style: const TextStyle(color: AppTheme.dangerRed, fontSize: 12)),
-                      ],
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: Text(
-                                'CANCELAR',
-                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.accentGold,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              onPressed: submitPin,
-                              child: const Text('VERIFICAR', style: TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                 ),
               ),
             );
@@ -951,19 +844,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppTheme.accentGold,
-                                          foregroundColor: Colors.black,
-                                          padding: const EdgeInsets.symmetric(vertical: 18),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        ),
-                                        onPressed: _verifyCode,
-                                        child: const Text("VERIFICAR CÓDIGO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                      ),
-                                    ),
+                                   
                                   ],
                                 )
                               : const SizedBox.shrink(),
