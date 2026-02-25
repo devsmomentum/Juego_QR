@@ -598,6 +598,19 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 
   Future<void> _saveChanges() async {
+    // Validación de estado: solo se permite guardar si el evento está en 'pending'
+    if (widget.event.status != 'pending') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⛔ No se puede editar: el evento ya no está en estado pendiente.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
 
@@ -1037,17 +1050,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     );
   }
 
+  /// El evento es editable ÚNICAMENTE si su status es 'pending'.
+  /// Si el status es nulo o cualquier valor distinto de 'pending', se bloquea (fail-safe).
   bool get _isEventActive {
-    final now = DateTime.now();
-    // Comparar fecha actual con fecha del evento.
-    // Si event.date es UTC (de supabase), convertimos now a utc para comparar, o viceversa.
-    // Usualmente DateTime.parse devuelve la zona horaria del string (UTC si tiene Z).
-    final eventDate =
-        widget.event.date.isUtc ? widget.event.date : widget.event.date.toUtc();
-    final nowUtc = now.toUtc();
-
-    // Si el evento está activo O completado, bloqueamos la edición.
-    return widget.event.isActive || widget.event.status == 'completed' || nowUtc.isAfter(eventDate);
+    return widget.event.status != 'pending';
   }
 
   Widget? _getFAB() {
@@ -1412,7 +1418,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 onPressed: _isEventActive ? null : _saveChanges,
                 icon: Icon(_isEventActive ? Icons.lock : Icons.save),
                 label: Text(_isEventActive
-                    ? "Evento En Curso (Solo Lectura)"
+                    ? "Evento No Editable (${widget.event.status == 'active' ? 'En Curso' : widget.event.status == 'completed' ? 'Completado' : 'Bloqueado'})"
                     : "Guardar Cambios"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor:

@@ -164,6 +164,8 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
               isLocked: isEdit ? widget.clue!.isLocked : true,
               isCompleted: isEdit ? widget.clue!.isCompleted : false,
               sequenceIndex: isEdit ? widget.clue!.sequenceIndex : 0,
+              latitude: _latitude,
+              longitude: _longitude,
             );
           } else {
              newClue = PhysicalClue(
@@ -195,6 +197,8 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
               riddleAnswer: _answerController.text,
               isLocked: true,
               isCompleted: false,
+              latitude: _latitude,
+              longitude: _longitude,
          );
       }
 

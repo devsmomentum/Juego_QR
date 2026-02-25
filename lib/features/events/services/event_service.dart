@@ -352,11 +352,8 @@ class EventService {
             'riddle_answer':
                 (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
             'xp_reward': clue.xpReward,
-            'latitude':
-                (clue is PhysicalClue) ? (clue as PhysicalClue).latitude : null,
-            'longitude': (clue is PhysicalClue)
-                ? (clue as PhysicalClue).longitude
-                : null,
+            'latitude': clue.latitude,
+            'longitude': clue.longitude,
             'hint': clue.hint,
             'sequence_index': clue.sequenceIndex,
           })
@@ -403,10 +400,8 @@ class EventService {
         'sequence_index': clue.sequenceIndex > 0
             ? clue.sequenceIndex
             : nextOrder, // Use provided index if valid
-        'latitude':
-            (clue is PhysicalClue) ? (clue as PhysicalClue).latitude : null,
-        'longitude':
-            (clue is PhysicalClue) ? (clue as PhysicalClue).longitude : null,
+        'latitude': clue.latitude,
+        'longitude': clue.longitude,
       }).select();
 
       debugPrint('✅ Add Response: $response');
