@@ -296,196 +296,197 @@ class _CluesScreenState extends State<CluesScreen> {
                 ),
               ),
               SafeArea(
-                child: Column(
-                children: [
-                  SafeArea(
-                    bottom: false,
-                    child: Container(),
-                  ),
-                  const ProgressHeader(),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Consumer<GameProvider>(
-                      builder: (context, game, _) {
-                        return RaceTrackWidget(
-                          leaderboard: game.leaderboard,
-                          currentPlayerId:
-                              Provider.of<PlayerProvider>(context, listen: false)
-                                      .currentPlayer
-                                      ?.userId ??
-                                  '',
-                          totalClues: game.clues.length,
-                        );
-                      },
+                child: CustomScrollView(
+                  slivers: [
+                    // 1. Progress Header
+                    const SliverToBoxAdapter(
+                      child: ProgressHeader(),
                     ),
-                  ),
-                  Expanded(
-                    child: gameProvider.isLoading
-                        ? Center(
+                    
+                    // 2. Race Track Widget
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Consumer<GameProvider>(
+                          builder: (context, game, _) {
+                            return RaceTrackWidget(
+                              leaderboard: game.leaderboard,
+                              currentPlayerId:
+                                  Provider.of<PlayerProvider>(context, listen: false)
+                                          .currentPlayer
+                                          ?.userId ??
+                                      '',
+                              totalClues: game.clues.length,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    // 3. Clues List or Loading/Error States
+                    if (gameProvider.isLoading)
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(color: AppTheme.accentGold),
+                              SizedBox(height: 16),
+                              Text(
+                                'Cargando...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (gameProvider.errorMessage != null)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: SingleChildScrollView(
                             child: Column(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const CircularProgressIndicator(color: AppTheme.accentGold),
+                                const Icon(Icons.error_outline,
+                                    size: 60, color: Colors.red),
                                 const SizedBox(height: 16),
-                                Text(
-                                  'Cargando...',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    shadows: [
-                                      Shadow(color: AppTheme.accentGold.withOpacity(0.5), blurRadius: 10),
-                                    ],
+                                const Text(
+                                  'Error al cargar pistas',
+                                  style: TextStyle(color: Colors.white, fontSize: 18),
+                                ),
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 32),
+                                  child: Text(
+                                    gameProvider.errorMessage!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white70),
                                   ),
+                                ),
+                                const SizedBox(height: 24),
+                                ElevatedButton(
+                                  onPressed: () => gameProvider.fetchClues(
+                                      eventId: widget.eventId),
+                                  child: const Text('Reintentar'),
                                 ),
                               ],
                             ),
-                          )
-                        : gameProvider.errorMessage != null
-                            ? Center(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.error_outline,
-                                          size: 60, color: Colors.red),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'Error al cargar pistas',
-                                        style: Theme.of(context).textTheme.titleLarge,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 32),
-                                        child: Text(
-                                          gameProvider.errorMessage!,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(color: currentTextSec),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      ElevatedButton(
-                                        onPressed: () => gameProvider.fetchClues(
-                                            eventId: widget.eventId),
-                                        child: const Text('Reintentar'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : gameProvider.clues.isEmpty
-                                ? Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.explore_off,
-                                          size: 80,
-                                          color: currentText.withOpacity(0.2),
-                                        ),
-                                        const SizedBox(height: 20),
-                                        Text(
-                                          'No hay pistas disponibles',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headlineMedium
-                                              ?.copyWith(
-                                                color: currentTextSec,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            gameProvider.fetchClues(
-                                                eventId: widget.eventId);
-                                          },
-                                          child: const Text('Recargar'),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    itemCount: gameProvider.clues.length,
-                                    itemBuilder: (context, index) {
-                                      final clue = gameProvider.clues[index];
-                                      final int currentIndex =
-                                          gameProvider.currentClueIndex;
-                                      final bool isPast = index < currentIndex;
-                                      final bool isFuture = index > currentIndex;
-                                      final bool isCurrent = index == currentIndex;
+                          ),
+                        ),
+                      )
+                    else if (gameProvider.clues.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.explore_off,
+                                size: 80,
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'No hay pistas disponibles',
+                                style: TextStyle(color: Colors.white70, fontSize: 20),
+                              ),
+                              const SizedBox(height: 10),
+                              ElevatedButton(
+                                onPressed: () {
+                                  gameProvider.fetchClues(
+                                      eventId: widget.eventId);
+                                },
+                                child: const Text('Recargar'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.all(16),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final clue = gameProvider.clues[index];
+                              final int currentIndex =
+                                  gameProvider.currentClueIndex;
+                              final bool isPast = index < currentIndex;
+                              final bool isFuture = index > currentIndex;
+                              final bool isCurrent = index == currentIndex;
 
-                                      if (isCurrent) {
-                                        debugPrint(
-                                            "DEBUG: Clue $index (Current) - isLocked: ${clue.isLocked}, isCompleted: ${clue.isCompleted}, scanned: ${_scannedClues.contains(clue.id)}");
-                                      }
+                              final bool showLockIcon =
+                                  isFuture || (isCurrent && clue.isLocked);
 
-                                      final bool showLockIcon =
-                                          isFuture || (isCurrent && clue.isLocked);
+                              return ClueCard(
+                                clue: clue,
+                                isLocked: showLockIcon,
+                                onTap: () async {
+                                  if (isFuture) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              "Debes completar la pista anterior primero.")),
+                                    );
+                                    return;
+                                  }
 
-                                      return ClueCard(
-                                        clue: clue,
-                                        isLocked: showLockIcon,
-                                        onTap: () async {
-                                          if (isFuture) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                  content: Text(
-                                                      "Debes completar la pista anterior primero.")),
-                                            );
-                                            return;
-                                          }
+                                  if (isPast ||
+                                      (isCurrent && clue.isCompleted)) {
+                                    _showCompletedClueDialog(context, clue);
+                                    return;
+                                  }
 
-                                          if (isPast ||
-                                              (isCurrent && clue.isCompleted)) {
-                                            _showCompletedClueDialog(context, clue);
-                                            return;
-                                          }
-
-                                          if (isCurrent) {
-                                            final player =
-                                                Provider.of<PlayerProvider>(context,
-                                                        listen: false)
-                                                    .currentPlayer;
-                                            final gameProvider =
-                                                Provider.of<GameProvider>(context,
-                                                    listen: false);
-
-                                            if (player?.role == 'spectator') {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        PuzzleScreen(clue: clue)),
-                                              );
-                                              return;
-                                            }
-
-                                            if ((player?.lives ?? 0) <= 0 ||
-                                                gameProvider.lives <= 0) {
-                                              Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                      builder: (_) => const Scaffold(
-                                                          backgroundColor:
-                                                              Colors.black,
-                                                          body: NoLivesWidget())));
-                                              return;
-                                            }
-
-                                            ClueNavigatorService.navigateToClue(
-                                                context, clue);
-                                          }
-                                        },
+                                  if (isCurrent) {
+                                    final player =
+                                        Provider.of<PlayerProvider>(context,
+                                                listen: false)
+                                            .currentPlayer;
+                                    
+                                    if (player?.role == 'spectator') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                PuzzleScreen(clue: clue)),
                                       );
-                                    },
-                                  ),
-                  ),
-                ],
+                                      return;
+                                    }
+
+                                    if ((player?.lives ?? 0) <= 0 ||
+                                        gameProvider.lives <= 0) {
+                                      Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (_) => const Scaffold(
+                                                  backgroundColor:
+                                                      Colors.black,
+                                                  body: NoLivesWidget())));
+                                      return;
+                                    }
+
+                                    ClueNavigatorService.navigateToClue(
+                                        context, clue);
+                                  }
+                                },
+                              );
+                            },
+                            childCount: gameProvider.clues.length,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
             ],
           ),
         ),

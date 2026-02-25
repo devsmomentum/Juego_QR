@@ -62,9 +62,11 @@ class _MinigameCountdownOverlayState extends State<MinigameCountdownOverlay>
   void _startCountdown() async {
     // Reproducir el audio de countdown UNA SOLA VEZ (se sincroniza con los números)
     try {
-      await _beepPlayer.play(AssetSource('audio/countdown.mp3'));
+      _beepPlayer.play(AssetSource('audio/countdown.mp3')).catchError((e) {
+        debugPrint("Countdown audio play error: $e");
+      });
     } catch (e) {
-      debugPrint("Countdown audio error: $e");
+      debugPrint("Countdown audio start error: $e");
     }
 
     // Show "3"

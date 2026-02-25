@@ -93,7 +93,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     final isDarkMode = playerProvider.isDarkMode;
 
     _showPremiumExitDialog(
-      title: '¿Qué deseas hacer?',
+      title: 'Que deseas hacer?',
       subtitle: 'Puedes cambiar de modo de juego o cerrar tu sesión.',
       isDarkMode: isDarkMode,
       options: [
@@ -131,7 +131,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     final player = playerProvider.currentPlayer;
     if (player != null && !player.emailVerified) {
       _showPremiumExitDialog(
-        title: 'VERIFICACIÓN REQUERIDA',
+        title: 'VERIFICACION REQUERIDA',
         subtitle:
             'Debes verificar tu correo electrónico antes de participar en eventos. '
             'Revisa tu bandeja de entrada.',
@@ -165,7 +165,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                 if (updatedPlayer != null && updatedPlayer.emailVerified) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('¡Email verificado! Ya puedes participar.'),
+                      content: Text('Email verificado! Ya puedes participar.'),
                       backgroundColor: AppTheme.successGreen,
                     ),
                   );
@@ -173,7 +173,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                          'Tu email aún no está verificado. Revisa tu bandeja.'),
+                          'Tu email aun no esta verificado. Revisa tu bandeja.'),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -192,7 +192,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
     _showPremiumExitDialog(
       title: scenario.name.toUpperCase(),
-      subtitle: '¿Cómo deseas participar en esta aventura?',
+      subtitle: 'Como deseas participar en esta aventura?',
       isDarkMode: isDarkMode,
       options: [
         _DialogOption(
@@ -2362,7 +2362,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                     // Custom AppBar
                     Padding(
                       padding: EdgeInsets.fromLTRB(
-                          20, MediaQuery.of(context).padding.top + 20, 20, 0),
+                          20, MediaQuery.of(context).padding.top + (kIsWeb ? 8 : 20), 20, 0),
                       child: Stack(
                         clipBehavior: Clip.none,
                         alignment: Alignment.center,
@@ -2516,17 +2516,17 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                     Center(
                       child: Image.asset(
                         'assets/images/logo4.1.png',
-                        height: 140, // Reduced size
+                        height: kIsWeb ? 60 : 140, // Smaller on web for more card space
                         fit: BoxFit.contain,
                       ),
                     ),
-                    const SizedBox(height: 4), // Reduced spacer
+                    SizedBox(height: kIsWeb ? 2 : 4),
 
                     Center(
                       child: Text(
                         "Búsqueda del tesoro ☘️",
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: kIsWeb ? 12 : 14,
                           color: currentTextSec,
                           fontWeight: FontWeight.w300,
                           letterSpacing: 1.0,
@@ -2534,7 +2534,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                       ),
                     ),
 
-                    const SizedBox(height: 8),
+                    SizedBox(height: kIsWeb ? 2 : 8),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 30),
@@ -2543,13 +2543,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             color: currentText,
-                            fontSize: 15,
+                            fontSize: kIsWeb ? 13 : 15,
                             height: 1.5,
                             fontStyle: FontStyle.italic),
                       ),
                     ),
 
-                    const SizedBox(height: 8), // Gap between both texts
+                    SizedBox(height: kIsWeb ? 2 : 8),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -2558,14 +2558,14 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                           "ELIGE TU AVENTURA",
                           style: TextStyle(
                               color: currentAction,
-                              fontSize: 18, // Reduced size
+                              fontSize: kIsWeb ? 16 : 18,
                               fontWeight: FontWeight.w900),
                         ),
                       ),
                     ),
 
-                    const SizedBox(
-                        height: 5), // Small gap between text and filters
+                    SizedBox(
+                        height: kIsWeb ? 2 : 5),
 
                     // CONTROLES DE FILTRO
                     Padding(
@@ -2659,7 +2659,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                         1.0, // Occupy 100% of available height
                                                     width: Curves.easeOut
                                                             .transform(value) *
-                                                        360, // Slightly wider to match new height
+                                                        (kIsWeb ? math.min(constraints.maxWidth * 0.5, 500) : 360), // Wider on web, fixed on mobile
                                                     child: child,
                                                   ),
                                                 ),

@@ -25,9 +25,6 @@ import '../widgets/minigames/flags_minigame.dart';
 import '../widgets/minigames/minesweeper_minigame.dart';
 import '../widgets/minigames/snake_minigame.dart';
 import '../widgets/minigames/block_fill_minigame.dart';
-import '../widgets/minigames/code_breaker_widget.dart';
-import '../widgets/minigames/image_trivia_widget.dart';
-import '../widgets/minigames/word_scramble_widget.dart';
 import '../widgets/minigames/charge_shaker_minigame.dart';
 import '../widgets/minigames/emoji_movie_minigame.dart';
 import '../widgets/minigames/virus_tap_minigame.dart';
@@ -447,18 +444,6 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       case PuzzleType.blockFill:
         gameWidget =
             BlockFillWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.codeBreaker:
-        gameWidget =
-            CodeBreakerWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.imageTrivia:
-        gameWidget =
-            ImageTriviaWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.wordScramble:
-        gameWidget =
-            WordScrambleWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
       case PuzzleType.memorySequence:
         gameWidget =
@@ -1072,8 +1057,7 @@ class FlagsWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class MinesweeperWrapper extends StatelessWidget {
@@ -1148,60 +1132,6 @@ class FindDifferenceWrapper extends StatelessWidget {
           }));
 }
 
-class CodeBreakerWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const CodeBreakerWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      CodeBreakerWidget(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class ImageTriviaWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const ImageTriviaWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      ImageTriviaWidget(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class WordScrambleWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const WordScrambleWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      WordScrambleWidget(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
-}
 
 class MemorySequenceWrapper extends StatelessWidget {
   final Clue clue;
@@ -1326,8 +1256,7 @@ class EmojiMovieWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class VirusTapWrapper extends StatelessWidget {
@@ -1388,12 +1317,6 @@ String _getMinigameInstruction(Clue clue) {
       return "Maneja la culebrita";
     case PuzzleType.blockFill:
       return "Rellena los bloques";
-    case PuzzleType.codeBreaker:
-      return "Descifra el código";
-    case PuzzleType.imageTrivia:
-      return "Adivina la imagen";
-    case PuzzleType.wordScramble:
-      return "Ordena las letras";
     case PuzzleType.memorySequence:
       return "Recuerda la secuencia";
     case PuzzleType.drinkMixer:
@@ -1474,129 +1397,155 @@ Widget _buildMinigameScaffold(
           ),
           // Content
           SafeArea(
-            child: Consumer<GameProvider>(
-              builder: (context, game, _) {
-                return Stack(
-                  children: [
-                    Column(
-                      children: [
-                        // AppBar Personalizado
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          child: Row(
-                            children: [
-                              if (player?.role == 'spectator')
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_back,
-                                      color: Colors.white),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                              const Spacer(),
-                              if (player?.role != 'spectator') ...[
-                                // INDICADOR DE VIDAS CON ANIMACIÓN
-                                const ShieldBadge(), // NEW SHIELD WIDGET
-                                AnimatedLivesWidget(),
-                                const SizedBox(width: 10),
+          child: Consumer<GameProvider>(
+            builder: (context, game, _) {
+              return Stack(
+                children: [
+                  Column(
+                    children: [
+                      // AppBar Personalizado
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 12, 
+                            vertical: (MediaQuery.of(context).size.width > 900) ? 2 : 8),
+                        child: Row(
+                          children: [
+                            if (player?.role == 'spectator')
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back,
+                                    color: Colors.white),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            const Spacer(),
+                            if (player?.role != 'spectator') ...[
+                              // INDICADOR DE VIDAS CON ANIMACIÓN
+                              const ShieldBadge(), // NEW SHIELD WIDGET
+                              AnimatedLivesWidget(),
+                              const SizedBox(width: 10),
 
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.accentGold.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(15),
-                                    border:
-                                        Border.all(color: AppTheme.accentGold),
-                                  ),
-                                  child: Row(
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accentGold.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border:
+                                      Border.all(color: AppTheme.accentGold),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.star,
+                                        color: AppTheme.accentGold, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '+${clue.xpReward} XP',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.flag,
+                                    color: AppTheme.dangerRed, size: 28),
+                                tooltip: 'Rendirse',
+                                onPressed: () =>
+                                    showSkipDialog(context, onFinish),
+                              ),
+                            ] else
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.blueAccent),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.visibility,
+                                        color: Colors.blueAccent, size: 14),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'MODO ESPECTADOR',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      Expanded(
+                        child: IgnorePointer(
+                          ignoring: player != null && player.isFrozen,
+                          child: LayoutBuilder(builder: (context, constraints) {
+                            final bool isWide = constraints.maxWidth > 900;
+                            
+                            return isScrollable
+                                ? SingleChildScrollView(
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight),
+                                      child: Column(
+                                        children: [
+                                          // MAPA DENTRO DEL SCROLL
+                                          Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: isWide ? 100 : 16, vertical: 4),
+                                            child: RaceTrackWidget(
+                                              leaderboard: game.leaderboard,
+                                              currentPlayerId:
+                                                  player?.userId ?? '',
+                                              totalClues: game.clues.length,
+                                              onSurrender: () =>
+                                                  showSkipDialog(
+                                                      context, onFinish),
+                                              compact: true,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 5),
+                                          wrappedChild,
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Column(
                                     children: [
-                                      const Icon(Icons.star,
-                                          color: AppTheme.accentGold, size: 12),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '+${clue.xpReward} XP',
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10),
+                                      // MAPA FIJO (Default)
+                                      Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: isWide ? 100 : 16, vertical: 4),
+                                        child: RaceTrackWidget(
+                                          leaderboard: game.leaderboard,
+                                          currentPlayerId: player?.userId ?? '',
+                                          totalClues: game.clues.length,
+                                          onSurrender: () =>
+                                              showSkipDialog(context, onFinish),
+                                          compact: isWide || clue.puzzleType ==
+                                                  PuzzleType.tetris ||
+                                              clue.puzzleType ==
+                                                  PuzzleType.hangman ||
+                                              clue.puzzleType ==
+                                                  PuzzleType.fastNumber,
+                                        ),
                                       ),
+                                      SizedBox(height: isWide ? 2 : 10),
+                                      Expanded(child: wrappedChild),
                                     ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.flag,
-                                      color: AppTheme.dangerRed, size: 28),
-                                  tooltip: 'Rendirse',
-                                  onPressed: () =>
-                                      showSkipDialog(context, onFinish),
-                                ),
-                              ] else
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border:
-                                        Border.all(color: Colors.blueAccent),
-                                  ),
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.visibility,
-                                          color: Colors.blueAccent, size: 14),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'MODO ESPECTADOR',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
+                                  );
+                          }),
                         ),
-
-                        // Mapa de Progreso
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          child: RaceTrackWidget(
-                            leaderboard: game.leaderboard,
-                            currentPlayerId: player?.userId ?? '',
-                            totalClues: game.clues.length,
-                            onSurrender: () =>
-                                showSkipDialog(context, onFinish),
-                            compact: clue.puzzleType == PuzzleType.tetris ||
-                                clue.puzzleType == PuzzleType.hangman ||
-                                clue.puzzleType == PuzzleType.fastNumber,
-                          ),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        Expanded(
-                          child: IgnorePointer(
-                            ignoring: player != null && player.isFrozen,
-                            child: isScrollable
-                                ? LayoutBuilder(
-                                    builder: (context, constraints) {
-                                    return SingleChildScrollView(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                            minHeight: constraints.maxHeight),
-                                        child: Center(child: wrappedChild),
-                                      ),
-                                    );
-                                  })
-                                : wrappedChild, // Usamos el hijo con countdown
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
 
                     // EFECTO BLUR (Inyectado aquí)
                     // EFECTO BLUR (Inyectado aquí)
@@ -1645,8 +1594,7 @@ class HolographicPanelsWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class MissingOperatorWrapper extends StatelessWidget {
@@ -1664,8 +1612,7 @@ class MissingOperatorWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class PrimeNetworkWrapper extends StatelessWidget {
@@ -1683,8 +1630,7 @@ class PrimeNetworkWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class PercentageCalculationWrapper extends StatelessWidget {
@@ -1702,8 +1648,7 @@ class PercentageCalculationWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class ChronologicalOrderWrapper extends StatelessWidget {
@@ -1721,8 +1666,7 @@ class ChronologicalOrderWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class CapitalCitiesWrapper extends StatelessWidget {
@@ -1740,8 +1684,7 @@ class CapitalCitiesWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class TrueFalseWrapper extends StatelessWidget {
@@ -1759,8 +1702,7 @@ class TrueFalseWrapper extends StatelessWidget {
           onSuccess: () {
             onFinish();
             _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          }));
 }
 
 class MatchThreeWrapper extends StatelessWidget {

@@ -222,136 +222,100 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
           Column(
             children: [
               // Status Bar
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Vidas
-                    Consumer<GameProvider>(builder: (context, game, _) {
-                      return Row(
-                        children: [
-                          const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                          const SizedBox(width: 5),
-                          Text("x${game.lives}",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      );
-                    }),
-                    // Timer
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: _secondsRemaining < 30
-                              ? AppTheme.dangerRed.withOpacity(0.2)
-                              : Colors.white10,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: _secondsRemaining < 30
-                                  ? AppTheme.dangerRed
-                                  : Colors.white24)),
-                      child: Row(
-                        children: [
-                          Icon(Icons.timer,
-                              size: 16,
-                              color: _secondsRemaining < 30
-                                  ? AppTheme.dangerRed
-                                  : Colors.white),
-                          const SizedBox(width: 5),
-                          Text(
-                              "${_secondsRemaining ~/ 60}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
-                              style: TextStyle(
-                                  color: _secondsRemaining < 30
-                                      ? AppTheme.dangerRed
-                                      : Colors.white,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              const Text(
+                "PUZZLE DESLIZANTE",
+                style: TextStyle(
+                    color: AppTheme.accentGold,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Orbitron',
+                    letterSpacing: 1.2),
               ),
+              const SizedBox(height: 10),
 
               Expanded(
                 child: Center(
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Container(
-                      margin: const EdgeInsets.all(20),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                          child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 10)
-                          ]),
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: gridSize,
-                          crossAxisSpacing: 4,
-                          mainAxisSpacing: 4,
-                        ),
-                        itemCount: tiles.length,
-                        itemBuilder: (context, index) {
-                          final number = tiles[index];
-                          if (number == 0)
-                            return const SizedBox.shrink(); // Espacio vacío
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 600;
+                    return Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isWide ? constraints.maxWidth * 0.25 : 20,
+                        vertical: 10,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: Container(
+                          decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.15),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 10)
+                              ]),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: GridView.builder(
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: gridSize,
+                                    crossAxisSpacing: 4,
+                                    mainAxisSpacing: 4,
+                                  ),
+                                  itemCount: tiles.length,
+                                  itemBuilder: (context, index) {
+                                    final number = tiles[index];
+                                    if (number == 0)
+                                      return const SizedBox.shrink(); // Espacio vacío
 
-                          return GestureDetector(
-                            onTap: () => _onTileTap(index),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: AppTheme.primaryPurple,
-                                  borderRadius: BorderRadius.circular(8),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      AppTheme.primaryPurple,
-                                      AppTheme.secondaryPink
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.2),
-                                        offset: const Offset(2, 2))
-                                  ]),
-                              child: Center(
-                                child: Text(
-                                  "$number",
-                                  style: const TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                                    return GestureDetector(
+                                      onTap: () => _onTileTap(index),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                            color: AppTheme.primaryPurple,
+                                            borderRadius: BorderRadius.circular(8),
+                                            gradient: const LinearGradient(
+                                              colors: [
+                                                AppTheme.primaryPurple,
+                                                AppTheme.secondaryPink
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: Colors.black.withOpacity(0.2),
+                                                  offset: const Offset(2, 2))
+                                            ]),
+                                        child: Center(
+                                          child: Text(
+                                            "$number",
+                                            style: const TextStyle(
+                                              fontSize: 32,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                ),
-                ),
+                    );
+                  }),
                 ),
               ),
 

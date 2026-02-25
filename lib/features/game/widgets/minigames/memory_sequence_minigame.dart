@@ -321,29 +321,36 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
               const SizedBox(height: 20),
 
               // 4. GAME GRID
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 80.0, vertical: 5.0),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 15,
-                    crossAxisSpacing: 15,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: List.generate(4, (index) {
-                      final isActive = _activeButtonIndex == index;
-                      return _buildGameButton(index, isActive);
-                    }),
+              LayoutBuilder(builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 600;
+                return Padding(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: isWide ? constraints.maxWidth * 0.42 : 75.0,
+                      vertical: 5.0),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 15,
+                      crossAxisSpacing: 15,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: List.generate(4, (index) {
+                        final isActive = _activeButtonIndex == index;
+                        return _buildGameButton(index, isActive);
+                      }),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
 
-              const SizedBox(height: 50),
+              const SizedBox(height: 30),
 
               // 5. SURRENDER BUTTON
-              CyberSurrenderButton(
-                onPressed: _showOverlay ? null : _handleGiveUp,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: CyberSurrenderButton(
+                  onPressed: _showOverlay ? null : _handleGiveUp,
+                ),
               ),
             ],
           ),
@@ -418,7 +425,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
             "${index + 1}",
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 32,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               decoration: TextDecoration.none,
             ),

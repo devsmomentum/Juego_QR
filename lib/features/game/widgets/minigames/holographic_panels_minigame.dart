@@ -258,22 +258,34 @@ class _HolographicPanelsMinigameState extends State<HolographicPanelsMinigame>
                   fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
-            // Panels
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                children: [
-                  Expanded(
-                      child: _buildPanel(_leftEquation,
-                          () => _handleSelection(true), Colors.cyanAccent)),
-                  const SizedBox(width: 20),
-                  Expanded(
-                      child: _buildPanel(_rightEquation,
-                          () => _handleSelection(false), Colors.pinkAccent)),
-                ],
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20),
+                child: LayoutBuilder(builder: (context, constraints) {
+                  final isWide = constraints.maxWidth > 800;
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(isWide ? 40 : 0),
+                          child: _buildPanel(_leftEquation,
+                              () => _handleSelection(true), Colors.cyanAccent),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(isWide ? 40 : 0),
+                          child: _buildPanel(_rightEquation,
+                              () => _handleSelection(false), Colors.pinkAccent),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
               ),
             ),
-            const SizedBox(height: 50),
+            const SizedBox(height: 20),
           ],
         ),
         if (_showOverlay)

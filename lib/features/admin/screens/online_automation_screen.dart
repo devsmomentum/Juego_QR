@@ -244,7 +244,7 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
           _buildSlider('Copa Mín. Jugadores', 'min_players', 2, 20, 1),
           _buildSlider('Copa Máx. Jugadores', 'max_players', 20, 50, 1),
           _buildSlider('Cant. Mín. Minijuegos', 'min_games', 2, 6, 1),
-          _buildSlider('Cant. Máx. Minijuegos', 'max_games', 6, 15, 1),
+          _buildSlider('Cant. Máx. Minijuegos', 'max_games', 6, 30, 1),
           _buildSlider('Entry Fee Mín (🍀)', 'min_fee', 0, 50, 5),
           _buildSlider('Entry Fee Máx (🍀)', 'max_fee', 50, 200, 5),
         ],

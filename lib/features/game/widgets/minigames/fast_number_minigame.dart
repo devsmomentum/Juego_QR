@@ -10,6 +10,7 @@ import '../../providers/connectivity_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import 'game_over_overlay.dart';
 import '../race_track_widget.dart';
+import 'cyber_surrender_button.dart';
 import '../../utils/minigame_logic_helper.dart';
 import '../../../../shared/widgets/animated_cyber_background.dart';
 import '../../../mall/screens/mall_screen.dart';
@@ -319,122 +320,151 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
               ),
             ),
 
-            const SizedBox(height: 15),
-
-            // FLYING AREA
+            // SCROLLABLE GAME CONTENT
             Expanded(
-              flex: 2,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.02),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ClipRect(
-                  child: Stack(
-                    children: [
-                      Center(
-                          child: Text(
-                              _state == GameState.inputting ? "???" : "",
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.05),
-                                  fontSize: 80,
-                                  fontWeight: FontWeight.bold,
-                                  decoration: TextDecoration.none))),
-                      if (_state == GameState.showing)
-                        SlideTransition(
-                          position: _flyAnimation,
-                          child: Center(
-                            child: Text(
-                              _targetNumber,
-                              style: const TextStyle(
-                                color: AppTheme.accentGold,
-                                fontSize: 80,
-                                fontWeight: FontWeight.w900,
-                                decoration: TextDecoration.none,
-                                shadows: [
-                                  Shadow(
-                                      color: AppTheme.accentGold,
-                                      blurRadius: 20)
-                                ],
-                              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: LayoutBuilder(builder: (context, constraints) {
+                  final isWide = constraints.maxWidth > 600;
+                  return Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isWide ? constraints.maxWidth * 0.25 : 20,
+                      vertical: 10,
+                    ),
+                    child: Column(
+                      children: [
+                        // FLYING AREA - NOW LARGER
+                        Container(
+                          height: 250, // Fixed larger height
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.02),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: ClipRect(
+                            child: Stack(
+                              children: [
+                                Center(
+                                    child: Text(
+                                        _state == GameState.inputting ? "???" : "",
+                                        style: TextStyle(
+                                            color: Colors.white.withOpacity(0.05),
+                                            fontSize: 100, // Enlarged
+                                            fontWeight: FontWeight.bold,
+                                            decoration: TextDecoration.none))),
+                                if (_state == GameState.showing)
+                                  SlideTransition(
+                                    position: _flyAnimation,
+                                    child: Center(
+                                      child: Text(
+                                        _targetNumber,
+                                        style: const TextStyle(
+                                          color: AppTheme.accentGold,
+                                          fontSize: 100, // Enlarged
+                                          fontWeight: FontWeight.w900,
+                                          decoration: TextDecoration.none,
+                                          shadows: [
+                                            Shadow(
+                                                color: AppTheme.accentGold,
+                                                blurRadius: 30)
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+
+                        const SizedBox(height: 15),
+
+                        // INPUT AREA
+                        Container(
+                          height: 480, // Fixed height for scrollable content
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.05)),
+                          ),
+                          child: Column(
+                            children: [
+                              // Display current input
+                              Container(
+                                height: 60,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                      color: _isError
+                                          ? AppTheme.dangerRed
+                                          : Colors.white24),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _currentInput.isEmpty ? "----" : _currentInput,
+                                  style: TextStyle(
+                                      color: _isError
+                                          ? AppTheme.dangerRed
+                                          : Colors.white,
+                                      fontSize: 36,
+                                      letterSpacing: 12,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.none),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // Keypad
+                              Expanded(
+                                child: GridView.builder(
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    childAspectRatio: 1.5,
+                                    crossAxisSpacing: 15,
+                                    mainAxisSpacing: 15,
+                                  ),
+                                  itemCount: 12,
+                                  itemBuilder: (context, index) {
+                                    if (index == 9)
+                                      return _buildKey(
+                                          "C", Colors.white38, _clearInput);
+                                    if (index == 10)
+                                      return _buildKey("0", Colors.white,
+                                          () => _handleKeyPress("0"));
+                                    if (index == 11)
+                                      return _buildKey("OK",
+                                          AppTheme.successGreen, _submitInput);
+
+                                    String key = (index + 1).toString();
+                                    return _buildKey(key, Colors.white,
+                                        () => _handleKeyPress(key));
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Add some spacing at the end of scroll
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  );
+                }),
               ),
             ),
 
-            // INPUT AREA
-            Expanded(
-              flex: 3,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(30)),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                ),
-                child: Column(
-                  children: [
-                    // Display current input
-                    Container(
-                      height: 50,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                            color:
-                                _isError ? AppTheme.dangerRed : Colors.white24),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _currentInput.isEmpty ? "----" : _currentInput,
-                        style: TextStyle(
-                            color: _isError ? AppTheme.dangerRed : Colors.white,
-                            fontSize: 32,
-                            letterSpacing: 10,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.none),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // Keypad
-                    Expanded(
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 2.3,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: 12,
-                        itemBuilder: (context, index) {
-                          if (index == 9)
-                            return _buildKey("C", Colors.white38, _clearInput);
-                          if (index == 10)
-                            return _buildKey(
-                                "0", Colors.white, () => _handleKeyPress("0"));
-                          if (index == 11)
-                            return _buildKey(
-                                "OK", AppTheme.successGreen, _submitInput);
-
-                          String key = (index + 1).toString();
-                          return _buildKey(
-                              key, Colors.white, () => _handleKeyPress(key));
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+            // SURRENDER BUTTON
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: CyberSurrenderButton(
+                onPressed: _showOverlay ? null : _handleGiveUp,
               ),
             ),
           ],
@@ -511,7 +541,7 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
           label,
           style: TextStyle(
               color: color,
-              fontSize: 22,
+              fontSize: 16, // Reduced from 18
               fontWeight: FontWeight.w900,
               letterSpacing: 1,
               decoration: TextDecoration.none),

@@ -27,9 +27,9 @@ class MinesweeperMinigame extends StatefulWidget {
 
 class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
   // Configuración Difficulty: Easy (4x4)
-  static const int rows = 6;
-  static const int cols = 6;
-  static const int totalMines = 5;
+  static const int rows = 4;
+  static const int cols = 4;
+  static const int totalMines = 3;
 
   late List<List<Cell>> _grid;
   bool _isFirstMove = true;
@@ -319,115 +319,36 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
 
   @override
   Widget build(BuildContext context) {
+    final isLowTime = _secondsRemaining <= 10;
     final minutes = (_secondsRemaining / 60).floor().toString().padLeft(2, '0');
     final seconds = (_secondsRemaining % 60).toString().padLeft(2, '0');
-    final isLowTime = _secondsRemaining <= 10;
 
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) {},
-      child: Stack(
-        children: [
-          // GAME CONTENT
-          Column(
+    return Stack(
+      children: [
+        // GAME CONTENT
+        Positioned.fill(
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
             children: [
-              // Header
+              // Header Local (Flags, Shields & Timer)
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Flag Counter
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.primaryPurple),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.flag,
-                              color: AppTheme.dangerRed, size: 20),
-                          const SizedBox(width: 8),
-                          Text("$_flagsAvailable",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18)),
-                        ],
-                      ),
-                    ),
-
-                    // ESCUDOS (Nuevo)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blueAccent),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.shield,
-                              color: Colors.blueAccent, size: 20),
-                          const SizedBox(width: 8),
-                          Text("$_shields",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18)),
-                        ],
-                      ),
-                    ),
-
-                    // Timer
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isLowTime ? AppTheme.dangerRed : Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.timer,
-                              color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          Text("$minutes:$seconds",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18)),
-                        ],
-                      ),
-                    ),
+                    _buildCompactStat(
+                        Icons.flag, "$_flagsAvailable", AppTheme.dangerRed),
+                    const SizedBox(width: 15),
+                    // ESCUDOS
+                    _buildCompactStat(
+                        Icons.shield, "$_shields", Colors.blueAccent),
+                    const SizedBox(width: 15),
+                    // TIMER
+                    _buildCompactStat(Icons.timer, "$minutes:$seconds",
+                        isLowTime ? AppTheme.dangerRed : AppTheme.accentGold),
                   ],
                 ),
-              ),
-
-              // Vidas Globales (Solo visualización)
-              Consumer<GameProvider>(
-                builder: (context, game, _) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(3, (index) {
-                        return Icon(
-                          index < game.lives
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                          color: AppTheme.dangerRed,
-                          size: 24,
-                        );
-                      }),
-                    ),
-                  );
-                },
               ),
 
               const Text("Toca para abrir. Mantén para marcar 🚩",
@@ -437,83 +358,95 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
               // GRID
               Expanded(
                 child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[700]!, width: 4),
-                    ),
-                    child: ConstrainedBox(
-                      constraints:
-                          const BoxConstraints(maxWidth: 320, maxHeight: 320),
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 600;
+                    return Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isWide ? constraints.maxWidth * 0.05 : 10,
+                        vertical: 5,
+                      ),
                       child: AspectRatio(
                         aspectRatio: 1, // Square grid
-                        child: GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: rows * cols,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cols,
-                            crossAxisSpacing: 2,
-                            mainAxisSpacing: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[900],
+                            borderRadius: BorderRadius.circular(16),
+                            border:
+                                Border.all(color: Colors.grey[800]!, width: 4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.5),
+                                blurRadius: 15,
+                              )
+                            ],
                           ),
-                          itemBuilder: (context, index) {
-                            final r = index ~/ cols;
-                            final c = index % cols;
-                            return _buildCell(r, c);
-                          },
+                          child: GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: rows * cols,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: cols,
+                              crossAxisSpacing: 4,
+                              mainAxisSpacing: 4,
+                            ),
+                            itemBuilder: (context, index) {
+                              final r = index ~/ cols;
+                              final c = index % cols;
+                              return _buildCell(r, c);
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                 ),
               ),
-
               const SizedBox(height: 20),
             ],
           ),
+        ),
 
-          // OVERLAY
-          if (_showOverlay)
-            GameOverOverlay(
-              title: _overlayTitle,
-              message: _overlayMessage,
-              onRetry: _canRetry
-                  ? () {
+        // OVERLAY
+        if (_showOverlay)
+          GameOverOverlay(
+            title: _overlayTitle,
+            message: _overlayMessage,
+            onRetry: _canRetry
+                ? () {
+                    setState(() {
+                      _showOverlay = false;
+                    });
+                    _startNewGame();
+                  }
+                : null,
+            onGoToShop: _showShopButton
+                ? () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const MallScreen()),
+                    );
+                    // Check lives upon return
+                    if (!context.mounted) return;
+                    final player =
+                        Provider.of<PlayerProvider>(context, listen: false)
+                            .currentPlayer;
+                    if ((player?.lives ?? 0) > 0) {
                       setState(() {
-                        _showOverlay = false;
+                        _canRetry = true;
+                        _showShopButton = false;
+                        _overlayTitle = "¡VIDAS OBTENIDAS!";
+                        _overlayMessage = "Puedes continuar jugando.";
                       });
-                      _startNewGame();
                     }
-                  : null,
-              onGoToShop: _showShopButton
-                  ? () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const MallScreen()),
-                      );
-                      // Check lives upon return
-                      if (!context.mounted) return;
-                      final player =
-                          Provider.of<PlayerProvider>(context, listen: false)
-                              .currentPlayer;
-                      if ((player?.lives ?? 0) > 0) {
-                        setState(() {
-                          _canRetry = true;
-                          _showShopButton = false;
-                          _overlayTitle = "¡VIDAS OBTENIDAS!";
-                          _overlayMessage = "Puedes continuar jugando.";
-                        });
-                      }
-                    }
-                  : null,
-              onExit: () {
-                Navigator.pop(context);
-              },
-            ),
-        ],
-      ),
+                  }
+                : null,
+            onExit: () {
+              Navigator.pop(context);
+            },
+          ),
+      ],
     );
   }
 
@@ -526,28 +459,34 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
     if (!cell.isRevealed) {
       bgColor = Colors.blueGrey[700]!;
       if (cell.isFlagged) {
-        child = const Icon(Icons.flag, color: AppTheme.dangerRed, size: 24);
+        child = const FittedBox(
+          child: Icon(Icons.flag, color: AppTheme.dangerRed),
+        );
       }
     } else {
       // Revelado
       if (cell.isMine) {
         bgColor = cell.isExploded ? Colors.red : Colors.grey[400]!;
-        child = const Icon(Icons.dangerous, color: Colors.black, size: 24);
+        child = const FittedBox(
+          child: Icon(Icons.dangerous, color: Colors.black),
+        );
       } else {
         bgColor = Colors.grey[200]!;
         if (cell.adjacentMines > 0) {
-          child = Text(
-            '${cell.adjacentMines}',
-            style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 20,
-                color: _getNumberColor(cell.adjacentMines),
-                shadows: [
-                  Shadow(
-                      color: Colors.black.withOpacity(0.2),
-                      offset: const Offset(1, 1),
-                      blurRadius: 1)
-                ]),
+          child = FittedBox(
+            child: Text(
+              '${cell.adjacentMines}',
+              style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 42,
+                  color: _getNumberColor(cell.adjacentMines),
+                  shadows: [
+                    Shadow(
+                        color: Colors.black.withOpacity(0.2),
+                        offset: const Offset(1, 1),
+                        blurRadius: 1)
+                  ]),
+            ),
           );
         }
       }
@@ -556,10 +495,13 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
     return GestureDetector(
       onTap: () => _handleCellTap(r, c),
       onLongPress: () => _handleCellLongPress(r, c),
+      behavior: HitTestBehavior.opaque,
       child: Container(
+        margin: const EdgeInsets.all(1),
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(4),
             border: !cell.isRevealed ? Border.all(color: Colors.white10) : null,
             boxShadow: !cell.isRevealed
                 ? [
@@ -570,6 +512,32 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
                   ]
                 : null),
         child: Center(child: child),
+      ),
+    );
+  }
+
+  Widget _buildCompactStat(IconData icon, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }

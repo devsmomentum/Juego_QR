@@ -89,101 +89,107 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                           ),
                         ],
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            '¡DESAFÍO COMPLETADO!',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.successGreen,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "¡Trébol Dorado ${widget.clue.sequenceIndex + 1} de ${widget.totalClues} recolectado!",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withOpacity(0.7),
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            margin: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  widget.nextClueHint != null
-                                      ? "SIGUIENTE UBICACIÓN"
-                                      : "¡MISIÓN COMPLETADA!",
-                                  style: const TextStyle(
-                                    color: AppTheme.accentGold,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  widget.nextClueHint ?? "¡Has completado todas las misiones!",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    height: 1.4,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildRewardBadge(Icons.star, "+${widget.clue.xpReward} XP", AppTheme.accentGold),
-                              const SizedBox(width: 15),
-                              _buildRewardBadge(Icons.monetization_on, "+${widget.coinsEarned}", Colors.amber),
-                            ],
-                          ),
-                          if (widget.showNextStep) ...[
-                            const SizedBox(height: 20),
-                            Text(
-                              "¡Siguiente misión desbloqueada en el mapa!",
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              '¡DESAFÍO COMPLETADO!',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.successGreen,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "¡Trébol Dorado ${widget.clue.sequenceIndex + 1} de ${widget.totalClues} recolectado!",
+                              style: TextStyle(
                                 fontSize: 12,
+                                color: Colors.white.withOpacity(0.7),
                                 fontStyle: FontStyle.italic,
                               ),
                             ),
-                          ],
-                          const SizedBox(height: 25),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: widget.onMapReturn,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryPurple,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                elevation: 5,
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: AppTheme.accentGold.withOpacity(0.3)),
                               ),
-                              icon: const Icon(Icons.map),
-                              label: const Text(
-                                'VOLVER AL MAPA',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    "INFORMACIÓN DESBLOQUEADA",
+                                    style: TextStyle(
+                                      color: AppTheme.accentGold,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    widget.clue.description,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      height: 1.4,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ],
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildRewardBadge(Icons.star,
+                                    "+${widget.clue.xpReward} XP", AppTheme.accentGold),
+                                const SizedBox(width: 15),
+                                _buildRewardBadge(Icons.monetization_on,
+                                    "+${widget.coinsEarned}", Colors.amber),
+                              ],
+                            ),
+                            if (widget.showNextStep) ...[
+                              const SizedBox(height: 20),
+                              Text(
+                                "¡Siguiente misión desbloqueada en el mapa!",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 25),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: widget.onMapReturn,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryPurple,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                  elevation: 5,
+                                ),
+                                icon: const Icon(Icons.map),
+                                label: const Text(
+                                  'VOLVER AL MAPA',
+                                  style: TextStyle(
+                                      fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     Positioned(

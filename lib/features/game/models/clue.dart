@@ -19,9 +19,6 @@ enum PuzzleType {
   minesweeper,
   snake,
   blockFill,
-  codeBreaker,
-  imageTrivia,
-  wordScramble,
   memorySequence,
   drinkMixer,
   librarySort,
@@ -48,7 +45,6 @@ enum PuzzleType {
       // EASY: Simple logic, fast completion
       case PuzzleType.slidingPuzzle:
       case PuzzleType.ticTacToe:
-      case PuzzleType.imageTrivia:
       case PuzzleType.trueFalse:
       case PuzzleType.virusTap:
       case PuzzleType.flags:
@@ -58,7 +54,6 @@ enum PuzzleType {
 
       // MEDIUM: Requires some focus or memory
       case PuzzleType.hangman:
-      case PuzzleType.wordScramble:
       case PuzzleType.memorySequence:
       case PuzzleType.emojiMovie:
       case PuzzleType.bagShuffle:
@@ -72,7 +67,6 @@ enum PuzzleType {
       case PuzzleType.minesweeper:
       case PuzzleType.snake:
       case PuzzleType.blockFill:
-      case PuzzleType.codeBreaker:
       case PuzzleType.holographicPanels:
       case PuzzleType.primeNetwork:
       case PuzzleType.percentageCalculation:
@@ -89,7 +83,7 @@ enum PuzzleType {
 
   /// Whether this minigame is suitable for auto-generation
   bool get automationAvailable {
-    // Exclude chargeShaker as it was noted as problematic/manual in some contexts
+    // Exclude problematic minigames from automation
     if (this == PuzzleType.chargeShaker) return false;
     return true;
   }
@@ -120,12 +114,7 @@ enum PuzzleType {
         return '🐍 Snake (Culebrita)';
       case PuzzleType.blockFill:
         return '🟦 Rellenar Bloques';
-      case PuzzleType.codeBreaker:
-        return '🔐 Caja Fuerte (Code)';
-      case PuzzleType.imageTrivia:
-        return '🖼️ Trivia de Imagen';
-      case PuzzleType.wordScramble:
-        return '🔤🔠 Ordenar Palabras';
+
       case PuzzleType.chargeShaker:
         return '⚡ Agitar Carga';
       case PuzzleType.emojiMovie:
@@ -216,12 +205,7 @@ enum PuzzleType {
         return 'Come 15 manzanas sin chocar';
       case PuzzleType.blockFill:
         return 'Rellena todo el camino';
-      case PuzzleType.codeBreaker:
-        return 'Descifra el código de 4 dígitos';
-      case PuzzleType.imageTrivia:
-        return '¿Qué es lo que ves en la imagen?';
-      case PuzzleType.wordScramble:
-        return 'Ordena las letras para formar la palabra';
+
       case PuzzleType.memorySequence:
         return 'Repite la secuencia de colores correctamente';
       case PuzzleType.drinkMixer:

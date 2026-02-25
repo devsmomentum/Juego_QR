@@ -31,8 +31,8 @@ enum Direction { up, down, left, right }
 
 class _SnakeMinigameState extends State<SnakeMinigame> {
   // Config
-  static const int rows = 15; // Reduced from 20 to enlarge view
-  static const int cols = 15; // Reduced from 20 to enlarge view
+  static const int rows = 12; // Reduced to enlarge cells
+  static const int cols = 12; // Reduced to enlarge cells
 
   // Overlay State
   bool _showOverlay = false;
@@ -131,7 +131,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
     _preStartTimer?.cancel();
 
     setState(() {
-      _snake = [const Point(7, 7), const Point(6, 7), const Point(5, 7)];
+      _snake = [const Point(6, 6), const Point(5, 6), const Point(4, 6)];
       _obstacles = [];
       _isOrangeMode = false;
       _direction = Direction.right;
@@ -379,16 +379,16 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
         if (_crashAllowance > 0) {
           // 1. Reset Snake
-          _snake = [const Point(7, 7), const Point(6, 7), const Point(5, 7)];
+          _snake = [const Point(6, 6), const Point(5, 6), const Point(4, 6)];
           _direction = Direction.right;
           _nextDirection = Direction.right;
 
           // 2. Clear Safe Zone
           final safeZone = [
-            const Point(7, 7),
-            const Point(6, 7),
-            const Point(5, 7),
-            const Point(8, 7)
+            const Point(6, 6),
+            const Point(5, 6),
+            const Point(4, 6),
+            const Point(7, 6)
           ];
           _obstacles.removeWhere((obs) => safeZone.contains(obs));
 
@@ -581,145 +581,155 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
               const SizedBox(height: 10),
 
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Center(
-                    child: GestureDetector(
-                      onPanEnd: (details) {
-                        final velocity = details.velocity.pixelsPerSecond;
-                        if (velocity.distance < 100) return;
-                        if (velocity.dx.abs() > velocity.dy.abs()) {
-                          if (velocity.dx > 0)
-                            _onChangeDirection(Direction.right);
-                          else
-                            _onChangeDirection(Direction.left);
-                        } else {
-                          if (velocity.dy > 0)
-                            _onChangeDirection(Direction.down);
-                          else
-                            _onChangeDirection(Direction.up);
-                        }
-                      },
-                      child: AspectRatio(
-                        key: _boardKey, // FORCE REBUILD ON CRASH
-                        aspectRatio: cols / rows,
-                        child: Container(
-                          decoration: BoxDecoration(
-                              color: const Color(0xFF121212),
-                              border: Border.all(
-                                  color:
-                                      AppTheme.primaryPurple.withOpacity(0.4),
-                                  width: 3),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                    color: AppTheme.primaryPurple
-                                        .withOpacity(0.15),
-                                    blurRadius: 30,
-                                    spreadRadius: 5)
-                              ]),
+                child: LayoutBuilder(builder: (context, outerConstraints) {
+                  final isWide = outerConstraints.maxWidth > 600;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2), // Minimal padding
+                    child: Center(
+                      child: GestureDetector(
+                        onPanEnd: (details) {
+                          final velocity = details.velocity.pixelsPerSecond;
+                          if (velocity.distance < 100) return;
+                          if (velocity.dx.abs() > velocity.dy.abs()) {
+                            if (velocity.dx > 0)
+                              _onChangeDirection(Direction.right);
+                            else
+                              _onChangeDirection(Direction.left);
+                          } else {
+                            if (velocity.dy > 0)
+                              _onChangeDirection(Direction.down);
+                            else
+                              _onChangeDirection(Direction.up);
+                          }
+                        },
+                        child: AspectRatio(
+                          key: _boardKey, // FORCE REBUILD ON CRASH
+                          aspectRatio: cols / rows,
                           child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final cellSize = constraints.maxWidth / cols;
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  CustomPaint(
-                                    size: Size(constraints.maxWidth,
-                                        constraints.maxHeight),
-                                    painter: GridPainter(rows, cols,
-                                        Colors.white.withOpacity(0.04)),
-                                  ),
-
-                                  // Render Obstacles
-                                  ..._obstacles.map((obs) {
-                                    return Positioned(
-                                      left: obs.x * cellSize,
-                                      top: obs.y * cellSize,
-                                      child: Container(
-                                        width: cellSize,
-                                        height: cellSize,
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[700],
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                          border:
-                                              Border.all(color: Colors.white24),
-                                        ),
+                              builder: (context, boardConstraints) {
+                            // Allow the board to take more height if available
+                            return Container(
+                              decoration: BoxDecoration(
+                                  color: const Color(0xFF121212),
+                                  border: Border.all(
+                                      color: AppTheme.primaryPurple
+                                          .withOpacity(0.4),
+                                      width: 3),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color: AppTheme.primaryPurple
+                                            .withOpacity(0.15),
+                                        blurRadius: 30,
+                                        spreadRadius: 5)
+                                  ]),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final cellSize = constraints.maxWidth / cols;
+                                  return Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      CustomPaint(
+                                        size: Size(constraints.maxWidth,
+                                            constraints.maxHeight),
+                                        painter: GridPainter(rows, cols,
+                                            Colors.white.withOpacity(0.04)),
                                       ),
-                                    );
-                                  }),
 
-                                  // Render Player Snake
-                                  ..._snake.asMap().entries.map((entry) {
-                                    final index = entry.key;
-                                    final part = entry.value;
-                                    final isHead = index == 0;
-                                    Color bodyColor = _isOrangeMode
-                                        ? Colors.orange
-                                        : Colors.greenAccent[700]!;
-                                    Color headColor = _isOrangeMode
-                                        ? Colors.deepOrange
-                                        : AppTheme.successGreen;
+                                      // Render Obstacles
+                                      ..._obstacles.map((obs) {
+                                        return Positioned(
+                                          left: obs.x * cellSize,
+                                          top: obs.y * cellSize,
+                                          child: Container(
+                                            width: cellSize,
+                                            height: cellSize,
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[700],
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                  color: Colors.white24),
+                                            ),
+                                          ),
+                                        );
+                                      }),
 
-                                    return Positioned(
-                                      key: ValueKey(
-                                          'snake_${index}_${part.x}_${part.y}'),
-                                      left: part.x * cellSize,
-                                      top: part.y * cellSize,
-                                      child: Container(
-                                        width: cellSize,
-                                        height: cellSize,
-                                        margin: const EdgeInsets.all(0.5),
-                                        decoration: BoxDecoration(
-                                          color: isHead ? headColor : bodyColor,
-                                          borderRadius: BorderRadius.circular(
-                                              isHead ? 4 : 2),
-                                          boxShadow: _isOrangeMode
-                                              ? [
-                                                  BoxShadow(
-                                                      color: Colors.orange
-                                                          .withOpacity(0.5),
-                                                      blurRadius: 5)
-                                                ]
-                                              : null,
-                                        ),
-                                        child: isHead
-                                            ? _buildHeadEyes(cellSize)
-                                            : null,
-                                      ),
-                                    );
-                                  }),
-                                  // Render Food (with null check safety)
-                                  if (_food != null)
-                                    Positioned(
-                                      left: _food!.x * cellSize,
-                                      top: _food!.y * cellSize,
-                                      child: SizedBox(
-                                        width: cellSize,
-                                        height: cellSize,
-                                        child: Center(
-                                          child: FittedBox(
-                                            fit: BoxFit.contain,
-                                            child: Text("🍎",
-                                                style: TextStyle(
-                                                    fontSize: cellSize)),
+                                      // Render Player Snake
+                                      ..._snake.asMap().entries.map((entry) {
+                                        final index = entry.key;
+                                        final part = entry.value;
+                                        final isHead = index == 0;
+                                        Color bodyColor = _isOrangeMode
+                                            ? Colors.orange
+                                            : Colors.greenAccent[700]!;
+                                        Color headColor = _isOrangeMode
+                                            ? Colors.deepOrange
+                                            : AppTheme.successGreen;
+
+                                        return Positioned(
+                                          key: ValueKey(
+                                              'snake_${index}_${part.x}_${part.y}'),
+                                          left: part.x * cellSize,
+                                          top: part.y * cellSize,
+                                          child: Container(
+                                            width: cellSize,
+                                            height: cellSize,
+                                            margin: const EdgeInsets.all(0.5),
+                                            decoration: BoxDecoration(
+                                              color: isHead
+                                                  ? headColor
+                                                  : bodyColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      isHead ? 4 : 2),
+                                              boxShadow: _isOrangeMode
+                                                  ? [
+                                                      BoxShadow(
+                                                          color: Colors.orange
+                                                              .withOpacity(0.5),
+                                                          blurRadius: 5)
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: isHead
+                                                ? _buildHeadEyes(cellSize)
+                                                : null,
+                                          ),
+                                        );
+                                      }),
+                                      // Render Food (with null check safety)
+                                      if (_food != null)
+                                        Positioned(
+                                          left: _food!.x * cellSize,
+                                          top: _food!.y * cellSize,
+                                          child: SizedBox(
+                                            width: cellSize,
+                                            height: cellSize,
+                                            child: Center(
+                                              child: FittedBox(
+                                                fit: BoxFit.contain,
+                                                child: Text("🍎",
+                                                    style: TextStyle(
+                                                        fontSize: cellSize)),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
 
-                                  if (_showingPreStart)
-                                    _buildPreStartOverlay(cellSize),
-                                ],
-                              );
-                            },
-                          ),
+                                      if (_showingPreStart)
+                                        _buildPreStartOverlay(cellSize),
+                                    ],
+                                  );
+                                },
+                              ),
+                            );
+                          }),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ),
 
               // CONTROLES D-PAD COMPACTOS
@@ -773,28 +783,55 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   }
 
   Widget _buildDPad() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildDPadButton(
-              Icons.keyboard_arrow_up, () => _onChangeDirection(Direction.up)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildDPadButton(Icons.keyboard_arrow_left,
-                  () => _onChangeDirection(Direction.left)),
-              const SizedBox(width: 80),
-              _buildDPadButton(Icons.keyboard_arrow_right,
-                  () => _onChangeDirection(Direction.right)),
-            ],
-          ),
-          _buildDPadButton(Icons.keyboard_arrow_down,
-              () => _onChangeDirection(Direction.down)),
-        ],
-      ),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final bool isWide = constraints.maxWidth > 600;
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Row based D-Pad for wide screens to save height
+            if (isWide)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildDPadButton(Icons.keyboard_arrow_left,
+                      () => _onChangeDirection(Direction.left)),
+                  const SizedBox(width: 20),
+                  _buildDPadButton(Icons.keyboard_arrow_up,
+                      () => _onChangeDirection(Direction.up)),
+                  const SizedBox(width: 20),
+                  _buildDPadButton(Icons.keyboard_arrow_down,
+                      () => _onChangeDirection(Direction.down)),
+                  const SizedBox(width: 20),
+                  _buildDPadButton(Icons.keyboard_arrow_right,
+                      () => _onChangeDirection(Direction.right)),
+                ],
+              )
+            else
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDPadButton(Icons.keyboard_arrow_up,
+                      () => _onChangeDirection(Direction.up)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildDPadButton(Icons.keyboard_arrow_left,
+                          () => _onChangeDirection(Direction.left)),
+                      const SizedBox(width: 80),
+                      _buildDPadButton(Icons.keyboard_arrow_right,
+                          () => _onChangeDirection(Direction.right)),
+                    ],
+                  ),
+                  _buildDPadButton(Icons.keyboard_arrow_down,
+                      () => _onChangeDirection(Direction.down)),
+                ],
+              ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildDPadButton(IconData icon, VoidCallback onTap) {

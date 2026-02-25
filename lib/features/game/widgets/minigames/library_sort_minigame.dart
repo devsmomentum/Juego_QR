@@ -246,38 +246,45 @@ class _LibrarySortMinigameState extends State<LibrarySortMinigame> {
 
             // THE LIBRARY SHELF (Slots) - EXPANDED TO FIT
             Expanded(
-              flex: 3,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.black38,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.white10),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black54, blurRadius: 10)
-                  ],
-                ),
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    childAspectRatio: 0.65,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 10,
+              flex: 4,
+              child: LayoutBuilder(builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 600;
+                return Container(
+                  margin: EdgeInsets.symmetric(
+                      horizontal: isWide ? constraints.maxWidth * 0.35 : 60,
+                      vertical: 5),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black38,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.white10),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black54, blurRadius: 10)
+                    ],
                   ),
-                  itemCount: _shelfSlots.length,
-                  itemBuilder: (context, index) =>
-                      _buildShelfSlot(_shelfSlots[index]),
-                ),
-              ),
+                  child: GridView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: isWide ? 12 : 6,
+                      childAspectRatio: isWide ? 0.6 : 0.5,
+                      crossAxisSpacing: 3,
+                      mainAxisSpacing: 3,
+                    ),
+                    itemCount: _shelfSlots.length,
+                    itemBuilder: (context, index) =>
+                        _buildShelfSlot(_shelfSlots[index]),
+                  ),
+                );
+              }),
             ),
 
             // THE SCATTERED BOOKS (Source tray)
             Container(
-              height: 100,
+              height: 60, // Minimal height
               width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+              margin: EdgeInsets.symmetric(
+                  horizontal: MediaQuery.of(context).size.width * 0.2,
+                  vertical: 5),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.05),
@@ -290,7 +297,7 @@ class _LibrarySortMinigameState extends State<LibrarySortMinigame> {
                   const Text("LIBROS PENDIENTES",
                       style: TextStyle(
                           color: Colors.white24,
-                          fontSize: 8,
+                          fontSize: 7,
                           fontWeight: FontWeight.bold,
                           decoration: TextDecoration.none)),
                   Expanded(
@@ -463,7 +470,7 @@ class _LibrarySortMinigameState extends State<LibrarySortMinigame> {
   Widget _buildBookCore(BookModel book,
       {bool isDragging = false, bool isFixed = false}) {
     return Container(
-      width: 48,
+      width: 32, // Further reduced width
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: const BorderRadius.only(
@@ -530,8 +537,8 @@ class _LibrarySortMinigameState extends State<LibrarySortMinigame> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 20,
-                    height: 35,
+                    width: 14, // Reduced from 20
+                    height: 20, // Reduced from 35 - CRITICAL TO FIX OVERFLOW
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(2),
@@ -540,16 +547,16 @@ class _LibrarySortMinigameState extends State<LibrarySortMinigame> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: List.generate(
-                          4,
+                          3, // Reduced from 4
                           (index) => Container(
-                              width: 12, height: 1.5, color: Colors.white24)),
+                              width: 10, height: 1.0, color: Colors.white24)),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Icon(
                     isFixed ? Icons.lock_clock_outlined : Icons.auto_stories,
                     color: Colors.white30,
-                    size: 14,
+                    size: 10, // Reduced from 14
                   ),
                 ],
               ),

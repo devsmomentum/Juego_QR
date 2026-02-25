@@ -234,7 +234,9 @@ class RaceTrackWidget extends StatelessWidget {
 
                 // --- RACE TRACK (RENDERING ONLY via RaceViewData) ---
                 SizedBox(
-                  height: compact ? 95 : 120,
+                  height: compact 
+                    ? (MediaQuery.of(context).size.width > 900 ? 75 : 95) 
+                    : 120,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       return Stack(

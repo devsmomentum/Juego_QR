@@ -293,128 +293,88 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
           // GAME CONTENT
           Column(
             children: [
-              // Status Bar
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Vidas
-                    Consumer<GameProvider>(builder: (context, game, _) {
-                      return Row(
-                        children: [
-                          const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                          const SizedBox(width: 5),
-                          Text("x${game.lives}",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      );
-                    }),
-                    // Timer
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: _secondsRemaining < 10
-                              ? AppTheme.dangerRed.withOpacity(0.2)
-                              : Colors.white10,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: _secondsRemaining < 10
-                                  ? AppTheme.dangerRed
-                                  : Colors.white24)),
-                      child: Row(
-                        children: [
-                          Icon(Icons.timer,
-                              size: 16,
-                              color: _secondsRemaining < 10
-                                  ? AppTheme.dangerRed
-                                  : Colors.white),
-                          const SizedBox(width: 5),
-                          Text(
-                              "${_secondsRemaining ~/ 60}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
-                              style: TextStyle(
-                                  color: _secondsRemaining < 10
-                                      ? AppTheme.dangerRed
-                                      : Colors.white,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
               const Text(
-                "GANA A LA VIEJA (Tic Tac Toe)",
+                "GANA A LA VIEJA",
                 style: TextStyle(
                     color: AppTheme.accentGold,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Orbitron',
+                    letterSpacing: 1.2),
               ),
               const SizedBox(height: 10),
 
               Expanded(
                 child: Center(
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Container(
-                      margin: const EdgeInsets.all(20),
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                          color: AppTheme.cardBg,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.5),
-                                blurRadius: 15)
-                          ]),
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: 9,
-                        itemBuilder: (context, index) {
-                          final cell = board[index];
-                          Color cellColor = Colors.white10;
-                          if (cell == 'X') cellColor = AppTheme.primaryPurple;
-                          if (cell == 'O') cellColor = AppTheme.warningOrange;
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 600;
+                    return Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isWide ? constraints.maxWidth * 0.25 : 20,
+                        vertical: 10,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                              color: AppTheme.cardBg,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.3)),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: AppTheme.primaryPurple.withOpacity(0.2),
+                                    blurRadius: 20)
+                              ]),
+                          child: GridView.builder(
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                            ),
+                            itemCount: 9,
+                            itemBuilder: (context, index) {
+                              final cell = board[index];
+                              Color cellColor = Colors.white.withOpacity(0.05);
+                              if (cell == 'X') cellColor = AppTheme.primaryPurple;
+                              if (cell == 'O') cellColor = AppTheme.warningOrange;
 
-                          return GestureDetector(
-                            onTap: () => _onTileTap(index),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: cellColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.2),
-                                        offset: const Offset(2, 2))
-                                  ]),
-                              child: Center(
-                                child: Text(
-                                  cell,
-                                  style: const TextStyle(
-                                    fontSize: 48,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                              return GestureDetector(
+                                onTap: () => _onTileTap(index),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                      color: cellColor,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: Colors.white10),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: Colors.black26,
+                                            offset: const Offset(2, 4),
+                                            blurRadius: 4)
+                                      ]),
+                                  child: Center(
+                                    child: FittedBox(
+                                      child: Text(
+                                        cell,
+                                        style: const TextStyle(
+                                          fontSize: 48,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                          fontFamily: 'Orbitron'
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              );
+                            },
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                 ),
               ),
 

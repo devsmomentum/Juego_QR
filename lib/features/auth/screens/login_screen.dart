@@ -411,17 +411,11 @@ class _LoginScreenState extends State<LoginScreen>
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     final isDarkMode = context.read<PlayerProvider>().isDarkMode;
 
-    // Colores dinámicos
-    final Color dSurface = const Color(0xFF1A1A1D);
-    final Color lSurface = const Color(0xFFFFFFFF);
-    final Color dText = Colors.white;
-    final Color lText = const Color(0xFF1A1A1D);
-    final Color dBrand = const Color(0xFFFECB00);
-    final Color lBrand = const Color(0xFF5A189A);
-
-    final Color currentBg = isDarkMode ? dSurface : lSurface;
-    final Color currentText = isDarkMode ? dText : lText;
-    final Color currentBrand = isDarkMode ? dBrand : lBrand;
+    // Forzar colores de modo oscuro para el modal de ubicación
+    const Color currentBg = Color(0xFF1A1A1D);
+    const Color currentText = Colors.white;
+    const Color currentBrand = Color(0xFFFECB00);
+    const Color currentGoldLight = Color(0xFFFFF176);
 
     // Si falta algo, mostramos el BottomSheet explicativo antes de pedirlo nativamente
     if (permission == LocationPermission.denied ||
@@ -441,9 +435,9 @@ class _LoginScreenState extends State<LoginScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.location_on_outlined, size: 60, color: currentBrand),
+                const Icon(Icons.location_on_outlined, size: 60, color: currentBrand),
                 const SizedBox(height: 16),
-                Text(
+                const Text(
                   'Ubicación Necesaria',
                   style: TextStyle(
                       fontSize: 20,
@@ -461,20 +455,25 @@ class _LoginScreenState extends State<LoginScreen>
                   width: double.infinity,
                   height: 55,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isDarkMode
-                          ? [const Color(0xFFFFF176), const Color(0xFFFECB00)]
-                          : [const Color(0xFF9D4EDD), const Color(0xFF5A189A)],
+                    gradient: const LinearGradient(
+                      colors: [currentGoldLight, currentBrand],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
                     borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: currentBrand.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
-                      foregroundColor: isDarkMode ? Colors.black : Colors.white,
+                      foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -487,14 +486,13 @@ class _LoginScreenState extends State<LoginScreen>
                         style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
-                // === BOTÓN DE DESARROLLADOR ===
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: currentText.withOpacity(0.5),
-                      side: BorderSide(color: currentText.withOpacity(0.2)),
+                      foregroundColor: Colors.white54,
+                      side: BorderSide(color: Colors.white.withOpacity(0.2)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -666,24 +664,26 @@ class _LoginScreenState extends State<LoginScreen>
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Align(
-                                      alignment: Alignment.topRight,
-                                      child: IconButton(
-                                        icon: Icon(
-                                          isDarkMode
-                                              ? Icons.wb_sunny_outlined
-                                              : Icons.nightlight_round_outlined,
-                                          color: Colors.white,
-                                          size: 28,
+                                    // Toggle día/noche solo en app (en web está en el Stack)
+                                    if (!kIsWeb)
+                                      Align(
+                                        alignment: Alignment.topRight,
+                                        child: IconButton(
+                                          icon: Icon(
+                                            isDarkMode
+                                                ? Icons.wb_sunny_outlined
+                                                : Icons.nightlight_round_outlined,
+                                            color: Colors.white,
+                                            size: 28,
+                                          ),
+                                          onPressed: () {
+                                            debugPrint(
+                                                "Toggle presionado: actual=$isDarkMode");
+                                            playerProvider
+                                                .toggleDarkMode(!isDarkMode);
+                                          },
                                         ),
-                                        onPressed: () {
-                                          debugPrint(
-                                              "Toggle presionado: actual=$isDarkMode");
-                                          playerProvider
-                                              .toggleDarkMode(!isDarkMode);
-                                        },
                                       ),
-                                    ),
                                     const Spacer(flex: 1),
                                     // Logo de MapHunter
                                     Image.asset(
@@ -906,6 +906,30 @@ class _LoginScreenState extends State<LoginScreen>
                   },
                 ),
               ),
+
+              // Toggle día/noche solo en web - esquina superior derecha
+              if (kIsWeb)
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: SafeArea(
+                    child: IconButton(
+                      icon: Icon(
+                        isDarkMode
+                            ? Icons.wb_sunny_outlined
+                            : Icons.nightlight_round_outlined,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                      onPressed: () {
+                        debugPrint(
+                            "Toggle presionado: actual=$isDarkMode");
+                        playerProvider
+                            .toggleDarkMode(!isDarkMode);
+                      },
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

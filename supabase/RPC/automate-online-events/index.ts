@@ -1,3 +1,5 @@
+// @ts-nocheck
+// deno-lint-ignore-file
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -68,9 +70,9 @@ serve(async (req) => {
 
         // 3. Selection Strategy (Balanced Difficulty)
         // We define pools based on the logic in clue.dart (dbValue matches camelCase in TypeScript as per enum)
-        const easyPool = ['slidingPuzzle', 'ticTacToe', 'imageTrivia', 'trueFalse', 'virusTap', 'flags', 'matchThree', 'fastNumber'];
-        const mediumPool = ['hangman', 'wordScramble', 'memorySequence', 'emojiMovie', 'bagShuffle', 'droneDodge', 'missingOperator', 'capitalCities'];
-        const hardPool = ['tetris', 'minesweeper', 'snake', 'blockFill', 'codeBreaker', 'holographicPanels', 'primeNetwork', 'percentageCalculation', 'chronologicalOrder', 'drinkMixer', 'librarySort', 'findDifference'];
+        const easyPool = ['slidingPuzzle', 'ticTacToe', 'trueFalse', 'virusTap', 'flags', 'matchThree', 'fastNumber'];
+        const mediumPool = ['hangman', 'memorySequence', 'emojiMovie', 'bagShuffle', 'droneDodge', 'missingOperator', 'capitalCities'];
+        const hardPool = ['tetris', 'minesweeper', 'snake', 'blockFill', 'holographicPanels', 'primeNetwork', 'percentageCalculation', 'chronologicalOrder', 'drinkMixer', 'librarySort', 'findDifference'];
 
         const selectedPuzzles: string[] = [];
         const targetEasy = Math.ceil(gameCount * 0.4);

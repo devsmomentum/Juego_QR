@@ -258,9 +258,14 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Column(
-          children: [
-            const SizedBox(height: 5),
+        LayoutBuilder(builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 600;
+          return Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: isWide ? constraints.maxWidth * 0.2 : 20),
+            child: Column(
+              children: [
+                const SizedBox(height: 5),
 
             // BARRA DE ESTADO (Vidas y Tiempo)
             Padding(
@@ -298,7 +303,7 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                               : "TOCA LA BOLSA CORRECTA",
                       style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 12,
+                          fontSize: 10, // Reduced
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
                           decoration: TextDecoration.none),
@@ -308,17 +313,17 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                     const Text("BUSCA: ",
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: 10, // Reduced
                             fontWeight: FontWeight.bold,
                             decoration: TextDecoration.none)),
                     const SizedBox(width: 8),
                     Container(
-                      width: 20,
-                      height: 20,
+                      width: 16, // Reduced from 20
+                      height: 16,
                       decoration: BoxDecoration(
                         color: _targetColor,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white),
+                        border: Border.all(color: Colors.white, width: 1),
                       ),
                     ),
                   ]
@@ -332,18 +337,23 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Stack(
-                  children: [
-                    // Position slots indicators
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: List.generate(3, (index) => _buildSlotMarker()),
-                    ),
+                child: LayoutBuilder(builder: (context, constraints) {
+                  final gameAreaWidth = constraints.maxWidth;
+                  return Stack(
+                    children: [
+                      // Position slots indicators
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children:
+                            List.generate(3, (index) => _buildSlotMarker()),
+                      ),
 
-                    // The Bags
-                    ..._bags.map((bag) => _buildAnimatedBag(bag)),
-                  ],
-                ),
+                      // The Bags
+                      ..._bags.map(
+                          (bag) => _buildAnimatedBag(bag, gameAreaWidth)),
+                    ],
+                  );
+                }),
               ),
             ),
 
@@ -370,12 +380,14 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                 ),
               ),
 
-            // BOTÓN DE RENDICIÓN
-            CyberSurrenderButton(
-              onPressed: _showOverlay ? null : _handleGiveUp,
+                // BOTÓN DE RENDICIÓN
+                CyberSurrenderButton(
+                  onPressed: _showOverlay ? null : _handleGiveUp,
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        }),
         if (_showOverlay)
           GameOverOverlay(
             title: _overlayTitle,
@@ -412,16 +424,15 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
     });
   }
 
-  Widget _buildAnimatedBag(BagModel bag) {
-    double width = MediaQuery.of(context).size.width - 40;
-    double slotWidth = width / 3;
+  Widget _buildAnimatedBag(BagModel bag, double totalWidth) {
+    double slotWidth = totalWidth / 3;
     double targetLeft = bag.currentPosition * slotWidth;
 
     return AnimatedPositioned(
-      duration: const Duration(milliseconds: 600), // Speed of the swap movement
+      duration: const Duration(milliseconds: 600),
       curve: Curves.easeInOutBack,
       left: targetLeft,
-      top: 50,
+      top: 30,
       width: slotWidth,
       child: GestureDetector(
         onTap: () => _onBagTap(bag),
@@ -433,40 +444,38 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                 // Ball
                 if (_state == GameState.showing || _state == GameState.reveal)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 20.0),
+                    padding: const EdgeInsets.only(bottom: 15.0),
                     child: Container(
-                      width: 35,
-                      height: 35,
+                      width: 28,
+                      height: 28,
                       decoration: BoxDecoration(
                         color: bag.ballColor,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                               color: bag.ballColor.withOpacity(0.4),
-                              blurRadius: 10)
+                              blurRadius: 8)
                         ],
                       ),
                     ),
                   ),
 
-                // BAG DESIGN (Pouch shape)
+                // BAG DESIGN
                 AnimatedContainer(
-                  duration: const Duration(
-                      milliseconds: 1200), // Slower entry/covering animation
+                  duration: const Duration(milliseconds: 1200),
                   height: (_state == GameState.showing ||
                           _state == GameState.reveal)
-                      ? 100
-                      : 160,
-                  width: 95,
+                      ? 70
+                      : 120,
+                  width: 70,
                   margin: EdgeInsets.only(
                       bottom: (_state == GameState.showing ||
                               _state == GameState.reveal)
-                          ? 80
+                          ? 60
                           : 0),
                   child: CustomPaint(
                     painter: BagPainter(
-                      color: const Color(0xFF8B4513)
-                          .withOpacity(0.9), // Brown leather color
+                      color: const Color(0xFF8B4513).withOpacity(0.9),
                       borderColor: const Color(0xFF5D2E0A),
                     ),
                   ),
