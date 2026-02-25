@@ -1,9 +1,19 @@
--- Function: use_power_mechanic (Synced with migration 20260225_gift_max_quantity_check.sql)
--- Date: 2026-02-25
--- Purpose: 
--- Allow spectators (and players targeting others) to "gift" defense powers (Shield, Return, Invisibility).
--- If caster_id != target_id for these powers, add to target's inventory instead of activating.
--- Preserves all protections and logic from the previous RPC update.
+-- =============================================================
+-- Migration: 20260225140000_block_spectator_blur_screen
+-- Purpose: Block spectators from using blur_screen power.
+--
+-- blur_screen is an AoE (Area of Effect) power that affects ALL
+-- competing players simultaneously. If spectators use it, the
+-- commission system cannot fairly compensate targets (1 purchase
+-- would generate N×commission clovers, creating more clovers
+-- than were spent). To prevent this economic imbalance,
+-- spectators are blocked from using blur_screen entirely.
+--
+-- Changes:
+--   - Added early-return check: if caster is spectator AND
+--     power is blur_screen, return error 'spectator_blur_blocked'
+--     BEFORE ammo is consumed.
+-- =============================================================
 
 CREATE OR REPLACE FUNCTION public.use_power_mechanic(
     p_caster_id uuid, 
@@ -197,7 +207,7 @@ BEGIN
         );
     END IF;
 
-    -- 4. ATAQUE DE ÁREA (Blur Screen)
+    -- 4. ATAQUE DE ÁREA (Blur Screen) - Solo jugadores, NO espectadores
     IF p_power_slug = 'blur_screen' THEN
         DECLARE
             v_aoe_target_id uuid;

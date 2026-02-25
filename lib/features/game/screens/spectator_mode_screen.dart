@@ -997,10 +997,13 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         if (inventoryList.isEmpty) return const SizedBox.shrink();
 
         // Contar items para mostrar cantidades
+        // Excluir blur_screen del inventario de espectador (AoE no permitido)
         final inventoryMap = <String, int>{};
         for (var slug in inventoryList) {
+          if (slug == 'blur_screen') continue; // Espectadores no pueden usar blur_screen
           inventoryMap[slug] = (inventoryMap[slug] ?? 0) + 1;
         }
+        if (inventoryMap.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1787,7 +1790,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
           Expanded(
             child: Consumer<PlayerProvider>(
               builder: (context, playerProvider, child) {
-                final powers = playerProvider.shopItems.where((p) => p.id != 'extra_life').toList();
+                // Filtrar extra_life y blur_screen (AoE no permitido para espectadores)
+                final powers = playerProvider.shopItems.where((p) => p.id != 'extra_life' && p.id != 'blur_screen').toList();
                 
                 if (powers.isEmpty) {
                   return Center(
