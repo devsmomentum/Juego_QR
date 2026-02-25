@@ -1095,25 +1095,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                         ),
                                         const SizedBox(height: 10),
 
-                                        // Description field for BOTH modes (online minigames also need instructions)
-                                        TextFormField(
-                                          initialValue: provider.clueForms[
-                                                  provider.currentClueIndex]
-                                              ['description'],
-                                          decoration: inputDecoration.copyWith(
-                                            labelText: provider.eventType ==
-                                                    'online'
-                                                ? 'Instrucciones del Minijuego'
-                                                : 'Instrucciones / Historia',
-                                          ),
-                                          style: const TextStyle(
-                                              color: Colors.white),
-                                          onChanged: (v) => provider.updateClue(
-                                              provider.currentClueIndex,
-                                              'description',
-                                              v),
-                                        ),
-                                        const SizedBox(height: 10),
+                                        // REMOVED: Description/Historia field - ya no se usa como pista.
+                                        // La "pista" ahora es el campo hint (ubicación) de la siguiente pista en secuencia.
 
                                         // Question
                                         TextFormField(

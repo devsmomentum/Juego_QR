@@ -8,6 +8,7 @@ class SuccessCelebrationDialog extends StatefulWidget {
   final bool showNextStep;
   final VoidCallback onMapReturn;
   final int coinsEarned; // Dynamic coins from server
+  final String? nextClueHint; // Ubicación de la siguiente pista en secuencia
 
   const SuccessCelebrationDialog({
     super.key,
@@ -16,6 +17,7 @@ class SuccessCelebrationDialog extends StatefulWidget {
     required this.onMapReturn,
     this.totalClues = 5, // Default/Placeholder
     this.coinsEarned = 0, // Default if not provided
+    this.nextClueHint,
   });
 
   final int totalClues;
@@ -119,9 +121,11 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                             ),
                             child: Column(
                               children: [
-                                const Text(
-                                  "INFORMACIÓN DESBLOQUEADA",
-                                  style: TextStyle(
+                                Text(
+                                  widget.nextClueHint != null
+                                      ? "SIGUIENTE UBICACIÓN"
+                                      : "¡MISIÓN COMPLETADA!",
+                                  style: const TextStyle(
                                     color: AppTheme.accentGold,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
@@ -130,7 +134,7 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  widget.clue.description,
+                                  widget.nextClueHint ?? "¡Has completado todas las misiones!",
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 14,

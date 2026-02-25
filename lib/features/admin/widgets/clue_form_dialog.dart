@@ -25,7 +25,6 @@ class ClueFormDialog extends StatefulWidget {
 
 class _ClueFormDialogState extends State<ClueFormDialog> {
   late TextEditingController _titleController;
-  late TextEditingController _descriptionController;
   late TextEditingController _questionController;
   late TextEditingController _answerController;
   late TextEditingController _xpController;
@@ -43,7 +42,6 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
     super.initState();
     final c = widget.clue;
     _titleController = TextEditingController(text: c?.title ?? '');
-    _descriptionController = TextEditingController(text: c?.description ?? '');
     _questionController = TextEditingController(text: c?.riddleQuestion ?? '');
     _answerController = TextEditingController(text: c?.riddleAnswer ?? '');
     _xpController = TextEditingController(text: c?.xpReward.toString() ?? '50');
@@ -65,7 +63,6 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
     _questionController.dispose();
     _answerController.dispose();
     _xpController.dispose();
@@ -170,7 +167,6 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
              newClue = OnlineClue(
               id: isEdit ? widget.clue!.id : '',
               title: _titleController.text,
-              description: _descriptionController.text,
               hint: _hintController.text,
               type: type,
               xpReward: int.tryParse(_xpController.text) ?? 50,
@@ -187,7 +183,6 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
              newClue = PhysicalClue(
               id: isEdit ? widget.clue!.id : '',
               title: _titleController.text,
-              description: _descriptionController.text,
               hint: _hintController.text,
               type: type,
               xpReward: int.tryParse(_xpController.text) ?? 50,
@@ -205,7 +200,6 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
          newClue = OnlineClue(
               id: isEdit ? widget.clue!.id : '',
               title: _titleController.text,
-              description: _descriptionController.text,
               hint: _hintController.text,
               type: ClueType.minigame,
               xpReward: int.tryParse(_xpController.text) ?? 50,
@@ -325,13 +319,6 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
               controller: _titleController,
               style: const TextStyle(color: Colors.white),
               decoration: _buildInputDecoration('Título'),
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _descriptionController,
-              maxLines: 2,
-              style: const TextStyle(color: Colors.white),
-              decoration: _buildInputDecoration('Descripción / Historia'),
             ),
             const SizedBox(height: 10),
             TextFormField(

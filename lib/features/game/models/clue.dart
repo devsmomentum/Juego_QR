@@ -264,7 +264,7 @@ enum PuzzleType {
 abstract class Clue {
   final String id;
   final String title;
-  final String description;
+  final String description; // DEPRECATED: Ya no se usa como pista. Se mantiene por compatibilidad DB.
   final String hint;
   final ClueType type;
   final int xpReward;
@@ -281,7 +281,7 @@ abstract class Clue {
   Clue({
     required this.id,
     required this.title,
-    required this.description,
+    this.description = '', // DEPRECATED: Campo opcional, ya no se requiere
     required this.hint,
     required this.type,
     this.xpReward = 50,
@@ -332,7 +332,7 @@ class PhysicalClue extends Clue {
   PhysicalClue({
     required super.id,
     required super.title,
-    required super.description,
+    super.description,
     required super.hint,
     required super.type,
     super.xpReward,
@@ -406,7 +406,7 @@ class OnlineClue extends Clue {
   OnlineClue({
     required super.id,
     required super.title,
-    required super.description,
+    super.description,
     required super.hint,
     required super.type,
     super.xpReward,

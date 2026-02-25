@@ -254,7 +254,7 @@ class _CluesScreenState extends State<CluesScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14),
               ),
               const SizedBox(height: 12),
-              Text(clue.description ?? 'Sin descripción', 
+              Text(clue.hint.isNotEmpty ? clue.hint : 'Misión completada', 
                 style: const TextStyle(color: Colors.white70, fontSize: 13)),
             ],
           ),

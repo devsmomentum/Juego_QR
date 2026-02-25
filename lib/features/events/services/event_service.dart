@@ -91,7 +91,6 @@ class EventService {
         toInsert.add({
           'event_id': eventId,
           'title': clue['title'],
-          'description': clue['description'],
           'hint': clue['hint'] ?? '',
           'type': clue['type'] ?? 'minigame',
           'latitude': clue['latitude'],
@@ -344,7 +343,6 @@ class EventService {
           .from('clues')
           .update({
             'title': clue.title,
-            'description': clue.description,
             'puzzle_type': (clue is OnlineClue)
                 ? (clue as OnlineClue).puzzleType.toString().split('.').last
                 : null,
@@ -392,7 +390,6 @@ class EventService {
       final response = await _supabase.from('clues').insert({
         'event_id': eventId.trim(),
         'title': clue.title,
-        'description': clue.description,
         'hint': clue.hint,
         'type': clue.type.toString().split('.').last,
         'puzzle_type': (clue is OnlineClue)

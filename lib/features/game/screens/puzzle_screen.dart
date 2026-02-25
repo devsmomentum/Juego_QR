@@ -601,7 +601,7 @@ void showClueSelector(BuildContext context, Clue currentClue) {
                 ),
               ),
               subtitle: Text(
-                clue.description,
+                clue.hint.isNotEmpty ? clue.hint : clue.title,
                 style: const TextStyle(color: Colors.white70, fontSize: 11),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -938,6 +938,8 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     nextClue = clues[currentIdx + 1];
   }
   final showNextStep = nextClue != null;
+  // Obtener el hint (ubicación) de la siguiente pista para mostrarlo al jugador
+  final String? nextClueHint = nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null;
 
   // 3. Mostrar el panel de celebración - OBLIGATORIO después del sello
   // [FIX] Usar navigator capturado para garantizar visualización
@@ -954,6 +956,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       showNextStep: showNextStep,
       totalClues: clues.length,
       coinsEarned: coinsEarned, // Valor dinámico del servidor
+      nextClueHint: nextClueHint, // Ubicación de la siguiente pista
       onMapReturn: () {
         Navigator.of(dialogContext).pop();
         Future.delayed(const Duration(milliseconds: 100), () {
