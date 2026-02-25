@@ -416,22 +416,41 @@ class EventService {
     }
   }
 
-  Future<void> restartCompetition(String eventId) async {
+  /// Safely resets an event using the atomic RPC function.
+  /// Returns a detailed summary of what was cleaned.
+  /// Clues and event configuration are NEVER deleted.
+  Future<Map<String, dynamic>> safeResetEvent(String eventId) async {
     try {
-      final response = await _supabase.functions.invoke(
-        'admin-actions/reset-event',
-        body: {'eventId': eventId},
-        method: HttpMethod.post,
-      );
-
-      if (response.status != 200) {
-        throw Exception(
-            'Error en Edge Function del servidor: ${response.data}');
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('Usuario no autenticado');
       }
+
+      final result = await _supabase.rpc('safe_reset_event', params: {
+        'target_event_id': eventId,
+        'admin_id': userId,
+      });
+
+      final response = Map<String, dynamic>.from(result as Map);
+
+      if (response['success'] != true) {
+        throw Exception(
+            response['message'] ?? 'Error desconocido al reiniciar evento');
+      }
+
+      debugPrint(
+          '✅ Evento reiniciado: ${response['clues_preserved']} pistas preservadas');
+      return response;
     } catch (e) {
       debugPrint('Error al reiniciar competencia: $e');
       rethrow;
     }
+  }
+
+  /// @deprecated Use [safeResetEvent] instead. Kept for reference only.
+  Future<void> restartCompetition(String eventId) async {
+    // Redirect to the safe version
+    await safeResetEvent(eventId);
   }
 
   Future<void> deleteClue(String clueId) async {

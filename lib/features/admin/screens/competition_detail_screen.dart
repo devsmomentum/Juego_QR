@@ -643,29 +643,97 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   Future<bool> _showConfirmDialog() async {
     return await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: AppTheme.cardBg, // Usa el tema definido en tu app
-            title: const Text("Confirmar Reinicio",
-                style: TextStyle(color: Colors.white)),
-            content: const Text(
-              "¿Estás seguro? Se expulsará a todos los jugadores, se borrará su progreso y las pistas volverán a bloquearse. Esta acción no se puede deshacer.",
-              style: TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text("Cancelar"),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text("REINICIAR",
-                    style: TextStyle(color: Colors.white)),
-              ),
-            ],
+          barrierDismissible: false,
+          builder: (ctx) => _SafeResetConfirmDialog(
+            eventTitle: widget.event.title,
           ),
         ) ??
-        false; // Retorna false si el usuario cierra el diálogo sin presionar nada
+        false;
+  }
+
+  /// Shows a post-reset summary dialog with integrity verification
+  void _showResetSummary(Map<String, dynamic> result) {
+    final summary = result['summary'] as Map<String, dynamic>? ?? {};
+    final cluesPreserved = result['clues_preserved'] ?? 0;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Row(
+          children: [
+            Icon(Icons.verified_user, color: Colors.greenAccent, size: 28),
+            SizedBox(width: 8),
+            Text("Reinicio Seguro Completado",
+                style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Integrity verification
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield, color: Colors.greenAccent, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      "$cluesPreserved pistas intactas e íntegras",
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text("Datos eliminados:",
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              _summaryRow("Jugadores expulsados", summary['players_removed']),
+              _summaryRow("Solicitudes limpiadas", summary['requests_removed']),
+              _summaryRow("Progreso de pistas", summary['progress_cleared']),
+              _summaryRow("Poderes limpiados", summary['powers_cleared']),
+              _summaryRow("Transacciones", summary['transactions_cleared']),
+              _summaryRow("Logs de combate", summary['combat_logs_cleared']),
+              _summaryRow("Apuestas", summary['bets_cleared']),
+              _summaryRow("Premios", summary['prizes_cleared']),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Entendido", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, dynamic count) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          Text("${count ?? 0}",
+              style: const TextStyle(color: Colors.orangeAccent, fontSize: 13)),
+        ],
+      ),
+    );
   }
 
   // --- Pot Logic ---
@@ -899,24 +967,23 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
               setState(() => _isLoading = true);
               try {
-                // 1. Llamar al reset nuclear en el servidor
-                await Provider.of<EventProvider>(context, listen: false)
-                    .restartCompetition(widget.event.id);
+                // 1. Call the safe atomic RPC (not the old nuclear edge function)
+                final result =
+                    await Provider.of<EventProvider>(context, listen: false)
+                        .safeResetEvent(widget.event.id);
 
-                // 2. Refrescar todos los datos locales para sincronizar con el borrado nuclear
+                // 2. Refresh local data to sync with server state
                 if (mounted) {
                   Provider.of<GameRequestProvider>(context, listen: false)
                       .fetchAllRequests();
                   Provider.of<PlayerProvider>(context, listen: false)
                       .fetchAllPlayers();
-                  _fetchLeaderboard(); // Esto ahora debería venir vacío
+                  _fetchLeaderboard();
                 }
 
+                // 3. Show integrity-verified summary
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('✅ Competencia reiniciada exitosamente')),
-                  );
+                  _showResetSummary(result);
                 }
               } catch (e) {
                 if (mounted) {
@@ -1894,6 +1961,175 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+}
+
+/// A two-step confirmation dialog that prevents accidental resets.
+/// The admin must type "REINICIAR" to unlock the confirm button.
+class _SafeResetConfirmDialog extends StatefulWidget {
+  final String eventTitle;
+
+  const _SafeResetConfirmDialog({required this.eventTitle});
+
+  @override
+  State<_SafeResetConfirmDialog> createState() =>
+      _SafeResetConfirmDialogState();
+}
+
+class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
+  final _controller = TextEditingController();
+  bool _canConfirm = false;
+
+  static const _confirmWord = 'REINICIAR';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.cardBg,
+      title: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 28),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text("Reinicio Seguro",
+                style: TextStyle(color: Colors.white, fontSize: 18)),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Evento: "${widget.eventTitle}"',
+              style: const TextStyle(
+                  color: AppTheme.accentGold, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+
+            // What WILL be deleted
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("SE ELIMINARÁ:",
+                      style: TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13)),
+                  SizedBox(height: 6),
+                  Text("• Inscripciones de jugadores",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text("• Progreso de pistas de todos los usuarios",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text("• Poderes, transacciones y combates",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text("• Apuestas y distribuciones de premios",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text("• Solicitudes de ingreso",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // What will NOT be deleted
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("SE PRESERVARÁ:",
+                      style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13)),
+                  SizedBox(height: 6),
+                  Text("• Todas las pistas y sus ubicaciones",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text("• Configuración del evento",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text("• Tiendas del centro comercial",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Confirmation input
+            const Text(
+              'Escribe REINICIAR para confirmar:',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _controller,
+              style: const TextStyle(color: Colors.white, letterSpacing: 2),
+              decoration: InputDecoration(
+                hintText: _confirmWord,
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: _canConfirm ? Colors.greenAccent : Colors.white24,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: _canConfirm ? Colors.greenAccent : Colors.white24,
+                  ),
+                ),
+              ),
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (value) {
+                setState(() {
+                  _canConfirm = value.trim().toUpperCase() == _confirmWord;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Cancelar"),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _canConfirm ? Colors.red : Colors.grey[800],
+          ),
+          onPressed: _canConfirm ? () => Navigator.pop(context, true) : null,
+          child: Text(
+            _canConfirm ? "REINICIAR EVENTO" : "Escribe REINICIAR...",
+            style: TextStyle(
+              color: _canConfirm ? Colors.white : Colors.white38,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

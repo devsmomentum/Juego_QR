@@ -191,6 +191,20 @@ class EventProvider with ChangeNotifier {
     }
   }
 
+  /// Safely resets an event. Returns summary with integrity verification.
+  Future<Map<String, dynamic>> safeResetEvent(String eventId) async {
+    try {
+      final result = await _eventService.safeResetEvent(eventId);
+      await fetchEvents();
+      notifyListeners();
+      return result;
+    } catch (e) {
+      debugPrint('Error al reiniciar competencia: $e');
+      rethrow;
+    }
+  }
+
+  /// @deprecated Use [safeResetEvent] instead.
   Future<void> restartCompetition(String eventId) async {
     try {
       await _eventService.restartCompetition(eventId);
