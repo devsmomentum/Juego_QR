@@ -362,17 +362,17 @@ serve(async (req) => {
         R = idx >= 0 ? idx + 1 : N;
       }
 
-      // Algoritmo de recompensa adaptativo
+      // Algoritmo de recompensa adaptativo (Rango global: 50-150 coins)
       let coinsEarned: number;
       if (R === 1) {
-        // Líder absoluto (R=1): Random(15, 25) - Menos monedas para evitar que se escape
-        coinsEarned = Math.floor(Math.random() * 11) + 15;
+        // Líder absoluto (R=1): Random(50, 80) - Menos monedas para evitar que se escape
+        coinsEarned = Math.floor(Math.random() * 31) + 50;
       } else if (R === N && N > 1) {
-        // Último lugar (R=N, solo si hay más de 1 jugador): Random(35, 45) - Más monedas para catch-up
-        coinsEarned = Math.floor(Math.random() * 11) + 35;
+        // Último lugar (R=N, solo si hay más de 1 jugador): Random(120, 150) - Más monedas para catch-up
+        coinsEarned = Math.floor(Math.random() * 31) + 120;
       } else {
-        // Pelotón (resto): Random(25, 35)
-        coinsEarned = Math.floor(Math.random() * 11) + 25;
+        // Pelotón (resto): Random(80, 120)
+        coinsEarned = Math.floor(Math.random() * 41) + 80;
       }
 
       console.log(
