@@ -13,6 +13,7 @@ import 'qr_scanner_screen.dart';
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../shared/widgets/development_bypass_button.dart';
 
 class ClueFinderScreen extends StatefulWidget {
   final Clue clue; // Changed from PhysicalClue to Clue
@@ -708,6 +709,11 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                                   ),
                                 ],
                               ),
+                            ),
+
+                            // DEV BYPASS: Only visible for admin role
+                            DevelopmentBypassButton(
+                              onBypass: () => _handleScannedCode("DEV_SKIP_CODE"),
                             ),
 
                           

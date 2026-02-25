@@ -17,6 +17,7 @@ import '../models/event.dart';
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../shared/widgets/development_bypass_button.dart';
 
 class CodeFinderScreen extends StatefulWidget {
   final Scenario scenario;
@@ -844,10 +845,23 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                   
+                                    // DEV BYPASS: Only visible for admin role
+                                    DevelopmentBypassButton(
+                                      onBypass: () => _handleScannedCode("DEV_SKIP_CODE"),
+                                      label: 'DEV: Saltar Código',
+                                    ),
                                   ],
                                 )
-                              : const SizedBox.shrink(),
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // DEV BYPASS: Also available when not in zone (admin only)
+                                    DevelopmentBypassButton(
+                                      onBypass: () => _handleScannedCode("DEV_SKIP_CODE"),
+                                      label: 'DEV: Saltar Código',
+                                    ),
+                                  ],
+                                ),
                         ),
                       ],
                     ),

@@ -9,6 +9,7 @@ import '../../game/providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../game/screens/qr_scanner_screen.dart'; // Import Scanner
 import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
+import '../../../shared/widgets/development_bypass_button.dart';
 
 class MallScreen extends StatefulWidget {
   const MallScreen({super.key});
@@ -169,6 +170,18 @@ class _MallScreenState extends State<MallScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
+                      // DEV BYPASS: Only visible for admin role
+                      DevelopmentBypassButton(
+                        label: 'DEV: Entrar sin QR',
+                        icon: Icons.storefront,
+                        onBypass: () {
+                          Navigator.pop(dialogContext);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => StoreDetailScreen(store: store)),
+                          );
+                        },
+                      ),
                       // Scan button
                       SizedBox(
                         width: double.infinity,

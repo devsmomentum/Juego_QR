@@ -9,6 +9,8 @@ import '../../admin/services/sponsor_service.dart'; // NEW
 import '../../admin/models/sponsor.dart'; // NEW
 import '../widgets/sponsor_banner.dart'; // NEW
 import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:provider/provider.dart';
+import '../../auth/providers/player_provider.dart';
 
 class EventWaitingScreen extends StatefulWidget {
   final GameEvent event;
@@ -332,15 +334,48 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                 bottom: 20,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text("Volver a Escenarios",
-                        style: TextStyle(
-                            color: isDarkMode
-                                ? Colors.white54
-                                : AppTheme.lBrandMain.withOpacity(0.7))),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // DEV BYPASS: Only visible for admin role
+                    Consumer<PlayerProvider>(
+                      builder: (context, playerProv, _) {
+                        final player = playerProv.currentPlayer;
+                        if (player == null || !player.isAdmin) return const SizedBox.shrink();
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange.shade800,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(color: Colors.orange.shade400, width: 1.5),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              _timer?.cancel();
+                              widget.onTimerFinished();
+                            },
+                            icon: const Icon(Icons.developer_mode, size: 18),
+                            label: const Text('DEV: Saltar Espera',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                        );
+                      },
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text("Volver a Escenarios",
+                          style: TextStyle(
+                              color: isDarkMode
+                                  ? Colors.white54
+                                  : AppTheme.lBrandMain.withOpacity(0.7))),
+                    ),
+                  ],
                 ),
               )
             ],

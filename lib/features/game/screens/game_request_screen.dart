@@ -16,6 +16,7 @@ import './scenarios_screen.dart';
 import './spectator_mode_screen.dart';
 import '../../auth/screens/avatar_selection_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/development_bypass_button.dart';
 
 class GameRequestScreen extends StatefulWidget {
   final String? eventId;
@@ -1448,6 +1449,19 @@ class _GameRequestScreenState extends State<GameRequestScreen>
                                 ],
                               ),
                             ),
+                          // DEV BYPASS: Only visible for admin role
+                          DevelopmentBypassButton(
+                            label: 'DEV: Saltar Solicitud',
+                            icon: Icons.skip_next,
+                            onBypass: () {
+                              final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+                              playerProvider.setSpectatorRole(false);
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                    builder: (_) => HomeScreen(eventId: widget.eventId!)),
+                              );
+                            },
+                          ),
                         ],
                       ),
               ),

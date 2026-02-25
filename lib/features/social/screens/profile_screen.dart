@@ -22,6 +22,7 @@ import '../../../shared/utils/global_keys.dart';
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../admin/screens/dashboard-screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool hideScaffold;
@@ -569,6 +570,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
+                    // ADMIN: Admin Panel access button
+                    if (player.isAdmin) ...[  
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: _buildProfileButton(
+                          icon: Icons.admin_panel_settings,
+                          label: "Panel de Administración",
+                          color: AppTheme.primaryPurple,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const DashboardScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

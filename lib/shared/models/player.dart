@@ -6,7 +6,7 @@ class Player implements ITargetable {
   final String name;
   final String email;
   final String _avatarUrl;
-  final String role; // 'admin' or 'user'
+  final String role; // 'admin', 'user', or 'user_staff'
   String? avatarId; // ID del sprite elegido
   String? gamePlayerId; // ID de inscripción al evento (game_players.id)
   String? currentEventId; // ID del evento actual en el que está jugando
@@ -199,6 +199,13 @@ class Player implements ITargetable {
   int get experienceToNextLevel => (level * 100);
 
   double get experienceProgress => experience / experienceToNextLevel;
+
+  // --- Role Convenience Getters ---
+
+  /// True only for 'admin' role.
+  bool get isAdmin => role == 'admin';
+
+  // --- Status Getters ---
 
   bool get isInvisible => status == PlayerStatus.invisible;
 

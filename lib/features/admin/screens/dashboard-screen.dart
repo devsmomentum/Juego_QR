@@ -19,6 +19,7 @@ import 'minigames/drink_mixer_config_screen.dart';
 import 'audit_logs_screen.dart';
 import 'sponsors_management_screen.dart';
 import 'online_automation_screen.dart';
+import '../../game/screens/game_mode_selector_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -232,6 +233,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     fontSize: 14,
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold)),
+                          ),
+                          // Modo Jugador toggle
+                          IconButton(
+                            icon: const Icon(Icons.sports_esports, color: AppTheme.accentGold),
+                            tooltip: "Modo Jugador",
+                            onPressed: () {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+                                (route) => false,
+                              );
+                            },
                           ),
                           IconButton(
                             icon:

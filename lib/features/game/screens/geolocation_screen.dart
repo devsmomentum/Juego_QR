@@ -6,6 +6,7 @@ import '../widgets/sponsor_banner.dart';
 import '../../../core/theme/app_theme.dart';
 import 'dart:math' as math;
 import '../models/clue.dart';
+import '../../auth/providers/player_provider.dart';
 
 class GeolocationScreen extends StatefulWidget {
   final String clueId;
@@ -357,6 +358,36 @@ class _GeolocationScreenState extends State<GeolocationScreen>
               ),
 
               const SizedBox(height: 40),
+
+              // DEV BYPASS: Only visible for admin role
+              Consumer<PlayerProvider>(
+                builder: (context, playerProv, _) {
+                  final player = playerProv.currentPlayer;
+                  if (player == null || !player.isAdmin) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange.shade800,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.orange.shade400, width: 1.5),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.developer_mode, size: 18),
+                      label: const Text('DEV: Saltar Geolocalización',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                  );
+                },
+              ),
 
               // Hint
               Container(
