@@ -1277,9 +1277,10 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
             ),
           );
         } else {
+          final errorMsg = playerProvider.lastPowerError ?? 'Error al usar el poder';
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error al usar el poder'),
+            SnackBar(
+              content: Text(errorMsg),
               backgroundColor: Colors.red,
             ),
           );

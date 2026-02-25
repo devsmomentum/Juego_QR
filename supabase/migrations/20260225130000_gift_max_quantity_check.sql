@@ -1,9 +1,8 @@
--- Function: use_power_mechanic (Synced with migration 20260225_gift_max_quantity_check.sql)
+-- Migration: Add max quantity check when gifting defense powers
 -- Date: 2026-02-25
--- Purpose: 
--- Allow spectators (and players targeting others) to "gift" defense powers (Shield, Return, Invisibility).
--- If caster_id != target_id for these powers, add to target's inventory instead of activating.
--- Preserves all protections and logic from the previous RPC update.
+-- Purpose: Prevent spectators from gifting defense powers to players
+-- who already have the maximum quantity (3) of that power in their inventory.
+-- Returns a custom error 'target_inventory_full' instead of silently stacking.
 
 CREATE OR REPLACE FUNCTION public.use_power_mechanic(
     p_caster_id uuid, 

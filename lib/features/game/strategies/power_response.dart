@@ -53,6 +53,12 @@ class PowerUseResponse {
          if (error == 'target_invisible') return PowerUseResponse.error('¡El objetivo es invisible!');
          if (error == 'shield_already_active') return PowerUseResponse.error('¡El escudo ya está activo!');
          if (error == 'target_already_protected') return PowerUseResponse.error('¡El objetivo ya está protegido!');
+         if (error == 'target_inventory_full') {
+           final slug = response['power_slug']?.toString() ?? '';
+           final maxQty = response['max_qty']?.toString() ?? '3';
+           final powerName = _powerSlugToName(slug);
+           return PowerUseResponse.error('¡El jugador ya tiene el máximo ($maxQty) de $powerName en su inventario!');
+         }
          return PowerUseResponse.error(error?.toString() ?? 'Error desconocido');
       }
       
@@ -90,6 +96,20 @@ class PowerUseResponse {
     return PowerUseResponse.success();
   }
 }
+
+  /// Maps a power slug to a user-friendly Spanish name.
+  String _powerSlugToName(String slug) {
+    switch (slug) {
+      case 'shield': return 'Escudo';
+      case 'return': return 'Retorno';
+      case 'invisibility': return 'Invisibilidad';
+      case 'freeze': return 'Congelamiento';
+      case 'black_screen': return 'Pantalla Negra';
+      case 'life_steal': return 'Robo de Vida';
+      case 'blur_screen': return 'Pantalla Borrosa';
+      default: return slug;
+    }
+  }
 
 /// Información de rivales para broadcast de poderes.
 class RivalInfo {
