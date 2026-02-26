@@ -2743,8 +2743,15 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                     _onScenarioSelected(
                                                         scenario);
                                                   } else {
-                                                    _showJoinOptionDialog(
-                                                        scenario);
+                                                    final role = _eventRoleMap[scenario.id];
+                                                    if (role == 'player') {
+                                                      _onScenarioSelected(scenario);
+                                                    } else if (role == 'spectator') {
+                                                      _onSpectatorSelected(scenario);
+                                                    } else {
+                                                      _showJoinOptionDialog(
+                                                          scenario);
+                                                    }
                                                   }
                                                 }
                                               },
