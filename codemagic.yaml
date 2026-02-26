@@ -3,6 +3,8 @@ workflows:
     name: Despliegue Total Morna (Android + iOS)
     instance_type: mac_mini_m1 # Necesario para compilar iOS
     max_build_duration: 60
+    integrations:
+      app_store_connect: Codemagic_MH # Asegúrate de que este nombre coincida con el que pusiste en el panel de Codemagic
     environment:
       flutter: stable
       groups:
