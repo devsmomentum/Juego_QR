@@ -6,6 +6,8 @@ workflows:
       flutter: stable
       xcode: latest
       java: 17
+    integrations:
+      app_store_connect: "Codemagic_MH"
     signing:
       xcode_project: "ios/Runner.xcodeproj"
       # Cámbialo a false para forzar el uso de tu perfil específico
