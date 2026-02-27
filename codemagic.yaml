@@ -6,10 +6,14 @@ workflows:
       flutter: stable
       xcode: latest
       java: 17
-    signing: xcode_project: "ios/Runner.xcodeproj" automatic_signing: true provisioning_profile_type: app_store entitlements: ios/Runner/Runner.entitlements
+    signing:
     
-    scripts:
+      xcode_project: "ios/Runner.xcodeproj"
+      automatic_signing: true
+      provisioning_profile_type: app_store
+      entitlements: ios/Runner/Runner.entitlements
 
+    scripts:
 
       - name: Clean Flutter dependencies
         script: |
