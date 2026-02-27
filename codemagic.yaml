@@ -1,4 +1,4 @@
-workflows:
+```workflows:
   flutter-build-ios:
     environment:
       groups:
@@ -7,39 +7,22 @@ workflows:
       xcode: latest
       java: 17
     signing:
-    
       xcode_project: "ios/Runner.xcodeproj"
       automatic_signing: true
       provisioning_profile_type: app_store
       entitlements: ios/Runner/Runner.entitlements
-
     scripts:
-
-      - name: Clean CocoaPods cache and update specs
-        script: |
-          rm -rf ~/.cocoapods/repos
-          pod repo update
-
-    - name: iOS setup
-      script: |
-        cd ios
-        pod repo update
-        pod install --repo-update
-    
-
-      - name: Clean Flutter dependencies
+      - name: Clean Flutter and get dependencies
         script: |
           flutter clean
+          flutter pub upgrade onesignal_flutter
           flutter pub get
-
       - name: Clean and install CocoaPods
         script: |
           cd ios
-          rm -rf Pods Podfile.lock ~/Library/Caches/CocoaPods
+          rm -rf Pods Podfile.lock ~/Library/Caches/CocoaPods ~/.cocoapods/repos
           pod repo update
-          pod install
-          cd ..
-
+          pod install --repo-update
       - name: Build iOS
         script: |
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign```
