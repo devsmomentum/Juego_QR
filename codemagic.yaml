@@ -15,6 +15,11 @@ workflows:
 
     scripts:
 
+      - name: Clean CocoaPods cache and update specs
+        script: |
+          rm -rf ~/.cocoapods/repos
+          pod repo update
+
       - name: Clean Flutter dependencies
         script: |
           flutter clean
