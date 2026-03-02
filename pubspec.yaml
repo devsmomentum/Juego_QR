@@ -2,7 +2,7 @@ name: map_hunter
 description: Real Life RPG - MapHunter con elementos de juego de rol
 
 publish_to: "none"
-version: 1.0.1+2
+version: 1.0.1+3
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -73,7 +73,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .env
+    # - .env
     - assets/audio/
     - assets/images/
     - assets/images/personajesgrupal.png

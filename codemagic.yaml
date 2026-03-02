@@ -25,4 +25,4 @@ workflows:
           pod install --repo-update --verbose
       - name: Build iOS
         script: |
-          flutter build ios --release --no-codesign
+          flutter build ipa --release --export-method app-store
