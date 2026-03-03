@@ -10,9 +10,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../shared/models/player.dart';
-import '../providers/game_provider.dart';
-import '../providers/power_interfaces.dart';
+import '../../../../shared/models/player.dart';
+import '../../providers/game_provider.dart';
+import '../../providers/power_interfaces.dart';
 
 // ============================================================
 // EJEMPLO 1: Widget de Podio con Selector
