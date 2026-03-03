@@ -250,4 +250,56 @@ class AppConfigService {
       return false;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // VERSION CONFIGURATION
+  // ---------------------------------------------------------------------------
+
+  /// Reads the full version_configuration object from app_config.
+  /// Returns a map with: latest_version, min_supported_version,
+  /// maintenance_mode, apk_download_url.
+  Future<Map<String, dynamic>> getVersionConfig() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'version_configuration')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        return Map<String, dynamic>.from(response['value'] as Map);
+      }
+      return _defaultVersionConfig();
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching version_configuration: $e');
+      return _defaultVersionConfig();
+    }
+  }
+
+  /// Saves the full version_configuration object to app_config.
+  Future<bool> updateVersionConfig(Map<String, dynamic> config) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'version_configuration',
+        'value': config,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] version_configuration updated: $config');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating version_configuration: $e');
+      return false;
+    }
+  }
+
+  Map<String, dynamic> _defaultVersionConfig() => {
+        'latest_version': '1.0.0',
+        'min_supported_version': '1.0.0',
+        'maintenance_mode': false,
+        'apk_download_url': '',
+        'android_store_url': '',
+        'ios_store_url': '',
+      };
 }
