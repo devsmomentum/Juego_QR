@@ -5,6 +5,7 @@ import '../strategies/power_strategy_factory.dart';
 import '../../game/repositories/power_repository_interface.dart';
 import '../../mall/models/power_item.dart';
 import '../../../core/services/effect_timer_service.dart';
+import '../../../core/services/feedback_event_queue.dart';
 
 import 'power_interfaces.dart';
 
@@ -54,6 +55,14 @@ class PowerEffectProvider extends ChangeNotifier
       _timerEventSubscription; // NEW: Listen for timer expirations
   Timer? _defenseFeedbackTimer;
 
+  /// Canal de Broadcast de Supabase para recibir combat_events con baja latencia (~50ms).
+  /// Complementa _combatEventsSubscription (Postgres Changes, ~300ms) como fast-path.
+  /// Los triggers DB (trg_combat_event_broadcast) alimentan este canal.
+  RealtimeChannel? _broadcastChannel;
+
+  /// IDs de combat_events ya procesados vía Broadcast. Evita reprocess desde Postgres Changes.
+  final Set<String> _broadcastProcessedIds = {};
+
   String? _listeningForId;
   String? get listeningForId => _listeningForId;
 
@@ -96,10 +105,14 @@ class PowerEffectProvider extends ChangeNotifier
   String? _cachedShieldPowerId;
   DateTime? _ignoreShieldUntil;
 
-  final StreamController<PowerFeedbackEvent> _feedbackStreamController =
-      StreamController<PowerFeedbackEvent>.broadcast();
-  Stream<PowerFeedbackEvent> get feedbackStream =>
-      _feedbackStreamController.stream;
+  /// Cola de feedback con garantía de entrega.
+  /// Reemplaza el BroadcastStream anterior que descartaba eventos
+  /// cuando el usuario navegaba a otra pantalla (no había listeners activos).
+  final FeedbackEventQueue<PowerFeedbackEvent> _feedbackQueue =
+      FeedbackEventQueue(maxSize: 20, ttl: const Duration(seconds: 10));
+
+  @override
+  Stream<PowerFeedbackEvent> get feedbackStream => _feedbackQueue.stream;
 
   // --- DELEGATED TO EffectTimerService ---
   String? get activePowerSlug => _timerService.activeEffectSlugs.isNotEmpty
@@ -261,6 +274,8 @@ class PowerEffectProvider extends ChangeNotifier
       _subscription?.cancel();
       _casterSubscription?.cancel();
       _combatEventsSubscription?.cancel();
+      _broadcastChannel?.unsubscribe();
+      _broadcastChannel = null;
       return;
     }
 
@@ -379,10 +394,44 @@ class PowerEffectProvider extends ChangeNotifier
     _combatEventsSubscription = _repository
         .getCombatEventsStream(targetId: myGamePlayerId)
         .listen((List<Map<String, dynamic>> data) async {
-      await _handleCombatEvents(data);
+      // OPTIMIZACIÓN: Filtrar eventos que ya fueron procesados via Broadcast
+      // para evitar procesamiento redundante del mismo evento.
+      final fresh = data.where((e) {
+        final id = e['id']?.toString();
+        return id == null || !_broadcastProcessedIds.contains(id);
+      }).toList();
+      await _handleCombatEvents(fresh);
     }, onError: (e) {
       debugPrint('PowerEffectProvider combat_events stream error: $e');
     });
+
+    // 3b. Canal de Broadcast (fast-path ~50ms) para combat_events y power_applied.
+    // Los triggers DB alimentan este canal. Si llega aquí primero, marcamos el ID
+    // como procesado para que el Postgres Changes (3a) lo ignore.
+    _broadcastChannel?.unsubscribe();
+    _broadcastChannel = _repository
+        .getCombatBroadcastChannel(gamePlayerId: myGamePlayerId)
+        .onBroadcast(
+          event: 'combat_event',
+          callback: (payload) async {
+            final data = payload as Map<String, dynamic>?;
+            if (data == null) return;
+
+            final id = data['id']?.toString();
+            if (id != null) {
+              if (_broadcastProcessedIds.contains(id)) return; // Ya procesado
+              _broadcastProcessedIds.add(id);
+              // Mantener el set acotado (últimos 100 IDs)
+              if (_broadcastProcessedIds.length > 100) {
+                _broadcastProcessedIds.remove(_broadcastProcessedIds.first);
+              }
+            }
+
+            debugPrint('⚡ [BROADCAST] combat_event recibido (fast-path): ${data['result_type']}');
+            await _handleCombatEvents([data]);
+          },
+        );
+    _broadcastChannel!.subscribe();
 
     // 4. Listen for Timer Expiration Events (CRITICAL for UI unlock + defense deactivation)
     _timerEventSubscription?.cancel();
@@ -456,10 +505,9 @@ class PowerEffectProvider extends ChangeNotifier
       debugPrint('[COMBAT]    - Protected After Update: $_isProtected');
 
       _registerDefenseAction(DefenseAction.shieldBroken);
-      _feedbackStreamController
-          .add(PowerFeedbackEvent(PowerFeedbackType.shieldBroken));
+      _feedbackQueue.add(PowerFeedbackEvent(PowerFeedbackType.shieldBroken));
 
-      debugPrint('[COMBAT] 🛡️ Shield broken feedback emitted');
+      debugPrint('[COMBAT] 🛡️ Shield broken feedback emitted (queued)');
     } else if (resultType == 'reflected') {
       final targetId = event['target_id']?.toString();
       // If I am the target, it means *I* reflected the attack
@@ -481,7 +529,7 @@ class PowerEffectProvider extends ChangeNotifier
         _registerDefenseAction(DefenseAction.returned);
 
         // Emit positive feedback event (for toasts or other listeners)
-        _feedbackStreamController.add(PowerFeedbackEvent(
+        _feedbackQueue.add(PowerFeedbackEvent(
           PowerFeedbackType.returnSuccess,
           message: '¡Ataque devuelto exitosamente!',
           relatedPlayerName: attackerId,
@@ -502,7 +550,7 @@ class PowerEffectProvider extends ChangeNotifier
         setPendingEffectContext(null, null);
 
         // Emit Feedback Event
-        _feedbackStreamController.add(PowerFeedbackEvent(
+        _feedbackQueue.add(PowerFeedbackEvent(
           PowerFeedbackType.lifeStolen,
           relatedPlayerName: attackerId,
         ));
@@ -525,7 +573,7 @@ class PowerEffectProvider extends ChangeNotifier
 
       final powerDisplayName = _getPowerDisplayName(giftPowerSlug);
 
-      _feedbackStreamController.add(PowerFeedbackEvent(
+      _feedbackQueue.add(PowerFeedbackEvent(
         PowerFeedbackType.giftReceived,
         message: '¡$gifterName te ha regalado un $powerDisplayName!',
         relatedPlayerName: gifterName,
@@ -790,8 +838,7 @@ class PowerEffectProvider extends ChangeNotifier
       // --- HANDLE INCOMING FEEDBACK (As Attacker) ---
       if (slug == 'shield_feedback') {
         _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
-        _feedbackStreamController
-            .add(PowerFeedbackEvent(PowerFeedbackType.attackBlocked));
+        _feedbackQueue.add(PowerFeedbackEvent(PowerFeedbackType.attackBlocked));
         continue;
       }
 
@@ -841,11 +888,11 @@ class PowerEffectProvider extends ChangeNotifier
 
     // ⚡ CRITICAL: Emit feedback event for shield broken
     if (action == DefenseAction.shieldBroken) {
-      _feedbackStreamController.add(PowerFeedbackEvent(
+      _feedbackQueue.add(PowerFeedbackEvent(
         PowerFeedbackType.shieldBroken,
         message: 'Shield broken',
       ));
-      debugPrint('[SHIELD] 🛡️💥 Shield broken feedback event emitted');
+      debugPrint('[SHIELD] 🛡️💥 Shield broken feedback event queued (guaranteed delivery)');
     }
 
     // Duración diferenciada: Returned y ShieldBroken son eventos importantes => 4s
@@ -870,7 +917,7 @@ class PowerEffectProvider extends ChangeNotifier
   void notifyPowerReturned(String byPlayerName) {
     _returnedByPlayerName = byPlayerName;
     _registerDefenseAction(DefenseAction.returned);
-    _feedbackStreamController.add(PowerFeedbackEvent(
+    _feedbackQueue.add(PowerFeedbackEvent(
       PowerFeedbackType.returnRejection,
       relatedPlayerName: byPlayerName,
     ));
@@ -879,7 +926,7 @@ class PowerEffectProvider extends ChangeNotifier
 
   void notifyAttackBlocked() {
     _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
-    _feedbackStreamController.add(PowerFeedbackEvent(
+    _feedbackQueue.add(PowerFeedbackEvent(
       PowerFeedbackType.attackBlocked,
     ));
     notifyListeners();
@@ -887,7 +934,7 @@ class PowerEffectProvider extends ChangeNotifier
 
   void notifyStealFailed() {
     _registerDefenseAction(DefenseAction.stealFailed);
-    _feedbackStreamController.add(PowerFeedbackEvent(
+    _feedbackQueue.add(PowerFeedbackEvent(
       PowerFeedbackType.stealFailed,
     ));
     notifyListeners();
@@ -903,6 +950,8 @@ class PowerEffectProvider extends ChangeNotifier
     _returnedByPlayerName = null;
     _returnedAgainstCasterId = null;
     _listeningForEventId = null;
+    _feedbackQueue.clear(); // Descartar eventos pendientes de la sesión anterior
+    _broadcastProcessedIds.clear();
     notifyListeners();
   }
 
@@ -916,10 +965,12 @@ class PowerEffectProvider extends ChangeNotifier
     _subscription?.cancel();
     _casterSubscription?.cancel();
     _combatEventsSubscription?.cancel();
-    _timerEventSubscription?.cancel(); // NEW: Cancel timer event subscription
+    _timerEventSubscription?.cancel();
     _defenseFeedbackTimer?.cancel();
+    _broadcastChannel?.unsubscribe();
+    _broadcastChannel = null;
     _clearAllEffects();
-    _feedbackStreamController.close(); // Cleanup Stream
+    _feedbackQueue.dispose(); // Cleanup feedback queue
     super.dispose();
   }
 }

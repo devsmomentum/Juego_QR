@@ -8,6 +8,7 @@ import '../services/game_service.dart';
 import '../../admin/models/sponsor.dart';
 import '../../admin/services/sponsor_service.dart';
 import '../models/power_effect.dart';
+import '../../../core/services/leaderboard_debouncer.dart';
 
 // ============================================================
 // GATEKEEPER: User Event Status Types
@@ -147,6 +148,14 @@ class GameProvider extends ChangeNotifier implements IResettable {
   Timer? _leaderboardTimer;
   RealtimeChannel? _raceStatusChannel;
   RealtimeChannel? _livesSubscription; // Suscripción a vidas globales
+
+  /// Debouncer para el leaderboard: evita reconstrucciones excesivas cuando
+  /// múltiples jugadores completan pistas simultáneamente.
+  /// Con 50 jugadores activos, sin esto se dispararían 50+ notifyListeners()/seg.
+  final LeaderboardDebouncer _leaderboardDebouncer = LeaderboardDebouncer(
+    interval: const Duration(milliseconds: 2000),
+    maxWait: const Duration(milliseconds: 5000),
+  );
 
   List<Clue> get clues => _clues;
   List<Player> get leaderboard => _leaderboard;
@@ -288,15 +297,20 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   // --- GESTIÓN DEL RANKING EN TIEMPO REAL ---
 
-  /// Inicia el polling periódico del Leaderboard (cada 5 segundos).
+  /// Inicia el polling periódico del Leaderboard (heartbeat de fallback: cada 30 segundos).
   ///
-  /// Llama a `fetchLeaderboard` inicialmente y luego lo programa.
-  /// Útil para mantener la tabla de posiciones actualizada sin Realtime excesivo.
+  /// OPTIMIZACIÓN: El intervalo principal de actualización ahora corre por
+  /// [subscribeToRaceStatus] + [_leaderboardDebouncer] (event-driven, 2s debounce).
+  /// Este timer es solo un "heartbeat" de reconciliación para cubrir casos edge:
+  /// - Reconexión tras pérdida de WebSocket
+  /// - Eventos que llegaron durante desconexión temporal
   void startLeaderboardUpdates() {
     fetchLeaderboard();
     stopLeaderboardUpdates();
 
-    _leaderboardTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    // 30s en lugar de 5s: Realtime + debounce maneja las actualizaciones reactivas.
+    // Este timer solo es fallback de resync.
+    _leaderboardTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_currentEventId != null) {
         _fetchLeaderboardInternal(silent: true);
       }
@@ -310,6 +324,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _leaderboardTimer = null;
     _raceStatusChannel?.unsubscribe();
     _raceStatusChannel = null;
+    _leaderboardDebouncer.flush(); // Ejecutar cualquier update pendiente antes de parar
   }
 
   /// Detiene la suscripción Realtime de vidas.
@@ -330,8 +345,13 @@ class GameProvider extends ChangeNotifier implements IResettable {
       _setRaceCompleted(completed, source);
     }, onProgressUpdate: () {
       debugPrint(
-          '🏎️ RACE UPDATE: Realtime progress detected, refreshing leaderboard...');
-      _fetchLeaderboardInternal(silent: true);
+          '🏎️ RACE UPDATE: Realtime progress detected, scheduling debounced leaderboard refresh...');
+      // OPTIMIZACIÓN: Debounce de 2s para evitar 50+ fetches/segundo en ráfagas.
+      // Si hay actividad continua, maxWait=5s garantiza que no parezca congelado.
+      _leaderboardDebouncer.schedule(() {
+        debugPrint('📊 LeaderboardDebouncer: flush → _fetchLeaderboardInternal');
+        _fetchLeaderboardInternal(silent: true);
+      });
     });
   }
 
@@ -367,89 +387,43 @@ class GameProvider extends ChangeNotifier implements IResettable {
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'game_players',
-          // ⚡ SIN FILTRO: Recibimos TODOS los updates de game_players
-          // La validación se hace manualmente en el callback
+          // ✅ FILTRO SERVER-SIDE: Requiere REPLICA IDENTITY FULL en game_players
+          // (aplicado en migración 20260303100000_realtime_performance_optimizations.sql).
+          // Con 50 jugadores, esto reduce de 50×enviados/todos a 1×solo-el-mío.
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: normalizedUserId,
+          ),
           callback: (payload) {
             final record = payload.newRecord;
             final timestamp = DateTime.now().toIso8601String();
 
-            // 🔥 AUDITORÍA COMPLETA: Log de entrada del evento
             debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             debugPrint('[LIVES_SYNC] 🔥 REALTIME EVENT RECEIVED @ $timestamp');
 
-            // Extraer y normalizar IDs entrantes
-            final incomingUserIdRaw = record['user_id'];
+            // Con filtro server-side, el event_id aún requiere validación
+            // porque la columna user_id no garantiza pertenecer a este evento.
             final incomingEventIdRaw = record['event_id'];
             final incomingLivesRaw = record['lives'];
 
-            // Log de tipos para debugging
-            debugPrint('[LIVES_SYNC]   📦 Raw Data Types:');
-            debugPrint(
-                '[LIVES_SYNC]      user_id: ${incomingUserIdRaw.runtimeType} = $incomingUserIdRaw');
-            debugPrint(
-                '[LIVES_SYNC]      event_id: ${incomingEventIdRaw.runtimeType} = $incomingEventIdRaw');
-            debugPrint(
-                '[LIVES_SYNC]      lives: ${incomingLivesRaw.runtimeType} = $incomingLivesRaw');
-
-            // Normalizar IDs entrantes (manejar UUID objects y Strings)
-            final String incomingUserId =
-                incomingUserIdRaw?.toString().trim() ?? '';
             final String incomingEventId =
                 incomingEventIdRaw?.toString().trim() ?? '';
-
-            // Comparación con IDs esperados
-            debugPrint('[LIVES_SYNC]   🎯 ID Comparison:');
-            debugPrint(
-                '[LIVES_SYNC]      Expected user_id: "$normalizedUserId"');
-            debugPrint('[LIVES_SYNC]      Incoming user_id: "$incomingUserId"');
-            debugPrint(
-                '[LIVES_SYNC]      User Match: ${incomingUserId == normalizedUserId}');
-            debugPrint(
-                '[LIVES_SYNC]      Expected event_id: "$normalizedEventId"');
-            debugPrint(
-                '[LIVES_SYNC]      Incoming event_id: "$incomingEventId"');
-            debugPrint(
-                '[LIVES_SYNC]      Event Match: ${incomingEventId == normalizedEventId}');
-
-            // Filtrado robusto: Solo procesar si ambos IDs coinciden
-            final bool userMatches = incomingUserId == normalizedUserId;
             final bool eventMatches = incomingEventId == normalizedEventId;
 
-            if (userMatches && eventMatches) {
-              // ✅ MATCH: Este evento es para nuestro usuario
+            if (eventMatches) {
               final int newLives = incomingLivesRaw as int;
-              debugPrint('[LIVES_SYNC] ✅ MATCH CONFIRMED - Processing update');
-              debugPrint('[LIVES_SYNC]   Old lives: $_lives');
-              debugPrint('[LIVES_SYNC]   New lives: $newLives');
+              debugPrint('[LIVES_SYNC] ✅ Match - Updating lives: $_lives → $newLives');
 
-              // Solo actualizar si el valor cambió
               if (_lives != newLives) {
-                final int oldLives = _lives;
                 _lives = newLives;
-
-                debugPrint(
-                    '[LIVES_SYNC]   📢 Lives changed: $oldLives → $newLives');
-                debugPrint('[LIVES_SYNC]   🔔 Calling notifyListeners()...');
-
-                notifyListeners(); // 📢 Esto despierta a la UI
-
-                debugPrint(
-                    '[LIVES_SYNC]   ✅ notifyListeners() completed @ ${DateTime.now().toIso8601String()}');
-                debugPrint(
-                    '[LIVES_SYNC]   💡 UI should rebuild NOW with new value: $newLives');
+                notifyListeners();
+                debugPrint('[LIVES_SYNC] 🔔 notifyListeners() called');
               } else {
-                debugPrint(
-                    '[LIVES_SYNC]   ⚠️ Value unchanged ($newLives), skipping notification');
+                debugPrint('[LIVES_SYNC] ⚠️ Value unchanged ($newLives), skipping');
               }
             } else {
-              // ⚠️ NO MATCH: Evento filtrado
-              debugPrint('[LIVES_SYNC] ⚠️ EVENT FILTERED OUT');
-              if (!userMatches) {
-                debugPrint('[LIVES_SYNC]   ❌ User ID mismatch');
-              }
-              if (!eventMatches) {
-                debugPrint('[LIVES_SYNC]   ❌ Event ID mismatch');
-              }
+              debugPrint('[LIVES_SYNC] ⚠️ Event ID mismatch - filtered out');
             }
 
             debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -904,6 +878,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   void dispose() {
     stopLeaderboardUpdates();
     stopLivesSubscription();
+    _leaderboardDebouncer.dispose();
     super.dispose();
   }
 }
