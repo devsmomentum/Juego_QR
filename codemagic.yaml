@@ -16,13 +16,15 @@ workflows:
         script: |
           flutter clean
           flutter pub get
-      - name: Clean and install CocoaPods
+      - name: Install CocoaPods
         script: |
           cd ios
           rm -rf Pods Podfile.lock
-          rm -rf ~/Library/Caches/CocoaPods
-          rm -rf ~/.cocoapods/repos
-          pod install --repo-update --verbose
-      - name: Build iOS
+          pod install --repo-update
+      - name: Build iOS IPA (Release Mode)
         script: |
-          flutter build ipa --release --export-method app-store
+          # Incrementamos el build number automáticamente para evitar el error de duplicado (ID 409)
+          # Se usa 'build ipa' para asegurar que sea un binario de distribución real
+          flutter build ipa --release \
+            --build-number=$(($BUILD_NUMBER + 10)) \
+            --export-method app-store
