@@ -118,10 +118,9 @@ BEGIN
 
   ELSE
 
-    -- Not enough players -> cancel the event.
-    -- status = 'cancelled' so Realtime notifies all waiting clients.
-    UPDATE public.events
-    SET status = 'cancelled'
+    -- Not enough players -> delete the event.
+    -- Row is deleted so the event and all cascade rows are removed.
+    DELETE FROM public.events
     WHERE id = p_event_id
       AND status = 'pending'; -- race-condition guard
 

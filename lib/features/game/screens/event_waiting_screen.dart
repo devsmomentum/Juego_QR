@@ -8,7 +8,7 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../admin/services/sponsor_service.dart'; // NEW
 import '../../admin/models/sponsor.dart'; // NEW
 import '../widgets/sponsor_banner.dart'; // NEW
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../widgets/event_launch_countdown_overlay.dart'; // NEW: 5-second launch overlay
@@ -27,18 +27,22 @@ class EventWaitingScreen extends StatefulWidget {
 class _EventWaitingScreenState extends State<EventWaitingScreen>
     with SingleTickerProviderStateMixin {
   Timer? _timer;
-  Timer? _statusPollingTimer; // P1: Polling de recuperación como red de seguridad
+  Timer?
+      _statusPollingTimer; // P1: Polling de recuperación como red de seguridad
   Duration? _timeLeft;
-  bool _waitingForAdmin = false; // True when countdown finished but admin hasn't started event
-  bool _isNavigating = false; // Guard: evita doble-navegación entre Realtime y Polling
+  bool _waitingForAdmin =
+      false; // True when countdown finished but admin hasn't started event
+  bool _isNavigating =
+      false; // Guard: evita doble-navegación entre Realtime y Polling
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
 
   // ── Pending online: auto-start + launch overlay state ──────────────────────
-  Timer? _autoStartTimer;             // polls player count after countdown hits zero
-  int _playerCount = 0;               // current non-spectator enrolled players
-  int _minPlayersToStart = 5;         // loaded from config (default 5)
-  bool _isShowingLaunchCountdown = false; // true while the 5-s launch overlay is on
+  Timer? _autoStartTimer; // polls player count after countdown hits zero
+  int _playerCount = 0; // current non-spectator enrolled players
+  int _minPlayersToStart = 5; // loaded from config (default 5)
+  bool _isShowingLaunchCountdown =
+      false; // true while the 5-s launch overlay is on
   // ────────────────────────────────────────────────────────────────────────────
 
   @override
@@ -61,8 +65,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     // (antes estaba dentro de _loadSponsor(), causando una race condition)
     _setupRealtimeSubscription();
 
-    // P1: Polling de recuperación cada 5s como red de seguridad ante fallos de Realtime
-    _statusPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // P1: Polling de recuperación cada 30s como red de seguridad ante fallos de Realtime para no saturar la BD
+    _statusPollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _checkEventStatusFromServer();
     });
 
@@ -86,11 +90,12 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
 
   void _setupRealtimeSubscription() {
     try {
-      debugPrint("🔍 Setting up realtime subscription for event: ${widget.event.id}");
+      debugPrint(
+          "🔍 Setting up realtime subscription for event: ${widget.event.id}");
       _eventChannel = Supabase.instance.client
           .channel('public:events:${widget.event.id}')
           .onPostgresChanges(
-            event: PostgresChangeEvent.update,
+            event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'events',
             filter: PostgresChangeFilter(
@@ -99,10 +104,16 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               value: widget.event.id,
             ),
             callback: (payload) {
+              if (payload.eventType == PostgresChangeEvent.delete) {
+                debugPrint("❌ Event DELETED via Realtime.");
+                _showCancelledDialog();
+                return;
+              }
               debugPrint("🔔 Event update received: ${payload.newRecord}");
               final newStatus = payload.newRecord['status'];
               if (newStatus == 'active') {
-                debugPrint("✅ Event is now ACTIVE via Realtime! Triggering navigation...");
+                debugPrint(
+                    "✅ Event is now ACTIVE via Realtime! Triggering navigation...");
                 _triggerNavigation();
               } else if (newStatus == 'cancelled') {
                 debugPrint("❌ Event CANCELLED via Realtime.");
@@ -150,12 +161,17 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
           .from('events')
           .select('status')
           .eq('id', widget.event.id)
-          .maybeSingle();  // maybeSingle so a missing row doesn't throw
-      if (response == null) return; // event deleted, ignore until cancelled arrives via Realtime
+          .maybeSingle(); // maybeSingle so a missing row doesn't throw
+      if (response == null) {
+        debugPrint("❌ Polling detected event DELETED.");
+        if (mounted) _showCancelledDialog();
+        return;
+      }
       final status = response['status'] as String?;
-      debugPrint("⏳ Polling event status: $status");
+      // Se apaga el print de polling para no generar ruido en consola ('⏳ Polling event status: $status')
       if ((status == 'active' || status == 'completed') && mounted) {
-        debugPrint("✅ Polling detected event is now ACTIVE! Triggering navigation...");
+        debugPrint(
+            "✅ Polling detected event is now ACTIVE! Triggering navigation...");
         _triggerNavigation();
       } else if (status == 'cancelled' && mounted) {
         debugPrint("❌ Polling detected event CANCELLED.");
@@ -183,7 +199,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1D),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 48),
+        icon: const Icon(Icons.cancel_outlined,
+            color: Colors.redAccent, size: 48),
         title: const Text(
           'Evento Cancelado',
           textAlign: TextAlign.center,
@@ -348,13 +365,15 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     // Determine dynamic content based on state
     final bool isOnlineEvent = widget.event.type == 'online';
     final bool isWaitingPlayers = _waitingForAdmin && isOnlineEvent;
-    final bool isWaitingAdmin  = _waitingForAdmin && !isOnlineEvent;
+    final bool isWaitingAdmin = _waitingForAdmin && !isOnlineEvent;
 
     final String headerText = _waitingForAdmin
         ? (isOnlineEvent ? 'SALA DE ESPERA' : 'CUENTA REGRESIVA FINALIZADA')
         : 'PREÁRATE';
     final String titleText = _waitingForAdmin
-        ? (isOnlineEvent ? 'ESPERANDO JUGADORES...' : 'ESPERANDO AL ADMINISTRADOR')
+        ? (isOnlineEvent
+            ? 'ESPERANDO JUGADORES...'
+            : 'ESPERANDO AL ADMINISTRADOR')
         : 'LA AVENTURA COMIENZA PRONTO';
     final String subtitleText = _waitingForAdmin
         ? (isOnlineEvent
@@ -364,7 +383,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     final IconData iconData = _waitingForAdmin
         ? (isOnlineEvent ? Icons.people : Icons.admin_panel_settings)
         : Icons.hourglass_empty;
-    
+
     // LOGIN CLARO STYLE COLORS
     final Color dGoldMain = const Color(0xFFFECB00);
     final Color lBrandMain = const Color(0xFF5A189A);
@@ -372,10 +391,13 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     final Color lTextSecondary = const Color(0xFF4A4A5A);
 
     final Color primaryAccent = isDarkMode ? AppTheme.accentGold : lBrandMain;
-    final Color secondaryAccent = isDarkMode ? AppTheme.secondaryPink : dGoldMain;
+    final Color secondaryAccent =
+        isDarkMode ? AppTheme.secondaryPink : dGoldMain;
 
-    final Color iconColor = _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
-    final Color headerColor = _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
+    final Color iconColor =
+        _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
+    final Color headerColor =
+        _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
     final Color glowColor = _waitingForAdmin
         ? Colors.orangeAccent.withOpacity(0.2)
         : secondaryAccent.withOpacity(0.2);
@@ -383,10 +405,13 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
         ? Colors.orangeAccent.withOpacity(0.5)
         : primaryAccent.withOpacity(0.5);
 
-    final Color currentCardBg = isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.9);
+    final Color currentCardBg = isDarkMode
+        ? Colors.white.withOpacity(0.05)
+        : Colors.white.withOpacity(0.9);
     final Color currentTitleColor = Colors.white;
     final Color currentSubtitleColor = Colors.white70;
-    final Color currentBorderColor = (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.3);
+    final Color currentBorderColor =
+        (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.3);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -410,7 +435,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2),
             ),
           ),
-          
+
           SafeArea(
             child: Stack(
               children: [
@@ -429,9 +454,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: primaryAccent.withOpacity(0.1),
-                                border: Border.all(
-                                    color: borderColor,
-                                    width: 2),
+                                border:
+                                    Border.all(color: borderColor, width: 2),
                                 boxShadow: [
                                   BoxShadow(
                                     color: glowColor,
@@ -440,8 +464,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                   ),
                                 ],
                               ),
-                              child: Icon(iconData,
-                                  size: 60, color: iconColor),
+                              child: Icon(iconData, size: 60, color: iconColor),
                             ),
                           ),
                           const SizedBox(height: 50),
@@ -487,37 +510,47 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                             ClipRRect(
                               borderRadius: BorderRadius.circular(24),
                               child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
                                   padding: const EdgeInsets.all(5),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D0D0F).withOpacity(0.6),
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
                                     borderRadius: BorderRadius.circular(24),
                                     border: Border.all(
-                                        color: Colors.orangeAccent.withOpacity(0.6),
+                                        color: Colors.orangeAccent
+                                            .withOpacity(0.6),
                                         width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.orangeAccent.withOpacity(0.05),
+                                        color: Colors.orangeAccent
+                                            .withOpacity(0.05),
                                         blurRadius: 20,
                                       ),
                                     ],
                                   ),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 30, vertical: 25),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: Colors.orangeAccent.withOpacity(0.2),
+                                        color: Colors.orangeAccent
+                                            .withOpacity(0.2),
                                         width: 1.0,
                                       ),
-                                      color: Colors.orangeAccent.withOpacity(0.02),
+                                      color:
+                                          Colors.orangeAccent.withOpacity(0.02),
                                     ),
                                     child: Column(
                                       children: [
                                         Icon(
-                                          isOnlineEvent ? Icons.people : Icons.sync,
-                                          color: Colors.orangeAccent, size: 32,
+                                          isOnlineEvent
+                                              ? Icons.people
+                                              : Icons.sync,
+                                          color: Colors.orangeAccent,
+                                          size: 32,
                                         ),
                                         const SizedBox(height: 12),
                                         Text(
@@ -553,7 +586,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                                   ),
                                                 ),
                                                 TextSpan(
-                                                  text: ' / $_minPlayersToStart',
+                                                  text:
+                                                      ' / $_minPlayersToStart',
                                                   style: const TextStyle(
                                                     color: Colors.white54,
                                                     fontSize: 18,
@@ -582,7 +616,9 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                                 fontFamily: 'Roboto',
                                               ),
                                               children: [
-                                                TextSpan(text: "El administrador debe presionar "),
+                                                TextSpan(
+                                                    text:
+                                                        "El administrador debe presionar "),
                                                 TextSpan(
                                                   text: "PLAY",
                                                   style: TextStyle(
@@ -593,8 +629,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                               ],
                                             ),
                                           ),
-                                        ],  // closes else branch
-                                      ],  // closes Column.children
+                                        ], // closes else branch
+                                      ], // closes Column.children
                                     ),
                                   ),
                                 ),
@@ -605,31 +641,42 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                             ClipRRect(
                               borderRadius: BorderRadius.circular(24),
                               child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
                                   padding: const EdgeInsets.all(5),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D0D0F).withOpacity(0.6),
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
                                     borderRadius: BorderRadius.circular(24),
                                     border: Border.all(
-                                        color: currentBorderColor,
-                                        width: 1.5),
+                                        color: currentBorderColor, width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.05),
+                                        color: (isDarkMode
+                                                ? secondaryAccent
+                                                : primaryAccent)
+                                            .withOpacity(0.05),
                                         blurRadius: 20,
                                       ),
                                     ],
                                   ),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 30, vertical: 25),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.2),
+                                        color: (isDarkMode
+                                                ? secondaryAccent
+                                                : primaryAccent)
+                                            .withOpacity(0.2),
                                         width: 1.0,
                                       ),
-                                      color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.02),
+                                      color: (isDarkMode
+                                              ? secondaryAccent
+                                              : primaryAccent)
+                                          .withOpacity(0.02),
                                     ),
                                     child: Column(
                                       children: [
@@ -647,11 +694,15 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                         Text(
                                           "${_timeLeft!.inDays}d ${_timeLeft!.inHours % 24}h ${_timeLeft!.inMinutes % 60}m ${_timeLeft!.inSeconds % 60}s",
                                           style: TextStyle(
-                                            color: isDarkMode ? Colors.white : lBrandMain,
+                                            color: isDarkMode
+                                                ? Colors.white
+                                                : lBrandMain,
                                             fontSize: 28,
                                             fontWeight: FontWeight.w900,
                                             fontFamily: 'Orbitron',
-                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures()
+                                            ],
                                           ),
                                         ),
                                       ],
@@ -660,11 +711,12 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                 ),
                               ),
                             ),
-                          
+
                           // Sponsor Banner (Part of flow now)
                           if (_eventSponsor != null)
                             Padding(
-                              padding: const EdgeInsets.only(top: 20, bottom: 80),
+                              padding:
+                                  const EdgeInsets.only(top: 20, bottom: 80),
                               child: SponsorBanner(sponsor: _eventSponsor),
                             ),
                         ],
@@ -684,18 +736,23 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                       Consumer<PlayerProvider>(
                         builder: (context, playerProv, _) {
                           final player = playerProv.currentPlayer;
-                          if (player == null || !player.isAdmin) return const SizedBox.shrink();
+                          if (player == null || !player.isAdmin)
+                            return const SizedBox.shrink();
                           return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 40, vertical: 4),
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.orange.shade800,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(color: Colors.orange.shade400, width: 1.5),
+                                  side: BorderSide(
+                                      color: Colors.orange.shade400,
+                                      width: 1.5),
                                 ),
                                 elevation: 0,
                               ),
@@ -705,7 +762,9 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                               },
                               icon: const Icon(Icons.developer_mode, size: 18),
                               label: const Text('DEV: Saltar Espera',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14)),
                             ),
                           );
                         },

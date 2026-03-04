@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:map_hunter/features/game/models/event.dart';
 import 'package:provider/provider.dart';
 import 'package:map_hunter/features/auth/providers/player_provider.dart';
 import 'package:map_hunter/core/theme/app_theme.dart';
 import 'package:map_hunter/features/game/screens/clues_screen.dart';
 import 'package:map_hunter/features/game/screens/event_waiting_screen.dart';
 import 'package:map_hunter/features/game/providers/event_provider.dart';
+import 'package:map_hunter/features/game/models/event.dart'; // IMPORTED THIS
 import 'package:map_hunter/features/game/providers/game_provider.dart';
 import '../../game/providers/spectator_feed_provider.dart'; // NEW
 import '../../game/screens/live_feed_screen.dart'; // NEW
@@ -33,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   late List<Widget> _screens;
+  GameEvent? _cachedEvent;
 
   // Debug logic
   bool _forceGameStart = false;
@@ -79,9 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
       // Placeholder mientras redirige
-      _screens = [
-        const Scaffold(body: Center(child: LoadingIndicator()))
-      ];
+      _screens = [const Scaffold(body: Center(child: LoadingIndicator()))];
     } else {
       _screens = [
         CluesScreen(eventId: widget.eventId),
@@ -109,13 +110,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _checkAndShowTutorial({bool force = false}) async {
     if (_isTutorialShowing) return;
-    
+
     String section;
     switch (_currentIndex) {
-      case 0: section = 'CLUES'; break;
-      case 1: section = 'INVENTORY'; break;
-      case 2: section = 'RANKING'; break;
-      default: return;
+      case 0:
+        section = 'CLUES';
+        break;
+      case 1:
+        section = 'INVENTORY';
+        break;
+      case 2:
+        section = 'RANKING';
+        break;
+      default:
+        return;
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -123,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasSeen = prefs.getBool(tutorialKey) ?? false;
 
     if (!force && hasSeen) return;
-    
+
     final steps = MasterTutorialContent.getStepsForSection(section, context);
     if (steps.isEmpty) return;
 
@@ -147,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Removed _showWelcomeTutorial as it is no longer required in Home/Mode selection
-  
+
   @override
   void dispose() {
     // Usamos la referencia guardada, no el context
@@ -174,7 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 40),
         child: Container(
-          padding: const EdgeInsets.all(4), // Espacio para el efecto de doble borde
+          padding:
+              const EdgeInsets.all(4), // Espacio para el efecto de doble borde
           decoration: BoxDecoration(
             color: currentRed.withOpacity(0.2),
             borderRadius: BorderRadius.circular(28),
@@ -232,7 +241,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () => Navigator.pop(ctx),
                         child: const Text(
                           'CANCELAR',
-                          style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.white54,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -273,30 +284,36 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDarkMode = Provider.of<PlayerProvider>(context).isDarkMode;
 
     try {
-      final event =
+      final currentEvent =
           eventProvider.events.firstWhere((e) => e.id == widget.eventId);
-
-      // Only show waiting screen if event is pending (NOT yet activated by admin)
-      // The event transitions to 'active' ONLY when an admin calls start_event RPC
-      if (event.status == 'pending' && !_forceGameStart) {
-        return EventWaitingScreen(
-          event: event,
-          onTimerFinished: () {
-            // Admin activated the event via Realtime subscription
-            // (No auto-activation by timer — admin is the sole source of truth)
-            debugPrint("✅ Event ${event.id} activated by admin. Navigating to game.");
-            setState(() {
-              _forceGameStart = true;
-            });
-          },
-        );
-      }
+      _cachedEvent = currentEvent;
     } catch (_) {
-      // Fallback
+      // Fallback: If event is deleted, we use the last cached version to allow
+      // the EventWaitingScreen to display the "Event Cancelled" dialog gracefully.
     }
 
+    final event = _cachedEvent;
+
+    // Only show waiting screen if event is pending (NOT yet activated by admin)
+    // The event transitions to 'active' ONLY when an admin calls start_event RPC
+    if (event != null && event.status == 'pending' && !_forceGameStart) {
+      return EventWaitingScreen(
+        event: event,
+        onTimerFinished: () {
+          // Admin activated the event via Realtime subscription
+          // (No auto-activation by timer — admin is the sole source of truth)
+          debugPrint(
+              "✅ Event ${event.id} activated by admin. Navigating to game.");
+          setState(() {
+            _forceGameStart = true;
+          });
+        },
+      );
+    }
+    // The try block was handled above.
+
     final isSpectator = player?.role == 'spectator';
-    
+
     // Trigger tutorial for the current section
     if (!isSpectator) {
       _checkAndShowTutorial();
@@ -310,82 +327,86 @@ class _HomeScreenState extends State<HomeScreen> {
         statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        extendBody: true, // Allow body to show behind rounded corners of bottom nav
+        extendBody:
+            true, // Allow body to show behind rounded corners of bottom nav
         backgroundColor: Colors.transparent,
         body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              // Calculate index of the "Exit" item
-              final exitIndex = isSpectator ? 4 : 3;
-              
-              if (index == exitIndex) {
-                 _showExitDialog();
-                 return;
-              }
-
-              if (player == null || (!player.isFrozen && !player.isBlinded)) {
-                setState(() {
-                  _currentIndex = index;
-                });
-                // When tab changes, we might want to show tutorial again if it's the first time for that tab
-                _checkAndShowTutorial(force: false);
-              }
-            },
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: const Color(0xFF151517), // Match logout modal background
-            selectedItemColor: AppTheme.secondaryPink,
-            unselectedItemColor: Colors.white54,
-            showUnselectedLabels: true,
-            elevation: 0,
-            items: [
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.map),
-                activeIcon: Icon(Icons.map, size: 28),
-                label: 'Pistas',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                    isSpectator ? Icons.rss_feed : Icons.inventory_2_outlined),
-                activeIcon: Icon(
-                    isSpectator ? Icons.rss_feed : Icons.inventory_2,
-                    size: 28),
-                label: isSpectator ? 'En Vivo' : 'Inventario',
-              ),
-              if (isSpectator)
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.flash_on),
-                  activeIcon: Icon(Icons.flash_on, size: 28),
-                  label: 'Sabotajes',
-                ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.leaderboard_outlined),
-                activeIcon: Icon(Icons.leaderboard, size: 28),
-                label: 'Ranking',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.sensor_door_outlined),
-                activeIcon: Icon(Icons.sensor_door, color: AppTheme.dangerRed),
-                label: 'Salir',
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                // Calculate index of the "Exit" item
+                final exitIndex = isSpectator ? 4 : 3;
+
+                if (index == exitIndex) {
+                  _showExitDialog();
+                  return;
+                }
+
+                if (player == null || (!player.isFrozen && !player.isBlinded)) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                  // When tab changes, we might want to show tutorial again if it's the first time for that tab
+                  _checkAndShowTutorial(force: false);
+                }
+              },
+              type: BottomNavigationBarType.fixed,
+              backgroundColor:
+                  const Color(0xFF151517), // Match logout modal background
+              selectedItemColor: AppTheme.secondaryPink,
+              unselectedItemColor: Colors.white54,
+              showUnselectedLabels: true,
+              elevation: 0,
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.map),
+                  activeIcon: Icon(Icons.map, size: 28),
+                  label: 'Pistas',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(isSpectator
+                      ? Icons.rss_feed
+                      : Icons.inventory_2_outlined),
+                  activeIcon: Icon(
+                      isSpectator ? Icons.rss_feed : Icons.inventory_2,
+                      size: 28),
+                  label: isSpectator ? 'En Vivo' : 'Inventario',
+                ),
+                if (isSpectator)
+                  const BottomNavigationBarItem(
+                    icon: Icon(Icons.flash_on),
+                    activeIcon: Icon(Icons.flash_on, size: 28),
+                    label: 'Sabotajes',
+                  ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.leaderboard_outlined),
+                  activeIcon: Icon(Icons.leaderboard, size: 28),
+                  label: 'Ranking',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.sensor_door_outlined),
+                  activeIcon:
+                      Icon(Icons.sensor_door, color: AppTheme.dangerRed),
+                  label: 'Salir',
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
 
     if (isSpectator) {
       content = ChangeNotifierProvider(
