@@ -107,9 +107,10 @@ class PowerItem {
       const PowerItem(
         id: 'blur_screen',
         name: 'Pantalla Borrosa',
-        description: 'Aplica un efecto borroso sobre la pantalla de todos los rivales.',
+        description:
+            'Aplica un efecto borroso sobre la pantalla de todos los rivales.',
         type: PowerType.blur,
-        cost: 75, // Tier 2: Blur/Black Screen
+        cost: 300, // Updated to 300 as global default
         icon: '🌫️',
         color: Colors.blueGrey,
         durationMinutes: 0,

@@ -25,6 +25,7 @@ class GameEvent {
   final Map<String, dynamic> spectatorConfig; // NEW: Spectator pricing
   final int betTicketPrice; // NEW: Price per bet
   final String? sponsorId; // NEW: Linked Sponsor
+  final Map<String, int> storePrices; // NEW: Custom prices for this event
 
   GameEvent({
     required this.id,
@@ -50,6 +51,7 @@ class GameEvent {
     this.spectatorConfig = const {}, // NEW
     this.betTicketPrice = 100, // NEW
     this.sponsorId, // NEW
+    this.storePrices = const {}, // NEW
   });
 
   LatLng get location => LatLng(latitude, longitude);
@@ -91,6 +93,10 @@ class GameEvent {
           : {}, // NEW
       betTicketPrice: (json['bet_ticket_price'] as num?)?.toInt() ?? 100, // NEW
       sponsorId: json['sponsor_id'] as String?, // NEW
+      storePrices: (json['store_prices'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, (v as num).toInt()),
+          ) ??
+          {}, // NEW
     );
   }
 
@@ -118,6 +124,61 @@ class GameEvent {
       'pot': pot, // NEW: Include pot in serialization
       'spectator_config': spectatorConfig, // NEW
       'sponsor_id': sponsorId, // NEW
+      'store_prices': storePrices, // NEW
     };
+  }
+
+  GameEvent copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? locationName,
+    double? latitude,
+    double? longitude,
+    DateTime? date,
+    String? createdByAdminId,
+    String? imageUrl,
+    String? clue,
+    int? maxParticipants,
+    String? pin,
+    String? status,
+    DateTime? completedAt,
+    String? winnerId,
+    String? type,
+    int? entryFee,
+    int? currentParticipants,
+    int? configuredWinners,
+    int? pot,
+    Map<String, dynamic>? spectatorConfig,
+    int? betTicketPrice,
+    String? sponsorId,
+    Map<String, int>? storePrices,
+  }) {
+    return GameEvent(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      locationName: locationName ?? this.locationName,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      date: date ?? this.date,
+      createdByAdminId: createdByAdminId ?? this.createdByAdminId,
+      clue: clue ?? this.clue,
+      imageUrl: imageUrl ?? this.imageUrl,
+      maxParticipants: maxParticipants ?? this.maxParticipants,
+      pin: pin ?? this.pin,
+      status: status ?? this.status,
+      completedAt: completedAt ?? this.completedAt,
+      winnerId: winnerId ?? this.winnerId,
+      type: type ?? this.type,
+      entryFee: entryFee ?? this.entryFee,
+      currentParticipants: currentParticipants ?? this.currentParticipants,
+      configuredWinners: configuredWinners ?? this.configuredWinners,
+      pot: pot ?? this.pot,
+      spectatorConfig: spectatorConfig ?? this.spectatorConfig,
+      betTicketPrice: betTicketPrice ?? this.betTicketPrice,
+      sponsorId: sponsorId ?? this.sponsorId,
+      storePrices: storePrices ?? this.storePrices,
+    );
   }
 }

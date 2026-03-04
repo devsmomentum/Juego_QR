@@ -11,6 +11,7 @@ import '../widgets/inventory_item_card.dart';
 import '../../mall/screens/mall_screen.dart';
 import '../../mall/screens/store_detail_screen.dart'; // IMPORT AGREGADO
 import '../../mall/models/mall_store.dart'; // IMPORT AGREGADO
+import '../../mall/providers/store_provider.dart'; // IMPORT AGREGADO PARA PRECIOS CUSTOM
 import '../../../shared/utils/game_ui_utils.dart';
 import '../../game/providers/power_interfaces.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -64,6 +65,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const bool isDarkMode = true;
@@ -107,112 +114,117 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 SafeArea(
                   child: Column(
                     children: [
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Row(
-                      children: [
-
-
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Inventario',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                  fontFamily: 'Orbitron',
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
+                      // Header
+                      Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
+                                  const Text(
+                                    'Inventario',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      fontFamily: 'Orbitron',
+                                      letterSpacing: 1.5,
                                     ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          gradient: AppTheme.goldGradient,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.monetization_on,
+                                                size: 16, color: Colors.amber),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${player.coins}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: BackdropFilter(
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: AppTheme.secondaryPink
+                                          .withOpacity(0.6),
+                                      width: 1.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.secondaryPink
+                                            .withOpacity(0.1),
+                                        blurRadius: 12,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      gradient: AppTheme.goldGradient,
-                                      borderRadius: BorderRadius.circular(20),
+                                      borderRadius: BorderRadius.circular(13),
+                                      border: Border.all(
+                                        color: AppTheme.secondaryPink
+                                            .withOpacity(0.2),
+                                        width: 1,
+                                      ),
                                     ),
-                                    child: Row(
+                                    child: Column(
                                       children: [
-                                        const Icon(Icons.monetization_on, size: 16, color: Colors.amber),
-                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.inventory_2,
+                                          color: AppTheme.secondaryPink,
+                                          size: 28,
+                                        ),
+                                        const SizedBox(height: 4),
                                         Text(
-                                          '${player.coins}',
+                                          '${player.inventory.length}',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.bold,
+                                            fontSize: 18,
                                             color: Colors.white,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0D0D0F).withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: AppTheme.secondaryPink.withOpacity(0.6),
-                                  width: 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppTheme.secondaryPink.withOpacity(0.1),
-                                    blurRadius: 12,
-                                  ),
-                                ],
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(13),
-                                  border: Border.all(
-                                    color: AppTheme.secondaryPink.withOpacity(0.2),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Column(
-                                  children: [
-                                    const Icon(
-                                      Icons.inventory_2,
-                                      color: AppTheme.secondaryPink,
-                                      size: 28,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${player.inventory.length}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
 
                       // Inventory items grid
                       Expanded(
@@ -315,29 +327,56 @@ class _InventoryScreenState extends State<InventoryScreen> {
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 80.0),
         child: FloatingActionButton.extended(
-          onPressed: () {
+          onPressed: () async {
             final isOnline =
                 Provider.of<AppModeProvider>(context, listen: false)
                     .isOnlineMode;
 
             if (isOnline) {
-              // MODO ONLINE: Navegación Directa a Tienda Global (Virtual)
-              // Creamos una tienda virtual en vuelo para acceder al catálogo global
-              final virtualStore = MallStore(
-                id: 'virtual_global',
-                name: 'Tienda Global',
-                description:
-                    'Catálogo de poderes disponibles para el evento online.',
-                imageUrl:
-                    'asset/images/personajesgrupal.png', // Placeholder Cyberpunk
-                qrCodeData: 'SKIP_QR',
-                products: [], // Lista vacía fuerza a cargar el catálogo completo por defecto en StoreDetailScreen
-              );
+              final gameProvider =
+                  Provider.of<GameProvider>(context, listen: false);
+              final eventId = widget.eventId ?? gameProvider.currentEventId;
 
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => StoreDetailScreen(store: virtualStore)));
+              if (eventId == null) return;
+
+              setState(() => _isLoading = true);
+              try {
+                // Fetch the actual stores for this event to find custom prices
+                final storeProvider =
+                    Provider.of<StoreProvider>(context, listen: false);
+                await storeProvider.fetchStores(eventId);
+
+                // Use the first store found (likely "Tienda Global") or fallback to virtual
+                MallStore targetStore;
+                if (storeProvider.stores.isNotEmpty) {
+                  targetStore = storeProvider.stores.first;
+                } else {
+                  targetStore = MallStore(
+                    id: 'virtual_global',
+                    eventId: eventId,
+                    name: 'Tienda Global',
+                    description:
+                        'Catálogo de poderes disponibles para el evento online.',
+                    imageUrl: 'asset/images/personajesgrupal.png',
+                    qrCodeData: 'SKIP_QR',
+                    products: [],
+                  );
+                }
+
+                if (mounted) {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              StoreDetailScreen(store: targetStore)));
+                }
+              } catch (e) {
+                if (mounted) {
+                  _showSnackBar('Error cargando tienda: $e', Colors.red);
+                }
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
             } else {
               // MODO PRESENCIAL: Flujo normal (Lista de Tiendas -> QR)
               Navigator.push(context,

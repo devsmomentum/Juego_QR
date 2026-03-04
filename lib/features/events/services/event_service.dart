@@ -210,6 +210,18 @@ class EventService {
   }
 
   // Actualizar status del evento (for non-activation state changes like 'completed')
+  Future<void> updateEventStorePrices(
+      String eventId, Map<String, int> prices) async {
+    try {
+      await _supabase
+          .from('events')
+          .update({'store_prices': prices}).eq('id', eventId);
+    } catch (e) {
+      debugPrint('Error updating store prices: $e');
+      rethrow;
+    }
+  }
+
   Future<void> updateEventStatus(String eventId, String status) async {
     try {
       await _supabase
@@ -291,28 +303,34 @@ class EventService {
       title: data['title'] as String,
       description: (data['description'] ?? '') as String,
       locationName: (data['location_name'] ?? '') as String,
-      latitude: (data['latitude'] is double)
-          ? data['latitude']
-          : (double.tryParse(data['latitude'].toString()) ?? 0.0),
-      longitude: (data['longitude'] is double)
-          ? data['longitude']
-          : (double.tryParse(data['longitude'].toString()) ?? 0.0),
+      latitude: (data['latitude'] is num)
+          ? (data['latitude'] as num).toDouble()
+          : 0.0,
+      longitude: (data['longitude'] is num)
+          ? (data['longitude'] as num).toDouble()
+          : 0.0,
       date: DateTime.parse(data['date'] as String),
       createdByAdminId: (data['created_by_admin_id'] ?? '') as String,
       imageUrl: (data['image_url'] ?? '') as String,
-      clue: (data['clue'] ?? '¡Pista desbloqueada!') as String,
+      clue: (data['clue'] ?? '') as String,
       maxParticipants: (data['max_participants'] ?? 0) as int,
       pin: (data['pin'] ?? '') as String,
-      status:
-          (data['status'] ?? 'pending') as String, // FIX: Map status from DB
+      status: (data['status'] ?? 'pending') as String,
       winnerId: data['winner_id'] as String?,
       type: data['type'] ?? 'on_site',
-      entryFee: (data['entry_fee'] as num?)?.toInt() ??
-          0, // NEW: Read persistence fix
+      entryFee: (data['entry_fee'] as num?)?.toInt() ?? 0,
       currentParticipants: (data['current_participants'] as num?)?.toInt() ?? 0,
       configuredWinners: (data['configured_winners'] as num?)?.toInt() ?? 3,
-      pot: (data['pot'] as num?)?.toInt() ?? 0, // FIX: Map pot from DB
-      sponsorId: data['sponsor_id'] as String?, // NEW
+      pot: (data['pot'] as num?)?.toInt() ?? 0,
+      spectatorConfig: data['spectator_config'] != null
+          ? Map<String, dynamic>.from(data['spectator_config'])
+          : {},
+      betTicketPrice: (data['bet_ticket_price'] as num?)?.toInt() ?? 100,
+      sponsorId: data['sponsor_id'] as String?,
+      storePrices: data['store_prices'] != null
+          ? Map<String, int>.from(
+              data['store_prices'].map((k, v) => MapEntry(k, v as int)))
+          : {},
     );
   }
 
