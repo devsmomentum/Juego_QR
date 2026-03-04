@@ -151,23 +151,6 @@ class _VersionMonitorState extends State<VersionMonitor> {
                     ),
                   ),
               ],
-              // Botón de bypass solo en modo debug
-              if (kDebugMode)
-                Padding(
-                  padding: const EdgeInsets.only(top: 24),
-                  child: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _status = null;
-                        _isLoading = false;
-                      });
-                    },
-                    child: const Text(
-                      'Omitir (Desarrollador)',
-                      style: TextStyle(color: Colors.white24, fontSize: 12),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

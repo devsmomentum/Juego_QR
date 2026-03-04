@@ -39,14 +39,15 @@
     const isAndroid = /Android/i.test(navigator.userAgent);
     
     if (isAndroid) {
-      // URL de descarga directa de tu APK
-      const urlAPK = "https://prueba.maphunter.online/download/MH20260227-0001.apk";
-      
-      // Intent: 
-      // - Si la app está: la abre en play.maphunter.online
-      // - Si NO está: descarga el APK automáticamente (fallback)
-      const intentUrl = `intent://play.maphunter.online#Intent;scheme=https;package=com.map.hunter;S.browser_fallback_url=${encodeURIComponent(urlAPK)};end`;
-      
+      // Fallback: si la app no está instalada, redirige a la página de descarga
+      const fallbackUrl = "https://prueba.maphunter.online/";
+
+      // Intent:
+      // - Si la app está instalada: la abre apuntando al dominio actual
+      // - Si NO está instalada: redirige a la página de descarga del APK
+      const host = window.location.hostname;
+      const intentUrl = `intent://${host}#Intent;scheme=https;package=com.map.hunter;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
+
       window.location.href = intentUrl;
     }
   }
