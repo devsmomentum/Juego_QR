@@ -11,6 +11,7 @@ import '../widgets/sponsor_banner.dart'; // NEW
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../widgets/event_launch_countdown_overlay.dart'; // NEW: 5-second launch overlay
 
 class EventWaitingScreen extends StatefulWidget {
   final GameEvent event;
@@ -33,7 +34,12 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
 
-
+  // ── Pending online: auto-start + launch overlay state ──────────────────────
+  Timer? _autoStartTimer;             // polls player count after countdown hits zero
+  int _playerCount = 0;               // current non-spectator enrolled players
+  int _minPlayersToStart = 5;         // loaded from config (default 5)
+  bool _isShowingLaunchCountdown = false; // true while the 5-s launch overlay is on
+  // ────────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -98,6 +104,9 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               if (newStatus == 'active') {
                 debugPrint("✅ Event is now ACTIVE via Realtime! Triggering navigation...");
                 _triggerNavigation();
+              } else if (newStatus == 'cancelled') {
+                debugPrint("❌ Event CANCELLED via Realtime.");
+                _showCancelledDialog();
               }
             },
           )
@@ -109,15 +118,27 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
 
   /// Centraliza el trigger de navegación para evitar dobles llamadas
   /// entre Realtime y Polling (Bug #5 guard).
+  /// For online events: shows the 5-second launch countdown overlay first.
   void _triggerNavigation() {
     if (_isNavigating || !mounted) return;
     _isNavigating = true;
     _timer?.cancel();
     _statusPollingTimer?.cancel();
-    debugPrint("🚀 EventWaiting: _triggerNavigation() called — navigating to game");
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onTimerFinished();
-    });
+    _autoStartTimer?.cancel();
+    debugPrint("🚀 EventWaiting: _triggerNavigation() called");
+
+    if (widget.event.type == 'online') {
+      // Show 5-second launch countdown then navigate
+      if (mounted) {
+        setState(() => _isShowingLaunchCountdown = true);
+      }
+      // Navigation happens inside the overlay's onComplete callback (see build)
+    } else {
+      // Presential events: navigate immediately as before
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onTimerFinished();
+      });
+    }
   }
 
   /// P1+P3: Consulta el estado del evento directamente al servidor.
@@ -129,17 +150,137 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
           .from('events')
           .select('status')
           .eq('id', widget.event.id)
-          .single();
+          .maybeSingle();  // maybeSingle so a missing row doesn't throw
+      if (response == null) return; // event deleted, ignore until cancelled arrives via Realtime
       final status = response['status'] as String?;
       debugPrint("⏳ Polling event status: $status");
       if ((status == 'active' || status == 'completed') && mounted) {
         debugPrint("✅ Polling detected event is now ACTIVE! Triggering navigation...");
         _triggerNavigation();
+      } else if (status == 'cancelled' && mounted) {
+        debugPrint("❌ Polling detected event CANCELLED.");
+        _showCancelledDialog();
       }
     } catch (e) {
       debugPrint("❌ Error polling event status: $e");
     }
   }
+
+  // ── Cancellation dialog ─────────────────────────────────────────────────────
+  bool _cancelDialogShown = false;
+
+  void _showCancelledDialog() {
+    if (_cancelDialogShown || !mounted) return;
+    _cancelDialogShown = true;
+    // Stop all active timers
+    _timer?.cancel();
+    _statusPollingTimer?.cancel();
+    _autoStartTimer?.cancel();
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 48),
+        title: const Text(
+          'Evento Cancelado',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Orbitron',
+          ),
+        ),
+        content: Text(
+          'No se inscribieron suficientes jugadores antes de que finalizara el tiempo.\n\n'
+          'Se necesitaban $_minPlayersToStart jugadores y solo se inscribieron $_playerCount.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white70, height: 1.5),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog
+                Navigator.of(context).pop(); // back to scenarios
+              },
+              child: const Text('VOLVER A SALAS',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /// Starts polling player count every 3 s once the countdown hits zero.
+  /// On each tick: updates [_playerCount] and calls [_tryAutoStart].
+  void _startAutoStartPolling() {
+    if (widget.event.type != 'online') return;
+    _autoStartTimer?.cancel();
+    _tryAutoStart(); // immediate first check
+    _autoStartTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _tryAutoStart();
+    });
+  }
+
+  /// Fetches current player count, updates UI, and attempts to resolve the
+  /// event via the `auto_start_online_event` RPC:
+  ///   - countdown not expired → no-op (future tick will retry)
+  ///   - enough players         → activate (→ launch overlay)
+  ///   - not enough players     → server cancels event (→ cancellation dialog)
+  Future<void> _tryAutoStart() async {
+    if (_isNavigating || !mounted) return;
+    try {
+      // Count current players for display
+      final countResp = await Supabase.instance.client
+          .from('game_players')
+          .select('id')
+          .eq('event_id', widget.event.id)
+          .neq('status', 'spectator')
+          .neq('status', 'banned')
+          .count();
+      final count = countResp.count ?? 0;
+      if (mounted) setState(() => _playerCount = count);
+
+      // Attempt activation via RPC
+      final result = await Supabase.instance.client.rpc(
+        'auto_start_online_event',
+        params: {'p_event_id': widget.event.id},
+      );
+      debugPrint('🎯 auto_start_online_event result: $result');
+
+      if (result is Map) {
+        final minRequired = result['required'];
+        if (minRequired != null && mounted) {
+          setState(() => _minPlayersToStart = (minRequired as num).toInt());
+        }
+
+        if (result['success'] == true && mounted && !_isNavigating) {
+          debugPrint('✅ Event auto-started! Triggering navigation...');
+          _triggerNavigation();
+        } else if (result['cancelled'] == true && mounted) {
+          debugPrint('❌ Event cancelled by server (not enough players).');
+          _autoStartTimer?.cancel();
+          _showCancelledDialog();
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ _tryAutoStart error: $e');
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   void _calculateTime() {
     // PRIORIDAD AL ESTADO: Si el evento ya está activo o completado, omitir cuenta regresiva
@@ -147,6 +288,14 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       _timer?.cancel();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) widget.onTimerFinished();
+      });
+      return;
+    }
+    // Si el evento fue cancelado antes de que el timer calcule, mostrar dialog
+    if (widget.event.status == 'cancelled') {
+      _timer?.cancel();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showCancelledDialog();
       });
       return;
     }
@@ -163,9 +312,9 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
         });
       }
     } else {
-      // Countdown reached zero — BUT we do NOT auto-activate.
-      // The admin must manually start the event via the start_event RPC.
-      // We enter "waiting for admin" mode and keep listening via Realtime.
+      // Countdown reached zero.
+      // For ONLINE events: auto-start when min_players_to_start are enrolled.
+      // For PRESENTIAL events: wait for admin via start_event RPC.
       _timer?.cancel();
       if (mounted) {
         setState(() {
@@ -173,9 +322,11 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
           _waitingForAdmin = true;
         });
       }
-      debugPrint("⏳ Countdown finished for event ${widget.event.id}. Waiting for admin to start.");
+      debugPrint("⏳ Countdown finished for event ${widget.event.id}.");
       // P3: Verificar estado en servidor al llegar a cero (puede que el admin ya inició)
       _checkEventStatusFromServer();
+      // For online events: poll player count + attempt auto-activation
+      _startAutoStartPolling();
     }
   }
 
@@ -184,6 +335,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     _eventChannel?.unsubscribe();
     _timer?.cancel();
     _statusPollingTimer?.cancel();
+    _autoStartTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -193,15 +345,25 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     final playerProvider = context.watch<PlayerProvider>();
     final isDarkMode = playerProvider.isDarkMode;
 
-    // Determine dynamic content based on admin-wait state
-    final String headerText = _waitingForAdmin ? "CUENTA REGRESIVA FINALIZADA" : "PREPÁRATE";
+    // Determine dynamic content based on state
+    final bool isOnlineEvent = widget.event.type == 'online';
+    final bool isWaitingPlayers = _waitingForAdmin && isOnlineEvent;
+    final bool isWaitingAdmin  = _waitingForAdmin && !isOnlineEvent;
+
+    final String headerText = _waitingForAdmin
+        ? (isOnlineEvent ? 'SALA DE ESPERA' : 'CUENTA REGRESIVA FINALIZADA')
+        : 'PREÁRATE';
     final String titleText = _waitingForAdmin
-        ? "ESPERANDO AL ADMINISTRADOR"
-        : "LA AVENTURA COMIENZA PRONTO";
+        ? (isOnlineEvent ? 'ESPERANDO JUGADORES...' : 'ESPERANDO AL ADMINISTRADOR')
+        : 'LA AVENTURA COMIENZA PRONTO';
     final String subtitleText = _waitingForAdmin
-        ? "El contador ha terminado.\nEsperando señal del administrador para iniciar el evento..."
-        : "El tesoro aguarda por el más valiente.\nMantente alerta.";
-    final IconData iconData = _waitingForAdmin ? Icons.admin_panel_settings : Icons.hourglass_empty;
+        ? (isOnlineEvent
+            ? 'Iniciamos cuando lleguen $_minPlayersToStart jugadores\no cuando la sala esté llena.'
+            : 'El contador ha terminado.\nEsperando señal del administrador para iniciar el evento...')
+        : 'El tesoro aguarda por el más valiente.\nManténte alerta.';
+    final IconData iconData = _waitingForAdmin
+        ? (isOnlineEvent ? Icons.people : Icons.admin_panel_settings)
+        : Icons.hourglass_empty;
     
     // LOGIN CLARO STYLE COLORS
     final Color dGoldMain = const Color(0xFFFECB00);
@@ -353,11 +515,16 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                     ),
                                     child: Column(
                                       children: [
-                                        const Icon(Icons.sync, color: Colors.orangeAccent, size: 32),
+                                        Icon(
+                                          isOnlineEvent ? Icons.people : Icons.sync,
+                                          color: Colors.orangeAccent, size: 32,
+                                        ),
                                         const SizedBox(height: 12),
-                                        const Text(
-                                          "ESPERANDO INICIO MANUAL",
-                                          style: TextStyle(
+                                        Text(
+                                          isOnlineEvent
+                                              ? "ESPERANDO JUGADORES"
+                                              : "ESPERANDO INICIO MANUAL",
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w900,
@@ -366,27 +533,68 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                           ),
                                         ),
                                         const SizedBox(height: 8),
-                                        RichText(
-                                          textAlign: TextAlign.center,
-                                          text: const TextSpan(
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                              fontFamily: 'Roboto',
-                                            ),
-                                            children: [
-                                              TextSpan(text: "El administrador debe presionar "),
-                                              TextSpan(
-                                                text: "PLAY",
-                                                style: TextStyle(
-                                                  color: Colors.orangeAccent,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                        if (isOnlineEvent) ...[
+                                          // Player count progress bar
+                                          RichText(
+                                            textAlign: TextAlign.center,
+                                            text: TextSpan(
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 14,
+                                                fontFamily: 'Orbitron',
                                               ),
-                                            ],
+                                              children: [
+                                                TextSpan(
+                                                  text: '$_playerCount',
+                                                  style: const TextStyle(
+                                                    color: Colors.orangeAccent,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 28,
+                                                  ),
+                                                ),
+                                                TextSpan(
+                                                  text: ' / $_minPlayersToStart',
+                                                  style: const TextStyle(
+                                                    color: Colors.white54,
+                                                    fontSize: 18,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            _playerCount >= _minPlayersToStart
+                                                ? 'Iniciando...'
+                                                : 'jugadores mínimos para comenzar',
+                                            style: const TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ] else ...[
+                                          RichText(
+                                            textAlign: TextAlign.center,
+                                            text: const TextSpan(
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                                fontFamily: 'Roboto',
+                                              ),
+                                              children: [
+                                                TextSpan(text: "El administrador debe presionar "),
+                                                TextSpan(
+                                                  text: "PLAY",
+                                                  style: TextStyle(
+                                                    color: Colors.orangeAccent,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],  // closes else branch
+                                      ],  // closes Column.children
                                     ),
                                   ),
                                 ),
@@ -516,6 +724,15 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               ],
             ),
           ),
+          // ── 5-second launch countdown: shown when online event goes active ──
+          if (_isShowingLaunchCountdown)
+            Positioned.fill(
+              child: EventLaunchCountdownOverlay(
+                onComplete: () {
+                  if (mounted) widget.onTimerFinished();
+                },
+              ),
+            ),
         ],
       ),
     );

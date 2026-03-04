@@ -192,6 +192,8 @@ class AppConfigService {
         'min_fee': 0,
         'max_fee': 100,
         'fee_step': 5,
+        'pending_wait_minutes': 5,
+        'min_players_to_start': 5,
       };
     }
   }

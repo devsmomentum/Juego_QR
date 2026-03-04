@@ -552,6 +552,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   void initState() {
     super.initState();
     print("DEBUG: ScenariosScreen initState");
+    // Online mode: show pending (lobby) events by default
+    if (widget.isOnline) _selectedFilter = 'pending';
 
     _pageController = PageController(viewportFraction: 0.85);
 
@@ -2653,7 +2655,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                             isActive: _selectedFilter == 'pending',
                             onTap: () =>
                                 setState(() => _selectedFilter = 'pending'),
-                            activeColor: Colors.blueAccent,
+                            activeColor: widget.isOnline ? AppTheme.primaryPurple : Colors.blueAccent,
                             textColor: Colors.white, // Blanco sobre azul
                           ),
                           const SizedBox(width: 12),

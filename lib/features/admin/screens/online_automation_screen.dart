@@ -248,6 +248,14 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
           _buildSlider('Cant. Máx. Minijuegos', 'max_games', 6, 15, 1),
           _buildSlider('Entry Fee Mín [COIN]', 'min_fee', 0, 50, 5),
           _buildSlider('Entry Fee Máx [COIN]', 'max_fee', 50, 200, 5),
+          const Divider(color: Colors.white12, height: 32),
+          const Text(
+            'Inicio de Sala (Pending → Active)',
+            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+          ),
+          const SizedBox(height: 8),
+          _buildSlider('Espera antes de iniciar (min)', 'pending_wait_minutes', 1, 120, 1),
+          _buildSlider('Jugadores mín. para iniciar', 'min_players_to_start', 2, 20, 1),
         ],
       ),
     );

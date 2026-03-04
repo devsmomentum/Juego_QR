@@ -59,9 +59,11 @@ serve(async (req: Request) => {
         const minFee = Number(config.min_fee) || 0;
         const maxFee = Number(config.max_fee) || 100;
         const feeStep = Number(config.fee_step) || 5;
+        const pendingWaitMinutes = Number(config.pending_wait_minutes) || 5;
 
         const playerCount = Math.floor(Math.random() * (maxPlayers - minPlayers + 1)) + minPlayers;
         const gameCount = Math.floor(Math.random() * (maxGames - minGames + 1)) + minGames;
+        const configuredWinners = playerCount < 6 ? 1 : playerCount < 11 ? 2 : 3;
 
         // Safe fee calculation
         const feeRangeCount = Math.max(0, Math.floor((maxFee - minFee) / feeStep));
@@ -111,13 +113,15 @@ serve(async (req: Request) => {
                 location_name: 'Online',
                 latitude: 0,
                 longitude: 0,
-                date: new Date().toISOString(),
+                // date = now + pendingWaitMinutes (countdown shown in EventWaitingScreen)
+                date: new Date(Date.now() + pendingWaitMinutes * 60 * 1000).toISOString(),
                 max_participants: playerCount,
                 pin: pin,
                 clue: '🏆 ¡Felicidades! Has completado el circuito online.',
                 type: 'online',
                 entry_fee: entryFee,
-                status: 'active',
+                status: 'pending',   // ← starts pending; activated by auto_start_online_event RPC
+                configured_winners: configuredWinners,
                 created_at: new Date().toISOString()
             })
             .select()
