@@ -23,8 +23,14 @@ workflows:
           pod install --repo-update
       - name: Build iOS IPA (Release Mode)
         script: |
-          # Incrementamos el build number automáticamente para evitar el error de duplicado (ID 409)
-          # Se usa 'build ipa' para asegurar que sea un binario de distribución real
+          # Usamos +100 para asegurarnos de superar cualquier build previo (3, 4, etc.)
+          # El flag --release es vital para evitar el error de la pantalla negra
           flutter build ipa --release \
-            --build-number=$(($BUILD_NUMBER + 10)) \
+            --build-number=$(($BUILD_NUMBER + 100)) \
             --export-method app-store
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
