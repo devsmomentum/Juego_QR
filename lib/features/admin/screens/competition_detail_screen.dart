@@ -769,6 +769,64 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   // Use the local state pot
   int get _currentPot => _pot;
 
+  Future<void> _approveAll(List<GameRequest> pending) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardBg,
+        title: const Text("¿Aceptar a todos?",
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+            "Se aprobarán las ${pending.length} solicitudes pendientes de manera instantánea. ¿Estás seguro?",
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("ACEPTAR TODOS",
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    final provider = Provider.of<GameRequestProvider>(context, listen: false);
+
+    int successCount = 0;
+    int errorCount = 0;
+
+    for (var req in pending) {
+      try {
+        final result = await provider.approveRequest(req.id);
+        if (result['success'] == true) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (e) {
+        errorCount++;
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $successCount solicitudes aprobadas' +
+              (errorCount > 0 ? '. ❌ $errorCount fallaron.' : '')),
+          backgroundColor: errorCount > 0 ? Colors.orange : Colors.green,
+        ),
+      );
+      _loadData(); // Actualizar datos
+    }
+  }
+
   void _loadData() {
     setState(() {});
     Provider.of<GameRequestProvider>(context, listen: false).fetchAllRequests();
@@ -1604,11 +1662,26 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             ),
 
             if (pending.isNotEmpty) ...[
-              const Text("Solicitudes Pendientes",
-                  style: TextStyle(
-                      color: AppTheme.secondaryPink,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Solicitudes Pendientes",
+                      style: TextStyle(
+                          color: AppTheme.secondaryPink,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
+                  if (widget.event.type == 'on_site')
+                    TextButton.icon(
+                      onPressed: () => _approveAll(pending),
+                      icon:
+                          const Icon(Icons.done_all, color: Colors.greenAccent),
+                      label: const Text("ACEPTAR TODOS",
+                          style: TextStyle(
+                              color: Colors.greenAccent,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
               const SizedBox(height: 10),
               ...pending.map((req) => RequestTile(
                     request: req,
@@ -1822,129 +1895,150 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 
   Widget _buildStoresTab() {
-    return Consumer<StoreProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Column(
+      children: [
+        Expanded(
+          child: Consumer<StoreProvider>(
+            builder: (context, provider, child) {
+              if (provider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-        final stores = provider.stores;
+              final stores = provider.stores;
 
-        if (stores.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.store_mall_directory,
-                    size: 80, color: Colors.white24),
-                const SizedBox(height: 16),
-                const Text("No hay tiendas registradas",
-                    style: TextStyle(color: Colors.white54)),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddStoreDialog(),
-                  icon: const Icon(Icons.add),
-                  label: const Text("Agregar Tienda"),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentGold),
-                ),
-              ],
-            ),
-          );
-        }
+              if (stores.isEmpty) {
+                return const Center(
+                  child: Text("No hay tiendas registradas",
+                      style: TextStyle(color: Colors.white54)),
+                );
+              }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: stores.length,
-          itemBuilder: (context, index) {
-            final store = stores[index];
-            return Card(
-              color: AppTheme.cardBg,
-              margin: const EdgeInsets.only(bottom: 16),
-              child: ListTile(
-                leading: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(8),
-                    image: (store.imageUrl.isNotEmpty &&
-                            store.imageUrl.startsWith('http'))
-                        ? DecorationImage(
-                            image: NetworkImage(store.imageUrl),
-                            fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: (store.imageUrl.isEmpty ||
-                          !store.imageUrl.startsWith('http'))
-                      ? const Icon(Icons.store, color: Colors.white54)
-                      : null,
-                ),
-                title: Text(store.name,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(store.description,
-                        style: const TextStyle(color: Colors.white70),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: store.products
-                          .map((p) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black26,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.white12),
-                                ),
-                                child: Text(
-                                  "${p.icon} ${p.name} (\$${p.cost})",
-                                  style: const TextStyle(
-                                      color: Colors.greenAccent, fontSize: 11),
-                                ),
-                              ))
-                          .toList(),
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: stores.length,
+                itemBuilder: (context, index) {
+                  final store = stores[index];
+                  return Card(
+                    color: AppTheme.cardBg,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: ListTile(
+                      leading: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(8),
+                          image: (store.imageUrl.isNotEmpty &&
+                                  store.imageUrl.startsWith('http'))
+                              ? DecorationImage(
+                                  image: NetworkImage(store.imageUrl),
+                                  fit: BoxFit.cover)
+                              : null,
+                        ),
+                        child: (store.imageUrl.isEmpty ||
+                                !store.imageUrl.startsWith('http'))
+                            ? const Icon(Icons.store, color: Colors.white54)
+                            : null,
+                      ),
+                      title: Text(store.name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(store.description,
+                              style: const TextStyle(color: Colors.white70),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: store.products
+                                .map((p) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black26,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border:
+                                            Border.all(color: Colors.white12),
+                                      ),
+                                      child: Text(
+                                        "${p.icon} ${p.name} (\$${p.cost})",
+                                        style: const TextStyle(
+                                            color: Colors.greenAccent,
+                                            fontSize: 11),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
+                      ),
+                      isThreeLine: true,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                              icon: const Icon(Icons.qr_code,
+                                  color: Colors.white),
+                              tooltip: "Ver QR",
+                              onPressed: () => _showQRDialog(
+                                    store.qrCodeData,
+                                    "QR de Tienda",
+                                    store.name,
+                                    hint: "Escanear para entrar",
+                                  )),
+                          IconButton(
+                            icon: const Icon(Icons.edit,
+                                color: AppTheme.accentGold),
+                            onPressed: () => _showAddStoreDialog(store: store),
+                          ),
+                          if (!_isEventActive)
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _confirmDeleteStore(store),
+                            ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                isThreeLine: true,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                        icon: const Icon(Icons.qr_code, color: Colors.white),
-                        tooltip: "Ver QR",
-                        onPressed: () => _showQRDialog(
-                              store.qrCodeData,
-                              "QR de Tienda",
-                              store.name,
-                              hint: "Escanear para entrar",
-                            )),
-                    if (!_isEventActive) ...[
-                      IconButton(
-                        icon:
-                            const Icon(Icons.edit, color: AppTheme.accentGold),
-                        onPressed: () => _showAddStoreDialog(store: store),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _confirmDeleteStore(store),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
+  }
+
+  void _showGlobalPricesDialog() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StoreEditDialog(
+        eventId: widget.event.id,
+        initialPrices: widget.event.storePrices,
+        isGlobalMode: true,
+      ),
+    );
+
+    if (result != null && result.containsKey('customPrices')) {
+      try {
+        final prices = Map<String, int>.from(result['customPrices']);
+        await context
+            .read<EventProvider>()
+            .updateEventStorePrices(widget.event.id, prices);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Precios globales actualizados')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e')),
+        );
+      }
+    }
   }
 
   void _showAddStoreDialog({MallStore? store}) async {

@@ -9,8 +9,16 @@ import 'package:uuid/uuid.dart';
 class StoreEditDialog extends StatefulWidget {
   final MallStore? store;
   final String eventId;
+  final Map<String, int>? initialPrices;
+  final bool isGlobalMode;
 
-  const StoreEditDialog({super.key, this.store, required this.eventId});
+  const StoreEditDialog({
+    super.key,
+    this.store,
+    required this.eventId,
+    this.initialPrices,
+    this.isGlobalMode = false,
+  });
 
   @override
   State<StoreEditDialog> createState() => _StoreEditDialogState();
@@ -23,9 +31,9 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
   XFile? _imageFile;
   Uint8List? _imageBytes; // For preview (Cross-platform)
   Map<String, int> _customCosts = {}; // Track custom costs
-  
+
   final Set<String> _selectedProductIds = {};
-  
+
   // Available products to toggle
   final List<PowerItem> _availableItems = PowerItem.getShopItems();
 
@@ -34,11 +42,19 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
     super.initState();
     _name = widget.store?.name ?? '';
     _description = widget.store?.description ?? '';
-    
+
     if (widget.store != null) {
       for (var p in widget.store!.products) {
-         _selectedProductIds.add(p.id);
-         _customCosts[p.id] = p.cost; // Load existing custom costs
+        _selectedProductIds.add(p.id);
+        _customCosts[p.id] = p.cost;
+      }
+    } else if (widget.initialPrices != null) {
+      // GLOBAL MODE: Load all available items and set custom costs if present
+      for (var item in _availableItems) {
+        if (widget.initialPrices!.containsKey(item.id)) {
+          _selectedProductIds.add(item.id);
+          _customCosts[item.id] = widget.initialPrices![item.id]!;
+        }
       }
     }
   }
@@ -57,44 +73,47 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    
-    // MANDATORY IMAGE VALIDATION
-    if (_imageFile == null && (widget.store?.imageUrl.isEmpty ?? true)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ La imagen de la tienda es obligatoria')),
-      );
+
+    // IMAGE VALIDATION (Not required for global mode)
+    // IMAGE VALIDATION REMOVED AS REQUESTED
+
+    _formKey.currentState!.save();
+
+    if (widget.isGlobalMode) {
+      // GLOBAL MODE: Just return the map of slug -> cost
+      final Map<String, int> resultPrices = {};
+      for (var id in _selectedProductIds) {
+        resultPrices[id] = _customCosts[id] ??
+            _availableItems.firstWhere((i) => i.id == id).cost;
+      }
+      Navigator.pop(context, {'customPrices': resultPrices});
       return;
     }
 
-    _formKey.currentState!.save();
-    
     // Construct products list with custom costs
-    final List<PowerItem> selectedProducts = _selectedProductIds
-        .map((id) {
-           final baseItem = _availableItems.firstWhere((item) => item.id == id);
-           final customCost = _customCosts[id];
-           // If custom cost exists and differs, use it
-           if (customCost != null) {
-             return baseItem.copyWith(cost: customCost);
-           }
-           return baseItem;
-        })
-        .toList();
+    final List<PowerItem> selectedProducts = _selectedProductIds.map((id) {
+      final baseItem = _availableItems.firstWhere((item) => item.id == id);
+      final customCost = _customCosts[id];
+      if (customCost != null) {
+        return baseItem.copyWith(cost: customCost);
+      }
+      return baseItem;
+    }).toList();
 
-    // Create result object (image file is passed separate)
     final newStore = MallStore(
-      id: widget.store?.id ?? '', // ID handled by provider for create
+      id: widget.store?.id ?? '',
       eventId: widget.eventId,
       name: _name,
       description: _description,
-      imageUrl: widget.store?.imageUrl ?? '', // Provider will update if file exists
-      qrCodeData: widget.store?.qrCodeData ?? 'STORE:${widget.eventId}:${const Uuid().v4()}', // Same QR format as clues: STORE:{eventId}:{storeId}
+      imageUrl: widget.store?.imageUrl ?? '',
+      qrCodeData: widget.store?.qrCodeData ??
+          'STORE:${widget.eventId}:${const Uuid().v4()}',
       products: selectedProducts,
     );
 
     Navigator.pop(context, {
       'store': newStore,
-      'imageFile': _imageFile, // Passing XFile (compatible with Web/Mobile)
+      'imageFile': _imageFile,
     });
   }
 
@@ -102,7 +121,11 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppTheme.cardBg,
-      title: Text(widget.store == null ? 'Nueva Tienda' : 'Editar Tienda', style: const TextStyle(color: Colors.white)),
+      title: Text(
+          widget.isGlobalMode
+              ? 'Precios Globales'
+              : (widget.store == null ? 'Nueva Tienda' : 'Editar Tienda'),
+          style: const TextStyle(color: Colors.white)),
       content: SizedBox(
         width: 400,
         child: SingleChildScrollView(
@@ -112,63 +135,83 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image Picker
-                GestureDetector(
-                  onTap: _pickImage,
-                  child: Container(
-                    height: 150,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(12),
-                      image: _imageBytes != null
-                        ? DecorationImage(image: MemoryImage(_imageBytes!), fit: BoxFit.cover)
-                        : (widget.store?.imageUrl.isNotEmpty ?? false)
-                            ? DecorationImage(image: NetworkImage(widget.store!.imageUrl), fit: BoxFit.cover)
-                            : null,
+                if (!widget.isGlobalMode) ...[
+                  // Image Picker
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      height: 150,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(12),
+                        image: _imageBytes != null
+                            ? DecorationImage(
+                                image: MemoryImage(_imageBytes!),
+                                fit: BoxFit.cover)
+                            : (widget.store?.imageUrl.isNotEmpty ?? false)
+                                ? DecorationImage(
+                                    image: NetworkImage(widget.store!.imageUrl),
+                                    fit: BoxFit.cover)
+                                : null,
+                      ),
+                      child: (_imageBytes == null &&
+                              (widget.store?.imageUrl.isEmpty ?? true))
+                          ? const Center(
+                              child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_a_photo,
+                                    size: 40, color: Colors.white54),
+                                SizedBox(height: 5),
+                                Text("Imagen de la Tienda",
+                                    style: TextStyle(
+                                        color: Colors.white54, fontSize: 12))
+                              ],
+                            ))
+                          : null,
                     ),
-                    child: (_imageBytes == null && (widget.store?.imageUrl.isEmpty ?? true))
-                        ? const Center(child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_a_photo, size: 40, color: Colors.white54),
-                              SizedBox(height: 5),
-                              Text("Imagen Obligatoria", style: TextStyle(color: Colors.white54, fontSize: 12))
-                            ],
-                          ))
-                        : null,
                   ),
-                ),
-                const SizedBox(height: 16),
-                
-                TextFormField(
-                  initialValue: _name,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Nombre', labelStyle: TextStyle(color: Colors.white70)),
-                  validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                  onSaved: (v) => _name = v!,
-                ),
-                TextFormField(
-                  initialValue: _description,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Descripción', labelStyle: TextStyle(color: Colors.white70)),
-                  onSaved: (v) => _description = v!,
-                ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    initialValue: _name,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                        labelText: 'Nombre',
+                        labelStyle: TextStyle(color: Colors.white70)),
+                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                    onSaved: (v) => _name = v!,
+                  ),
+                  TextFormField(
+                    initialValue: _description,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                        labelText: 'Descripción',
+                        labelStyle: TextStyle(color: Colors.white70)),
+                    onSaved: (v) => _description = v!,
+                  ),
+                ],
                 const SizedBox(height: 20),
-                const Text("Productos Disponibles:", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text(
+                    widget.isGlobalMode
+                        ? "Precios por Defecto (Sobrescribir):"
+                        : "Productos Disponibles:",
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 ..._availableItems.map((item) {
                   final isSelected = _selectedProductIds.contains(item.id);
                   return Column(
                     children: [
                       CheckboxListTile(
-                        title: Text(item.name, style: const TextStyle(color: Colors.white)),
+                        title: Text(item.name,
+                            style: const TextStyle(color: Colors.white)),
                         subtitle: Text(
-                          // Show custom cost if editing, else default
-                          "Costo Base: ${item.cost}", 
-                          style: const TextStyle(color: Colors.white54)
-                        ),
-                        secondary: Text(item.icon, style: const TextStyle(fontSize: 24)),
+                            // Show custom cost if editing, else default
+                            "Costo Base: ${item.cost}",
+                            style: const TextStyle(color: Colors.white54)),
+                        secondary: Text(item.icon,
+                            style: const TextStyle(fontSize: 24)),
                         value: isSelected,
                         activeColor: AppTheme.primaryPurple,
                         checkColor: Colors.white,
@@ -188,7 +231,8 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
                       ),
                       if (isSelected)
                         Padding(
-                          padding: const EdgeInsets.only(left: 70, right: 20, bottom: 10),
+                          padding: const EdgeInsets.only(
+                              left: 70, right: 20, bottom: 10),
                           child: TextFormField(
                             initialValue: _customCosts[item.id]?.toString(),
                             keyboardType: TextInputType.number,
@@ -198,13 +242,15 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
                               labelStyle: TextStyle(color: Colors.white54),
                               isDense: true,
                               border: OutlineInputBorder(),
-                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                              enabledBorder: OutlineInputBorder(
+                                  borderSide:
+                                      BorderSide(color: Colors.white24)),
                             ),
                             onChanged: (val) {
-                                final newCost = int.tryParse(val);
-                                if (newCost != null) {
-                                  _customCosts[item.id] = newCost;
-                                }
+                              final newCost = int.tryParse(val);
+                              if (newCost != null) {
+                                _customCosts[item.id] = newCost;
+                              }
                             },
                           ),
                         )
@@ -217,10 +263,13 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar")),
         ElevatedButton(
           onPressed: _submit,
-          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+          style:
+              ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
           child: const Text("Guardar"),
         ),
       ],

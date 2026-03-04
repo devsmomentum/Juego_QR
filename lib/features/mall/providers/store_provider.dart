@@ -4,12 +4,13 @@ import '../services/store_service.dart';
 
 class StoreProvider extends ChangeNotifier {
   final StoreService _storeService;
-  
+
   List<MallStore> _stores = [];
   bool _isLoading = false;
   String? _errorMessage;
 
-  StoreProvider({required StoreService storeService}) : _storeService = storeService;
+  StoreProvider({required StoreService storeService})
+      : _storeService = storeService;
 
   List<MallStore> get stores => _stores;
   bool get isLoading => _isLoading;
@@ -50,7 +51,7 @@ class StoreProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   Future<void> updateStore(MallStore store, dynamic newImageFile) async {
     _isLoading = true;
     notifyListeners();

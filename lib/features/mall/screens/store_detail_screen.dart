@@ -9,6 +9,8 @@ import '../../game/providers/power_interfaces.dart';
 import '../../../core/theme/app_theme.dart';
 import '../widgets/shop_item_card.dart';
 import '../../../core/providers/app_mode_provider.dart';
+import '../../game/models/event.dart';
+import '../../game/providers/event_provider.dart';
 import '../../../shared/widgets/coin_image.dart';
 
 class StoreDetailScreen extends StatefulWidget {
@@ -30,25 +32,31 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     return '$coins';
   }
 
-  Future<void> _purchaseItem(BuildContext context, PowerItem item, int quantity) async {
+  Future<void> _purchaseItem(
+      BuildContext context, PowerItem item, int quantity) async {
     if (_isLoading) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
-      final String? eventId = gameProvider.currentEventId;
+      final String? eventId =
+          widget.store.eventId ?? gameProvider.currentEventId;
 
       if (eventId == null) {
+        debugPrint('StoreDetailScreen: ❌ Purchase failed - No eventId found');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: Debes estar en un evento para comprar.')),
+          const SnackBar(
+              content: Text('Error: Debes estar en un evento para comprar.')),
         );
         return;
       }
 
-      final bool isPower = item.type != PowerType.utility && item.id != 'extra_life';
+      final bool isPower =
+          item.type != PowerType.utility && item.id != 'extra_life';
       final int totalCost = item.cost * quantity;
 
       // Validar monedas totales
@@ -85,19 +93,20 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
       if (successCount > 0) {
         // CRITICAL FIX: Sincronizar inventario inmediatamente
-        final effectProvider = Provider.of<PowerEffectManager>(context, listen: false);
+        final effectProvider =
+            Provider.of<PowerEffectManager>(context, listen: false);
         await playerProvider.syncRealInventory(effectProvider: effectProvider);
-        
+
         // Actualizar vidas si es necesario
         if (item.id == 'extra_life') {
           // Usar syncLives para actualización inmediata sin red adicional
           // El PlayerProvider ya tiene el valor correcto tras la compra exitosa
           final newLives = playerProvider.currentPlayer?.lives ?? 3;
-          gameProvider.syncLives(newLives); 
+          gameProvider.syncLives(newLives);
         }
 
         if (!mounted) return;
-        
+
         await _showQuickFeedback(
           icon: item.icon,
           title: successCount > 1 ? '¡Compras Exitosas!' : '¡Compra Exitosa!',
@@ -112,9 +121,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage.contains('máximo') 
-              ? 'Límite alcanzado ($successCount comprados)' 
-              : 'Error parcial: $errorMessage'),
+            content: Text(errorMessage.contains('máximo')
+                ? 'Límite alcanzado ($successCount comprados)'
+                : 'Error parcial: $errorMessage'),
             backgroundColor: AppTheme.dangerRed,
           ),
         );
@@ -143,7 +152,6 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     final player = Provider.of<PlayerProvider>(context).currentPlayer;
@@ -166,11 +174,13 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 leading: Container(),
                 backgroundColor: Colors.transparent,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: Text(widget.store.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(widget.store.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   background: Image.network(
                     widget.store.imageUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_,__,___) => Container(color: Colors.grey[800]),
+                    errorBuilder: (_, __, ___) =>
+                        Container(color: Colors.grey[800]),
                   ),
                 ),
               ),
@@ -185,7 +195,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           Expanded(
                             child: Text(
                               "Productos Disponibles",
-                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -193,52 +206,68 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              IconButton(
+                                icon: const Icon(Icons.rocket_launch,
+                                    color: AppTheme.accentGold),
+                                tooltip: 'Comprar Todo (DEV)',
+                                onPressed: () async {
+                                  final playerProvider =
+                                      Provider.of<PlayerProvider>(context,
+                                          listen: false);
+                                  final gameProvider =
+                                      Provider.of<GameProvider>(context,
+                                          listen: false);
+                                  final eventId = gameProvider.currentEventId;
 
-                          IconButton(
-                            icon: const Icon(Icons.rocket_launch, color: AppTheme.accentGold),
-                            tooltip: 'Comprar Todo (DEV)',
-                            onPressed: () async {
-                              final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-                              final gameProvider = Provider.of<GameProvider>(context, listen: false);
-                              final eventId = gameProvider.currentEventId;
-
-                              if (eventId == null) return;
-                              setState(() => _isLoading = true);
-                              try {
-                                final message = await playerProvider.purchaseFullStock(eventId);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(message),
-                                      backgroundColor: message.contains('Error') || message.contains('Faltan') 
-                                        ? AppTheme.dangerRed 
-                                        : AppTheme.successGreen,
-                                    ),
-                                  );
-                                }
-                              } finally {
-                                if (mounted) setState(() => _isLoading = false);
-                              }
-                            },
-                          ),
+                                  if (eventId == null) return;
+                                  setState(() => _isLoading = true);
+                                  try {
+                                    final message = await playerProvider
+                                        .purchaseFullStock(eventId);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(message),
+                                          backgroundColor:
+                                              message.contains('Error') ||
+                                                      message.contains('Faltan')
+                                                  ? AppTheme.dangerRed
+                                                  : AppTheme.successGreen,
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted)
+                                      setState(() => _isLoading = false);
+                                  }
+                                },
+                              ),
 
                               const SizedBox(width: 4),
                               // Monedas
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.accentGold.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(color: AppTheme.accentGold.withOpacity(0.5))
-                                ),
+                                    color:
+                                        AppTheme.accentGold.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(15),
+                                    border: Border.all(
+                                        color: AppTheme.accentGold
+                                            .withOpacity(0.5))),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.monetization_on, size: 14, color: Colors.amber),
+                                    const Icon(Icons.monetization_on,
+                                        size: 14, color: Colors.amber),
                                     const SizedBox(width: 4),
                                     Text(
                                       _formatCoins(player?.coins ?? 0),
-                                      style: const TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold, fontSize: 13),
+                                      style: const TextStyle(
+                                          color: AppTheme.accentGold,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13),
                                     ),
                                   ],
                                 ),
@@ -248,77 +277,112 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        widget.store.description,
-                        style: const TextStyle(color: Colors.white70)
-                      ),
+                      Text(widget.store.description,
+                          style: const TextStyle(color: Colors.white70)),
                       const SizedBox(height: 20),
-                      
+
                       // FALLBACK LOGIC: Si es Online y la tienda viene vacía (error de datos), mostramos todo el catálogo
-                      Builder(
-                        builder: (context) {
-                          bool isOnline = false;
-                          try {
-                            // Using listen: false to just check state once
-                            isOnline = Provider.of<AppModeProvider>(context, listen: false).isOnlineMode;
-                            print("DEBUG: StoreDetailScreen isOnline=$isOnline");
-                          } catch (e) {
-                            print("DEBUG: StoreDetailScreen AppModeProvider Error: $e");
-                          }
-                          
-                          // FORCE CATALOG IN ONLINE MODE: Siempre mostrar todo el catálogo disponible
-                          // UPDATE: Usar los productos de la tienda (que traen precios personalizados)
-                          // Si la tienda viene vacía, entonces sí usar el catálogo default
-                          final displayProducts = widget.store.products.isNotEmpty 
-                              ? widget.store.products 
-                              : PowerItem.getShopItems();
-                            
-                          print("DEBUG: displayProducts length=${displayProducts.length}");
+                      Builder(builder: (context) {
+                        bool isOnline = false;
+                        try {
+                          // Using listen: false to just check state once
+                          isOnline = Provider.of<AppModeProvider>(context,
+                                  listen: false)
+                              .isOnlineMode;
+                          print("DEBUG: StoreDetailScreen isOnline=$isOnline");
+                        } catch (e) {
+                          print(
+                              "DEBUG: StoreDetailScreen AppModeProvider Error: $e");
+                        }
 
-                          if (displayProducts.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.all(20.0),
-                              child: Center(
-                                child: Text(
-                                  "No hay productos disponibles por el momento.",
-                                  style: TextStyle(color: Colors.white54),
-                                ),
-                              ),
-                            );
-                          }
+                        // FORCE CATALOG IN ONLINE MODE: Siempre mostrar todo el catálogo disponible
+                        // UPDATE: Usar los productos de la tienda (que traen precios personalizados)
+                        // Si la tienda viene vacía, entonces sí usar el catálogo default
+                        final eventProvider =
+                            Provider.of<EventProvider>(context);
+                        final gameProvider = Provider.of<GameProvider>(context);
+                        final String? eventId =
+                            widget.store.eventId ?? gameProvider.currentEventId;
 
-                          return ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: displayProducts.length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                                final item = displayProducts[index];
-                                final playerProvider = Provider.of<PlayerProvider>(context);
-                                final gameProvider = Provider.of<GameProvider>(context);
-                                final eventId = gameProvider.currentEventId;
-                                
-                                final bool isPower = item.type != PowerType.utility && item.id != 'extra_life';
-                                final int? ownedCount = (eventId != null && isPower)
-                                    ? playerProvider.getPowerCount(item.id, eventId)
-                                    : (item.id == 'extra_life' ? gameProvider.lives : null);
-
-                                return ShopItemCard(
-                                  item: item,
-                                  ownedCount: ownedCount,
-                                  onPurchase: (qty) => _purchaseItem(context, item, qty),
+                        // Find current event data for prices
+                        final currentEvent =
+                            eventProvider.events.cast<GameEvent?>().firstWhere(
+                                  (e) => e?.id == eventId,
+                                  orElse: () => null,
                                 );
-                            },
+
+                        final List<PowerItem> baseProducts =
+                            widget.store.products.isNotEmpty
+                                ? widget.store.products
+                                : PowerItem.getShopItems();
+
+                        // APPLY EVENT-SPECIFIC OVERRIDES (store_prices)
+                        final displayProducts = baseProducts.map((item) {
+                          if (currentEvent != null &&
+                              currentEvent.storePrices.containsKey(item.id)) {
+                            final customPrice =
+                                currentEvent.storePrices[item.id]!;
+                            if (item.cost != customPrice) {
+                              return item.copyWith(cost: customPrice);
+                            }
+                          }
+                          return item;
+                        }).toList();
+
+                        debugPrint(
+                            "DEBUG: StoreDetailScreen: id=$eventId, displayProducts=${displayProducts.length}, CustomPricesFound=${currentEvent?.storePrices.length ?? 0}, Prices=${currentEvent?.storePrices}");
+
+                        if (displayProducts.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Center(
+                              child: Text(
+                                "No hay productos disponibles por el momento.",
+                                style: TextStyle(color: Colors.white54),
+                              ),
+                            ),
                           );
                         }
-                      )
+
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: displayProducts.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final item = displayProducts[index];
+                            final playerProvider =
+                                Provider.of<PlayerProvider>(context);
+                            final gameProvider =
+                                Provider.of<GameProvider>(context);
+                            final eventId = gameProvider.currentEventId;
+
+                            final bool isPower =
+                                item.type != PowerType.utility &&
+                                    item.id != 'extra_life';
+                            final int? ownedCount = (eventId != null && isPower)
+                                ? playerProvider.getPowerCount(item.id, eventId)
+                                : (item.id == 'extra_life'
+                                    ? gameProvider.lives
+                                    : null);
+
+                            return ShopItemCard(
+                              item: item,
+                              ownedCount: ownedCount,
+                              onPurchase: (qty) =>
+                                  _purchaseItem(context, item, qty),
+                            );
+                          },
+                        );
+                      })
                     ],
                   ),
                 ),
               )
             ],
           ),
-          
+
           // Back Button (mismo estilo que avatar_selection_screen)
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
@@ -360,7 +424,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               ),
             ),
           ),
-          
+
           // Loading Overlay
           if (_isLoading)
             Container(
@@ -378,7 +442,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         shadows: [
-                          Shadow(color: AppTheme.accentGold.withOpacity(0.5), blurRadius: 10),
+                          Shadow(
+                              color: AppTheme.accentGold.withOpacity(0.5),
+                              blurRadius: 10),
                         ],
                       ),
                     ),

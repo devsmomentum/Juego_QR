@@ -8,9 +8,11 @@ import '../../events/services/event_service.dart';
 class EventProvider with ChangeNotifier {
   final EventService _eventService;
   List<GameEvent> _events = [];
-  RealtimeChannel? _eventsChannel; // P2: Suscripción Realtime a cambios del evento
+  RealtimeChannel?
+      _eventsChannel; // P2: Suscripción Realtime a cambios del evento
 
-  EventProvider({required EventService eventService}) : _eventService = eventService;
+  EventProvider({required EventService eventService})
+      : _eventService = eventService;
 
   List<GameEvent> get events => _events;
 
@@ -28,7 +30,8 @@ class EventProvider with ChangeNotifier {
   }
 
   // Crear CLUES en Lote (Client Side)
-  Future<void> createCluesBatch(String eventId, List<Map<String, dynamic>> cluesData) async {
+  Future<void> createCluesBatch(
+      String eventId, List<Map<String, dynamic>> cluesData) async {
     try {
       await _eventService.createCluesBatch(eventId, cluesData);
       debugPrint("✅ Pistas creadas exitosamente para el evento $eventId");
@@ -42,7 +45,7 @@ class EventProvider with ChangeNotifier {
   Future<void> updateEvent(GameEvent event, XFile? imageFile) async {
     try {
       final updatedEvent = await _eventService.updateEvent(event, imageFile);
-      
+
       final index = _events.indexWhere((e) => e.id == event.id);
       if (index != -1) {
         _events[index] = updatedEvent;
@@ -54,26 +57,42 @@ class EventProvider with ChangeNotifier {
     }
   }
 
+  // Update ONLY store prices
+  Future<void> updateEventStorePrices(
+      String eventId, Map<String, int> prices) async {
+    try {
+      await _eventService.updateEventStorePrices(eventId, prices);
+      final index = _events.indexWhere((e) => e.id == eventId);
+      if (index != -1) {
+        _events[index] = _events[index].copyWith(storePrices: prices);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error updating store prices: $e');
+      rethrow;
+    }
+  }
+
   // Actualizar status del evento
   Future<void> updateEventStatus(String eventId, String status) async {
     try {
       await _eventService.updateEventStatus(eventId, status);
-      
+
       final index = _events.indexWhere((e) => e.id == eventId);
       if (index != -1) {
         // Create a copy with updated status
-        // Since GameEvent fields are final, we need to create a new instance 
-        // copying all fields but status. 
+        // Since GameEvent fields are final, we need to create a new instance
+        // copying all fields but status.
         // Ideally GameEvent should have a copyWith method.
         // Assuming we rely on fetchEvents refresh or just optimistic update for now.
-        // Let's implement a manual copy for now if copyWith is missing, 
+        // Let's implement a manual copy for now if copyWith is missing,
         // or just fetch updated event. Fetching is safer.
         // But for UI responsiveness, let's update local list if possible.
         // I'll check GameEvent for copyWith. If not there, I will just refetch or do a manual copy.
         // Given I verified GameEvent and it didn't have copyWith in the view_file output (Step 167),
         // I will implement a manual copy here for the specific field, or cleaner: refetch.
         // Actually, looking at the code, GameEvent is a simple PODO.
-        
+
         // Let's try to do a manual update on the list by creating a new object.
         final old = _events[index];
         _events[index] = GameEvent(
@@ -109,7 +128,7 @@ class EventProvider with ChangeNotifier {
   Future<void> startEvent(String eventId) async {
     try {
       await _eventService.startEvent(eventId);
-      
+
       // Optimistic local update
       final index = _events.indexWhere((e) => e.id == eventId);
       if (index != -1) {
@@ -210,7 +229,7 @@ class EventProvider with ChangeNotifier {
   Future<void> restartCompetition(String eventId) async {
     try {
       await _eventService.restartCompetition(eventId);
-      await fetchEvents(); 
+      await fetchEvents();
       notifyListeners();
     } catch (e) {
       debugPrint('Error al reiniciar competencia: $e');
@@ -233,7 +252,24 @@ class EventProvider with ChangeNotifier {
   /// Suscribe al canal Realtime de Supabase para recibir cambios del evento.
   /// Cuando el admin activa el evento, el caché local se actualiza y
   /// HomeScreen.build() hace rebuild automático mostrando el juego.
-  void subscribeToEventUpdates(String eventId) {
+  Future<void> subscribeToEventUpdates(String eventId) async {
+    // P2: Si el evento no está en la lista local (común en el player), lo buscamos primero
+    final existingIndex = _events.indexWhere((e) => e.id == eventId);
+    if (existingIndex == -1) {
+      debugPrint(
+          '[EventProvider] 🔍 Event $eventId not found in local list. Fetching...');
+      try {
+        final allEvents = await _eventService.fetchEvents();
+        final serverEvent = allEvents.firstWhere((e) => e.id == eventId);
+        _events.add(serverEvent);
+        debugPrint('[EventProvider] ✅ Event $eventId added to local list');
+        notifyListeners();
+      } catch (e) {
+        debugPrint('[EventProvider] ⚠️ Error fetching event $eventId: $e');
+        // Continuamos con la suscripción de todos modos por si acaso
+      }
+    }
+
     _eventsChannel?.unsubscribe();
     _eventsChannel = Supabase.instance.client
         .channel('event_status_changes:$eventId')
@@ -248,43 +284,40 @@ class EventProvider with ChangeNotifier {
           ),
           callback: (payload) {
             debugPrint('[EventProvider] 🔔 Realtime: event update received');
-            final newStatus = payload.newRecord['status'] as String?;
-            if (newStatus == null) return;
+            final record = payload.newRecord;
             final index = _events.indexWhere((e) => e.id == eventId);
+
             if (index != -1) {
               final old = _events[index];
-              _events[index] = GameEvent(
-                id: old.id,
-                title: old.title,
-                description: old.description,
-                locationName: old.locationName,
-                latitude: old.latitude,
-                longitude: old.longitude,
-                date: old.date,
-                createdByAdminId: old.createdByAdminId,
-                clue: old.clue,
-                imageUrl: old.imageUrl,
-                maxParticipants: old.maxParticipants,
-                pin: old.pin,
+
+              // Map dynamic json to fields
+              final String? newStatus = record['status'];
+              final Map<String, dynamic>? newStorePricesRaw =
+                  record['store_prices'];
+              final Map<String, dynamic>? newSpectatorConfig =
+                  record['spectator_config'];
+              final int? newPot = record['pot'];
+
+              _events[index] = old.copyWith(
                 status: newStatus,
-                completedAt: old.completedAt,
-                winnerId: old.winnerId,
-                type: old.type,
-                entryFee: old.entryFee,
-                currentParticipants: old.currentParticipants,
-                configuredWinners: old.configuredWinners,
-                pot: old.pot,
-                spectatorConfig: old.spectatorConfig,
-                betTicketPrice: old.betTicketPrice,
-                sponsorId: old.sponsorId,
+                pot: newPot,
+                spectatorConfig: newSpectatorConfig,
+                storePrices: newStorePricesRaw
+                    ?.map((k, v) => MapEntry(k, (v as num).toInt())),
               );
-              debugPrint('[EventProvider] ✅ Local event status updated → $newStatus');
-              notifyListeners(); // HomeScreen rebuild automático
+
+              debugPrint(
+                  '[EventProvider] ✅ Local event updated via Realtime: ${newStorePricesRaw ?? 'no prices'}');
+              notifyListeners();
+            } else {
+              debugPrint(
+                  '[EventProvider] ⚠️ Received realtime update for event $eventId but it is STILL not in list!');
             }
           },
         )
         .subscribe();
-    debugPrint('[EventProvider] 🔧 Subscribed to Realtime updates for event $eventId');
+    debugPrint(
+        '[EventProvider] 🔧 Subscribed to Realtime updates for event $eventId');
   }
 
   /// Cancela la suscripción Realtime activa.
