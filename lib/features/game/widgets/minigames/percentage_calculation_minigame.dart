@@ -95,41 +95,78 @@ class _PercentageCalculationMinigameState
 
   void _generateRound() {
     // Generate clear percentages: 10, 20, 25, 50
-    List<int> percents = [10, 20, 25, 50];
+    final List<int> percents = [10, 20, 25, 50];
     _percentage = percents[_random.nextInt(percents.length)];
 
-    // Generate accurate base numbers (multiples of 10 or 100)
+    // Generate accurate base numbers (multiples of 10 or 4)
     if (_percentage == 25) {
-      _baseNumber = (_random.nextInt(20) + 1) * 4; // Ensure divisible by 4
+      _baseNumber = (_random.nextInt(25) + 1) * 4; // 4, 8, ..., 100
     } else {
-      _baseNumber = (_random.nextInt(40) + 1) * 10;
+      _baseNumber = (_random.nextInt(40) + 1) * 10; // 10, 20, ..., 400
     }
 
+    // Exact integer calculation (guaranteed by constraints above)
     _correctAnswer = (_baseNumber * _percentage) ~/ 100;
 
-    // Generate distractors
-    Set<int> distractorSet = {_correctAnswer};
-    while (distractorSet.length < 4) {
-      // Logic for distractors: slightly off, or calculating wrong %
+    debugPrint(
+        '[PERCENT_MINIGAME] Round: $_percentage% of $_baseNumber = $_correctAnswer');
+
+    // Generate distractors using a Set to ensure uniqueness
+    final Set<int> distractorSet = {_correctAnswer};
+
+    // 1. Try adding values calculating wrong percentages of the same base
+    for (int p in percents) {
+      if (p != _percentage) {
+        int val = (_baseNumber * p) ~/ 100;
+        if (val > 0 && val != _correctAnswer) {
+          distractorSet.add(val);
+        }
+      }
+    }
+
+    // 2. Add random variants until we have 4 options
+    int attempts = 0;
+    while (distractorSet.length < 4 && attempts < 100) {
+      attempts++;
       int type = _random.nextInt(3);
       int val;
+
       if (type == 0) {
-        // Close value
-        val = _correctAnswer + (_random.nextInt(10) - 5) * 2;
+        // Small offset (±1, ±2, ±3)
+        val = _correctAnswer +
+            (_random.nextBool() ? 1 : -1) * (_random.nextInt(3) + 1);
       } else if (type == 1) {
-        // Wrong percentage logic (e.g. 10% instead of 20%)
-        int wrongP = percents[_random.nextInt(percents.length)];
-        val = (_baseNumber * wrongP) ~/ 100;
+        // Large offset (±10)
+        val = _correctAnswer + (_random.nextBool() ? 10 : -10);
       } else {
-        // Random
-        val = _random.nextInt(_baseNumber);
+        // Random value within a reasonable range
+        val = _random.nextInt(_baseNumber + 5);
       }
 
-      if (val > 0) distractorSet.add(val);
+      if (val > 0 && val != _correctAnswer) {
+        distractorSet.add(val);
+      }
+    }
+
+    // 3. Absolute fallback: if we still don't have 4 options, force sequential distractors
+    int offset = 1;
+    while (distractorSet.length < 4) {
+      int val = _correctAnswer + offset;
+      distractorSet.add(val);
+      offset++;
     }
 
     _options = distractorSet.toList();
-    _options.shuffle();
+    _options.shuffle(_random);
+
+    // 4. Final safety check: ensure the correct answer is definitely in the options
+    if (!_options.contains(_correctAnswer)) {
+      debugPrint('[PERCENT_MINIGAME] ⚠️ ERROR: Correct answer was missing!');
+      _options[0] = _correctAnswer;
+      _options.shuffle(_random);
+    }
+
+    debugPrint('[PERCENT_MINIGAME] Options: $_options');
   }
 
   void _handleSelection(int selected) {
