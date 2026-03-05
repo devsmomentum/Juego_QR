@@ -51,6 +51,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final mainScroll = CustomScrollView(
+      physics:
+          const BouncingScrollPhysics(), // Smoother scrolling with keyboard
       slivers: [
         if (!widget.hideScaffold)
           SliverAppBar(
@@ -58,11 +60,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             floating: true,
             pinned: true,
             backgroundColor: Colors.black.withOpacity(0.5),
+            elevation: 0,
             title: const Text('ID DE JUGADOR',
                 style: TextStyle(
                     letterSpacing: 4,
                     fontWeight: FontWeight.w900,
-                    fontSize: 16)),
+                    fontSize: 16,
+                    fontFamily: 'Orbitron')),
             centerTitle: true,
             actions: [
               IconButton(
@@ -75,7 +79,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(
+                20, 10, 20, 100), // Extra bottom padding
             child: Column(
               children: [
                 // 1. GAMER CARD WITH NEON GLOW
@@ -85,8 +90,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 // 2. TRÉBOLES DORADOS - NEW ANIMATED SECTION
                 _buildGoldenCloversSection(gameProvider, isDarkMode),
-
-                const SizedBox(height: 24),
 
                 const SizedBox(height: 40),
                 const Text("ASTHORIA PROTOCOL v1.0.4",
@@ -100,35 +103,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
 
-    final content = widget.hideScaffold
-        ? mainScroll
-        : AnimatedCyberBackground(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Image.asset(
-                    'assets/images/fotogrupalnoche.png',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                  ),
-                ),
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withOpacity(0.6),
-                  ),
-                ),
-                mainScroll,
-              ],
-            ),
-          );
-
-    if (widget.hideScaffold) return content;
+    if (widget.hideScaffold) {
+      return mainScroll;
+    }
 
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
+      backgroundColor:
+          Colors.transparent, // Set to transparent to show fixed background
       extendBody: true,
       bottomNavigationBar: _buildBottomNavBar(),
-      body: content,
+      body: Stack(
+        children: [
+          // STABLE FIXED BACKGROUND
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/fotogrupalnoche.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.6),
+            ),
+          ),
+          // ANIMATED CYBER BACKGROUND (Optimized version)
+          const Positioned.fill(
+            child: AnimatedCyberBackground(showBackgroundBase: false),
+          ),
+          // MAIN CONTENT
+          SafeArea(child: mainScroll),
+        ],
+      ),
     );
   }
 
