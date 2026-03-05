@@ -11,6 +11,8 @@ import '../widgets/sponsor_banner.dart'; // NEW
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../providers/game_request_provider.dart';
+import '../providers/event_provider.dart';
 
 class EventWaitingScreen extends StatefulWidget {
   final GameEvent event;
@@ -30,6 +32,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   Duration? _timeLeft;
   bool _waitingForAdmin = false; // True when countdown finished but admin hasn't started event
   bool _isNavigating = false; // Guard: evita doble-navegación entre Realtime y Polling
+  int _participantCount = 0;
+  int _maxParticipants = 0;
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
 
@@ -39,6 +43,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   void initState() {
     super.initState();
     _calculateTime();
+    _loadInitialCounts(); // Load initial participant counts
     _timer =
         Timer.periodic(const Duration(seconds: 1), (_) => _calculateTime());
 
@@ -74,6 +79,30 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       });
     }
     // _setupRealtimeSubscription() fue movido a initState() — ver fix P0
+  }
+
+  Future<void> _loadInitialCounts() async {
+    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+    final eventProvider = Provider.of<EventProvider>(context, listen: false);
+
+    try {
+      final count = await requestProvider.getParticipantCount(widget.event.id);
+      int maxP = widget.event.maxParticipants;
+      
+      try {
+        final event = eventProvider.events.firstWhere((e) => e.id == widget.event.id);
+        maxP = event.maxParticipants;
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _participantCount = count;
+          _maxParticipants = maxP;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading initial counts: $e");
+    }
   }
 
   RealtimeChannel? _eventChannel;
@@ -127,11 +156,22 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     try {
       final response = await Supabase.instance.client
           .from('events')
-          .select('status')
+          .select('status, current_participants, max_participants')
           .eq('id', widget.event.id)
           .single();
       final status = response['status'] as String?;
-      debugPrint("⏳ Polling event status: $status");
+      final count = (response['current_participants'] as num?)?.toInt() ?? 0;
+      final maxP = (response['max_participants'] as num?)?.toInt() ?? 0;
+
+      debugPrint("⏳ Polling event status: $status, participants: $count/$maxP");
+      
+      if (mounted) {
+        setState(() {
+          _participantCount = count;
+          _maxParticipants = maxP;
+        });
+      }
+
       if ((status == 'active' || status == 'completed') && mounted) {
         debugPrint("✅ Polling detected event is now ACTIVE! Triggering navigation...");
         _triggerNavigation();
@@ -386,6 +426,16 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                             ],
                                           ),
                                         ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          "Participantes: $_participantCount / $_maxParticipants",
+                                          style: const TextStyle(
+                                            color: Colors.orangeAccent,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Orbitron',
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -444,6 +494,16 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                             fontWeight: FontWeight.w900,
                                             fontFamily: 'Orbitron',
                                             fontFeatures: const [FontFeature.tabularFigures()],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          "Participantes: $_participantCount / $_maxParticipants",
+                                          style: TextStyle(
+                                            color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.8),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Orbitron',
                                           ),
                                         ),
                                       ],
