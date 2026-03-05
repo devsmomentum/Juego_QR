@@ -26,6 +26,7 @@ class GameEvent {
   final int betTicketPrice; // NEW: Price per bet
   final String? sponsorId; // NEW: Linked Sponsor
   final Map<String, int> storePrices; // NEW: Custom prices for this event
+  final bool isAutomated; // TRUE = created by automation, auto-starts without admin
 
   GameEvent({
     required this.id,
@@ -52,6 +53,7 @@ class GameEvent {
     this.betTicketPrice = 100, // NEW
     this.sponsorId, // NEW
     this.storePrices = const {}, // NEW
+    this.isAutomated = false,
   });
 
   LatLng get location => LatLng(latitude, longitude);
@@ -97,6 +99,7 @@ class GameEvent {
             (k, v) => MapEntry(k, (v as num).toInt()),
           ) ??
           {}, // NEW
+      isAutomated: (json['is_automated'] as bool?) ?? false,
     );
   }
 
@@ -125,6 +128,7 @@ class GameEvent {
       'spectator_config': spectatorConfig, // NEW
       'sponsor_id': sponsorId, // NEW
       'store_prices': storePrices, // NEW
+      'is_automated': isAutomated,
     };
   }
 
@@ -153,6 +157,7 @@ class GameEvent {
     int? betTicketPrice,
     String? sponsorId,
     Map<String, int>? storePrices,
+    bool? isAutomated,
   }) {
     return GameEvent(
       id: id ?? this.id,
@@ -179,6 +184,7 @@ class GameEvent {
       betTicketPrice: betTicketPrice ?? this.betTicketPrice,
       sponsorId: sponsorId ?? this.sponsorId,
       storePrices: storePrices ?? this.storePrices,
+      isAutomated: isAutomated ?? this.isAutomated,
     );
   }
 }

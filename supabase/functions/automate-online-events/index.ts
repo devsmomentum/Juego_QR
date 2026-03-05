@@ -173,6 +173,7 @@ serve(async (req: Request) => {
                 entry_fee: entryFee,
                 status: 'pending',   // ← starts pending; activated by auto_start_online_event RPC
                 configured_winners: configuredWinners,
+                is_automated: true,  // ← no admin intervention needed; auto-starts at countdown end
                 created_at: new Date().toISOString()
             })
             .select()

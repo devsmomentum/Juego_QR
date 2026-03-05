@@ -244,7 +244,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   /// Starts polling player count every 3 s once the countdown hits zero.
   /// On each tick: updates [_playerCount] and calls [_tryAutoStart].
   void _startAutoStartPolling() {
-    if (widget.event.type != 'online') return;
+    if (widget.event.type != 'online' || !widget.event.isAutomated) return;
     _autoStartTimer?.cancel();
     _tryAutoStart(); // immediate first check
     _autoStartTimer = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -342,8 +342,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       debugPrint("⏳ Countdown finished for event ${widget.event.id}.");
       // P3: Verificar estado en servidor al llegar a cero (puede que el admin ya inició)
       _checkEventStatusFromServer();
-      // For online events: poll player count + attempt auto-activation
-      _startAutoStartPolling();
+      // Only auto-start for automated online events; manual events wait for admin
+      if (widget.event.isAutomated) _startAutoStartPolling();
     }
   }
 
@@ -364,24 +364,26 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
 
     // Determine dynamic content based on state
     final bool isOnlineEvent = widget.event.type == 'online';
-    final bool isWaitingPlayers = _waitingForAdmin && isOnlineEvent;
-    final bool isWaitingAdmin = _waitingForAdmin && !isOnlineEvent;
+    // Automated online events auto-start; manual online events require admin
+    final bool isAutomatedOnline = isOnlineEvent && widget.event.isAutomated;
+    final bool isWaitingPlayers = _waitingForAdmin && isAutomatedOnline;
+    final bool isWaitingAdmin = _waitingForAdmin && !isAutomatedOnline;
 
     final String headerText = _waitingForAdmin
-        ? (isOnlineEvent ? 'SALA DE ESPERA' : 'CUENTA REGRESIVA FINALIZADA')
+        ? (isAutomatedOnline ? 'SALA DE ESPERA' : 'CUENTA REGRESIVA FINALIZADA')
         : 'PREÁRATE';
     final String titleText = _waitingForAdmin
-        ? (isOnlineEvent
+        ? (isAutomatedOnline
             ? 'ESPERANDO JUGADORES...'
             : 'ESPERANDO AL ADMINISTRADOR')
         : 'LA AVENTURA COMIENZA PRONTO';
     final String subtitleText = _waitingForAdmin
-        ? (isOnlineEvent
+        ? (isAutomatedOnline
             ? 'Iniciamos cuando lleguen $_minPlayersToStart jugadores\no cuando la sala esté llena.'
             : 'El contador ha terminado.\nEsperando señal del administrador para iniciar el evento...')
         : 'El tesoro aguarda por el más valiente.\nManténte alerta.';
     final IconData iconData = _waitingForAdmin
-        ? (isOnlineEvent ? Icons.people : Icons.admin_panel_settings)
+        ? (isAutomatedOnline ? Icons.people : Icons.admin_panel_settings)
         : Icons.hourglass_empty;
 
     // LOGIN CLARO STYLE COLORS
@@ -546,7 +548,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                     child: Column(
                                       children: [
                                         Icon(
-                                          isOnlineEvent
+                                          isAutomatedOnline
                                               ? Icons.people
                                               : Icons.sync,
                                           color: Colors.orangeAccent,
@@ -554,7 +556,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                         ),
                                         const SizedBox(height: 12),
                                         Text(
-                                          isOnlineEvent
+                                          isAutomatedOnline
                                               ? "ESPERANDO JUGADORES"
                                               : "ESPERANDO INICIO MANUAL",
                                           style: const TextStyle(
@@ -566,7 +568,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                           ),
                                         ),
                                         const SizedBox(height: 8),
-                                        if (isOnlineEvent) ...[
+                                        if (isAutomatedOnline) ...[
                                           // Player count progress bar
                                           RichText(
                                             textAlign: TextAlign.center,
