@@ -256,150 +256,168 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Column(
-          children: [
-            const SizedBox(height: 5),
+    return LayoutBuilder(builder: (context, constraints) {
+      final height = constraints.maxHeight;
+      final width = constraints.maxWidth;
+      final isSmall = height < 500;
+      final isWide = width > 500;
 
-            // BARRA DE ESTADO (Vidas y Tiempo)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              child: Row(
+      return Stack(
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints:
+                  BoxConstraints(maxWidth: isWide ? 600 : double.infinity),
+              child: Column(
                 children: [
-                  _buildStatPill(
-                      Icons.favorite,
-                      "x${Provider.of<GameProvider>(context).lives}",
-                      AppTheme.dangerRed),
-                  const Spacer(),
-                  _buildStatPill(
-                      Icons.timer_outlined,
-                      "${(_secondsRemaining ~/ 60)}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
-                      _secondsRemaining < 10
-                          ? AppTheme.dangerRed
-                          : Colors.white70),
-                ],
-              ),
-            ),
+                  const SizedBox(height: 5),
 
-            const SizedBox(height: 10),
-
-            // STATUS & TARGET INFO
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _state == GameState.showing
-                          ? "MEMORIZA LA POSICIÓN"
-                          : _state == GameState.shuffling
-                              ? "¡AQUÍ VAN!"
-                              : "TOCA LA BOLSA CORRECTA",
-                      style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                          decoration: TextDecoration.none),
+                  // BARRA DE ESTADO (Vidas y Tiempo)
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    child: Row(
+                      children: [
+                        _buildStatPill(
+                            Icons.favorite,
+                            "x${Provider.of<GameProvider>(context).lives}",
+                            AppTheme.dangerRed),
+                        const Spacer(),
+                        _buildStatPill(
+                            Icons.timer_outlined,
+                            "${(_secondsRemaining ~/ 60)}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
+                            _secondsRemaining < 10
+                                ? AppTheme.dangerRed
+                                : Colors.white70),
+                      ],
                     ),
                   ),
-                  if (_state != GameState.shuffling) ...[
-                    const Text("BUSCA: ",
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.none)),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: _targetColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white),
+
+                  SizedBox(height: isSmall ? 5 : 10),
+
+                  // STATUS & TARGET INFO
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _state == GameState.showing
+                                ? "MEMORIZA LA POSICIÓN"
+                                : _state == GameState.shuffling
+                                    ? "¡AQUÍ VAN!"
+                                    : "TOCA LA BOLSA CORRECTA",
+                            style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: isSmall ? 10 : 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                                decoration: TextDecoration.none),
+                          ),
+                        ),
+                        if (_state != GameState.shuffling) ...[
+                          Text("BUSCA: ",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isSmall ? 10 : 12,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.none)),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: isSmall ? 15 : 20,
+                            height: isSmall ? 15 : 20,
+                            decoration: BoxDecoration(
+                              color: _targetColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white),
+                            ),
+                          ),
+                        ]
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: isSmall ? 10 : 20),
+
+                  // GAME AREA
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Stack(
+                        children: [
+                          // Position slots indicators
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children:
+                                List.generate(3, (index) => _buildSlotMarker()),
+                          ),
+
+                          // The Bags
+                          ..._bags.map((bag) =>
+                              _buildAnimatedBag(bag, isSmall, isWide, width)),
+                        ],
                       ),
                     ),
-                  ]
+                  ),
+
+                  // SHUFFLE PROGRESS
+                  if (_state == GameState.shuffling)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 40, vertical: isSmall ? 5 : 10),
+                      child: Column(
+                        children: [
+                          LinearProgressIndicator(
+                            value: _shufflesDone / _totalShuffles,
+                            backgroundColor: Colors.white10,
+                            color: AppTheme.accentGold,
+                          ),
+                          const SizedBox(height: 5),
+                          const Text("MEZCLANDO...",
+                              style: TextStyle(
+                                  color: AppTheme.accentGold,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.none)),
+                        ],
+                      ),
+                    ),
+
+                  // BOTÓN DE RENDICIÓN
+                  CyberSurrenderButton(
+                    onPressed: _showOverlay ? null : _handleGiveUp,
+                  ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            // GAME AREA
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Stack(
-                  children: [
-                    // Position slots indicators
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: List.generate(3, (index) => _buildSlotMarker()),
-                    ),
-
-                    // The Bags
-                    ..._bags.map((bag) => _buildAnimatedBag(bag)),
-                  ],
-                ),
-              ),
-            ),
-
-            // SHUFFLE PROGRESS
-            if (_state == GameState.shuffling)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 10),
-                child: Column(
-                  children: [
-                    LinearProgressIndicator(
-                      value: _shufflesDone / _totalShuffles,
-                      backgroundColor: Colors.white10,
-                      color: AppTheme.accentGold,
-                    ),
-                    const SizedBox(height: 5),
-                    const Text("MEZCLANDO...",
-                        style: TextStyle(
-                            color: AppTheme.accentGold,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.none)),
-                  ],
-                ),
-              ),
-
-            // BOTÓN DE RENDICIÓN
-            CyberSurrenderButton(
-              onPressed: _showOverlay ? null : _handleGiveUp,
-            ),
-          ],
-        ),
-        if (_showOverlay)
-          GameOverOverlay(
-            title: _overlayTitle,
-            message: _overlayMessage,
-            isVictory: _isVictory,
-            onRetry: _canRetry ? _resetGame : null,
-            onGoToShop: _showShopButton
-                ? () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const MallScreen()));
-                    if (mounted) {
-                      setState(() {
-                        _canRetry = true;
-                        _showShopButton = false;
-                      });
-                    }
-                  }
-                : null,
-            onExit: () {
-              Navigator.pop(context);
-            },
           ),
-      ],
-    );
+          if (_showOverlay)
+            GameOverOverlay(
+              title: _overlayTitle,
+              message: _overlayMessage,
+              isVictory: _isVictory,
+              onRetry: _canRetry ? _resetGame : null,
+              onGoToShop: _showShopButton
+                  ? () async {
+                      await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const MallScreen()));
+                      if (mounted) {
+                        setState(() {
+                          _canRetry = true;
+                          _showShopButton = false;
+                        });
+                      }
+                    }
+                  : null,
+              onExit: () {
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      );
+    });
   }
 
   void _resetGame() {
@@ -412,16 +430,16 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
     });
   }
 
-  Widget _buildAnimatedBag(BagModel bag) {
-    double width = MediaQuery.of(context).size.width - 40;
-    double slotWidth = width / 3;
+  Widget _buildAnimatedBag(BagModel bag, bool isSmall, bool isWide, double constraintsWidth) {
+    double gameWidth = isWide ? 600 : constraintsWidth;
+    double slotWidth = (gameWidth - 20) / 3;
     double targetLeft = bag.currentPosition * slotWidth;
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 600), // Speed of the swap movement
       curve: Curves.easeInOutBack,
       left: targetLeft,
-      top: 50,
+      top: isSmall ? 10 : 30,
       width: slotWidth,
       child: GestureDetector(
         onTap: () => _onBagTap(bag),
@@ -433,10 +451,10 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                 // Ball
                 if (_state == GameState.showing || _state == GameState.reveal)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 20.0),
+                    padding: EdgeInsets.only(bottom: isSmall ? 10.0 : 20.0),
                     child: Container(
-                      width: 35,
-                      height: 35,
+                      width: isSmall ? 25 : 35,
+                      height: isSmall ? 25 : 35,
                       decoration: BoxDecoration(
                         color: bag.ballColor,
                         shape: BoxShape.circle,
@@ -455,13 +473,13 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                       milliseconds: 1200), // Slower entry/covering animation
                   height: (_state == GameState.showing ||
                           _state == GameState.reveal)
-                      ? 100
-                      : 160,
-                  width: 95,
+                      ? (isSmall ? 60 : 100)
+                      : (isSmall ? 100 : 160),
+                  width: isSmall ? 60 : 95,
                   margin: EdgeInsets.only(
                       bottom: (_state == GameState.showing ||
                               _state == GameState.reveal)
-                          ? 80
+                          ? (isSmall ? 40 : 80)
                           : 0),
                   child: CustomPaint(
                     painter: BagPainter(

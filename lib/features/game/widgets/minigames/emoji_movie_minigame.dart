@@ -31,7 +31,8 @@ class EmojiMovieMinigame extends StatefulWidget {
 class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
     with SingleTickerProviderStateMixin {
   // Game Config
-  static const int _gameDurationSeconds = 20;
+  static const int _gameDurationSeconds = 90;
+  static const int _targetMovies = 5;
 
   // State
   bool _isGameOver = false;
@@ -42,6 +43,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   bool _showShopButton = false;
   bool _isLoading = true;
   int _secondsRemaining = _gameDurationSeconds;
+  int _moviesGuessed = 0;
   Timer? _gameTimer;
 
   // Game Data
@@ -74,13 +76,12 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   }
 
   void _startGameTimer() {
+    if (_gameTimer != null && _gameTimer!.isActive) return;
     _gameTimer?.cancel();
     _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
 
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
-
       if (gameProvider.isFrozen) return;
 
       // [FIX] Pause timer if connectivity is bad
@@ -238,7 +239,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
         _validAnswers.any((ans) => normalizedSelection == ans.toLowerCase());
 
     if (isCorrect) {
-      _winGame();
+      _handleSuccess();
     } else {
       _shakeController.forward(from: 0.0);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -252,12 +253,21 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
     }
   }
 
-  void _winGame() {
-    _gameTimer?.cancel();
+  void _handleSuccess() {
     setState(() {
-      _isGameOver = true;
+      _moviesGuessed++;
     });
-    widget.onSuccess();
+
+    if (_moviesGuessed >= _targetMovies) {
+      _gameTimer?.cancel();
+      setState(() {
+        _isGameOver = true;
+      });
+      widget.onSuccess();
+    } else {
+      // Soft reset for next movie
+      _initializeGameData();
+    }
   }
 
   Future<void> _loseLife(String reason) async {
@@ -297,13 +307,13 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   }
 
   void _resetGame() {
-    _initializeGameData();
-
     setState(() {
       _isGameOver = false;
       _showOverlay = false;
+      _moviesGuessed = 0;
       _secondsRemaining = _gameDurationSeconds;
     });
+    _initializeGameData();
   }
 
   @override
@@ -341,6 +351,14 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(Icons.movie, color: AppTheme.accentGold, size: 16),
+                    const SizedBox(width: 5),
+                    Text("$_moviesGuessed/$_targetMovies",
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 15),
                     Icon(Icons.timer,
                         color: isLowTime
                             ? AppTheme.dangerRed
