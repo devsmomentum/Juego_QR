@@ -463,6 +463,22 @@ class GameService {
         if (data != null) {
           return data['isCompleted'] ?? false;
         }
+      } else if (response.status == 401) {
+        // Handle Invalid JWT by forcing a refresh and retrying once
+        debugPrint('[GameService] 401 Detected. Forcing session refresh...');
+        await _supabase.auth.refreshSession();
+        
+        final retryResponse = await _supabase.functions.invoke(
+          'game-play/check-race-status',
+          headers: await _authHeaders(),
+          body: {'eventId': eventId},
+          method: HttpMethod.post,
+        );
+        
+        if (retryResponse.status == 200) {
+           final data = retryResponse.data as Map<String, dynamic>?;
+           return data?['isCompleted'] ?? false;
+        }
       }
       return false;
     } catch (e) {

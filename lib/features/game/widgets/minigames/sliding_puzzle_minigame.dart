@@ -221,31 +221,17 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
           // GAME CONTENT
           Column(
             children: [
-              // Status Bar
+              // Reduced Status Bar (Only Timer)
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Vidas
-                    Consumer<GameProvider>(builder: (context, game, _) {
-                      return Row(
-                        children: [
-                          const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                          const SizedBox(width: 5),
-                          Text("x${game.lives}",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      );
-                    }),
                     // Timer
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                           color: _secondsRemaining < 30
                               ? AppTheme.dangerRed.withOpacity(0.2)
@@ -258,7 +244,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                       child: Row(
                         children: [
                           Icon(Icons.timer,
-                              size: 16,
+                              size: 14,
                               color: _secondsRemaining < 30
                                   ? AppTheme.dangerRed
                                   : Colors.white),
@@ -269,6 +255,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                                   color: _secondsRemaining < 30
                                       ? AppTheme.dangerRed
                                       : Colors.white,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -276,6 +263,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                   ],
                 ),
               ),
+              const SizedBox(height: 5),
 
               Expanded(
                 child: Center(

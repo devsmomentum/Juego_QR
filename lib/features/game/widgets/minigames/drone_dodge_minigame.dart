@@ -45,7 +45,7 @@ class _DroneDodgeMinigameState extends State<DroneDodgeMinigame> {
   // Config
   static const int _gameDurationSeconds = 30; // Requested 30s
   double _playerX = 0.5; // Center
-  static const double _playerWidthRatio = 0.15;
+  static const double _playerWidthRatio = 0.12;
   static const double _playerHeightRatio = 0.08;
 
   // Dynamic Difficulty
@@ -170,7 +170,7 @@ class _DroneDodgeMinigameState extends State<DroneDodgeMinigame> {
   void _spawnObstacle() {
     final obstacle = DroneObstacle(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
-      x: _random.nextDouble() * 0.8 + 0.1, // 10% to 90%
+      x: _random.nextDouble(), // Full width 0.0 to 1.0
       speed: _obstacleSpeed * (_random.nextDouble() * 0.4 + 0.8),
       widthRatio: _random.nextDouble() * 0.1 + 0.1, // 10% to 20% width
     );
@@ -326,7 +326,7 @@ class _DroneDodgeMinigameState extends State<DroneDodgeMinigame> {
 
             setState(() {
               _playerX += details.delta.dx / width;
-              _playerX = _playerX.clamp(0.1, 0.9);
+              _playerX = _playerX.clamp(0.02, 0.98);
             });
           },
           child: Container(

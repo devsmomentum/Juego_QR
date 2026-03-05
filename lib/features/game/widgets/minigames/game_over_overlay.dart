@@ -63,74 +63,76 @@ class GameOverOverlay extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Icon
-                      Icon(
-                        isVictory ? Icons.emoji_events_rounded : Icons.warning_amber_rounded,
-                        color: accentColor,
-                        size: 52,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Title
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Icon
+                        Icon(
+                          isVictory ? Icons.emoji_events_rounded : Icons.warning_amber_rounded,
                           color: accentColor,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
+                          size: 52,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Message
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 14,
-                          height: 1.5,
+                        const SizedBox(height: 16),
+  
+                        // Title
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: accentColor,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Retry button
-                      if (onRetry != null)
-                        _buildButton(
-                          label: 'REINTENTAR',
-                          icon: Icons.refresh_rounded,
-                          color: AppTheme.accentGold,
-                          onTap: onRetry!,
-                        ),
-
-                      // Go to shop button
-                      if (onGoToShop != null) ...[
                         const SizedBox(height: 12),
-                        _buildButton(
-                          label: 'IR A LA TIENDA',
-                          icon: Icons.storefront_rounded,
-                          color: AppTheme.accentGold,
-                          onTap: onGoToShop!,
+  
+                        // Message
+                        Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
                         ),
+                        const SizedBox(height: 28),
+  
+                        // Retry button
+                        if (onRetry != null)
+                          _buildButton(
+                            label: 'REINTENTAR',
+                            icon: Icons.refresh_rounded,
+                            color: AppTheme.accentGold,
+                            onTap: onRetry!,
+                          ),
+  
+                        // Go to shop button
+                        if (onGoToShop != null) ...[
+                          const SizedBox(height: 12),
+                          _buildButton(
+                            label: 'IR A LA TIENDA',
+                            icon: Icons.storefront_rounded,
+                            color: AppTheme.accentGold,
+                            onTap: onGoToShop!,
+                          ),
+                        ],
+  
+                        // Exit button
+                        if (onExit != null) ...[
+                          const SizedBox(height: 12),
+                          _buildButton(
+                            label: 'SALIR',
+                            icon: Icons.exit_to_app_rounded,
+                            color: Colors.white54,
+                            onTap: onExit!,
+                            subtle: true,
+                          ),
+                        ],
                       ],
-
-                      // Exit button
-                      if (onExit != null) ...[
-                        const SizedBox(height: 12),
-                        _buildButton(
-                          label: 'SALIR',
-                          icon: Icons.exit_to_app_rounded,
-                          color: Colors.white54,
-                          onTap: onExit!,
-                          subtle: true,
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),

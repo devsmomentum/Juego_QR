@@ -228,33 +228,17 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
             padding: const EdgeInsets.only(bottom: 20),
             child: Column(
               children: [
-                // Status Bar
+                // Reduced Status Bar (Timer & Attempts only)
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Vidas
-                      Consumer<GameProvider>(builder: (context, game, _) {
-                        return Row(
-                          children: [
-                            const Icon(Icons.favorite,
-                                color: AppTheme.dangerRed, size: 24),
-                            const SizedBox(width: 5),
-                            Text("x${game.lives}",
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        );
-                      }),
-
                       // Timer
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                             color: _secondsRemaining <= 10
                                 ? AppTheme.dangerRed.withOpacity(0.2)
@@ -267,7 +251,7 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                         child: Row(
                           children: [
                             Icon(Icons.timer,
-                                size: 18,
+                                size: 14,
                                 color: _secondsRemaining <= 10
                                     ? AppTheme.dangerRed
                                     : Colors.white),
@@ -279,16 +263,16 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                                       ? AppTheme.dangerRed
                                       : Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14),
+                                  fontSize: 12),
                             ),
                           ],
                         ),
                       ),
-
+                      const SizedBox(width: 8),
                       // Intentos
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                             color: Colors.white10,
                             borderRadius: BorderRadius.circular(20),
@@ -299,14 +283,14 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                         child: Row(
                           children: [
                             const Icon(Icons.warning_amber_rounded,
-                                size: 18, color: AppTheme.warningOrange),
+                                size: 14, color: AppTheme.warningOrange),
                             const SizedBox(width: 5),
                             Text(
                               "$_wrongAttempts/$_maxAttempts",
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14),
+                                  fontSize: 12),
                             ),
                           ],
                         ),

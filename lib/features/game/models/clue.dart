@@ -19,15 +19,10 @@ enum PuzzleType {
   minesweeper,
   snake,
   blockFill,
-  codeBreaker,
-  imageTrivia,
-  wordScramble,
   memorySequence,
   drinkMixer,
-  librarySort,
   fastNumber,
   bagShuffle,
-  chargeShaker,
   emojiMovie,
   virusTap,
   droneDodge,
@@ -48,7 +43,6 @@ enum PuzzleType {
       // EASY: Simple logic, fast completion
       case PuzzleType.slidingPuzzle:
       case PuzzleType.ticTacToe:
-      case PuzzleType.imageTrivia:
       case PuzzleType.trueFalse:
       case PuzzleType.virusTap:
       case PuzzleType.flags:
@@ -58,7 +52,6 @@ enum PuzzleType {
 
       // MEDIUM: Requires some focus or memory
       case PuzzleType.hangman:
-      case PuzzleType.wordScramble:
       case PuzzleType.memorySequence:
       case PuzzleType.emojiMovie:
       case PuzzleType.bagShuffle:
@@ -72,13 +65,11 @@ enum PuzzleType {
       case PuzzleType.minesweeper:
       case PuzzleType.snake:
       case PuzzleType.blockFill:
-      case PuzzleType.codeBreaker:
       case PuzzleType.holographicPanels:
       case PuzzleType.primeNetwork:
       case PuzzleType.percentageCalculation:
       case PuzzleType.chronologicalOrder:
       case PuzzleType.drinkMixer:
-      case PuzzleType.librarySort:
       case PuzzleType.findDifference:
         return MinigameDifficulty.hard;
 
@@ -89,8 +80,6 @@ enum PuzzleType {
 
   /// Whether this minigame is suitable for auto-generation
   bool get automationAvailable {
-    // Exclude chargeShaker as it was noted as problematic/manual in some contexts
-    if (this == PuzzleType.chargeShaker) return false;
     return true;
   }
 
@@ -120,14 +109,6 @@ enum PuzzleType {
         return '🐍 Snake (Culebrita)';
       case PuzzleType.blockFill:
         return '🟦 Rellenar Bloques';
-      case PuzzleType.codeBreaker:
-        return '🔐 Caja Fuerte (Code)';
-      case PuzzleType.imageTrivia:
-        return '🖼️ Trivia de Imagen';
-      case PuzzleType.wordScramble:
-        return '🔤🔠 Ordenar Palabras';
-      case PuzzleType.chargeShaker:
-        return '⚡ Agitar Carga';
       case PuzzleType.emojiMovie:
         return '🎬 Adivina Película';
       case PuzzleType.virusTap:
@@ -154,8 +135,6 @@ enum PuzzleType {
         return '🧠 Secuencia de Memoria (Simon)';
       case PuzzleType.drinkMixer:
         return '🍹 Cócteles de Neón (Mixer)';
-      case PuzzleType.librarySort:
-        return '📚 Biblioteca de Tonos (Sort)';
       case PuzzleType.fastNumber:
         return '⚡ Número Veloz';
       case PuzzleType.bagShuffle:
@@ -175,10 +154,8 @@ enum PuzzleType {
       case PuzzleType.blockFill:
       case PuzzleType.memorySequence: // Auto-validado al ganar
       case PuzzleType.drinkMixer:
-      case PuzzleType.librarySort:
       case PuzzleType.fastNumber:
       case PuzzleType.bagShuffle:
-      case PuzzleType.chargeShaker:
       case PuzzleType.emojiMovie:
       case PuzzleType.virusTap:
       case PuzzleType.droneDodge:
@@ -216,24 +193,14 @@ enum PuzzleType {
         return 'Come 15 manzanas sin chocar';
       case PuzzleType.blockFill:
         return 'Rellena todo el camino';
-      case PuzzleType.codeBreaker:
-        return 'Descifra el código de 4 dígitos';
-      case PuzzleType.imageTrivia:
-        return '¿Qué es lo que ves en la imagen?';
-      case PuzzleType.wordScramble:
-        return 'Ordena las letras para formar la palabra';
       case PuzzleType.memorySequence:
         return 'Repite la secuencia de colores correctamente';
       case PuzzleType.drinkMixer:
         return 'Mezcla los colores para igualar el cóctel';
-      case PuzzleType.librarySort:
-        return 'Ordena los libros por su tonalidad de color';
       case PuzzleType.fastNumber:
         return 'Escribe el número de 5 cifras que aparecerá brevemente';
       case PuzzleType.bagShuffle:
         return 'Sigue la bolsa que contiene el color solicitado';
-      case PuzzleType.chargeShaker:
-        return '¡Agita el celular para cargar la batería!';
       case PuzzleType.emojiMovie:
         return 'Adivina la película con los emojis';
       case PuzzleType.virusTap:
