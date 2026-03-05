@@ -11,6 +11,8 @@ import '../widgets/sponsor_banner.dart'; // NEW
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../providers/game_request_provider.dart';
+import '../providers/event_provider.dart';
 import '../widgets/event_launch_countdown_overlay.dart'; // NEW: 5-second launch overlay
 
 class EventWaitingScreen extends StatefulWidget {
@@ -34,6 +36,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       false; // True when countdown finished but admin hasn't started event
   bool _isNavigating =
       false; // Guard: evita doble-navegación entre Realtime y Polling
+  int _participantCount = 0;
+  int _maxParticipants = 0;
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
 
@@ -49,6 +53,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   void initState() {
     super.initState();
     _calculateTime();
+    _loadInitialCounts(); // Load initial participant counts
     _timer =
         Timer.periodic(const Duration(seconds: 1), (_) => _calculateTime());
 
@@ -86,7 +91,32 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     // _setupRealtimeSubscription() fue movido a initState() — ver fix P0
   }
 
+  Future<void> _loadInitialCounts() async {
+    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+    final eventProvider = Provider.of<EventProvider>(context, listen: false);
+
+    try {
+      final count = await requestProvider.getParticipantCount(widget.event.id);
+      int maxP = widget.event.maxParticipants;
+      
+      try {
+        final event = eventProvider.events.firstWhere((e) => e.id == widget.event.id);
+        maxP = event.maxParticipants;
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _participantCount = count;
+          _maxParticipants = maxP;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading initial counts: $e");
+    }
+  }
+
   RealtimeChannel? _eventChannel;
+  RealtimeChannel? _playersChannel;
 
   void _setupRealtimeSubscription() {
     try {
@@ -122,8 +152,45 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
             },
           )
           .subscribe();
+
+      // Suscripción a game_players para actualizar conteo en tiempo real
+      _playersChannel = Supabase.instance.client
+          .channel('public:game_players:${widget.event.id}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'game_players',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'event_id',
+              value: widget.event.id,
+            ),
+            callback: (payload) {
+              debugPrint('👥 game_players change detected, refreshing count...');
+              _refreshParticipantCount();
+            },
+          )
+          .subscribe();
     } catch (e) {
       debugPrint("❌ Error setting up realtime subscription: $e");
+    }
+  }
+
+  /// Re-queries player count from DB and updates the UI state.
+  Future<void> _refreshParticipantCount() async {
+    if (!mounted) return;
+    try {
+      final resp = await Supabase.instance.client
+          .from('game_players')
+          .select('id')
+          .eq('event_id', widget.event.id)
+          .not('status', 'in', '(spectator,banned)')
+          .count();
+      if (mounted) {
+        setState(() => _participantCount = resp.count ?? 0);
+      }
+    } catch (e) {
+      debugPrint('❌ _refreshParticipantCount error: $e');
     }
   }
 
@@ -159,7 +226,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     try {
       final response = await Supabase.instance.client
           .from('events')
-          .select('status')
+          .select('status, current_participants, max_participants')
           .eq('id', widget.event.id)
           .maybeSingle(); // maybeSingle so a missing row doesn't throw
       if (response == null) {
@@ -168,7 +235,18 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
         return;
       }
       final status = response['status'] as String?;
-      // Se apaga el print de polling para no generar ruido en consola ('⏳ Polling event status: $status')
+      final count = (response['current_participants'] as num?)?.toInt() ?? 0;
+      final maxP = (response['max_participants'] as num?)?.toInt() ?? 0;
+
+      // Se apaga el print de polling para no generar ruido en consola ('⏳ Polling event status: $status, participants: $count/$maxP')
+      
+      if (mounted) {
+        setState(() {
+          _participantCount = count;
+          _maxParticipants = maxP;
+        });
+      }
+
       if ((status == 'active' || status == 'completed') && mounted) {
         debugPrint(
             "✅ Polling detected event is now ACTIVE! Triggering navigation...");
@@ -350,6 +428,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   @override
   void dispose() {
     _eventChannel?.unsubscribe();
+    _playersChannel?.unsubscribe();
     _timer?.cancel();
     _statusPollingTimer?.cancel();
     _autoStartTimer?.cancel();
@@ -631,6 +710,16 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                               ],
                                             ),
                                           ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          "Participantes: $_participantCount / $_maxParticipants",
+                                          style: const TextStyle(
+                                            color: Colors.orangeAccent,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Orbitron',
+                                          ),
+                                        ),
                                         ], // closes else branch
                                       ], // closes Column.children
                                     ),
@@ -707,6 +796,18 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                             ],
                                           ),
                                         ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          "Participantes: $_participantCount / $_maxParticipants",
+                                          style: TextStyle(
+                                            color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.8),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Orbitron',
+                                          ),
+                                        ),
+
+                                        
                                       ],
                                     ),
                                   ),

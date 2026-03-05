@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
+import '../../../core/storage/secure_local_storage.dart';
 
 /// Servicio de autenticación que encapsula la lógica de login, registro y logout.
 ///
@@ -177,12 +178,21 @@ class AuthService {
       }
     }
 
-    // 2. Cerrar sesión en Supabase
+    // 2. Limpiar token local PRIMERO — garantiza que el storage quede limpio
+    //    incluso si signOut() falla por red, sesión expirada, etc.
+    try {
+      await SecureLocalStorage().removePersistedSession();
+      debugPrint('AuthService: Local token cleared.');
+    } catch (e) {
+      debugPrint('AuthService: Error clearing local token: $e');
+    }
+
+    // 3. Cerrar sesión en Supabase (invalida el token en el servidor)
     try {
       await _supabase.auth.signOut();
     } catch (e) {
-      debugPrint('AuthService: Error force-closing session: $e');
-      // No re-lanzamos para permitir que la App asuma que salió localmente
+      debugPrint('AuthService: Error closing server session (token already cleared locally): $e');
+      // No re-lanzamos — el token local ya fue borrado, la App puede continuar
     }
   }
 

@@ -331,6 +331,7 @@ class EventService {
           ? Map<String, int>.from(
               data['store_prices'].map((k, v) => MapEntry(k, v as int)))
           : {},
+      isAutomated: (data['is_automated'] as bool?) ?? false,
     );
   }
 
