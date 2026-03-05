@@ -161,12 +161,15 @@ Future<void> main() async {
   );
 
   // Initialize OneSignal
-  // Remove this method to stop OneSignal Debugging
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
-    OneSignal.initialize("bbcc3a18-666a-4fa7-855a-4047b56a3e7d");
-    // The promptForPushNotificationsWithUserResponse function will show the iOS or Android push notification prompt. We recommend removing the following code and instead using an In-App Message to prompt for notification permission
+    OneSignal.initialize(dotenv.env['ONESIGNAL_APP_ID']!);
     OneSignal.Notifications.requestPermission(true);
+
+    // --- AUTO-TAGGING: Distinguir Dev/Prod sin crear dos apps ---
+    final String envTag = kDebugMode ? 'dev' : 'prod';
+    OneSignal.User.addTagWithKey("app_env", envTag);
+    debugPrint('🏷️ OneSignal user tagged as: $envTag');
   }
 
   // 3. La configuración de orientación y UI Overlay es solo para MÓVIL (Android/iOS)
