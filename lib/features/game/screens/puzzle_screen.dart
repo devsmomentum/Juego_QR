@@ -853,14 +853,17 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     navigator.pop();
   }
 
+  // [PERFORMANCE] Lanzar refreshProfile en background para no bloquear
+  // la animación del trébol. El RPC ya retornó coins_earned atómicamente.
+  // El refresh se completará durante la animación (~2.3s de margen).
+  Future<void>? profileRefreshFuture;
+
   if (result != null) {
     // coinsEarned se muestra en el SuccessCelebrationDialog (no SnackBar)
 
     if (playerProvider.currentPlayer != null) {
-      debugPrint('--- REFRESHING PROFILE START ---');
-      await playerProvider.refreshProfile();
-      debugPrint(
-          '--- REFRESHING PROFILE END. New Coins: ${playerProvider.currentPlayer?.coins} ---');
+      debugPrint('--- REFRESHING PROFILE (non-blocking) ---');
+      profileRefreshFuture = playerProvider.refreshProfile();
     }
 
     // Check if race was completed or if player completed all clues
@@ -968,6 +971,17 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   final showNextStep = nextClue != null;
   // Obtener el hint (ubicación) de la siguiente pista para mostrarlo al jugador
   final String? nextClueHint = nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null;
+
+  // [PERFORMANCE] Esperar a que el refresh termine antes del diálogo de celebración
+  // para que las monedas estén actualizadas. Tras ~2.3s de animación, ya debió completar.
+  if (profileRefreshFuture != null) {
+    try {
+      await profileRefreshFuture;
+      debugPrint('--- PROFILE REFRESH COMPLETED (after animation) ---');
+    } catch (e) {
+      debugPrint('WARN: Profile refresh failed: $e');
+    }
+  }
 
   // 3. Mostrar el panel de celebración - OBLIGATORIO después del sello
   // [FIX] Usar navigator capturado para garantizar visualización
