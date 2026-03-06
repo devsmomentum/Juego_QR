@@ -61,6 +61,9 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
   Future<void> _triggerManual() async {
     setState(() => _isLoading = true);
     try {
+      // Refresh session to ensure a valid JWT before calling the edge function
+      await _supabase.auth.refreshSession();
+
       final response = await _supabase.functions.invoke(
         'automate-online-events',
         body: {'trigger': 'manual'},

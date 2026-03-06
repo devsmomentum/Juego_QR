@@ -90,6 +90,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   Map<String, String> _playerStatuses =
       {}; // Cache para estados locales de baneo
   RealtimeChannel? _gamePlayersChannel; // Channel for realtime updates
+  Future<List<Clue>>? _cluesFuture; // Cached future to prevent FutureBuilder flickering
 
   Future<void> _fetchPlayerStatuses([AdminService? adminService]) async {
     debugPrint(
@@ -213,7 +214,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       Provider.of<StoreProvider>(context, listen: false)
           .fetchStores(widget.event.id);
       // Cargar pistas
-      Provider.of<EventProvider>(context, listen: false)
+      _cluesFuture = Provider.of<EventProvider>(context, listen: false)
           .fetchCluesForEvent(widget.event.id);
       _fetchPlayerStatuses(); // Cargar estados locales
 
@@ -1155,7 +1156,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               eventLongitude: widget.event.longitude,
             ),
           );
-          if (result == true) setState(() {});
+          if (result == true) _refreshClues();
         },
         child: const Icon(Icons.add, color: Colors.white),
       );
@@ -1755,10 +1756,16 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     );
   }
 
+  void _refreshClues() {
+    setState(() {
+      _cluesFuture = Provider.of<EventProvider>(context, listen: false)
+          .fetchCluesForEvent(widget.event.id);
+    });
+  }
+
   Widget _buildCluesTab() {
     return FutureBuilder<List<Clue>>(
-      future: Provider.of<EventProvider>(context, listen: false)
-          .fetchCluesForEvent(widget.event.id),
+      future: _cluesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -1823,7 +1830,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                               eventLongitude: widget.event.longitude,
                             ),
                           );
-                          if (result == true) setState(() {});
+                          if (result == true) _refreshClues();
                         },
                       ),
                   ],
