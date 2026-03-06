@@ -248,6 +248,48 @@ class AppConfigService {
   }
 
   // ---------------------------------------------------------------------------
+  // POWER DEFAULT COSTS
+  // ---------------------------------------------------------------------------
+
+  /// Reads the default power costs from app_config.
+  Future<Map<String, int>> getPowerDefaultCosts() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'power_default_costs')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        final map = response['value'] as Map<String, dynamic>;
+        return map.map((key, value) => MapEntry(key, (value as num).toInt()));
+      }
+      return {};
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching power_default_costs: $e');
+      return {};
+    }
+  }
+
+  /// Saves the default power costs to app_config.
+  Future<bool> updatePowerDefaultCosts(Map<String, int> costs) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'power_default_costs',
+        'value': costs,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] power_default_costs updated: $costs');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating power_default_costs: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // VERSION CONFIGURATION
   // ---------------------------------------------------------------------------
 
