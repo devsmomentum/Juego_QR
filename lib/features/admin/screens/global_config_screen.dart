@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/app_config_service.dart';
+import '../../mall/models/power_item.dart'; // NEW
 
 /// Admin screen for managing global application configuration.
-/// 
+///
 /// Handles:
 /// - BCV Exchange Rate (USD -> VES)
 /// - Gateway Fee Percentage (for visual display in app)
@@ -19,6 +20,9 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   final _formKey = GlobalKey<FormState>();
   final _exchangeRateController = TextEditingController();
   final _gatewayFeeController = TextEditingController();
+
+  // Power default costs
+  Map<String, int> _powerDefaultCosts = {};
 
   // Version config
   final _latestVersionController = TextEditingController();
@@ -57,25 +61,33 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
   Future<void> _loadConfig() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final results = await Future.wait([
         _configService.getExchangeRate(),
         _configService.getGatewayFeePercentage(),
         _configService.isRechargeEnabled(),
         _configService.getVersionConfig(),
+        _configService.getPowerDefaultCosts(), // NEW
       ]);
       _exchangeRateController.text = (results[0] as double).toStringAsFixed(2);
       _gatewayFeeController.text = (results[1] as double).toStringAsFixed(2);
       _rechargeEnabled = results[2] as bool;
 
       final versionCfg = results[3] as Map<String, dynamic>;
+
+      final dbPowerCosts = results[4] as Map<String, int>;
+      // Validate or populate default costs using PowerItem's default list
+      _powerDefaultCosts = {};
+      for (var item in PowerItem.getShopItems()) {
+        _powerDefaultCosts[item.id] = dbPowerCosts[item.id] ?? item.cost;
+      }
+
       _latestVersionController.text =
           versionCfg['latest_version'] as String? ?? '1.0.0';
       _minVersionController.text =
           versionCfg['min_supported_version'] as String? ?? '1.0.0';
-      _apkUrlController.text =
-          versionCfg['apk_download_url'] as String? ?? '';
+      _apkUrlController.text = versionCfg['apk_download_url'] as String? ?? '';
       _androidStoreUrlController.text =
           versionCfg['android_store_url'] as String? ?? '';
       _iosStoreUrlController.text =
@@ -145,18 +157,24 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
   Future<void> _saveConfig() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isSaving = true);
-    
+
     try {
       final exchangeRate = double.parse(_exchangeRateController.text);
       final gatewayFee = double.parse(_gatewayFeeController.text);
-      
+
       final rateSuccess = await _configService.updateExchangeRate(exchangeRate);
-      final feeSuccess = await _configService.updateGatewayFeePercentage(gatewayFee);
-      
+      final feeSuccess =
+          await _configService.updateGatewayFeePercentage(gatewayFee);
+      final powerSuccess = await _configService
+          .updatePowerDefaultCosts(_powerDefaultCosts); // NEW
+
+      // Also sync it globally immediately
+      PowerItem.updateGlobalCosts(_powerDefaultCosts);
+
       if (mounted) {
-        if (rateSuccess && feeSuccess) {
+        if (rateSuccess && feeSuccess && powerSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Configuración guardada exitosamente'),
@@ -221,7 +239,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               icon: Icons.currency_exchange,
               child: TextFormField(
                 controller: _exchangeRateController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: Colors.white, fontSize: 18),
                 decoration: InputDecoration(
                   hintText: 'Ej: 56.50',
@@ -232,7 +251,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   suffixStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.2)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -244,7 +264,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Requerido';
                   final parsed = double.tryParse(value);
-                  if (parsed == null || parsed <= 0) return 'Ingrese un valor válido';
+                  if (parsed == null || parsed <= 0)
+                    return 'Ingrese un valor válido';
                   return null;
                 },
               ),
@@ -257,20 +278,24 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               title: 'Comisión de Pasarela (Visualización)',
               subtitle: 'Porcentaje de comisión de Pago a Pago',
               icon: Icons.percent,
-              warning: 'Este valor debe coincidir con la comisión configurada en Pago a Pago '
+              warning:
+                  'Este valor debe coincidir con la comisión configurada en Pago a Pago '
                   'para mostrar el estimado correcto al usuario.',
               child: TextFormField(
                 controller: _gatewayFeeController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(color: Colors.white, fontSize: 18),
                 decoration: InputDecoration(
                   hintText: 'Ej: 3.0',
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
                   suffixText: '%',
-                  suffixStyle: const TextStyle(color: AppTheme.accentGold, fontSize: 18),
+                  suffixStyle:
+                      const TextStyle(color: AppTheme.accentGold, fontSize: 18),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.2)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -282,8 +307,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Requerido';
                   final parsed = double.tryParse(value);
-                  if (parsed == null || parsed < 0) return 'Ingrese un valor válido (0 o más)';
-                  if (parsed > 100) return 'El porcentaje no puede ser mayor a 100';
+                  if (parsed == null || parsed < 0)
+                    return 'Ingrese un valor válido (0 o más)';
+                  if (parsed > 100)
+                    return 'El porcentaje no puede ser mayor a 100';
                   return null;
                 },
               ),
@@ -308,16 +335,12 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: (_rechargeEnabled
-                              ? Colors.green
-                              : Colors.orange)
+                      color: (_rechargeEnabled ? Colors.green : Colors.orange)
                           .withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      _rechargeEnabled
-                          ? Icons.add_card
-                          : Icons.construction,
+                      _rechargeEnabled ? Icons.add_card : Icons.construction,
                       color: _rechargeEnabled ? Colors.green : Colors.orange,
                       size: 24,
                     ),
@@ -375,6 +398,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
             // Version Configuration Section
             _buildVersionCard(),
+
+            const SizedBox(height: 24),
+
+            // Power Default Costs Section
+            _buildPowerDefaultCostsCard(),
 
             const SizedBox(height: 40),
 
@@ -480,15 +508,15 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline, color: Colors.blueAccent, size: 18),
+                const Icon(Icons.info_outline,
+                    color: Colors.blueAccent, size: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'La "Versión mínima" es la que bloquea usuarios con APK antigua. '
                     '"Versión publicada" es solo informativa. '
                     'Ambas usan formato x.y.z (ej: 1.0.1).',
-                    style: TextStyle(
-                        color: Colors.blue.shade200, fontSize: 12),
+                    style: TextStyle(color: Colors.blue.shade200, fontSize: 12),
                   ),
                 ),
               ],
@@ -657,8 +685,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                           color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.save_rounded, size: 20),
               label: const Text('GUARDAR VERSIÓN',
-                  style:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryPurple,
                 foregroundColor: Colors.white,
@@ -687,7 +714,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         labelText: label,
         labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12),
+        hintStyle:
+            TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12),
         prefixIcon: Icon(icon, color: iconColor ?? Colors.white38, size: 20),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -720,8 +748,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         hintText: hint,
         hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
         helperText: helper,
-        helperStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
-        prefixIcon: Icon(Icons.tag_rounded, color: color.withOpacity(0.7), size: 20),
+        helperStyle:
+            TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+        prefixIcon:
+            Icon(Icons.tag_rounded, color: color.withOpacity(0.7), size: 20),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
@@ -800,7 +830,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+                  const Icon(Icons.warning_amber,
+                      color: Colors.amber, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -817,6 +848,135 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
           ],
           const SizedBox(height: 20),
           child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPowerDefaultCostsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGold.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.bolt,
+                    color: AppTheme.accentGold, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Precios Base de Poderes',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Costo por defecto al crear nuevos eventos (online y presenciales)',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 3,
+            ),
+            itemCount: PowerItem.getShopItems().length,
+            itemBuilder: (context, index) {
+              final power = PowerItem.getShopItems()[index];
+              final currentValue = _powerDefaultCosts[power.id] ?? power.cost;
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.03),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Text(power.icon, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        power.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 60,
+                      child: TextFormField(
+                        initialValue: currentValue.toString(),
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: AppTheme.accentGold,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 4),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                const BorderSide(color: AppTheme.accentGold),
+                          ),
+                          filled: true,
+                          fillColor: Colors.black26,
+                        ),
+                        onChanged: (val) {
+                          final parsed = int.tryParse(val);
+                          if (parsed != null && parsed >= 0) {
+                            _powerDefaultCosts[power.id] = parsed;
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

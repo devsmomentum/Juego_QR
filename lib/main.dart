@@ -57,6 +57,8 @@ import 'features/mall/providers/shop_provider.dart';
 
 import 'core/storage/secure_local_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'core/services/app_config_service.dart'; // NEW
+import 'features/mall/models/power_item.dart'; // NEW
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -159,6 +161,17 @@ Future<void> main() async {
       localStorage: SecureLocalStorage(),
     ),
   );
+
+  // Load global default power costs
+  try {
+    final appConfigService =
+        AppConfigService(supabaseClient: Supabase.instance.client);
+    final globalPowerCosts = await appConfigService.getPowerDefaultCosts();
+    PowerItem.updateGlobalCosts(globalPowerCosts);
+    debugPrint('🛍️ [DEBUG] Power default costs loaded: $globalPowerCosts');
+  } catch (e) {
+    debugPrint('🛍️ [ERROR] Failed to load power default costs: $e');
+  }
 
   // Initialize OneSignal
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {

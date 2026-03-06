@@ -42,6 +42,18 @@ serve(async (req: Request) => {
             return new Response(JSON.stringify({ error: 'Config not found' }), { status: 500 });
         }
 
+        // Fetch Global Power Defaults
+        const { data: globalPowerCostsData } = await supabaseClient
+            .from('app_config')
+            .select('config_value')
+            .eq('config_key', 'power_default_costs')
+            .maybeSingle();
+
+        let globalPowerCosts: Record<string, number> = {};
+        if (globalPowerCostsData && globalPowerCostsData.config_value) {
+            globalPowerCosts = globalPowerCostsData.config_value as Record<string, number>;
+        }
+
         // 2. Check if automation is enabled (Bypass if manual)
         if (config.enabled !== true && !isManualAction) {
             console.log('Automation is disabled and not a manual trigger.');
@@ -63,10 +75,12 @@ serve(async (req: Request) => {
         const intervalMinutes = config.interval_minutes !== undefined ? Number(config.interval_minutes) : 60;
 
         // Price defaults (same values hardcoded before, now overridable from admin config)
-        const defaultPrices: Record<string, number> = {
+        const hardcodedFallbackPrices: Record<string, number> = {
             black_screen: 75, blur_screen: 75, extra_life: 40,
             return: 90, freeze: 120, shield: 40, life_steal: 120, invisibility: 40
         };
+
+        const defaultPrices: Record<string, number> = { ...hardcodedFallbackPrices, ...globalPowerCosts };
         const configPlayerPrices: Record<string, number> =
             (config.player_prices && typeof config.player_prices === 'object')
                 ? config.player_prices as Record<string, number>
