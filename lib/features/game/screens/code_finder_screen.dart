@@ -82,6 +82,9 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
   }
 
   void _showCodeFinderTutorial() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_CODE_FINDER') ?? false;
     if (hasSeen) return;

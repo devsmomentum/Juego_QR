@@ -79,142 +79,186 @@ class _CyberTutorialOverlayState extends State<CyberTutorialOverlay> {
                   ),
                 ],
               ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Visual Area (Simula un vídeo o demo)
-                    if (step.visual != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          height: 200,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.05),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          child: step.visual,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ] else ...[
-                       // Icon Fallback
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentGold.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          step.icon,
-                          color: AppTheme.accentGold,
-                          size: 40,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    
-                    // Title
-                    Text(
-                      step.title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white, // Siempre blanco
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    // Description
-                    Text(
-                      step.description,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white70, // Siempre blanco70
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // Indicators
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        widget.steps.length,
-                        (index) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: index == _currentIndex ? 32 : 8,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: index == _currentIndex 
-                                ? AppTheme.accentGold 
-                                : AppTheme.accentGold.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    
-                    // Actions
-                    Row(
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_currentIndex > 0)
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => setState(() => _currentIndex--),
-                                child: const Text(
-                                  'ATRÁS',
-                                  style: TextStyle(
-                                    color: Colors.white38, // Siempre blanco38 
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12
+                        // Visual Area (Simula un vídeo o demo)
+                        if (step.visual != null) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              height: 200,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.05),
+                                border: Border.all(color: Colors.white10),
+                              ),
+                              child: step.visual,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ] else ...[
+                           // Icon Fallback
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentGold.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              step.icon,
+                              color: AppTheme.accentGold,
+                              size: 40,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        
+                        // Title
+                        Text(
+                          step.title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white, // Siempre blanco
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Description
+                        Text(
+                          step.description,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white70, // Siempre blanco70
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Indicators
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            widget.steps.length,
+                            (index) => AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: index == _currentIndex ? 32 : 8,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: index == _currentIndex 
+                                    ? AppTheme.accentGold 
+                                    : AppTheme.accentGold.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        
+                        // Actions
+                        Row(
+                          children: [
+                            if (_currentIndex > 0)
+                              Expanded(
+                                child: TextButton(
+                                  onPressed: () => setState(() => _currentIndex--),
+                                    child: const Text(
+                                      'ATRÁS',
+                                      style: TextStyle(
+                                        color: Colors.white38, // Siempre blanco38 
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12
+                                      ),
+                                    ),
+                                ),
+                              ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.accentGold.withOpacity(0.3),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.accentGold,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 18),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: _next,
+                                  child: Text(
+                                    _currentIndex == widget.steps.length - 1 ? '¡LISTO PARA JUGAR!' : 'SIGUIENTE',
+                                    style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
                                   ),
                                 ),
-                            ),
-                          ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.accentGold.withOpacity(0.3),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.accentGold,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                elevation: 0,
                               ),
-                              onPressed: _next,
-                              child: Text(
-                                _currentIndex == widget.steps.length - 1 ? '¡LISTO PARA JUGAR!' : 'SIGUIENTE',
-                                style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Styled Skip button (Omitir)
+                        Center(
+                          child: InkWell(
+                            onTap: widget.onFinish,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppTheme.accentGold.withOpacity(0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.keyboard_double_arrow_right_rounded,
+                                    size: 14,
+                                    color: AppTheme.accentGold.withOpacity(0.5),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'OMITIR TUTORIAL',
+                                    style: TextStyle(
+                                      color: AppTheme.accentGold.withOpacity(0.5),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -12,6 +12,7 @@ import '../../game/screens/game_mode_selector_screen.dart';
 
 class AvatarSelectionScreen extends StatefulWidget {
   final String? eventId;
+  final bool isFromProfile;
 
   static const List<String> validAvatarIds = [
     'explorer_m',
@@ -24,7 +25,7 @@ class AvatarSelectionScreen extends StatefulWidget {
     'spec_f',
   ];
 
-  const AvatarSelectionScreen({super.key, this.eventId});
+  const AvatarSelectionScreen({super.key, this.eventId, this.isFromProfile = false});
 
   @override
   State<AvatarSelectionScreen> createState() => _AvatarSelectionScreenState();
@@ -212,6 +213,11 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
 
       if (!mounted) return;
 
+      if (widget.isFromProfile) {
+        Navigator.of(context).pop();
+        return;
+      }
+
       if (widget.eventId != null) {
         await gameProvider.initializeGameForApprovedUser(
             playerProvider.currentPlayer!.userId, widget.eventId!);
@@ -384,7 +390,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 10),
 
                 // Carousel Infinito
                 Expanded(
@@ -407,72 +413,77 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
                             duration: const Duration(milliseconds: 300),
                             child: Opacity(
                               opacity: isSelected ? 1.0 : 0.5,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // Avatar Image with Hover Effect
-                                  AnimatedBuilder(
-                                    animation: _hoverController,
-                                    builder: (context, child) {
-                                      final double offset = isSelected
-                                          ? Curves.easeInOut.transform(
-                                                  _hoverController.value) *
-                                              15
-                                          : 0;
-                                      return Transform.translate(
-                                        offset: Offset(0, -offset),
-                                        child: child,
-                                      );
-                                    },
-                                    child: Container(
-                                      height: 200,
-                                      width: 200,
-                                      decoration: null,
-                                      child: Image.asset(
-                                        'assets/images/avatars/${avatar['id']}.png',
-                                        fit: BoxFit.contain,
-                                        cacheWidth:
-                                            400, // Constraint memory usage
-                                        errorBuilder: (_, __, ___) =>
-                                            const Icon(
-                                          Icons.person,
-                                          color: Colors.white70,
-                                          size: 100,
+                              child: Center(
+                                child: SingleChildScrollView(
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Avatar Image with Hover Effect
+                                      AnimatedBuilder(
+                                        animation: _hoverController,
+                                        builder: (context, child) {
+                                          final double offset = isSelected
+                                              ? Curves.easeInOut.transform(
+                                                      _hoverController.value) *
+                                                  15
+                                              : 0;
+                                          return Transform.translate(
+                                            offset: Offset(0, -offset),
+                                            child: child,
+                                          );
+                                        },
+                                        child: Container(
+                                          height: 200,
+                                          width: 200,
+                                          decoration: null,
+                                          child: Image.asset(
+                                            'assets/images/avatars/${avatar['id']}.png',
+                                            fit: BoxFit.contain,
+                                            cacheWidth:
+                                                400, // Constraint memory usage
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.person,
+                                              color: Colors.white70,
+                                              size: 100,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 30),
-                                  Text(
-                                    avatar['name']!,
-                                    style: TextStyle(
-                                      fontFamily: 'Orbitron',
-                                      color: isSelected
-                                          ? dGoldMain
-                                          : Colors.white70,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: isSelected ? 26 : 22,
-                                      letterSpacing: 2,
-                                      shadows: const [],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 50),
-                                    child: Text(
-                                      avatar['desc']!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.white54,
-                                        fontSize: 14,
-                                        height: 1.5,
+                                      const SizedBox(height: 15),
+                                      Text(
+                                        avatar['name']!,
+                                        style: TextStyle(
+                                          fontFamily: 'Orbitron',
+                                          color: isSelected
+                                              ? dGoldMain
+                                              : Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: isSelected ? 26 : 22,
+                                          letterSpacing: 2,
+                                          shadows: const [],
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 8),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 50),
+                                        child: Text(
+                                          avatar['desc']!,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.white54,
+                                            fontSize: 14,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           );
@@ -502,7 +513,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
 
                 // Confirm Button (Doble Borde Estilo Premium)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(40, 20, 40, 40),
+                  padding: const EdgeInsets.fromLTRB(40, 10, 40, 20),
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(

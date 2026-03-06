@@ -715,11 +715,11 @@ class MasterTutorialContent {
 
   static Widget _buildInZoneVisual() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12),
       color: const Color(0xFF020617),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: AppTheme.cardBg,
             borderRadius: BorderRadius.circular(15),
@@ -742,11 +742,11 @@ class MasterTutorialContent {
                   fontSize: 12,
                 ),
               ),
-              const SizedBox(height: 15),
-              const Icon(Icons.qr_code_2, color: AppTheme.accentGold, size: 50),
+              const SizedBox(height: 10),
+              const Icon(Icons.qr_code_2, color: AppTheme.accentGold, size: 40),
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppTheme.accentGold,
                   borderRadius: BorderRadius.circular(8),

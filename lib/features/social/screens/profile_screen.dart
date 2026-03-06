@@ -24,6 +24,7 @@ import '../../../shared/widgets/master_tutorial_content.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../admin/screens/dashboard-screen.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../../auth/screens/avatar_selection_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool hideScaffold;
@@ -396,82 +397,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Avatar Section
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 110,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                              width: 3,
-                            ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AvatarSelectionScreen(isFromProfile: true),
                           ),
-                          padding: const EdgeInsets.all(4),
-                          child: Container(
+                        );
+                      },
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 110,
+                            height: 110,
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppTheme.primaryPurple,
-                                  AppTheme.secondaryPink.withOpacity(0.5)
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(55),
-                              child: Builder(
-                                builder: (context) {
-                                  final avatarId = player.avatarId;
-                                  if (avatarId != null && avatarId.isNotEmpty) {
-                                    return Image.asset(
-                                      'assets/images/avatars/$avatarId.png',
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                          Icons.person,
-                                          size: 55,
-                                          color: Colors.white),
-                                    );
-                                  }
-                                  if (player.avatarUrl != null &&
-                                      player.avatarUrl!.startsWith('http')) {
-                                    return Image.network(
-                                      player.avatarUrl!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                          Icons.person,
-                                          size: 55,
-                                          color: Colors.white),
-                                    );
-                                  }
-                                  return const Icon(Icons.person,
-                                      size: 55, color: Colors.white);
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Camera Overlay
-                        Positioned(
-                          bottom: 5,
-                          right: 5,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryPurple,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: const Color(0xFF1A1A1D), width: 2),
+                                color: Colors.white.withOpacity(0.3),
+                                width: 3,
+                              ),
                             ),
-                            child: const Icon(Icons.camera_alt,
-                                color: Colors.white, size: 10),
+                            padding: const EdgeInsets.all(4),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppTheme.primaryPurple,
+                                    AppTheme.secondaryPink.withOpacity(0.5)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(55),
+                                child: Builder(
+                                  builder: (context) {
+                                    final avatarId = player.avatarId;
+                                    if (avatarId != null && avatarId.isNotEmpty) {
+                                      return Image.asset(
+                                        'assets/images/avatars/$avatarId.png',
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => const Icon(
+                                            Icons.person,
+                                            size: 55,
+                                            color: Colors.white),
+                                      );
+                                    }
+                                    if (player.avatarUrl != null &&
+                                        player.avatarUrl!.startsWith('http')) {
+                                      return Image.network(
+                                        player.avatarUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => const Icon(
+                                            Icons.person,
+                                            size: 55,
+                                            color: Colors.white),
+                                      );
+                                    }
+                                    return const Icon(Icons.person,
+                                        size: 55, color: Colors.white);
+                                  },
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          // Camera Overlay
+                          Positioned(
+                            bottom: 5,
+                            right: 5,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryPurple,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: const Color(0xFF1A1A1D), width: 2),
+                              ),
+                              child: const Icon(Icons.face_unlock_outlined,
+                                  color: Colors.white, size: 10),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                     const SizedBox(height: 20),
@@ -526,6 +537,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Divider(color: Colors.white.withOpacity(0.1), height: 1),
 
                     const SizedBox(height: 32),
+
+                    // CAMBIAR PERSONAJE BUTTON
+                    SizedBox(
+                      width: double.infinity,
+                      child: _buildProfileButton(
+                        icon: Icons.face_retouching_natural,
+                        label: "CAMBIAR PERSONAJE / AVATAR",
+                        color: AppTheme.accentGold,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AvatarSelectionScreen(isFromProfile: true),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
 
                     // Buttons Row 1
                     Row(
