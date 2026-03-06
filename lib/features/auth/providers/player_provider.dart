@@ -55,6 +55,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   bool _isSpectatorSession = false; // NEW: Flag for spectator mode choice
   bool _isDarkMode = false; // Global theme state
   bool _isAutoTheme = true; // Auto theme based on Venezuela time
+  bool _isNewlyRegistered = false; // Flag to track if the user just registered
   Timer? _themeTimer; // Timer to periodically check time
 
   List<PowerItem> _shopItems = PowerItem.getShopItems();
@@ -65,6 +66,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   List<PowerItem> get shopItems => _shopItems;
   bool get isDarkMode => _isDarkMode;
   bool get isAutoTheme => _isAutoTheme;
+  bool get isNewlyRegistered => _isNewlyRegistered;
 
   String? _banMessage;
   String? get banMessage => _banMessage;
@@ -139,6 +141,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   }
 
   Future<void> loadTheme() async {
+    _isNewlyRegistered = false; // Default: not new on session load
     final prefs = await SharedPreferences.getInstance();
     _isAutoTheme = prefs.getBool('is_auto_theme') ?? true; // Default: auto
 
@@ -261,6 +264,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
 
   Future<void> login(String email, String password) async {
     try {
+      _isNewlyRegistered = false; // Regular login is not a registration
       final userId = await _authService.login(email, password);
       await restoreSession(userId);
     } catch (e) {
@@ -272,6 +276,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Future<void> register(String name, String email, String password,
       {String? cedula, String? phone}) async {
     try {
+      _isNewlyRegistered = true; // MARK AS NEWLY REGISTERED
       final userId = await _authService.register(name, email, password,
           cedula: cedula, phone: phone);
 

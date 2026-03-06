@@ -126,6 +126,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
     }
 
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!force && !playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     final String tutorialKey = 'has_seen_tutorial_$section';
     final hasSeen = prefs.getBool(tutorialKey) ?? false;

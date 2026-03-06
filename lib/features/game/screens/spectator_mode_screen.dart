@@ -118,6 +118,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   }
 
   void _showSpectatorTutorial({bool force = false}) async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!force && !playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     if (!force) {
       final hasSeen = prefs.getBool('has_seen_tutorial_SPECTATOR') ?? false;

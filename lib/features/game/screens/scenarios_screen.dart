@@ -627,47 +627,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     final prefs = await SharedPreferences.getInstance();
     final bool hasSeenTutorial = prefs.getBool('seen_home_tutorial') ?? false;
     if (!hasSeenTutorial) {
-      if (mounted) _showTutorial(context);
+      // Eliminar el tutorial inicial de bienvenida según requerimiento
       await prefs.setBool('seen_home_tutorial', true);
     }
   }
 
-  void _showTutorial(BuildContext context) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (context, _, __) => CyberTutorialOverlay(
-          steps: [
-            TutorialStep(
-              title: "TABLERO DE MISIONES",
-              description:
-                  "Aquí verás los eventos y escenarios disponibles según el modo que elegiste. ¡Explóralos todos!",
-              icon: Icons.map_outlined,
-            ),
-            TutorialStep(
-              title: "MODOS DE JUEGO",
-              description:
-                  "En la pestaña 'Modos' podrás elegir entre jugar de forma presencial u online.",
-              icon: Icons.sports_esports_outlined,
-            ),
-            TutorialStep(
-              title: "TU CARTERA",
-              description:
-                  "Gestiona tus tréboles, recarga saldo y canjea tus premios acumulados en este juego.",
-              icon: Icons.account_balance_wallet_outlined,
-            ),
-            TutorialStep(
-              title: "TU PERFIL",
-              description:
-                  "Consulta tus estadísticas, nivel de jugador y personaliza tu avatar para que todos te reconozcan.",
-              icon: Icons.person_outline,
-            ),
-          ],
-          onFinish: () => Navigator.pop(context),
-        ),
-      ),
-    );
-  }
+  // El tutorial inicial ha sido eliminado a petición.
+
 
   /// Cleans up any active game session data to prevent ghost effects or state leaks.
   void _cleanupGameState() {
@@ -761,6 +727,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   }
 
   void _showScenariosTutorial() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_SCENARIOS') ?? false;
     if (hasSeen) return;
@@ -2475,9 +2444,6 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                     case 'logout':
                                       _showLogoutDialog();
                                       break;
-                                    case 'tutorial':
-                                      _showTutorial(context);
-                                      break;
                                   }
                                 },
                                 itemBuilder: (context) => [
@@ -2517,16 +2483,6 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                             color: currentBrand),
                                         const SizedBox(width: 12),
                                         Text('Soporte',
-                                            style:
-                                                TextStyle(color: currentText))
-                                      ])),
-                                  PopupMenuItem(
-                                      value: 'tutorial',
-                                      child: Row(children: [
-                                        Icon(Icons.help_outline,
-                                            color: currentBrand),
-                                        const SizedBox(width: 12),
-                                        Text('Guía de Juego',
                                             style:
                                                 TextStyle(color: currentText))
                                       ])),

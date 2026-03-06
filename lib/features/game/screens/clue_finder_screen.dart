@@ -80,6 +80,9 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
   }
 
   void _showClueScannerTutorial() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_CLUE_SCANNER') ?? false;
     if (hasSeen) return;
