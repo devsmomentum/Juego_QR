@@ -38,6 +38,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
   // Race-end listener
   GameProvider? _gameProviderRef;
   bool _isNavigatingToWinner = false;
+  Timer? _raceStatusPollingTimer;
 
   // Animations
   late AnimationController _pulseController;
@@ -69,6 +70,12 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
       _gameProviderRef!.addListener(_onGameProviderChange);
       // Immediate check in case the race already ended
       _onGameProviderChange();
+
+      // Independent polling: ensures we detect event end even if Realtime misses it
+      _raceStatusPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!mounted || _isNavigatingToWinner) return;
+        _gameProviderRef?.checkRaceStatus();
+      });
     });
   }
 
@@ -220,6 +227,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
 
   @override
   void dispose() {
+    _raceStatusPollingTimer?.cancel();
     _gameProviderRef?.removeListener(_onGameProviderChange);
     _positionStreamSubscription?.cancel();
     _pulseController.dispose();
