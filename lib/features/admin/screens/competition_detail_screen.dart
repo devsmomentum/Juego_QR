@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:map_hunter/features/admin/services/admin_service.dart';
 import '../../game/models/event.dart';
 import '../../game/models/clue.dart';
@@ -599,6 +602,111 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     }
   }
 
+  Future<void> _generateAllQRsPdf() async {
+    setState(() => _isLoading = true);
+    try {
+      final doc = pw.Document();
+
+      // Load fonts
+      final fontBold = await PdfGoogleFonts.nunitoBold();
+      final fontItalic = await PdfGoogleFonts.nunitoItalic();
+
+      // Add page helper
+      void addQRPage(String data, String title, String label, String? hint) {
+        doc.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4,
+            build: (pw.Context context) {
+              return pw.Center(
+                child: pw.Column(
+                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      title,
+                      style: pw.TextStyle(
+                        font: fontBold,
+                        fontSize: 28,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 20),
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.qrCode(),
+                      data: data,
+                      width: 400,
+                      height: 400,
+                    ),
+                    pw.SizedBox(height: 20),
+                    if (label.isNotEmpty)
+                      pw.Text(
+                        label,
+                        style: pw.TextStyle(
+                          font: fontBold,
+                          fontSize: 22,
+                        ),
+                      ),
+                    if (hint != null && hint.isNotEmpty) ...[
+                      pw.SizedBox(height: 20),
+                      pw.Text(
+                        hint,
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          font: fontItalic,
+                          fontSize: 18,
+                          fontStyle: pw.FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
+
+      // 1. Event Access QR
+      if (_pin.length == 6) {
+        addQRPage("EVENT:${widget.event.id}:$_pin", "QR de Acceso al Evento",
+            "", "Escanea este código para entrar");
+      }
+
+      // 2. Clues QRs
+      final eventProvider = Provider.of<EventProvider>(context, listen: false);
+      final clues = await eventProvider.fetchCluesForEvent(widget.event.id);
+      for (var clue in clues) {
+        addQRPage("CLUE:${widget.event.id}:${clue.id}", clue.title,
+            "Pista: ${clue.puzzleType.label}", clue.hint);
+      }
+
+      // 3. Stores QRs
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+      final stores = storeProvider.stores;
+      for (var store in stores) {
+        if (store.qrCodeData.isNotEmpty) {
+          addQRPage(store.qrCodeData, "QR de Tienda", store.name,
+              "Escanea para entrar");
+        }
+      }
+
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename:
+            'todos_qr_evento_${_pin.isNotEmpty ? _pin : widget.event.id}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al generar PDF: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _saveChanges() async {
     // Validación de estado: solo se permite guardar si el evento está en 'pending'
     if (widget.event.status != 'pending') {
@@ -987,6 +1095,20 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           maxLines: 1,
         ),
         actions: [
+          if (widget.event.type != 'online')
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf, color: Colors.blueAccent),
+              tooltip: "Generar y Guardar Todos los QRs",
+              onPressed: () {
+                if (_pin.length == 6) {
+                  _generateAllQRsPdf();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Guarda el PIN primero')),
+                  );
+                }
+              },
+            ),
           if (widget.event.status == 'pending')
             IconButton(
               icon: const Icon(Icons.play_arrow_rounded,
@@ -1334,6 +1456,33 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                         if (_pin.length == 6) {
                           final qrData = "EVENT:${widget.event.id}:$_pin";
                           _showQRDialog(qrData, "QR de Acceso", "PIN: $_pin");
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Guarda el PIN primero')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                if (widget.event.type != 'online') const SizedBox(width: 8),
+                if (widget.event.type != 'online')
+                  Container(
+                    height: 56,
+                    width: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.picture_as_pdf,
+                          color: Colors.blueAccent),
+                      tooltip: "Guardar Todos los QRs (PDF)",
+                      onPressed: () {
+                        if (_pin.length == 6) {
+                          _generateAllQRsPdf();
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
