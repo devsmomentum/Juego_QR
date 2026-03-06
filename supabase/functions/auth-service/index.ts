@@ -135,6 +135,7 @@ serve(async (req) => {
 
       let sanitizedPhone = phone;
       if (phone) {
+        // Eliminar espacios, guiones y puntos pero conservar el "+" inicial
         sanitizedPhone = phone.replace(/[\.\-\s]/g, "");
       }
 
@@ -159,30 +160,36 @@ serve(async (req) => {
         }
       }
 
-      // Validar formato de teléfono venezolano (04XX-XXXXXXX)
+      // Validar formato de teléfono E.164: +[código país][número local]
+      // Acepta formato internacional (+58412..., +1202..., +3491..., etc.)
+      // y también el formato venezolano legacy (04121234567)
       if (sanitizedPhone) {
-        // Ensure only digits remain for phone check
-        const phoneDigits = sanitizedPhone.replace(/\D/g, "");
-        // 13/02/2026: Added 22 to match client options
-        const phoneRegex = /^04(12|14|24|16|26|22)\d{7}$/;
+        // E.164: "+" seguido de 7 a 15 dígitos
+        const e164Regex = /^\+\d{7,15}$/;
+        // Legacy venezolano: 04XX + 7 dígitos
+        const legacyVERegex = /^04(12|14|24|16|26|22)\d{7}$/;
 
-        if (!phoneRegex.test(phoneDigits)) {
-          throw new Error("Formato de teléfono inválido. Usa 04121234567");
+        if (e164Regex.test(sanitizedPhone)) {
+          // Ya viene en E.164 — se usa tal cual
+        } else if (legacyVERegex.test(sanitizedPhone)) {
+          // Convertir formato legacy venezolano a E.164: 04121234567 → +584121234567
+          sanitizedPhone = "+58" + sanitizedPhone.substring(1);
+        } else {
+          throw new Error(
+            "Formato de teléfono inválido. Usa formato internacional (+584121234567) o local (04121234567)",
+          );
         }
 
         // Verificar si el teléfono ya existe
         const { data: existingPhone } = await supabaseClient
           .from("profiles")
           .select("id")
-          .eq("phone", phoneDigits)
+          .eq("phone", sanitizedPhone)
           .single();
 
         if (existingPhone) {
           throw new Error("Este teléfono ya está registrado");
         }
-
-        // Update the variable to be used in signUp
-        sanitizedPhone = phoneDigits;
       }
 
       // Attempt signUp — handle duplicate user gracefully
@@ -415,14 +422,24 @@ serve(async (req) => {
         }
       }
 
-      // Validate phone (Venezuelan format)
+      // Validate phone (E.164 international format or legacy Venezuelan)
       let sanitizedPhone: string | undefined = undefined;
       if (phone !== undefined && phone !== null) {
-        const phoneDigits = String(phone).replace(/\D/g, "");
-        const phoneRegex = /^04(12|14|24|16|26|22)\d{7}$/;
-        if (!phoneRegex.test(phoneDigits)) {
+        let phoneValue = String(phone).replace(/[\. \-]/g, "");
+
+        // E.164: "+" seguido de 7 a 15 dígitos
+        const e164Regex = /^\+\d{7,15}$/;
+        // Legacy venezolano: 04XX + 7 dígitos
+        const legacyVERegex = /^04(12|14|24|16|26|22)\d{7}$/;
+
+        if (e164Regex.test(phoneValue)) {
+          // Ya viene en E.164 — se usa tal cual
+        } else if (legacyVERegex.test(phoneValue)) {
+          // Convertir formato legacy venezolano a E.164
+          phoneValue = "+58" + phoneValue.substring(1);
+        } else {
           throw new Error(
-            "Formato de teléfono inválido. Usa 04121234567",
+            "Formato de teléfono inválido. Usa formato internacional (+584121234567) o local (04121234567)",
           );
         }
 
@@ -430,7 +447,7 @@ serve(async (req) => {
         const { data: existingPhone } = await userSupabase
           .from("profiles")
           .select("id")
-          .eq("phone", phoneDigits)
+          .eq("phone", phoneValue)
           .neq("id", user.id)
           .maybeSingle();
 
@@ -438,7 +455,7 @@ serve(async (req) => {
           throw new Error("Este teléfono ya está registrado");
         }
 
-        sanitizedPhone = phoneDigits;
+        sanitizedPhone = phoneValue;
       }
 
       // Validate cedula (Venezuelan format)

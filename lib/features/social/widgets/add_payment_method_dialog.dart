@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../auth/services/auth_service.dart';
+import '../../auth/models/country_code.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 
@@ -94,7 +95,7 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
     final playerProvider = Provider.of<PlayerProvider>(context);
     final player = playerProvider.currentPlayer;
     final dni = player?.cedula ?? 'No definido';
-    final phone = player?.phone ?? 'No definido';
+    final phone = CountryCode.formatForDisplay(player?.phone);
 
     return Dialog(
       backgroundColor: Colors.transparent,

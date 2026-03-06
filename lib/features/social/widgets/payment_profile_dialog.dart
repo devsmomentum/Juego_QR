@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../../auth/providers/profile_registration_provider.dart';
+import '../../auth/widgets/phone_input_field.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -31,9 +33,11 @@ class _PaymentProfileDialogState extends State<PaymentProfileDialog> {
       if (player.cedula != null) {
          _dniController.text = player.cedula!;
       }
-      if (player.phone != null) {
-         _phoneController.text = player.phone!;
-      }
+      // Inicializar el provider de teléfono con el valor E.164 existente
+      final phoneProvider =
+          Provider.of<ProfileRegistrationProvider>(context, listen: false);
+      phoneProvider.loadFromE164(player.phone);
+      _phoneController.text = phoneProvider.phoneNumber;
     }
   }
 
@@ -50,11 +54,14 @@ class _PaymentProfileDialogState extends State<PaymentProfileDialog> {
     setState(() => _isLoading = true);
     
     final fullDni = '$_documentType${_dniController.text.trim()}';
+    final phoneProvider =
+        Provider.of<ProfileRegistrationProvider>(context, listen: false);
+    final phoneE164 = phoneProvider.formattedPhone ?? '';
 
     try {
       await Provider.of<PlayerProvider>(context, listen: false).updateProfile(
         cedula: fullDni,
-        phone: _phoneController.text.trim(),
+        phone: phoneE164,
       );
 
       if (mounted) {
@@ -193,17 +200,9 @@ class _PaymentProfileDialogState extends State<PaymentProfileDialog> {
                     ),
                     const SizedBox(height: 18),
                     
-                    // Phone Input
-                    TextFormField(
+                    // Phone Input con selector de código de país
+                    GamePhoneInputField(
                       controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('Teléfono (04141234567)', true),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Requerido';
-                        if (value.length < 10) return 'Teléfono inválido';
-                        return null;
-                      },
                     ),
                   ],
                 ),

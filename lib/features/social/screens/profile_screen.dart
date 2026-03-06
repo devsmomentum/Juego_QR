@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../../auth/providers/profile_registration_provider.dart';
+import '../../auth/widgets/phone_input_field.dart';
 import '../../game/providers/game_provider.dart';
 import '../../game/providers/power_effect_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -652,8 +654,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: player.name);
     final emailController = TextEditingController(text: player.email);
-    final phoneController = TextEditingController(text: player.phone ?? '');
+    final phoneController = TextEditingController();
     bool isSaving = false;
+
+    // Inicializar el provider de teléfono con el valor E.164 existente
+    final phoneProvider =
+        Provider.of<ProfileRegistrationProvider>(context, listen: false);
+    phoneProvider.loadFromE164(player.phone);
+    // Pre-poblar el controller con el número local parseado
+    phoneController.text = phoneProvider.phoneNumber;
 
     // Registration-matching banned words
     final bannedWords = [
@@ -780,30 +789,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Teléfono
-                  TextFormField(
+                  // Teléfono con selector de código de país
+                  GamePhoneInputField(
                     controller: phoneController,
-                    style: const TextStyle(color: Colors.white),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(11),
-                    ],
-                    decoration: _fieldDecoration(
-                        'TELÉFONO (04XX...)', Icons.phone_android_outlined),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Ingresa tu teléfono';
-                      }
-                      if (value.length < 11) {
-                        return 'Ingresa el número completo (11 dígitos)';
-                      }
-                      final prefixRegex = RegExp(r'^04(12|14|24|16|26|22)');
-                      if (!prefixRegex.hasMatch(value)) {
-                        return 'Prefijo inválido (ej: 0412...)';
-                      }
-                      return null;
-                    },
                   ),
 
                   const SizedBox(height: 24),
@@ -817,7 +805,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             final newName = nameController.text.trim();
                             final newEmail =
                                 emailController.text.trim().toLowerCase();
-                            final newPhone = phoneController.text.trim();
+                            final newPhone =
+                                phoneProvider.formattedPhone ?? '';
 
                             // Check if email is changing
                             final emailIsChanging =

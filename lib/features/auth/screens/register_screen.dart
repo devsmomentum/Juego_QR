@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
+import '../providers/profile_registration_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/utils/error_handler.dart';
@@ -17,6 +18,7 @@ import '../../game/screens/game_mode_selector_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import '../../../core/services/terms_service.dart';
+import '../widgets/phone_input_field.dart';
 
 // RE-FORCE CLEAN VERSION - NO _isDarkMode
 class RegisterScreen extends StatefulWidget {
@@ -35,9 +37,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _cedulaController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  // Selectores para cédula y teléfono
+  // Selector para cédula
   String _selectedNationalityType = 'V'; // V o E
-  String _selectedPhonePrefix = '0412'; // Prefijo por defecto
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
@@ -47,15 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // Opciones de nacionalidad
   final List<String> _nationalityTypes = ['V', 'E'];
 
-  // Prefijos de operadoras venezolanas
-  final List<String> _phonePrefixes = [
-    '0412',
-    '0414',
-    '0424',
-    '0416',
-    '0426',
-    '0422'
-  ];
+
 
   // Lista básica de palabras prohibidas (se puede expandir)
   final List<String> _bannedWords = [
@@ -164,13 +157,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final cedulaToSend =
           '$_selectedNationalityType${_cedulaController.text.trim()}'
               .toUpperCase();
-      final phoneToSend =
-          _phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      final phoneProvider =
+          Provider.of<ProfileRegistrationProvider>(context, listen: false);
+      final phoneToSend = phoneProvider.formattedPhone ?? '';
       final emailToSend = _emailController.text.trim().toLowerCase();
       final nameToSend = _nameController.text.trim();
 
       debugPrint(
-          'REGISTER PAYLOAD: Cedula: $cedulaToSend, Phone: $phoneToSend, Email: $emailToSend');
+          'REGISTER PAYLOAD: Cedula: $cedulaToSend, Phone(E.164): $phoneToSend, Email: $emailToSend');
 
       await playerProvider.register(
         nameToSend,
@@ -519,32 +513,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 const SizedBox(height: 16),
 
-                                // Teléfono
-                                TextFormField(
+                                // Teléfono con selector de código de país
+                                GamePhoneInputField(
                                   controller: _phoneController,
-                                  style: const TextStyle(color: Colors.white),
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(11),
-                                  ],
-                                  decoration: const InputDecoration(
-                                    labelText: 'TELÉFONO',
-                                    prefixIcon:
-                                        Icon(Icons.phone_android_outlined),
-                                    hintText: '04121234567',
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty)
-                                      return 'Ingresa tu teléfono';
-                                    if (value.length < 11)
-                                      return 'Ingresa el número completo (11 dígitos)';
-                                    final prefixRegex =
-                                        RegExp(r'^04(12|14|24|16|26|22)');
-                                    if (!prefixRegex.hasMatch(value))
-                                      return 'Prefijo inválido (ej: 0412...)';
-                                    return null;
-                                  },
                                 ),
                                 const SizedBox(height: 16),
 

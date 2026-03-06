@@ -13,6 +13,7 @@ import 'features/auth/screens/splash_screen.dart';
 import 'features/game/providers/game_provider.dart';
 import 'features/game/services/penalty_service.dart';
 import 'features/auth/providers/player_provider.dart';
+import 'features/auth/providers/profile_registration_provider.dart';
 import 'features/auth/services/auth_service.dart';
 import 'features/auth/services/inventory_service.dart';
 import 'features/auth/services/power_service.dart';
@@ -268,6 +269,8 @@ class _MapHunterAppState extends State<MapHunterApp>
         ),
 
         // --- Existing Providers ---
+        ChangeNotifierProvider(
+            create: (_) => ProfileRegistrationProvider()),
         ChangeNotifierProvider(create: (context) {
           final supabase = Supabase.instance.client;
           final authService = Provider.of<AuthService>(context,
