@@ -20,6 +20,7 @@ import 'audit_logs_screen.dart';
 import 'sponsors_management_screen.dart';
 import 'online_automation_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
+import 'event_metrics_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -39,7 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Usuarios",
     "Compras",
     "Retiros",
-    "Reportes",
+    "Métricas", // Renamed from "Reportes"
     "Minijuegos",
     "Patrocinadores",
     "Auditoría",
@@ -54,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.people,
     Icons.local_offer,
     Icons.money_off,
-    Icons.bar_chart,
+    Icons.analytics, // Icon for "Métricas" (formerly "Reportes")
     Icons.games,
     Icons.business_center,
     Icons.history_edu,
@@ -129,13 +130,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const UserManagementScreen(), // Index 4
       const CloverPlansManagementScreen(), // Index 5 - Planes Compra
       const WithdrawalPlansManagementScreen(), // Index 6 - Planes Retiro
-      const Center(
-          child: Text('Reportes - En desarrollo',
-              style: TextStyle(color: Colors.white54))), // Index 6 - Reportes
-      const _MinigamesListView(), // Index 7 - Minijuegos
-      const SponsorsManagementScreen(), // Index 8 - Patrocinadores
-      const AuditLogsScreen(), // Index 9 - Auditoría
-      const GlobalConfigScreen(), // Index 10 - Configuración
+      const EventMetricsScreen(), // Index 7 - Métricas
+      const _MinigamesListView(), // Index 8 - Minijuegos
+      const SponsorsManagementScreen(), // Index 9 - Patrocinadores
+      const AuditLogsScreen(), // Index 10 - Auditoría
+      const GlobalConfigScreen(), // Index 11 - Configuración
     ];
 
     return LayoutBuilder(
@@ -198,70 +197,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       // Información de Usuario
-                      Flexible(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Ocutar email en pantallas muy pequeñas si es necesario,
-                            // pero con Expanded en el titulo deberia bastar.
-                            // Usaremos un constrained box para el email si queremos.
-                            if (MediaQuery.of(context).size.width > 600) ...[
-                              Flexible(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: const [
-                                    Text(
-                                      "Administrador",
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      "admin@system.com",
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                            ],
-                            CircleAvatar(
-                              backgroundColor: AppTheme.secondaryPink,
-                              radius: 16, // Smaller avatar
-                              child: const Text("A",
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (MediaQuery.of(context).size.width > 600) ...[
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: const [
+                                Text(
+                                  "Administrador",
                                   style: TextStyle(
-                                      fontSize: 14,
                                       color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14),
+                                ),
+                                Text(
+                                  "admin@system.com",
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
-                            // Modo Jugador toggle
-                            IconButton(
-                              icon: const Icon(Icons.sports_esports,
-                                  color: AppTheme.accentGold),
-                              tooltip: "Modo Jugador",
-                              onPressed: () {
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          const GameModeSelectorScreen()),
-                                  (route) => false,
-                                );
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.logout,
-                                  color: Colors.white54),
-                              tooltip: "Salir",
-                              onPressed: () => _handleLogout(context),
-                            ),
+                            const SizedBox(width: 12),
                           ],
-                        ),
+                          CircleAvatar(
+                            backgroundColor: AppTheme.secondaryPink,
+                            radius: 16,
+                            child: const Text("A",
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 8),
+                          // Modo Jugador toggle
+                          IconButton(
+                            icon: const Icon(Icons.sports_esports,
+                                color: AppTheme.accentGold, size: 20),
+                            tooltip: "Modo Jugador",
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const GameModeSelectorScreen()),
+                                (route) => false,
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          IconButton(
+                            icon: const Icon(Icons.logout,
+                                color: Colors.white54, size: 20),
+                            tooltip: "Salir",
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => _handleLogout(context),
+                          ),
+                        ],
                       ),
                     ],
                   ),
