@@ -40,7 +40,6 @@ import '../widgets/minigames/percentage_calculation_minigame.dart';
 import '../widgets/minigames/chronological_order_minigame.dart';
 import '../widgets/minigames/capital_cities_minigame.dart';
 import '../widgets/minigames/true_false_minigame.dart';
-import '../widgets/minigames/match_three_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
@@ -510,10 +509,6 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         gameWidget =
             TrueFalseWrapper(clue: widget.clue, onFinish: _finishLegally);
         break;
-      case PuzzleType.matchThree:
-        gameWidget =
-            MatchThreeWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
       default:
         gameWidget = const Center(child: Text("Minijuego no implementado"));
     }
@@ -744,13 +739,79 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                           await MinigameLogicHelper.executeLoseLife(context);
                         }
 
-                        // 5. Feedback
+                        // 5. Feedback Premium
                         messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Te has rendido (-1 Vida). Puedes volver a intentarlo cuando estés listo.'),
-                            backgroundColor: AppTheme.warningOrange,
-                            duration: Duration(seconds: 3),
+                          SnackBar(
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Colors.transparent,
+                            elevation: 0,
+                            content: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppTheme.warningOrange,
+                                    AppTheme.warningOrange.withOpacity(0.8),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.2),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.favorite_rounded,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  const Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'MISIÓN CANCELADA',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Has perdido una vida (-1 ❤️). Reinténtalo cuando estés listo.',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            duration: const Duration(seconds: 4),
                           ),
                         );
                       },
@@ -1338,8 +1399,6 @@ String _getMinigameInstruction(Clue clue) {
       return "Selecciona la capital";
     case PuzzleType.trueFalse:
       return "Verdadero o Falso";
-    case PuzzleType.matchThree:
-      return "Combina 3 iguales";
     default:
       // Si es un tipo estándar, verificamos por el título o descripción
       if (clue.riddleQuestion?.contains("código") ?? false)
@@ -1355,13 +1414,7 @@ Widget _buildMinigameScaffold(
     {bool isScrollable = false}) {
   final player = Provider.of<PlayerProvider>(context).currentPlayer;
 
-  // Envolvemos el minijuego en el countdown
   final instruction = _getMinigameInstruction(clue);
-  final wrappedChild = MinigameCountdownOverlay(
-    instruction: instruction,
-    child: child,
-  );
-
   final isDarkMode = Provider.of<PlayerProvider>(context).isDarkMode;
 
   return SabotageOverlay(
@@ -1384,16 +1437,18 @@ Widget _buildMinigameScaffold(
               color: Colors.black.withOpacity(isDarkMode ? 0.5 : 0.3),
             ),
           ),
-          // Content
-          SafeArea(
-            left: clue.puzzleType != PuzzleType.droneDodge,
-            right: clue.puzzleType != PuzzleType.droneDodge,
-            child: Consumer<GameProvider>(
-              builder: (context, game, _) {
-                return Stack(
-                  children: [
-                    Column(
-                      children: [
+          // Content wrapped in Countdown
+          MinigameCountdownOverlay(
+            instruction: instruction,
+            child: SafeArea(
+              left: clue.puzzleType != PuzzleType.droneDodge,
+              right: clue.puzzleType != PuzzleType.droneDodge,
+              child: Consumer<GameProvider>(
+                builder: (context, game, _) {
+                  return Stack(
+                    children: [
+                      Column(
+                        children: [
                         // AppBar Personalizado
                         Padding(
                           padding: EdgeInsets.symmetric(
@@ -1519,11 +1574,11 @@ Widget _buildMinigameScaffold(
                                       child: ConstrainedBox(
                                         constraints: BoxConstraints(
                                             minHeight: constraints.maxHeight),
-                                        child: Center(child: wrappedChild),
+                                        child: Center(child: child),
                                       ),
                                     );
                                   })
-                                : wrappedChild, // Usamos el hijo con countdown
+                                : child, // Usamos el hijo directamente, el countdown envuelve todo
                           ),
                         ),
                       ],
@@ -1553,10 +1608,11 @@ Widget _buildMinigameScaffold(
               },
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     ),
-  );
+  ),
+);
 }
 
 // --- WRAPPERS FOR NEW MINIGAMES ---
@@ -1694,20 +1750,3 @@ class TrueFalseWrapper extends StatelessWidget {
       isScrollable: true);
 }
 
-class MatchThreeWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const MatchThreeWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      MatchThreeMinigame(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}

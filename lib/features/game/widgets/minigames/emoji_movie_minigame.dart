@@ -31,7 +31,7 @@ class EmojiMovieMinigame extends StatefulWidget {
 class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
     with SingleTickerProviderStateMixin {
   // Game Config
-  static const int _gameDurationSeconds = 90;
+  static const int _gameDurationSeconds = 45;
   static const int _targetMovies = 5;
 
   // State
@@ -54,6 +54,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   // Service
   late EmojiMovieService _movieService;
   List<EmojiMovieProblem> _allMovies = []; // Cache fetched movies
+  final List<String> _usedEmojiSets = []; // Track used emojis to avoid repeats
 
   // Animations
   late AnimationController _shakeController;
@@ -137,7 +138,15 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
 
       if (_allMovies.isNotEmpty) {
         final random = Random();
-        final problem = _allMovies[random.nextInt(_allMovies.length)];
+        
+        // Filter out movies already used in this round
+        final availableMovies = _allMovies.where((m) => !_usedEmojiSets.contains(m.emojis)).toList();
+        
+        // If we ran out of movies (unlikely with fallback), clear used history
+        final pool = availableMovies.isEmpty ? _allMovies : availableMovies;
+        
+        final problem = pool[random.nextInt(pool.length)];
+        _usedEmojiSets.add(problem.emojis);
 
         _displayEmojis = problem.emojis;
         if (problem.validAnswers.isEmpty) {
@@ -164,47 +173,46 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   }
 
   void _generateOptions(String correctAnswer) {
+    Set<String> optionsSet = {correctAnswer};
+    final random = Random();
+
+    // If no movies are loaded, provide default options
     if (_allMovies.isEmpty) {
-      _options = [correctAnswer, "Option 1", "Option 2", "Option 3"];
+      _options = [correctAnswer, "Option 1", "Option 2", "Option 3", "Option 4", "Option 5"];
       _options.shuffle();
       return;
     }
 
-    final random = Random();
-    Set<String> wrongOptions = {};
-
+    // Use all movies in db as potential distractors
+    // Increase to 6 options for higher difficulty
+    // Ensure we have enough unique options from _allMovies
     int attempts = 0;
-    while (wrongOptions.length < 3 && attempts < 100) {
+    while (optionsSet.length < 6 && attempts < 100) {
       attempts++;
       final problem = _allMovies[random.nextInt(_allMovies.length)];
       if (problem.validAnswers.isEmpty) continue;
 
       final candidate = problem.validAnswers.first;
 
-      if (!_validAnswers.contains(candidate.toLowerCase()) &&
-          !wrongOptions.contains(candidate)) {
-        bool collision = false;
-        for (var valid in _validAnswers) {
-          if (valid.contains(candidate.toLowerCase()) ||
-              candidate.toLowerCase().contains(valid)) {
-            collision = true;
-            break;
-          }
-        }
+      // Avoid adding the correct answer or very similar answers
+      bool isSimilarToCorrect = _validAnswers.any((valid) =>
+          candidate.toLowerCase().contains(valid.toLowerCase()) ||
+          valid.toLowerCase().contains(candidate.toLowerCase()));
 
-        if (!collision) {
-          wrongOptions.add(candidate.toUpperCase());
-        }
+      if (!isSimilarToCorrect && !optionsSet.contains(candidate)) {
+        optionsSet.add(candidate);
       }
     }
 
-    while (wrongOptions.length < 3) {
-      wrongOptions.add("Opción ${wrongOptions.length + 1}");
+    // If we still don't have 6 options, fill with generic ones
+    while (optionsSet.length < 6) {
+      optionsSet.add("Opción ${optionsSet.length + 1}");
     }
 
-    _options = [correctAnswer, ...wrongOptions];
+    _options = optionsSet.toList();
     _options.shuffle();
 
+    // Capitalize first letter of each option
     _options = _options.map((opt) {
       if (opt.isEmpty) return opt;
       return opt[0].toUpperCase() + opt.substring(1);
@@ -311,6 +319,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       _isGameOver = false;
       _showOverlay = false;
       _moviesGuessed = 0;
+      _usedEmojiSets.clear(); // Clear used history on reset
       _secondsRemaining = _gameDurationSeconds;
     });
     _initializeGameData();
@@ -401,25 +410,47 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
                       child: child,
                     );
                   },
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(child: _buildOptionButton(_options[0])),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildOptionButton(_options[1])),
-                        ],
+                  child:
+                      // Options Grid (Higher difficulty with more options)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 2.5, // Adjusted for more options
+                          ),
+                          itemCount: _options.length,
+                          itemBuilder: (context, index) {
+                            final option = _options[index];
+                            return ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white10,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                  side: const BorderSide(color: Colors.white24),
+                                ),
+                              ),
+                              onPressed: () => _checkAnswer(option),
+                              child: Text(
+                                option,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: _buildOptionButton(_options[2])),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildOptionButton(_options[3])),
-                        ],
-                      ),
-                    ],
-                  ),
                 ),
             ],
           ),
