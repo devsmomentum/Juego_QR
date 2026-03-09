@@ -7,16 +7,18 @@ import '../../wallet/services/clover_plan_service.dart';
 import '../../../shared/widgets/coin_image.dart';
 
 /// Admin screen for managing clover purchase plans.
-/// 
+///
 /// Allows editing price_usd, clovers_quantity, and is_active status.
 class CloverPlansManagementScreen extends StatefulWidget {
   const CloverPlansManagementScreen({super.key});
 
   @override
-  State<CloverPlansManagementScreen> createState() => _CloverPlansManagementScreenState();
+  State<CloverPlansManagementScreen> createState() =>
+      _CloverPlansManagementScreenState();
 }
 
-class _CloverPlansManagementScreenState extends State<CloverPlansManagementScreen> {
+class _CloverPlansManagementScreenState
+    extends State<CloverPlansManagementScreen> {
   late CloverPlanService _planService;
   List<CloverPlan> _plans = [];
   bool _isLoading = true;
@@ -28,7 +30,6 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
     _planService = CloverPlanService(supabaseClient: Supabase.instance.client);
     _loadPlans();
   }
-
 
   Future<void> _loadPlans() async {
     setState(() {
@@ -51,7 +52,8 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
     }
   }
 
-  Future<void> _updatePlan(CloverPlan plan, {double? priceUsd, int? cloversQuantity, bool? isActive}) async {
+  Future<void> _updatePlan(CloverPlan plan,
+      {double? priceUsd, int? cloversQuantity, bool? isActive}) async {
     try {
       await _planService.updatePlan(
         plan.id,
@@ -59,7 +61,7 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
         cloversQuantity: cloversQuantity,
         isActive: isActive,
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -82,8 +84,10 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
   }
 
   void _showEditDialog(CloverPlan plan) {
-    final priceController = TextEditingController(text: plan.priceUsd.toStringAsFixed(2));
-    final cloversController = TextEditingController(text: plan.cloversQuantity.toString());
+    final priceController =
+        TextEditingController(text: plan.priceUsd.toStringAsFixed(2));
+    final cloversController =
+        TextEditingController(text: plan.cloversQuantity.toString());
     bool isActive = plan.isActive;
 
     showDialog(
@@ -102,7 +106,8 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
                 const SizedBox(width: 12),
                 Text(
                   'Editar ${plan.name}',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -112,29 +117,34 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Price USD
-                  const Text('Precio (USD)', style: TextStyle(color: Colors.white70)),
+                  const Text('Precio (USD)',
+                      style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: priceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       prefixText: '\$ ',
                       prefixStyle: const TextStyle(color: AppTheme.accentGold),
                       enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                        borderSide:
+                            BorderSide(color: Colors.white.withOpacity(0.3)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: AppTheme.accentGold),
+                        borderSide:
+                            const BorderSide(color: AppTheme.accentGold),
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Clovers Quantity
-                  const Text('Cantidad de Tréboles', style: TextStyle(color: Colors.white70)),
+                  const Text('Cantidad de Tréboles',
+                      style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: cloversController,
@@ -144,23 +154,29 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
                     decoration: InputDecoration(
                       suffix: const CoinImage(size: 16),
                       enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                        borderSide:
+                            BorderSide(color: Colors.white.withOpacity(0.3)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: AppTheme.accentGold),
+                        borderSide:
+                            const BorderSide(color: AppTheme.accentGold),
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Active Toggle
                   SwitchListTile(
-                    title: const Text('Plan Activo', style: TextStyle(color: Colors.white)),
+                    title: const Text('Plan Activo',
+                        style: TextStyle(color: Colors.white)),
                     subtitle: Text(
-                      isActive ? 'Visible para usuarios' : 'Oculto para usuarios',
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      isActive
+                          ? 'Visible para usuarios'
+                          : 'Oculto para usuarios',
+                      style:
+                          const TextStyle(color: Colors.white60, fontSize: 12),
                     ),
                     value: isActive,
                     activeColor: AppTheme.accentGold,
@@ -173,27 +189,28 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+                child: const Text('Cancelar',
+                    style: TextStyle(color: Colors.white60)),
               ),
               ElevatedButton(
                 onPressed: () {
                   final newPrice = double.tryParse(priceController.text);
                   final newClovers = int.tryParse(cloversController.text);
-                  
+
                   if (newPrice == null || newPrice <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Precio inválido')),
                     );
                     return;
                   }
-                  
+
                   if (newClovers == null || newClovers <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Cantidad inválida')),
                     );
                     return;
                   }
-                  
+
                   Navigator.pop(ctx);
                   _updatePlan(
                     plan,
@@ -239,13 +256,15 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.accentGold))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.accentGold))
           : _error != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                      Text(_error!,
+                          style: const TextStyle(color: Colors.redAccent)),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _loadPlans,
@@ -282,8 +301,8 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
         color: AppTheme.cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: plan.isActive 
-              ? AppTheme.accentGold.withOpacity(0.3) 
+          color: plan.isActive
+              ? AppTheme.accentGold.withOpacity(0.3)
               : Colors.grey.withOpacity(0.3),
         ),
       ),
@@ -294,7 +313,7 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: plan.isActive 
+              color: plan.isActive
                   ? AppTheme.accentGold.withOpacity(0.2)
                   : Colors.grey.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
@@ -304,13 +323,16 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Text(
                       plan.name,
@@ -320,10 +342,10 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (!plan.isActive) ...[
-                      const SizedBox(width: 8),
+                    if (!plan.isActive)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.grey.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(4),
@@ -333,7 +355,6 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
                           style: TextStyle(color: Colors.grey, fontSize: 10),
                         ),
                       ),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -347,27 +368,34 @@ class _CloverPlansManagementScreenState extends State<CloverPlansManagementScree
               ],
             ),
           ),
-          
-          // Price
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                plan.formattedPrice,
-                style: TextStyle(
-                  color: plan.isActive ? AppTheme.accentGold : Colors.grey,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+
+          // Price Info
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    plan.formattedPrice,
+                    style: TextStyle(
+                      color: plan.isActive ? AppTheme.accentGold : Colors.grey,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-              const Text(
-                'USD',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
+                const Text(
+                  'USD',
+                  style: TextStyle(color: Colors.white54, fontSize: 10),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 8),
-          
+
           // Edit Button
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white54),

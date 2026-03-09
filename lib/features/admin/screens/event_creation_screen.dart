@@ -219,15 +219,32 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: SegmentedButton<String>(
+                            showSelectedIcon: false,
                             segments: const [
                               ButtonSegment<String>(
                                 value: 'on_site',
-                                label: Text('📍 Presencial'),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '📍 Presencial',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14),
+                                  ),
+                                ),
                                 icon: Icon(Icons.map),
                               ),
                               ButtonSegment<String>(
                                 value: 'online',
-                                label: Text('🌐 Online'),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '🌐 Online',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14),
+                                  ),
+                                ),
                                 icon: Icon(Icons.public),
                               ),
                             ],
@@ -1341,7 +1358,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       Container(
                                         decoration: BoxDecoration(
                                           color: AppTheme.accentGold,
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: IconButton(
                                           icon: const Icon(Icons.qr_code_2,
@@ -1407,14 +1425,12 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       constraints.maxWidth < 600 ? 1 : 2,
                                   crossAxisSpacing: 10,
                                   mainAxisSpacing: 10,
-                                  childAspectRatio: constraints.maxWidth < 600
-                                      ? 2.5
-                                      : 3,
+                                  childAspectRatio:
+                                      constraints.maxWidth < 600 ? 2.5 : 3,
                                 ),
                                 itemCount: PowerItem.getShopItems().length,
                                 itemBuilder: (context, index) {
-                                  final power =
-                                      PowerItem.getShopItems()[index];
+                                  final power = PowerItem.getShopItems()[index];
                                   final currentPrice =
                                       provider.playerPrices[power.id] ??
                                           power.cost;
@@ -1422,8 +1438,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     decoration: BoxDecoration(
                                       color: AppTheme.cardBg,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: Colors.white10),
+                                      border: Border.all(color: Colors.white10),
                                     ),
                                     padding: const EdgeInsets.all(12),
                                     child: Row(
@@ -1432,8 +1447,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                           height: 48,
                                           width: 48,
                                           decoration: BoxDecoration(
-                                            color:
-                                                power.color.withOpacity(0.2),
+                                            color: power.color.withOpacity(0.2),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                           ),
@@ -1455,8 +1469,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                       color: Colors.white,
                                                       fontWeight:
                                                           FontWeight.bold)),
-                                              Text(
-                                                  "${power.cost} Default",
+                                              Text("${power.cost} Default",
                                                   style: const TextStyle(
                                                       color: Colors.white38,
                                                       fontSize: 12)),
@@ -1468,23 +1481,19 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                           child: TextFormField(
                                             initialValue:
                                                 currentPrice.toString(),
-                                            keyboardType:
-                                                TextInputType.number,
+                                            keyboardType: TextInputType.number,
                                             textAlign: TextAlign.center,
                                             decoration:
                                                 inputDecoration.copyWith(
                                               contentPadding:
-                                                  const EdgeInsets
-                                                      .symmetric(
+                                                  const EdgeInsets.symmetric(
                                                       vertical: 10,
                                                       horizontal: 5),
                                               isDense: true,
                                             ),
                                             style: const TextStyle(
-                                                color:
-                                                    AppTheme.primaryPurple,
-                                                fontWeight:
-                                                    FontWeight.bold),
+                                                color: AppTheme.primaryPurple,
+                                                fontWeight: FontWeight.bold),
                                             inputFormatters: [
                                               FilteringTextInputFormatter
                                                   .digitsOnly

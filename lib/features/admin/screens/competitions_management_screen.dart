@@ -194,10 +194,19 @@ class _CompetitionsManagementScreenState
           // CONTROLES ADICIONALES (TIPO + BÚSQUEDA)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-            child: Row(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
               children: [
-                Expanded(
-                  flex: 2,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width > 600
+                        ? 200
+                        : double.infinity,
+                    maxWidth: MediaQuery.of(context).size.width > 600
+                        ? 250
+                        : double.infinity,
+                  ),
                   child: DropdownButtonFormField<String>(
                     value: _selectedTypeFilter,
                     dropdownColor: AppTheme.cardBg,
@@ -237,41 +246,48 @@ class _CompetitionsManagementScreenState
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por título...',
-                      hintStyle: const TextStyle(color: Colors.white54),
-                      prefixIcon:
-                          const Icon(Icons.search, color: Colors.white54),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Colors.white24),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width > 600
+                        ? 300
+                        : double.infinity,
+                    maxWidth: double.infinity,
+                  ),
+                  child: IntrinsicWidth(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) =>
+                          setState(() => _searchQuery = value),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar por título...',
+                        hintStyle: const TextStyle(color: Colors.white54),
+                        prefixIcon:
+                            const Icon(Icons.search, color: Colors.white54),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Colors.white24),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: AppTheme.accentGold),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.03),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close,
+                                    color: Colors.white54),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: AppTheme.accentGold),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.03),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.white54),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
                     ),
                   ),
                 ),

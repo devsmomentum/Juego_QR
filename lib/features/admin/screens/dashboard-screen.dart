@@ -198,60 +198,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       // Información de Usuario
-                      Row(
-                        children: [
-                          // Ocutar email en pantallas muy pequeñas si es necesario,
-                          // pero con Expanded en el titulo deberia bastar.
-                          // Usaremos un constrained box para el email si queremos.
-                          if (MediaQuery.of(context).size.width > 600) ...[
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: const [
-                                Text(
-                                  "Administrador",
+                      Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Ocutar email en pantallas muy pequeñas si es necesario,
+                            // pero con Expanded en el titulo deberia bastar.
+                            // Usaremos un constrained box para el email si queremos.
+                            if (MediaQuery.of(context).size.width > 600) ...[
+                              Flexible(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: const [
+                                    Text(
+                                      "Administrador",
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      "admin@system.com",
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            CircleAvatar(
+                              backgroundColor: AppTheme.secondaryPink,
+                              radius: 16, // Smaller avatar
+                              child: const Text("A",
                                   style: TextStyle(
+                                      fontSize: 14,
                                       color: Colors.white,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  "admin@system.com",
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                                      fontWeight: FontWeight.bold)),
                             ),
-                            const SizedBox(width: 12),
+                            // Modo Jugador toggle
+                            IconButton(
+                              icon: const Icon(Icons.sports_esports,
+                                  color: AppTheme.accentGold),
+                              tooltip: "Modo Jugador",
+                              onPressed: () {
+                                Navigator.of(context).pushAndRemoveUntil(
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const GameModeSelectorScreen()),
+                                  (route) => false,
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.logout,
+                                  color: Colors.white54),
+                              tooltip: "Salir",
+                              onPressed: () => _handleLogout(context),
+                            ),
                           ],
-                          CircleAvatar(
-                            backgroundColor: AppTheme.secondaryPink,
-                            radius: 16, // Smaller avatar
-                            child: const Text("A",
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          // Modo Jugador toggle
-                          IconButton(
-                            icon: const Icon(Icons.sports_esports, color: AppTheme.accentGold),
-                            tooltip: "Modo Jugador",
-                            onPressed: () {
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
-                                (route) => false,
-                              );
-                            },
-                          ),
-                          IconButton(
-                            icon:
-                                const Icon(Icons.logout, color: Colors.white54),
-                            tooltip: "Salir",
-                            onPressed: () => _handleLogout(context),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),

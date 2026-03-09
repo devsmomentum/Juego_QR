@@ -65,7 +65,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           children: const [
             Icon(Icons.people, color: Colors.white),
             SizedBox(width: 10),
-            Text("Gestión de Usuarios"),
+            Expanded(
+              child: Text(
+                "Gestión de Usuarios",
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         backgroundColor: AppTheme.darkBg,
@@ -85,88 +90,95 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             // Sección de Filtros
             Padding(
               padding: const EdgeInsets.all(20.0),
-              child: Row(
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
                 children: [
                   // Buscador (Nombre/Email)
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar usuario...',
-                          hintStyle:
-                              TextStyle(color: Colors.white.withOpacity(0.5)),
-                          prefixIcon: const Icon(Icons.search,
-                              color: AppTheme.primaryPurple),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 15),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: MediaQuery.of(context).size.width > 600
+                          ? 300
+                          : double.infinity,
+                    ),
+                    child: IntrinsicWidth(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardBg,
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        onChanged: (_) => setState(() {}),
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar usuario...',
+                            hintStyle:
+                                TextStyle(color: Colors.white.withOpacity(0.5)),
+                            prefixIcon: const Icon(Icons.search,
+                                color: AppTheme.primaryPurple),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 15),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
                   // Filtro de Estado
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                  Container(
+                    width: MediaQuery.of(context).size.width > 600
+                        ? 200
+                        : double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBg,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _filterStatus,
+                        dropdownColor: const Color(0xFF1A1F3D),
+                        icon: const Icon(Icons.filter_list,
+                            color: AppTheme.secondaryPink),
+                        isExpanded: true,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w500),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'all',
+                            child: Text("Todos"),
+                          ),
+                          DropdownMenuItem(
+                            value: 'active',
+                            child: Text("Activos",
+                                style: TextStyle(color: Colors.greenAccent)),
+                          ),
+                          DropdownMenuItem(
+                            value: 'banned',
+                            child: Text("Baneados",
+                                style: TextStyle(color: Colors.redAccent)),
                           ),
                         ],
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _filterStatus,
-                          dropdownColor: const Color(0xFF1A1F3D),
-                          icon: const Icon(Icons.filter_list,
-                              color: AppTheme.secondaryPink),
-                          isExpanded: true,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w500),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'all',
-                              child: Text("Todos"),
-                            ),
-                            DropdownMenuItem(
-                              value: 'active',
-                              child: Text("Activos",
-                                  style: TextStyle(color: Colors.greenAccent)),
-                            ),
-                            DropdownMenuItem(
-                              value: 'banned',
-                              child: Text("Baneados",
-                                  style: TextStyle(color: Colors.redAccent)),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _filterStatus = value);
-                            }
-                          },
-                        ),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _filterStatus = value);
+                          }
+                        },
                       ),
                     ),
                   ),
