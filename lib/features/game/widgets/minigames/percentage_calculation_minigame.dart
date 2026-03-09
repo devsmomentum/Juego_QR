@@ -36,6 +36,7 @@ class _PercentageCalculationMinigameState
   int _score = 0;
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
+  bool _isProcessingSelection = false; // Guard against double-taps
 
   // Round Data
   late int _baseNumber;
@@ -169,25 +170,38 @@ class _PercentageCalculationMinigameState
     debugPrint('[PERCENT_MINIGAME] Options: $_options');
   }
 
-  void _handleSelection(int selected) {
-    if (_isGameOver) return;
+  Future<void> _handleSelection(int selected) async {
+    if (_isGameOver || _isProcessingSelection) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
 
+    setState(() => _isProcessingSelection = true);
+
     if (selected == _correctAnswer) {
       setState(() {
         _score++;
-        if (_score >= _targetScore) {
-          _endGame(win: true);
-        } else {
-          _generateRound();
-        }
       });
+
+      if (_score >= _targetScore) {
+        _endGame(win: true);
+      } else {
+        // Small delay for feedback and to prevent immediate next-round taps
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          setState(() {
+            _generateRound();
+            _isProcessingSelection = false;
+          });
+        }
+      }
     } else {
-      _handleMistake();
+      await _handleMistake();
+      if (mounted) {
+        setState(() => _isProcessingSelection = false);
+      }
     }
   }
 

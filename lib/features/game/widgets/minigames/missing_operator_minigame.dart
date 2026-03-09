@@ -35,6 +35,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
   int _score = 0;
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
+  bool _isProcessingSelection = false; // Guard against double-taps
 
   // Round Data
   late int _operand1;
@@ -125,25 +126,65 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
     }
   }
 
-  void _handleSelection(String selectedOp) {
-    if (_isGameOver) return;
+  Future<void> _handleSelection(String selectedOp) async {
+    if (_isGameOver || _isProcessingSelection) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
 
-    if (selectedOp == _correctOperator) {
+    setState(() => _isProcessingSelection = true);
+
+    // Dynamic Mathematical Validation
+    // Instead of string matching, we check if the selected operator solves the equation.
+    bool isCorrect = false;
+    try {
+      switch (selectedOp) {
+        case '+':
+          isCorrect = (_operand1 + _operand2 == _result);
+          break;
+        case '-':
+          isCorrect = (_operand1 - _operand2 == _result);
+          break;
+        case 'x':
+          isCorrect = (_operand1 * _operand2 == _result);
+          break;
+        case '/':
+          if (_operand2 != 0) {
+            // Check for integer division equality
+            isCorrect = (_operand1 / _operand2 == _result.toDouble());
+          }
+          break;
+      }
+    } catch (e) {
+      debugPrint("Mathematical validation error: $e");
+      isCorrect = false;
+    }
+
+    if (isCorrect) {
+      // Feedback Visual (Opcional, pero score++ ya es feedback)
       setState(() {
         _score++;
-        if (_score >= _targetScore) {
-          _endGame(win: true);
-        } else {
-          _generateRound();
-        }
       });
+
+      if (_score >= _targetScore) {
+        _endGame(win: true);
+      } else {
+        // Small delay so the user feels the "hit" before it changes
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          setState(() {
+            _generateRound();
+            _isProcessingSelection = false;
+          });
+        }
+      }
     } else {
-      _handleMistake();
+      await _handleMistake();
+      if (mounted) {
+        setState(() => _isProcessingSelection = false);
+      }
     }
   }
 
@@ -221,9 +262,11 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
             children: [
               // Título con Estilo Cyberpunk
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+                  border:
+                      Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
                   borderRadius: BorderRadius.circular(4),
                   boxShadow: [
                     BoxShadow(
@@ -247,7 +290,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                 ),
               ),
               const SizedBox(height: 35),
-              
+
               // Stats Bar (Glassmorphic)
               Row(
                 children: [
@@ -256,7 +299,9 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                       icon: Icons.timer_outlined,
                       label: "TIEMPO",
                       value: "$_secondsRemaining",
-                      color: _secondsRemaining < 10 ? AppTheme.dangerRed : Colors.white,
+                      color: _secondsRemaining < 10
+                          ? AppTheme.dangerRed
+                          : Colors.white,
                     ),
                   ),
                   const SizedBox(width: 15),
@@ -271,7 +316,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                 ],
               ),
               const SizedBox(height: 30),
-              
+
               // Equation Card (Panel Holográfico)
               Container(
                 width: double.infinity,
@@ -295,7 +340,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                     children: [
                       _buildNumberText("$_operand1"),
                       const SizedBox(width: 18),
-                      
+
                       // Slot del Operador
                       Container(
                         width: 65,
@@ -303,7 +348,8 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.accentGold, width: 2),
+                          border:
+                              Border.all(color: AppTheme.accentGold, width: 2),
                           boxShadow: [
                             BoxShadow(
                               color: AppTheme.accentGold.withOpacity(0.2),
@@ -322,7 +368,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                           ),
                         ),
                       ),
-                      
+
                       const SizedBox(width: 18),
                       _buildNumberText("$_operand2"),
                       const SizedBox(width: 15),
@@ -342,7 +388,8 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                           color: AppTheme.successGreen,
                           fontWeight: FontWeight.w900,
                           shadows: [
-                            Shadow(color: AppTheme.successGreen, blurRadius: 20),
+                            Shadow(
+                                color: AppTheme.successGreen, blurRadius: 20),
                           ],
                         ),
                       ),
@@ -351,7 +398,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
                 ),
               ),
               const SizedBox(height: 50),
-              
+
               // Botones de Operadores
               Wrap(
                 spacing: 20,
@@ -367,7 +414,6 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
             ],
           ),
         ),
-        
         if (_showOverlay)
           GameOverOverlay(
             title: _overlayTitle,
