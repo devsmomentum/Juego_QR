@@ -404,7 +404,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const AvatarSelectionScreen(isFromProfile: true),
+                            builder: (_) => const AvatarSelectionScreen(
+                                isFromProfile: true),
                           ),
                         );
                       },
@@ -439,14 +440,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 child: Builder(
                                   builder: (context) {
                                     final avatarId = player.avatarId;
-                                    if (avatarId != null && avatarId.isNotEmpty) {
+                                    if (avatarId != null &&
+                                        avatarId.isNotEmpty) {
                                       return Image.asset(
                                         'assets/images/avatars/$avatarId.png',
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => const Icon(
-                                            Icons.person,
-                                            size: 55,
-                                            color: Colors.white),
+                                        errorBuilder: (_, __, ___) =>
+                                            const Icon(Icons.person,
+                                                size: 55, color: Colors.white),
                                       );
                                     }
                                     if (player.avatarUrl != null &&
@@ -454,10 +455,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       return Image.network(
                                         player.avatarUrl!,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => const Icon(
-                                            Icons.person,
-                                            size: 55,
-                                            color: Colors.white),
+                                        errorBuilder: (_, __, ___) =>
+                                            const Icon(Icons.person,
+                                                size: 55, color: Colors.white),
                                       );
                                     }
                                     return const Icon(Icons.person,
@@ -551,7 +551,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const AvatarSelectionScreen(isFromProfile: true),
+                              builder: (_) => const AvatarSelectionScreen(
+                                  isFromProfile: true),
                             ),
                           );
                         },
@@ -776,16 +777,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     inputFormatters: [
                       LengthLimitingTextInputFormatter(50),
                       FilteringTextInputFormatter.allow(
-                          RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]')),
+                          RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ0-9\s]')),
                     ],
                     decoration: _fieldDecoration(
                         'NOMBRE COMPLETO', Icons.person_outline),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'Ingresa tu nombre';
-                      }
-                      if (!value.trim().contains(' ')) {
-                        return 'Ingresa Nombre y Apellido';
                       }
                       final lowerName = value.toLowerCase();
                       for (final word in bannedWords) {
@@ -835,8 +833,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             final newName = nameController.text.trim();
                             final newEmail =
                                 emailController.text.trim().toLowerCase();
-                            final newPhone =
-                                phoneProvider.formattedPhone ?? '';
+                            final newPhone = phoneProvider.formattedPhone ?? '';
+                            // Check if phone is changing (sanitized comparison)
+                            final currentPhoneSanitized = (player.phone ?? '')
+                                .replaceAll(RegExp(r'[^0-9]'), '');
+                            final newPhoneSanitized =
+                                newPhone.replaceAll(RegExp(r'[^0-9]'), '');
+                            final phoneIsChanging =
+                                newPhoneSanitized != currentPhoneSanitized;
 
                             // Check if email is changing
                             final emailIsChanging =
@@ -911,9 +915,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   await playerProvider.updateProfile(
                                 name: newName != player.name ? newName : null,
                                 email: sendEmail ? newEmail : null,
-                                phone: newPhone != (player.phone ?? '')
-                                    ? newPhone
-                                    : null,
+                                phone: phoneIsChanging ? newPhone : null,
                               );
 
                               if (mounted) {
