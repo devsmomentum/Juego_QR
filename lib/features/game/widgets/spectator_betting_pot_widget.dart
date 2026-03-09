@@ -77,7 +77,7 @@ class _SpectatorBettingPotWidgetState extends State<SpectatorBettingPotWidget> {
     return GestureDetector(
       onLongPress: _showDebugInfo,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(4), // Espacio para el efecto de doble borde
         decoration: BoxDecoration(
           color: AppTheme.dGoldMain.withOpacity(0.05),

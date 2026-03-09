@@ -439,7 +439,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                       // 1. Header Row with Back Button
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                            horizontal: 16, vertical: 4),
                         child: Row(
                           children: [
                             CyberRingButton(
@@ -480,7 +480,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
                             // C. Carrera en Curso / Finalizada (Race Tracker siempre visible)
                             SizedBox(
-                              height: 300,
+                              height: 180,
                               child: Stack(
                                 children: [
                                   _buildRaceView(),
@@ -772,8 +772,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
             leaderboard: leaderboard,
             currentPlayerId: currentPlayerId,
             totalClues: totalClues,
-            compact:
-                false, // Usamos la versión completa que ya tiene estilo premium
+            compact: true, // Usamos la versión compacta para evitar desbordamientos
           ),
         );
       },
@@ -919,7 +918,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
   Widget _buildTabSelector() {
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.3),
         borderRadius: BorderRadius.circular(15),
@@ -1781,7 +1780,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
   Widget _buildStoreView() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1833,7 +1832,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Expanded(
             child: Consumer<PlayerProvider>(
               builder: (context, playerProvider, child) {
@@ -2008,7 +2007,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🍀', style: TextStyle(fontSize: 12)),
+                            const CoinImage(size: 14),
                             const SizedBox(width: 4),
                             Text(
                               '${power.cost}',
