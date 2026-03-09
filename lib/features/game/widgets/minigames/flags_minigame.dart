@@ -78,6 +78,43 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     {'code': 'cl', 'name': 'Chile'},
     {'code': 'pe', 'name': 'Perú'},
     {'code': 'uy', 'name': 'Uruguay'},
+    {'code': 'ma', 'name': 'Marruecos'},
+    {'code': 'ng', 'name': 'Nigeria'},
+    {'code': 'sn', 'name': 'Senegal'},
+    {'code': 'et', 'name': 'Etiopía'},
+    {'code': 'gh', 'name': 'Ghana'},
+    {'code': 'dz', 'name': 'Argelia'},
+    {'code': 'tn', 'name': 'Túnez'},
+    {'code': 'sa', 'name': 'Arabia Saudita'},
+    {'code': 'ae', 'name': 'EAU'},
+    {'code': 'il', 'name': 'Israel'},
+    {'code': 'jo', 'name': 'Jordania'},
+    {'code': 'lb', 'name': 'Líbano'},
+    {'code': 'pk', 'name': 'Pakistán'},
+    {'code': 'bd', 'name': 'Bangladesh'},
+    {'code': 'lk', 'name': 'Sri Lanka'},
+    {'code': 'np', 'name': 'Nepal'},
+    {'code': 'mn', 'name': 'Mongolia'},
+    {'code': 'uz', 'name': 'Uzbekistán'},
+    {'code': 'ge', 'name': 'Georgia'},
+    {'code': 'hr', 'name': 'Croacia'},
+    {'code': 'rs', 'name': 'Serbia'},
+    {'code': 'ro', 'name': 'Rumanía'},
+    {'code': 'hu', 'name': 'Hungría'},
+    {'code': 'cz', 'name': 'República Checa'},
+    {'code': 'ie', 'name': 'Irlanda'},
+    {'code': 'nz', 'name': 'Nueva Zelanda'},
+    {'code': 'bo', 'name': 'Bolivia'},
+    {'code': 'ec', 'name': 'Ecuador'},
+    {'code': 'py', 'name': 'Paraguay'},
+    {'code': 'cr', 'name': 'Costa Rica'},
+    {'code': 'pa', 'name': 'Panamá'},
+    {'code': 'cu', 'name': 'Cuba'},
+    {'code': 'jm', 'name': 'Jamaica'},
+    {'code': 'is', 'name': 'Islandia'},
+    {'code': 'at', 'name': 'Austria'},
+    {'code': 'sk', 'name': 'Eslovaquia'},
+    {'code': 'bg', 'name': 'Bulgaria'},
   ];
 
   @override
@@ -247,7 +284,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     final random = Random();
     final options = <String>{correctAnswer};
 
-    while (options.length < 4) {
+    while (options.length < 6 && options.length < _allCountries.length) {
       final randomCountry =
           _allCountries[random.nextInt(_allCountries.length)]['name']!;
       options.add(randomCountry);
@@ -386,23 +423,29 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
                   // Opciones
                   if (!_showOverlay) // Hide options if overlay is ON to prevent interaction (AbsorbPointer handles it, but cleaner UI)
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      spacing: 8,
+                      runSpacing: 8,
                       alignment: WrapAlignment.center,
                       children: _generateOptions().map((option) {
-                        return ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryPurple,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 30, vertical: 15),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: () => _handleOptionSelected(option),
-                          child: Text(
-                            option,
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.white),
+                        return SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.44,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryPurple,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => _handleOptionSelected(option),
+                            child: Text(
+                              option,
+                              style: const TextStyle(
+                                  fontSize: 14, color: Colors.white),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         );
                       }).toList(),

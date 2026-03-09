@@ -114,7 +114,8 @@ class _VirusTapMinigameState extends State<VirusTapMinigame> {
             _rescheduleSpawn();
           }
         } else {
-          _endGame(win: false, reason: "¡Tiempo agotado!");
+          _gameTimer?.cancel();
+          _loseLife("¡Tiempo agotado!");
         }
       });
     });
@@ -218,24 +219,16 @@ class _VirusTapMinigameState extends State<VirusTapMinigame> {
       if (!mounted) return;
 
       if (newLives <= 0) {
-        _endGame(win: false, reason: "Sin vidas. $reason");
+        _endGame(win: false, reason: "Sin vidas. $reason", lives: newLives);
       } else {
-        // Resume
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(reason),
-              backgroundColor: AppTheme.dangerRed,
-              duration: const Duration(milliseconds: 800)),
-        );
-        // Wait a bit before resuming
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted && !_isGameOver) _startTimers();
-        });
+        // En lugar de resumir, mostramos el overlay de fallo para que reinicien el nivel
+        // Esto es más consistente con el resto de minijuegos
+        _endGame(win: false, reason: reason, lives: newLives);
       }
     }
   }
 
-  void _endGame({required bool win, String? reason}) {
+  void _endGame({required bool win, String? reason, int? lives}) {
     _gameTimer?.cancel();
     _loopTimer?.cancel();
     _spawnTimer?.cancel();
@@ -247,15 +240,17 @@ class _VirusTapMinigameState extends State<VirusTapMinigame> {
     if (win) {
       widget.onSuccess();
     } else {
-      final player =
-          Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
-      final lives = player?.lives ?? 0;
+      final currentLives = lives ??
+          Provider.of<PlayerProvider>(context, listen: false)
+              .currentPlayer
+              ?.lives ??
+          0;
 
       setState(() {
         _showOverlay = true;
-        _overlayTitle = "GAME OVER";
+        _overlayTitle = "FALLASTE";
         _overlayMessage = reason ?? "Perdiste";
-        _canRetry = lives > 0; // Only allow retry if lives remain
+        _canRetry = currentLives > 0; // Only allow retry if lives remain
         _showShopButton = true;
       });
     }

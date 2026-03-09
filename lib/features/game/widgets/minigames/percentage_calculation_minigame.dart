@@ -263,6 +263,13 @@ class _PercentageCalculationMinigameState
             children: [
               const SizedBox(height: 10), // Reduced top padding
 
+              const Text("CALCULA EL PORCENTAJE",
+                  style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
+              const SizedBox(height: 15),
               // 1. Top Bar (Compact)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,

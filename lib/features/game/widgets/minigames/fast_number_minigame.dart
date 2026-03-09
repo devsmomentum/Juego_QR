@@ -297,6 +297,13 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
                 child: Column(
                   children: [
                     SizedBox(height: (isSmall || isWide) ? 2 : 10),
+                    const Text("CAPTURA EL NÚMERO",
+                        style: TextStyle(
+                            color: AppTheme.accentGold,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2)),
+                    SizedBox(height: (isSmall || isWide) ? 5 : 10),
 
                 // STATUS & PROGRESS
                 Padding(

@@ -32,8 +32,7 @@ enum PuzzleType {
   percentageCalculation,
   chronologicalOrder,
   capitalCities,
-  trueFalse,
-  matchThree;
+  trueFalse;
 
   String get dbValue => toString().split('.').last;
 
@@ -46,7 +45,6 @@ enum PuzzleType {
       case PuzzleType.trueFalse:
       case PuzzleType.virusTap:
       case PuzzleType.flags:
-      case PuzzleType.matchThree:
       case PuzzleType.fastNumber:
         return MinigameDifficulty.easy;
 
@@ -129,8 +127,6 @@ enum PuzzleType {
         return '🌍 Capitales';
       case PuzzleType.trueFalse:
         return '✅❌ Verdadero o Falso';
-      case PuzzleType.matchThree:
-        return '🍬 Match 3';
       case PuzzleType.memorySequence:
         return '🧠 Secuencia de Memoria (Simon)';
       case PuzzleType.drinkMixer:
@@ -166,7 +162,6 @@ enum PuzzleType {
       case PuzzleType.chronologicalOrder:
       case PuzzleType.capitalCities:
       case PuzzleType.trueFalse:
-      case PuzzleType.matchThree:
         return true;
       default:
         return false;
@@ -221,8 +216,6 @@ enum PuzzleType {
         return 'Selecciona la capital correcta.';
       case PuzzleType.trueFalse:
         return 'Responde correctamente 5 afirmaciones.';
-      case PuzzleType.matchThree:
-        return 'Combina 3 elementos iguales.';
     }
   }
 }

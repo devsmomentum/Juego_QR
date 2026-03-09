@@ -39,6 +39,8 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
 
+  List<String> _shuffledCountries = [];
+  int _currentCountryIndex = 0;
   late String _currentCountry;
   late String _correctAnswer;
   List<String> _options = [];
@@ -79,7 +81,32 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
           _startGame();
         } else {
           // Fallback logic if Supabase is empty or fails
-          _capitals = {"❓": "Error de carga"};
+          _capitals = {
+            "España": "Madrid",
+            "Francia": "París",
+            "Italia": "Roma",
+            "Alemania": "Berlín",
+            "Reino Unido": "Londres",
+            "Portugal": "Lisboa",
+            "EEUU": "Washington D.C.",
+            "Canadá": "Ottawa",
+            "México": "Ciudad de México",
+            "Brasil": "Brasilia",
+            "Argentina": "Buenos Aires",
+            "Chile": "Santiago",
+            "Colombia": "Bogotá",
+            "Venezuela": "Caracas",
+            "Perú": "Lima",
+            "Japón": "Tokio",
+            "China": "Pekín",
+            "Corea del Sur": "Seúl",
+            "Australia": "Camberra",
+            "Rusia": "Moscú",
+            "Egipto": "El Cairo",
+            "Sudáfrica": "Pretoria",
+            "India": "Nueva Delhi",
+            "Turquía": "Ankara",
+          };
           _startGame();
         }
       });
@@ -91,6 +118,11 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
     _secondsRemaining = _gameDurationSeconds;
     _isGameOver = false;
     _showOverlay = false;
+    
+    // Prepare shuffled pool to avoid repeats
+    _shuffledCountries = _capitals.keys.toList()..shuffle(_random);
+    _currentCountryIndex = 0;
+    
     _generateRound();
     _startTimer();
   }
@@ -121,22 +153,31 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
   }
 
   void _generateRound() {
-    // Pick a random country
-    List<String> countries = _capitals.keys.toList();
-    _currentCountry = countries[_random.nextInt(countries.length)];
+    if (_shuffledCountries.isEmpty) return;
+    
+    // Pick next country from shuffled pool
+    if (_currentCountryIndex >= _shuffledCountries.length) {
+      _shuffledCountries.shuffle(_random);
+      _currentCountryIndex = 0;
+    }
+    
+    _currentCountry = _shuffledCountries[_currentCountryIndex];
     _correctAnswer = _capitals[_currentCountry]!;
+    _currentCountryIndex++;
 
-    // Generate 3 distractors
+    // Generate 5 distractors (Total 6 options) for higher difficulty
     Set<String> optionsSet = {_correctAnswer};
     List<String> allCapitals = _capitals.values.toList();
 
-    while (optionsSet.length < 4) {
+    // To make it harder, we try to pick "realistic" distractors if possible, 
+    // but here we just ensure we have 6 distinct options.
+    while (optionsSet.length < 6 && optionsSet.length < allCapitals.length) {
       String distractor = allCapitals[_random.nextInt(allCapitals.length)];
       optionsSet.add(distractor);
     }
 
     _options = optionsSet.toList();
-    _options.shuffle();
+    _options.shuffle(_random);
   }
 
   void _handleSelection(String selected) {
@@ -259,28 +300,32 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    // const Text("BANDERA DE:",
-                    //     style: TextStyle(color: Colors.white54, fontSize: 18)),
-                    // const SizedBox(height: 10),
+                    const Text("¿CUÁL ES LA CAPITAL DE?",
+                        style: TextStyle(
+                            color: AppTheme.accentGold,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2)),
+                    const SizedBox(height: 15),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
                         _currentCountry,
                         style: const TextStyle(
-                            color: Colors.amberAccent,
+                            color: Colors.white,
                             fontSize: 80, // slightly smaller to save space
                             fontWeight: FontWeight.bold),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 20),
                     // Options Grid
                     Center(
                       child: GridView.count(
                         shrinkWrap: true,
                         crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 2.2, // Taller buttons
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 2.8, // Slightly more compact for 6 buttons
                         physics: const NeverScrollableScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         children: _options.map((opt) {

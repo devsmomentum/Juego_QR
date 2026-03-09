@@ -271,6 +271,13 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
               child: Column(
                 children: [
                   const SizedBox(height: 5),
+                  const Text("EL TRILE: SIGUE EL COLOR",
+                      style: TextStyle(
+                          color: AppTheme.accentGold,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2)),
+                  const SizedBox(height: 5),
 
                   // BARRA DE ESTADO (Vidas y Tiempo)
                   Padding(

@@ -221,6 +221,14 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
           // GAME CONTENT
           Column(
             children: [
+              const SizedBox(height: 10),
+              const Text("ORDENA EL ROMPECABEZAS",
+                  style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
+              const SizedBox(height: 10),
               // Reduced Status Bar (Only Timer)
               Padding(
                 padding:
