@@ -173,9 +173,11 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   }
 
   Widget _buildHourlyChartSection() {
-    final maxPlayers = _hourlyFlow.values.isNotEmpty
+    final maxVal = _hourlyFlow.values.isNotEmpty
         ? _hourlyFlow.values.reduce((a, b) => a > b ? a : b)
-        : 1;
+        : 0;
+    // Evitamos división por cero si todos los valores son 0 (común en desarrollo)
+    final maxPlayers = maxVal > 0 ? maxVal : 1;
 
     return Container(
       padding: const EdgeInsets.all(20),
