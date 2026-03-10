@@ -90,8 +90,99 @@ serve(async (req: Request) => {
                 ? config.spectator_prices as Record<string, number>
                 : {};
 
-        // 3.5 Check time since last automated event (Bypass if manual)
-        if (!isManualAction) {
+        // 3.5 Mode-based scheduling logic
+        // Supports two modes:
+        //   "automatic" (default): creates events every `interval_minutes` since the last one.
+        //   "scheduled": creates events at fixed VET (UTC-4) hours from `scheduled_hours`.
+        // Only one mode is active at a time. Manual triggers bypass both.
+        const VET_OFFSET_HOURS = -4; // Venezuela Time = UTC-4 (no DST)
+        const mode: string = config.mode || 'automatic';
+        const scheduledHours: string[] = Array.isArray(config.scheduled_hours) ? config.scheduled_hours : [];
+
+        // eventDate will be set based on mode; used later for the event's `date` field.
+        let eventDate: Date;
+
+        if (mode === 'scheduled' && scheduledHours.length > 0 && !isManualAction) {
+            // ── SCHEDULED MODE ─────────────────────────────────────────────
+            const now = new Date();
+            const pendingMs = pendingWaitMinutes * 60 * 1000;
+            let targetDate: Date | null = null;
+
+            for (const hourStr of scheduledHours) {
+                const parts = hourStr.split(':');
+                const h = parseInt(parts[0], 10);
+                const m = parseInt(parts[1] || '0', 10);
+                if (isNaN(h) || isNaN(m)) continue;
+
+                // Build today's scheduled time: hours are in VET (UTC-4), convert to UTC
+                const utcHour = h - VET_OFFSET_HOURS; // e.g. 15:00 VET → 19:00 UTC
+                const scheduled = new Date(Date.UTC(
+                    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), utcHour, m, 0, 0
+                ));
+                // The trigger fires pending_wait_minutes BEFORE the scheduled hour
+                const triggerTime = new Date(scheduled.getTime() - pendingMs);
+                const diffMs = now.getTime() - triggerTime.getTime();
+
+                // The event should be created anytime between triggerTime and the scheduled hour.
+                // This covers: exact trigger moment, late cron fires, and cases where
+                // the admin sets a schedule that's fewer than pending_wait_minutes away.
+                // The idempotency check below prevents duplicates across multiple cron ticks.
+                if (now.getTime() >= triggerTime.getTime() && now.getTime() < scheduled.getTime()) {
+                    targetDate = scheduled;
+                    break;
+                }
+
+                // Also check tomorrow's occurrence of the same slot
+                const scheduledTomorrow = new Date(scheduled.getTime() + 86_400_000);
+                const triggerTomorrow = new Date(scheduledTomorrow.getTime() - pendingMs);
+                if (now.getTime() >= triggerTomorrow.getTime() && now.getTime() < scheduledTomorrow.getTime()) {
+                    targetDate = scheduledTomorrow;
+                    break;
+                }
+            }
+
+            if (!targetDate) {
+                console.log(`Scheduled mode: no slot trigger matches current time. Hours: ${scheduledHours.join(', ')}`);
+                return new Response(JSON.stringify({
+                    message: 'No scheduled slot now',
+                    mode: 'scheduled',
+                    scheduled_hours: scheduledHours
+                }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    status: 200
+                });
+            }
+
+            // Idempotency: check no event already exists for this time slot (±2 min window)
+            const windowStart = new Date(targetDate.getTime() - 120_000).toISOString();
+            const windowEnd = new Date(targetDate.getTime() + 120_000).toISOString();
+
+            const { data: existingEvent } = await supabaseClient
+                .from('events')
+                .select('id')
+                .eq('type', 'online')
+                .gte('date', windowStart)
+                .lte('date', windowEnd)
+                .limit(1)
+                .maybeSingle();
+
+            if (existingEvent) {
+                console.log(`Scheduled mode: event already exists for slot ${targetDate.toISOString()} (id: ${existingEvent.id})`);
+                return new Response(JSON.stringify({
+                    message: 'Event already exists for this slot',
+                    existing_event_id: existingEvent.id,
+                    slot: targetDate.toISOString()
+                }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    status: 200
+                });
+            }
+
+            eventDate = targetDate;
+            console.log(`Scheduled mode: creating event for slot ${targetDate.toISOString()} (trigger window hit)`);
+
+        } else if (!isManualAction) {
+            // ── AUTOMATIC MODE (default) ───────────────────────────────────
             const { data: lastEvent, error: lastEventError } = await supabaseClient
                 .from('events')
                 .select('created_at')
@@ -117,6 +208,15 @@ serve(async (req: Request) => {
                     });
                 }
             }
+
+            // In automatic mode, event starts after pending_wait_minutes from now
+            eventDate = new Date(Date.now() + pendingWaitMinutes * 60 * 1000);
+            console.log(`Automatic mode: next event date = ${eventDate.toISOString()}`);
+
+        } else {
+            // ── MANUAL TRIGGER ─────────────────────────────────────────────
+            eventDate = new Date(Date.now() + pendingWaitMinutes * 60 * 1000);
+            console.log(`Manual trigger: event date = ${eventDate.toISOString()}`);
         }
 
         // Usar exactamente el valor máximo configurado por el admin
@@ -192,8 +292,8 @@ serve(async (req: Request) => {
                 location_name: 'Online',
                 latitude: 0,
                 longitude: 0,
-                // date = now + pendingWaitMinutes (countdown shown in EventWaitingScreen)
-                date: new Date(Date.now() + pendingWaitMinutes * 60 * 1000).toISOString(),
+                // date = eventDate (computed by mode: scheduled hour or now + pendingWaitMinutes)
+                date: eventDate.toISOString(),
                 max_participants: playerCount,
                 pin: pin,
                 clue: '🏆 ¡Felicidades! Has completado el circuito online.',
@@ -228,7 +328,7 @@ serve(async (req: Request) => {
             const appEnv = Deno.env.get('APP_ENV') || 'dev'; // Por defecto es dev
 
             if (osAppId && osApiKey) {
-                const eventStartTime = new Date(Date.now() + pendingWaitMinutes * 60 * 1000);
+                const eventStartTime = eventDate;
                 const notificationTime = new Date(eventStartTime.getTime() - (5 * 60 * 1000));
                 const now = new Date();
 
