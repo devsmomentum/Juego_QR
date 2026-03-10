@@ -115,7 +115,7 @@ class GameService {
           .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
           .order('last_active', ascending: true)
-          .limit(50);
+          .limit(100); // Increased from 50: with exactly 50 players the old limit caused unsorted user injection.
 
       // --- INVISIBILITY FILTER ---
       // Fetch currently invisible players to exclude them from the list

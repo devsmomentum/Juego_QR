@@ -851,130 +851,37 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
   // [FIX] Capturar Navigator ANTES de cualquier operación async
-  // Esto garantiza que podamos navegar incluso si el context padre cambia
   final navigator = Navigator.of(context);
-  final rootOverlay = Overlay.of(context);
-  final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => const Center(
-      child: LoadingIndicator(),
-    ),
-  );
+  // ── DESACOPLADO DEL RPC ──────────────────────────────────────────────────
+  // Lanzar el RPC en background INMEDIATAMENTE sin bloquear el UI.
+  // El sello animado dura ~2.3s, que es tiempo más que suficiente para que
+  // el servidor responda. Ya no mostramos el spinner bloqueante.
+  Future<Map<String, dynamic>?> clueCompletionFuture;
 
-  Map<String, dynamic>? result;
-  int coinsEarned = 0;
-
-  try {
-    if (clue.id.startsWith('demo_')) {
-      gameProvider.completeLocalClue(clue.id);
-      result = {'success': true}; // Demo mode fallback
-    } else {
-      debugPrint('--- COMPLETING CLUE: ${clue.id} (XP: ${clue.xpReward}) ---');
-      result =
-          await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN");
-      coinsEarned = result?['coins_earned'] ?? 0;
-      debugPrint(
-          '--- CLUE COMPLETION RESULT: ${result != null}, Coins Earned: $coinsEarned ---');
-    }
-  } catch (e) {
-    debugPrint("Error completando pista: $e");
-    result = null;
-  }
-
-  // [FIX] Cerrar spinner usando navigator capturado
-  if (navigator.mounted) {
-    navigator.pop();
-  }
-
-  // [PERFORMANCE] Lanzar refreshProfile en background para no bloquear
-  // la animación del trébol. El RPC ya retornó coins_earned atómicamente.
-  // El refresh se completará durante la animación (~2.3s de margen).
-  Future<void>? profileRefreshFuture;
-
-  if (result != null) {
-    // coinsEarned se muestra en el SuccessCelebrationDialog (no SnackBar)
-
-    if (playerProvider.currentPlayer != null) {
-      debugPrint('--- REFRESHING PROFILE (non-blocking) ---');
-      profileRefreshFuture = playerProvider.refreshProfile();
-    }
-
-    // Check if race was completed or if player completed all clues
-    if (gameProvider.isRaceCompleted || gameProvider.hasCompletedAllClues) {
-      // Get player position
-      int playerPosition = 0; // Default 0
-      final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
-
-      if (gameProvider.leaderboard.isNotEmpty) {
-        final index =
-            gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
-        playerPosition =
-            index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
-      } else {
-        playerPosition = 999; // Safe default
-      }
-
-      // 🏆 LOGIC UPDATE: WAITING ROOM vs WINNER SCREEN
-      // If the race is NOT globally completed yet (still active), but user finished -> Waiting Room
-      // If the race IS globally completed -> Winner Screen
-
-      if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
-        debugPrint(
-            "🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
-        if (navigator.mounted) {
-          navigator.pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => WaitingRoomScreen(
-                eventId: gameProvider.currentEventId ?? '',
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Navigate to winner celebration screen if race IS completed
-      if (navigator.mounted) {
-        navigator.pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => WinnerCelebrationScreen(
-              eventId: gameProvider.currentEventId ?? '',
-              playerPosition: playerPosition,
-              totalCluesCompleted: gameProvider.completedClues,
-            ),
-          ),
-          (route) => route.isFirst,
-        );
-      }
-      return;
-    }
+  if (clue.id.startsWith('demo_')) {
+    gameProvider.completeLocalClue(clue.id);
+    clueCompletionFuture = Future.value({'success': true, 'coins_earned': 0});
   } else {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Error al guardar el progreso. Verifica tu conexión.'),
-            backgroundColor: AppTheme.dangerRed),
-      );
-    }
-    return;
+    debugPrint('--- COMPLETING CLUE (background): ${clue.id} ---');
+    clueCompletionFuture =
+        gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN");
   }
 
-  // [FIX] Verificar navigator en vez de context para robustez
-  if (!navigator.mounted) {
-    debugPrint('WARN: Navigator not mounted before TimeStampAnimation');
-    return;
+  // También lanzar el refresh de perfil en paralelo (no necesita el RPC aún)
+  Future<void>? profileRefreshFuture;
+  if (playerProvider.currentPlayer != null) {
+    profileRefreshFuture = playerProvider.refreshProfile();
   }
+  // ─────────────────────────────────────────────────────────────────────────
 
-  // 1. Mostrar la Animación del Trébol Dorado
-  // [FIX] Usar Completer para asegurar que onComplete se ejecute una sola vez
+  if (!navigator.mounted) return;
+
+  // 1. Mostrar la Animación del Trébol Dorado INMEDIATAMENTE (sin spinner)
   bool sealCompleted = false;
   try {
     await showGeneralDialog(
-      context: navigator.context, // Usar navigator.context, no context raw
+      context: navigator.context,
       barrierDismissible: false,
       pageBuilder: (dialogContext, _, __) => Scaffold(
         backgroundColor: Colors.black.withOpacity(0.85),
@@ -993,11 +900,91 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     debugPrint('Error showing TimeStampAnimation: $e');
   }
 
-  // [FIX] ELIMINADO: Early return por context.mounted
-  // El diálogo de celebración DEBE mostrarse siempre después del sello
-  // Usamos navigator capturado en vez de context
+  // 2. Leer el resultado del RPC (el sello tardó ~2.3s, ya debió terminar)
+  Map<String, dynamic>? result;
+  int coinsEarned = 0;
+  try {
+    result = await clueCompletionFuture;
+    coinsEarned = result?['coins_earned'] ?? 0;
+    debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
+  } catch (e) {
+    debugPrint("Error completando pista (background): $e");
+    // La actualización optimista ya se hizo en game_provider.dart,
+    // así que el UI ya refleja la pista como completada.
+    result = {'success': true, 'coins_earned': 0};
+  }
 
-  // 2. Determinar si hay siguiente pista
+  // Esperar que el refreshProfile termine (si aún no lo hizo)
+  if (profileRefreshFuture != null) {
+    try {
+      await profileRefreshFuture;
+    } catch (e) {
+      debugPrint('WARN: Profile refresh failed: $e');
+    }
+  }
+
+  if (!navigator.mounted) return;
+
+  // 3. Manejar fin de carrera o navegación a sala de espera
+  if (result != null) {
+    if (gameProvider.isRaceCompleted || gameProvider.hasCompletedAllClues) {
+      int playerPosition = 0;
+      final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+
+      if (gameProvider.leaderboard.isNotEmpty) {
+        final index =
+            gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
+        playerPosition =
+            index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
+      } else {
+        playerPosition = 999;
+      }
+
+      if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
+        debugPrint("🏆 User finished, Race still ACTIVE → Waiting Room");
+        if (navigator.mounted) {
+          navigator.pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => WaitingRoomScreen(
+                eventId: gameProvider.currentEventId ?? '',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (navigator.mounted) {
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => WinnerCelebrationScreen(
+              eventId: gameProvider.currentEventId ?? '',
+              playerPosition: playerPosition,
+              totalCluesCompleted: gameProvider.completedClues,
+            ),
+          ),
+          (route) => route.isFirst,
+        );
+      }
+      return;
+    }
+  } else {
+    // RPC falló: la actualización optimista ya está hecha, pero avisamos
+    if (navigator.mounted) {
+      ScaffoldMessenger.of(navigator.context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Error al guardar el progreso. Verifica tu conexión.'),
+            backgroundColor: AppTheme.dangerRed),
+      );
+    }
+    // No retornamos: dejamos que muestre el diálogo de celebración igualmente
+    // para no interrumpir la experiencia del jugador.
+  }
+
+  if (!navigator.mounted) return;
+
+  // 4. Mostrar el panel de celebración "¡Pista Completada!"
   final clues = gameProvider.clues;
   final currentIdx = clues.indexWhere((c) => c.id == clue.id);
   Clue? nextClue;
@@ -1005,26 +992,8 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     nextClue = clues[currentIdx + 1];
   }
   final showNextStep = nextClue != null;
-  // Obtener el hint (ubicación) de la siguiente pista para mostrarlo al jugador
-  final String? nextClueHint = nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null;
-
-  // [PERFORMANCE] Esperar a que el refresh termine antes del diálogo de celebración
-  // para que las monedas estén actualizadas. Tras ~2.3s de animación, ya debió completar.
-  if (profileRefreshFuture != null) {
-    try {
-      await profileRefreshFuture;
-      debugPrint('--- PROFILE REFRESH COMPLETED (after animation) ---');
-    } catch (e) {
-      debugPrint('WARN: Profile refresh failed: $e');
-    }
-  }
-
-  // 3. Mostrar el panel de celebración - OBLIGATORIO después del sello
-  // [FIX] Usar navigator capturado para garantizar visualización
-  if (!navigator.mounted) {
-    debugPrint('WARN: Navigator not mounted for SuccessCelebrationDialog');
-    return;
-  }
+  final String? nextClueHint =
+      nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null;
 
   await showDialog(
     context: navigator.context,
@@ -1033,8 +1002,8 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       clue: clue,
       showNextStep: showNextStep,
       totalClues: clues.length,
-      coinsEarned: coinsEarned, // Valor dinámico del servidor
-      nextClueHint: nextClueHint, // Ubicación de la siguiente pista
+      coinsEarned: coinsEarned,
+      nextClueHint: nextClueHint,
       onMapReturn: () {
         Navigator.of(dialogContext).pop();
         Future.delayed(const Duration(milliseconds: 100), () {
@@ -1046,6 +1015,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     ),
   );
 }
+
 
 // --- WRAPPERS ACTUALIZADOS CON ONFINISH ---
 
