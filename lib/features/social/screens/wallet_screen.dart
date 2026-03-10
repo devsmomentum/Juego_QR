@@ -7,15 +7,12 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/loading_overlay.dart';
-import '../../wallet/widgets/payment_webview_modal.dart'; // Added
+import '../../wallet/widgets/payment_validation_widget.dart';
 import 'profile_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../../shared/widgets/glitch_text.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/services/pago_a_pago_service.dart';
-import '../../../core/models/pago_a_pago_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../widgets/payment_profile_dialog.dart';
 import '../widgets/payment_method_selector.dart';
 import '../widgets/add_payment_method_dialog.dart';
@@ -1028,15 +1025,19 @@ class _WalletScreenState extends State<WalletScreen> {
 
       // Parse response
       final Map<String, dynamic> dataObj = responseData['data'] ?? responseData['result'] ?? responseData;
-      final String? paymentUrl = dataObj['payment_url']?.toString() ?? dataObj['url']?.toString();
+      final String? dbOrderId = dataObj['db_order_id']?.toString();
+      final String? validationCode = dataObj['validation_code']?.toString();
+      final double? amountVes = (dataObj['amount_ves'] is num)
+          ? (dataObj['amount_ves'] as num).toDouble()
+          : double.tryParse(dataObj['amount_ves']?.toString() ?? '');
 
-      if (paymentUrl == null || paymentUrl.isEmpty) {
-        throw Exception('URL de pago no recibida');
+      if (dbOrderId == null || dbOrderId.isEmpty || validationCode == null || validationCode.isEmpty) {
+        throw Exception('Datos de validación no recibidos');
       }
 
       if (!mounted) return;
 
-      // Open WebView as a Modal Bottom Sheet
+      // Show Pago Móvil Validation Modal
       final bool? result = await showModalBottomSheet<bool>(
         context: context,
         isScrollControlled: true,
@@ -1046,11 +1047,12 @@ class _WalletScreenState extends State<WalletScreen> {
         builder: (ctx) => SafeArea(
           child: Padding(
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: PaymentWebViewModal(paymentUrl: paymentUrl),
+            child: PaymentValidationWidget(
+              orderId: dbOrderId,
+              validationCode: validationCode,
+              amountVes: amountVes,
             ),
           ),
         ),
@@ -1058,17 +1060,17 @@ class _WalletScreenState extends State<WalletScreen> {
 
       if (result == true) {
          if (!mounted) return;
-        //  ScaffoldMessenger.of(context).showSnackBar(
-        //    const SnackBar(
-        //      content: Text('¡Pago Exitoso! Verificando saldo...'),
-        //      backgroundColor: AppTheme.successGreen,
-        //    ),
-        //  );
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(
+             content: Text('¡Pago verificado! Actualizando saldo...'),
+             backgroundColor: AppTheme.successGreen,
+           ),
+         );
          
          await Future.delayed(const Duration(seconds: 2));
          if (mounted) {
             await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
-            await _loadRecentTransactions(); // Refresh history to show success/pending
+            await _loadRecentTransactions();
          }
       } else {
          if (!mounted) return;
@@ -1375,50 +1377,6 @@ class _WalletScreenState extends State<WalletScreen> {
         },
       ),
     );
-  }
-
-  Future<void> _processWithdrawal(BuildContext context, double amount,
-      Map<String, dynamic> method) async {
-    try {
-      final playerProvider =
-          Provider.of<PlayerProvider>(context, listen: false);
-      final balance = playerProvider.currentPlayer?.clovers ?? 0;
-
-      if (balance < amount) throw Exception("Saldo insuficiente");
-
-      final apiKey = dotenv.env['PAGO_PAGO_API_KEY'] ?? '';
-      final service = PagoAPagoService(apiKey: apiKey);
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-
-      if (token == null) throw Exception("No hay sesión activa");
-
-      // Construct STRICT Request based on User Payment Method
-      final request = WithdrawalRequest(
-        amount: amount,
-        bank: method['bank_code'],
-        dni: method['dni'], // From saved method (which came from profile)
-        phone: method['phone_number'], // From saved method
-        cta: null, // Mobile Payment only
-      );
-
-      final response = await service.withdrawFunds(request, token);
-
-      if (!mounted) return;
-
-      if (response.success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('¡Retiro exitoso!'),
-            backgroundColor: AppTheme.successGreen));
-        // Refresh logic would go here
-      } else {
-        throw Exception(response.message);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'), backgroundColor: AppTheme.dangerRed));
-      }
-    }
   }
 
   /// Process withdrawal using a withdrawal plan ID.

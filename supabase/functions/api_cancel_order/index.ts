@@ -12,32 +12,51 @@ serve(async (req) => {
     }
 
     try {
-        const supabaseClient = createClient(
+        // Admin client for DB operations (bypasses RLS)
+        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        if (!serviceRoleKey) {
+            throw new Error("Server Misconfiguration: Missing DB Permissions")
+        }
+
+        const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+            serviceRoleKey,
         )
+
+        // Authenticate user via their token
+        const authToken = req.headers.get('Authorization')
+        if (!authToken) throw new Error("Missing Authorization header")
 
         const {
             data: { user },
-        } = await supabaseClient.auth.getUser()
+            error: userError,
+        } = await supabaseAdmin.auth.getUser(authToken.replace('Bearer ', ''))
 
-        if (!user) {
+        if (userError || !user) {
             throw new Error("Unauthorized")
         }
 
         const { order_id } = await req.json()
 
-        // 1. Get order details to retrieve external ID
-        const { data: order, error: fetchError } = await supabaseClient
+        if (!order_id) {
+            throw new Error("Missing order_id parameter")
+        }
+
+        // 1. Get order details — verify ownership via user_id
+        const { data: order, error: fetchError } = await supabaseAdmin
             .from('clover_orders')
-            .select('pago_pago_order_id, status')
+            .select('pago_pago_order_id, status, user_id')
             .eq('id', order_id)
             .single()
 
         if (fetchError || !order) {
             console.error("Error fetching order:", fetchError)
             throw new Error("Orden no encontrada")
+        }
+
+        // Security: Verify the user owns this order
+        if (order.user_id !== user.id) {
+            throw new Error("No autorizado para cancelar esta orden")
         }
 
         if (order.status !== 'pending') {
@@ -50,52 +69,63 @@ serve(async (req) => {
         }
 
         // 2. Get API Key & Config
-        const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')!
-        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_CANCEL_URL') || "https://pagoapago.com/api/v1/cancel" // Fallback or strict env
+        const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')
+        if (!pagoApiKey) {
+            throw new Error("Server Misconfiguration: Missing PAGO_PAGO_API_KEY")
+        }
+
+        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_CANCEL_URL')
+        if (!PAGO_PAGO_URL) {
+            throw new Error("Server Misconfiguration: Missing PAGO_PAGO_CANCEL_URL")
+        }
 
         console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago`)
 
-        // 3. Cancel on Provider
+        // 3. Cancel on Provider (PUT per documentation)
         const response = await fetch(PAGO_PAGO_URL, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'pago_pago_api': pagoApiKey
             },
-            body: JSON.stringify({ order_id: externalId }) // Send External ID
+            body: JSON.stringify({ order_id: externalId })
         })
 
         const data = await response.json()
 
-        // 3. Update Local DB Status to 'cancelled'
-        if (response.ok) {
-            const { error: updateError } = await supabaseClient
-                .from('clover_orders')
-                .update({ 
-                    status: 'cancelled',
-                    updated_at: new Date().toISOString(),
-                    extra_data: { 
-                        cancelled_at: new Date().toISOString(),
-                        cancellation_response: data 
-                    }
-                })
-                .eq('id', order_id)
-
-            if (updateError) {
-                console.error("Failed to update order status locally:", updateError)
-                // We still return success because the payment gateway cancelled it.
-            } else {
-                console.log(`Order ${order_id} marked as cancelled in DB.`)
-            }
+        if (!response.ok) {
+            console.error("Pago a Pago cancel failed:", data)
+            throw new Error(`Error de pasarela: ${data?.message || data?.error || response.status}`)
         }
 
-        return new Response(JSON.stringify(data), {
+        // 4. Update Local DB Status to 'cancelled'
+        const { error: updateError } = await supabaseAdmin
+            .from('clover_orders')
+            .update({ 
+                status: 'cancelled',
+                updated_at: new Date().toISOString(),
+                extra_data: { 
+                    cancelled_at: new Date().toISOString(),
+                    cancellation_response: data 
+                }
+            })
+            .eq('id', order_id)
+
+        if (updateError) {
+            console.error("Failed to update order status locally:", updateError)
+            // Still return success because the payment gateway cancelled it
+        } else {
+            console.log(`Order ${order_id} marked as cancelled in DB.`)
+        }
+
+        return new Response(JSON.stringify({ success: true, message: "Orden cancelada exitosamente" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
+        console.error("[api_cancel_order] Error:", error)
+        return new Response(JSON.stringify({ error: error.message, success: false }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 400,
         })

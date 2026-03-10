@@ -1,124 +1,134 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // Added
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/pago_a_pago_models.dart';
-import '../../features/social/screens/wallet_screen.dart'; // To access any constants if needed, or moved here.
 
+/// Service that proxies all payment operations through Supabase Edge Functions.
+/// 
+/// No API keys or sensitive credentials are handled client-side.
+/// All secrets (PAGO_PAGO_API_KEY, etc.) live exclusively in Edge Function env vars.
 class PagoAPagoService {
-  // BASE URL from documentation (Your Supabase Project)
-  static String get _baseUrl => 
-    '${dotenv.env['SUPABASE_URL']}/functions/v1';
-  
-  static String get _apiKeyPlaceholder => 
-    dotenv.env['PAGO_PAGO_API_KEY'] ?? 'PAGO_PAGO_API_KEY_AQUI'; 
+  final SupabaseClient _client;
 
-  final String apiKey;
+  PagoAPagoService({SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
 
-  PagoAPagoService({required this.apiKey});
-
-  Future<PaymentOrderResponse> createPaymentOrder(PaymentOrderRequest request, String authToken) async {
-    // Legacy/Full implementation
-    final url = Uri.parse('$_baseUrl/api_pay_orders');
+  /// Creates a payment order via the `api_pay_orders` Edge Function.
+  /// The Edge Function validates the plan server-side and fetches the price from DB.
+  Future<PaymentOrderResponse> createPaymentOrder({required String planId}) async {
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: jsonEncode(request.toJson()),
-      );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return PaymentOrderResponse.fromJson(jsonDecode(response.body));
-      } else {
-         return PaymentOrderResponse(success: false, message: 'Error ${response.statusCode}: ${response.body}');
-      }
-    } catch (e) {
-      return PaymentOrderResponse(success: false, message: 'Excepción: $e');
-    }
-  }
+      debugPrint('[PagoAPagoService] Invoking api_pay_orders for plan: $planId');
 
-  // Refactored to use Supabase Functions (Ensures Edge Function logic runs)
-  Future<PaymentOrderResponse> createSimplePaymentOrder({required double amountBs}) async {
-    try {
-      debugPrint('[PagoAPagoService] Invoking Edge Function api_pay_orders for $amountBs Bs...');
-      
-      final FunctionResponse response = await Supabase.instance.client.functions.invoke(
+      final response = await _client.functions.invoke(
         'api_pay_orders',
-        body: {
-          'amount': amountBs,
-          'currency': 'VES',
-          'motive': 'Recarga de Tréboles', 
-        },
+        body: {'plan_id': planId},
       );
 
-      debugPrint('[PagoAPagoService] Edge Function Response: ${response.status}');
-      debugPrint('[PagoAPagoService] Data: ${response.data}');
+      debugPrint('[PagoAPagoService] Response status: ${response.status}');
 
       if (response.status == 200) {
-         final data = response.data;
-         return PaymentOrderResponse.fromJson(data);
+        return PaymentOrderResponse.fromJson(response.data);
       } else {
-         return PaymentOrderResponse(
-          success: false, 
-          message: 'Error ${response.status}: ${response.data}'
+        return PaymentOrderResponse(
+          success: false,
+          message: 'Error ${response.status}: ${response.data}',
         );
       }
     } catch (e) {
-      debugPrint('[PagoAPagoService] Exception invoking function: $e');
+      debugPrint('[PagoAPagoService] Exception: $e');
       if (e is FunctionException) {
-         return PaymentOrderResponse(success: false, message: 'Function Error: ${e.details} (Reason: ${e.reasonPhrase})');
+        return PaymentOrderResponse(
+          success: false,
+          message: 'Error: ${e.details} (${e.reasonPhrase})',
+        );
       }
       return PaymentOrderResponse(success: false, message: 'Excepción: $e');
     }
   }
 
+  /// Cancels a pending order via the `api_cancel_order` Edge Function.
+  /// The API key is handled server-side — never sent from the client.
   Future<bool> cancelOrder(String orderId) async {
-    final url = Uri.parse('$_baseUrl/api_cancel_order');
     try {
-      final response = await http.put(
-        url,
-         headers: {
-          'Content-Type': 'application/json',
-          'pago_pago_api': apiKey,
-        },
-        body: jsonEncode({'order_id': orderId}),
+      debugPrint('[PagoAPagoService] Cancelling order: $orderId');
+
+      final response = await _client.functions.invoke(
+        'api_cancel_order',
+        body: {'order_id': orderId},
       );
-      
-      return response.statusCode == 200;
+
+      return response.status == 200;
     } catch (e) {
-       debugPrint('PagoAPagoService: Cancel error: $e');
-       return false;
+      debugPrint('[PagoAPagoService] Cancel error: $e');
+      return false;
     }
   }
-  Future<WithdrawalResponse> withdrawFunds(WithdrawalRequest request, String authToken) async {
-    final url = Uri.parse('$_baseUrl/api_withdraw_funds');
-    
+
+  /// Processes a withdrawal via the `api_withdraw_funds` Edge Function.
+  /// Sends plan_id; the Edge Function validates price/balance server-side.
+  Future<WithdrawalResponse> withdrawFunds(WithdrawalRequest request) async {
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: jsonEncode(request.toJson()),
+      debugPrint('[PagoAPagoService] Invoking api_withdraw_funds...');
+
+      final response = await _client.functions.invoke(
+        'api_withdraw_funds',
+        body: request.toJson(),
       );
 
-      debugPrint('Withdrawal Response: ${response.body}');
+      debugPrint('[PagoAPagoService] Withdrawal status: ${response.status}');
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return WithdrawalResponse.fromJson(jsonDecode(response.body));
+      if (response.status == 200) {
+        return WithdrawalResponse.fromJson(response.data);
       } else {
-         final errorBody = jsonDecode(response.body);
-         return WithdrawalResponse(
-           success: false, 
-           message: errorBody['error'] ?? errorBody['message'] ?? 'Error ${response.statusCode}'
-         );
+        final errorData = response.data;
+        return WithdrawalResponse(
+          success: false,
+          message: errorData?['error'] ?? errorData?['message'] ?? 'Error ${response.status}',
+        );
       }
     } catch (e) {
+      debugPrint('[PagoAPagoService] Withdrawal exception: $e');
+      if (e is FunctionException) {
+        return WithdrawalResponse(
+          success: false,
+          message: 'Error: ${e.details} (${e.reasonPhrase})',
+        );
+      }
       return WithdrawalResponse(success: false, message: 'Error de red: $e');
+    }
+  }
+
+  /// Validates a Pago Móvil payment via the `validate-mpay-payment` Edge Function.
+  Future<Map<String, dynamic>> validateMpayPayment({
+    required String orderId,
+    required String phone,
+    required String reference,
+    required String concept,
+  }) async {
+    try {
+      debugPrint('[PagoAPagoService] Validating mpay for order: $orderId');
+
+      final response = await _client.functions.invoke(
+        'validate-mpay-payment',
+        body: {
+          'order_id': orderId,
+          'phone': phone,
+          'reference': reference,
+          'concept': concept,
+        },
+      );
+
+      debugPrint('[PagoAPagoService] Mpay validation status: ${response.status}');
+
+      if (response.status == 200 && response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {'success': false, 'message': 'Error ${response.status}: ${response.data}'};
+    } catch (e) {
+      debugPrint('[PagoAPagoService] Mpay validation exception: $e');
+      if (e is FunctionException) {
+        return {'success': false, 'message': 'Error: ${e.details} (${e.reasonPhrase})'};
+      }
+      return {'success': false, 'message': 'Error de conexión: $e'};
     }
   }
 }
