@@ -49,6 +49,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
   int _score = 0;
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
+  bool _isProcessingSelection = false; // Guard against double-taps
 
   List<TFStatement> _shuffledStatements = [];
   int _currentStatementIndex = 0;
@@ -77,71 +78,97 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
     final List<TFStatement> localStatements = [
       // CIENCIA Y NATURALEZA
       TFStatement("El Sol es una estrella.", true),
-      TFStatement("La Gran Muralla China es visible desde la Luna.", false, correction: "Es un mito; no se ve a simple vista."),
-      TFStatement("El agua hierve a 90°C a nivel del mar.", false, correction: "Hierve a 100°C."),
+      TFStatement("La Gran Muralla China es visible desde la Luna.", false,
+          correction: "Es un mito; no se ve a simple vista."),
+      TFStatement("El agua hierve a 90°C a nivel del mar.", false,
+          correction: "Hierve a 100°C."),
       TFStatement("Los delfines son mamíferos.", true),
       TFStatement("El cuerpo humano adulto tiene 206 huesos.", true),
-      TFStatement("El sonido viaja más rápido que la luz.", false, correction: "La luz es 1 millón de veces más rápida."),
-      TFStatement("Los pingüinos pueden volar.", false, correction: "Son aves nadadoras, no voladoras."),
+      TFStatement("El sonido viaja más rápido que la luz.", false,
+          correction: "La luz es 1 millón de veces más rápida."),
+      TFStatement("Los pingüinos pueden volar.", false,
+          correction: "Son aves nadadoras, no voladoras."),
       TFStatement("El elemento químico del oro es Au.", true),
       TFStatement("Júpiter es el planeta más grande del Sistema Solar.", true),
-      TFStatement("Las nubes están hechas de algodón.", false, correction: "Están hechas de vapor y gotas de agua."),
+      TFStatement("Las nubes están hechas de algodón.", false,
+          correction: "Están hechas de vapor y gotas de agua."),
       TFStatement("El diamante es el material natural más duro.", true),
       TFStatement("La ballena azul es el animal más grande del mundo.", true),
-      TFStatement("Los gatos siempre caen de pie.", false, correction: "Tienen gran equilibrio, pero no siempre."),
-      TFStatement("La atmósfera tiene más oxígeno que nitrógeno.", false, correction: "Tiene un 78% de nitrógeno."),
+      TFStatement("Los gatos siempre caen de pie.", false,
+          correction: "Tienen gran equilibrio, pero no siempre."),
+      TFStatement("La atmósfera tiene más oxígeno que nitrógeno.", false,
+          correction: "Tiene un 78% de nitrógeno."),
       TFStatement("Venus es el planeta más caliente del Sistema Solar.", true),
 
       // GEOGRAFÍA Y PAÍSES
-      TFStatement("París es la capital de Italia.", false, correction: "Es la capital de Francia."),
+      TFStatement("París es la capital de Italia.", false,
+          correction: "Es la capital de Francia."),
       TFStatement("La Amazonía es la selva más grande del mundo.", true),
       TFStatement("Viena es la capital de Austria.", true),
       TFStatement("El Everest es la montaña más alta del mundo.", true),
-      TFStatement("La capital de Estados Unidos es Nueva York.", false, correction: "Es Washington D.C."),
+      TFStatement("La capital de Estados Unidos es Nueva York.", false,
+          correction: "Es Washington D.C."),
       TFStatement("Chile es el país más largo y angosto del mundo.", true),
       TFStatement("El desierto del Sahara es el más caluroso.", true),
       TFStatement("Rusia es el país más grande por territorio.", true),
       TFStatement("El río Amazonas es el más caudaloso del mundo.", true),
       TFStatement("Australia es una isla y un continente.", true),
-      TFStatement("La capital de Japón es Kioto.", false, correction: "Es Tokio."),
-      TFStatement("España limita al sur con Portugal.", false, correction: "Limita al oeste con Portugal."),
+      TFStatement("La capital de Japón es Kioto.", false,
+          correction: "Es Tokio."),
+      TFStatement("España limita al sur con Portugal.", false,
+          correction: "Limita al oeste con Portugal."),
       TFStatement("El Vaticano es el país más pequeño del mundo.", true),
-      TFStatement("Islandia es un país tropical.", false, correction: "Está cerca del círculo polar ártico."),
+      TFStatement("Islandia es un país tropical.", false,
+          correction: "Está cerca del círculo polar ártico."),
       TFStatement("El canal de Panamá une el Atlántico con el Pacífico.", true),
 
       // HISTORIA Y CULTURA
-      TFStatement("Pitágoras fue un famoso pintor.", false, correction: "Fue un matemático griego."),
+      TFStatement("Pitágoras fue un famoso pintor.", false,
+          correction: "Fue un matemático griego."),
       TFStatement("Cristóbal Colón llegó a América en 1492.", true),
-      TFStatement("La Mona Lisa fue pintada por Van Gogh.", false, correction: "Fue pintada por Leonardo da Vinci."),
+      TFStatement("La Mona Lisa fue pintada por Van Gogh.", false,
+          correction: "Fue pintada por Leonardo da Vinci."),
       TFStatement("El abecedario español tiene 27 letras.", true),
-      TFStatement("Batman pertenece a Marvel.", false, correction: "Pertenece a DC Comics."),
-      TFStatement("Los vikingos usaban cascos con cuernos.", false, correction: "Es un mito de óperas y películas."),
+      TFStatement("Batman pertenece a Marvel.", false,
+          correction: "Pertenece a DC Comics."),
+      TFStatement("Los vikingos usaban cascos con cuernos.", false,
+          correction: "Es un mito de óperas y películas."),
       TFStatement("La Revolución Francesa comenzó en 1789.", true),
       TFStatement("El Titanic se hundió en su primer viaje.", true),
-      TFStatement("Albert Einstein recibió el Nobel por la relatividad.", false, correction: "Lo recibió por el efecto fotoeléctrico."),
-      TFStatement("Julio César fue un emperador romano.", false, correction: "Fue dictador; el primer emperador fue Augusto."),
+      TFStatement("Albert Einstein recibió el Nobel por la relatividad.", false,
+          correction: "Lo recibió por el efecto fotoeléctrico."),
+      TFStatement("Julio César fue un emperador romano.", false,
+          correction: "Fue dictador; el primer emperador fue Augusto."),
       TFStatement("La Segunda Guerra Mundial terminó en 1945.", true),
       TFStatement("El Quijote fue escrito por Cervantes.", true),
-      TFStatement("Los números romanos usan la letra 'K'.", false, correction: "No existe la K en números romanos."),
+      TFStatement("Los números romanos usan la letra 'K'.", false,
+          correction: "No existe la K en números romanos."),
       TFStatement("El muro de Berlín cayó en 1989.", true),
-      TFStatement("Beethoven era sordo cuando compuso su novena sinfonía.", true),
+      TFStatement(
+          "Beethoven era sordo cuando compuso su novena sinfonía.", true),
 
       // ENTRETENIMIENTO Y GENERAL
       TFStatement("Spider-Man fue creado por Stan Lee.", true),
       TFStatement("El símbolo químico del agua es H2O.", true),
-      TFStatement("Mario Bros es un dentista.", false, correction: "Es un fontanero (plomero)."),
+      TFStatement("Mario Bros es un dentista.", false,
+          correction: "Es un fontanero (plomero)."),
       TFStatement("La estatua de la Libertad fue un regalo de Francia.", true),
       TFStatement("Un año bisiesto tiene 366 días.", true),
-      TFStatement("El ajedrez se inventó en Rusia.", false, correction: "Se cree que se originó en la India."),
+      TFStatement("El ajedrez se inventó en Rusia.", false,
+          correction: "Se cree que se originó en la India."),
       TFStatement("La miel nunca caduca.", true),
       TFStatement("Los pulpos tienen tres corazones.", true),
-      TFStatement("El idioma más hablado del mundo es el inglés.", false, correction: "Es el chino mandarín (nativos)."),
+      TFStatement("El idioma más hablado del mundo es el inglés.", false,
+          correction: "Es el chino mandarín (nativos)."),
       TFStatement("Facebook fue creado por Mark Zuckerberg.", true),
-      TFStatement("Las cebras son blancas con rayas negras.", true, correction: "Su piel es negra bajo el pelo."),
+      TFStatement("Las cebras son blancas con rayas negras.", true,
+          correction: "Su piel es negra bajo el pelo."),
       TFStatement("El Monopoly se inventó durante la Gran Depresión.", true),
-      TFStatement("Los mosquitos tienen dientes.", true, correction: "Tienen 47 pequeñas cerdas dentadas."),
+      TFStatement("Los mosquitos tienen dientes.", true,
+          correction: "Tienen 47 pequeñas cerdas dentadas."),
       TFStatement("La bandera de Japón tiene un sol rojo.", true),
-      TFStatement("El fútbol se juega con 12 jugadores por equipo.", false, correction: "Se juega con 11 jugadores."),
+      TFStatement("El fútbol se juega con 12 jugadores por equipo.", false,
+          correction: "Se juega con 11 jugadores."),
     ];
 
     // Intentar cargar datos de la base de datos
@@ -177,11 +204,12 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
     _secondsRemaining = _gameDurationSeconds;
     _isGameOver = false;
     _showOverlay = false;
-    
+
     // Prepare shuffled pool to avoid repeats
-    _shuffledStatements = List<TFStatement>.from(_allStatements)..shuffle(_random);
+    _shuffledStatements = List<TFStatement>.from(_allStatements)
+      ..shuffle(_random);
     _currentStatementIndex = 0;
-    
+
     _generateRound();
     _startTimer();
   }
@@ -213,35 +241,48 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
 
   void _generateRound() {
     if (_shuffledStatements.isEmpty) return;
-    
+
     if (_currentStatementIndex >= _shuffledStatements.length) {
       _shuffledStatements.shuffle(_random);
       _currentStatementIndex = 0;
     }
-    
+
     _currentStatement = _shuffledStatements[_currentStatementIndex];
     _currentStatementIndex++;
   }
 
-  void _handleSelection(bool selectedTrue) {
-    if (_isGameOver) return;
+  Future<void> _handleSelection(bool selectedTrue) async {
+    if (_isGameOver || _isProcessingSelection) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
 
+    setState(() => _isProcessingSelection = true);
+
     if (selectedTrue == _currentStatement.isTrue) {
       setState(() {
         _score++;
-        if (_score >= _targetScore) {
-          _endGame(win: true);
-        } else {
-          _generateRound();
-        }
       });
+
+      if (_score >= _targetScore) {
+        _endGame(win: true);
+      } else {
+        // Small delay for feedback and to prevent immediate next-round taps
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          setState(() {
+            _generateRound();
+            _isProcessingSelection = false;
+          });
+        }
+      }
     } else {
-      _handleMistake();
+      await _handleMistake();
+      if (mounted) {
+        setState(() => _isProcessingSelection = false);
+      }
     }
   }
 
@@ -321,9 +362,11 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                   children: [
                     // Título con Glow Cibernético
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        border: Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+                        border: Border.all(
+                            color: AppTheme.accentGold.withOpacity(0.5)),
                         borderRadius: BorderRadius.circular(4),
                         boxShadow: [
                           BoxShadow(
@@ -347,7 +390,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                       ),
                     ),
                     const SizedBox(height: 35),
-                    
+
                     // Stats Bar (Glassmorphic)
                     Row(
                       children: [
@@ -356,7 +399,9 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                             icon: Icons.timer_outlined,
                             label: "TIEMPO",
                             value: "$_secondsRemaining",
-                            color: _secondsRemaining < 10 ? AppTheme.dangerRed : Colors.white,
+                            color: _secondsRemaining < 10
+                                ? AppTheme.dangerRed
+                                : Colors.white,
                           ),
                         ),
                         const SizedBox(width: 15),
@@ -371,7 +416,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                       ],
                     ),
                     const SizedBox(height: 30),
-                    
+
                     // Statement Card (Panel principal)
                     Container(
                       width: double.infinity,
@@ -379,7 +424,8 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(28),
-                        border: Border.all(color: Colors.white.withOpacity(0.15)),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.15)),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.4),
@@ -396,7 +442,8 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                               color: AppTheme.accentGold.withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.psychology_outlined, color: AppTheme.accentGold, size: 32),
+                            child: Icon(Icons.psychology_outlined,
+                                color: AppTheme.accentGold, size: 32),
                           ),
                           const SizedBox(height: 20),
                           Text(
@@ -412,7 +459,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                       ),
                     ),
                     const SizedBox(height: 50),
-                    
+
                     // Buttons de Acción
                     Row(
                       children: [
@@ -439,7 +486,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                   ],
                 ),
         ),
-        
+
         // Overlay de Game Over
         if (_showOverlay)
           GameOverOverlay(
@@ -547,7 +594,8 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: darkText ? Colors.black : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           elevation: 0,
         ),
         child: Row(

@@ -48,8 +48,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // Opciones de nacionalidad
   final List<String> _nationalityTypes = ['V', 'E'];
 
-
-
   // Lista básica de palabras prohibidas (se puede expandir)
   final List<String> _bannedWords = [
     'admin',
@@ -526,17 +524,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   inputFormatters: [
                                     LengthLimitingTextInputFormatter(50),
                                     FilteringTextInputFormatter.allow(
-                                        RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]')),
+                                        RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ0-9\s]')),
                                   ],
                                   decoration: const InputDecoration(
                                     labelText: 'NOMBRE COMPLETO',
                                     prefixIcon: Icon(Icons.person_outline),
                                   ),
                                   validator: (value) {
-                                    if (value == null || value.isEmpty)
+                                    if (value == null || value.trim().isEmpty) {
                                       return 'Ingresa tu nombre';
-                                    if (!value.trim().contains(' '))
+                                    }
+                                    if (!value.trim().contains(' ')) {
                                       return 'Ingresa Nombre y Apellido';
+                                    }
                                     final lowerName = value.toLowerCase();
                                     for (final word in _bannedWords) {
                                       if (lowerName.contains(word))

@@ -203,7 +203,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     _pin = widget.event.pin;
     _maxParticipants = widget.event.maxParticipants;
     _entryFee = widget.event.entryFee; // NEW: Init
-    _selectedDate = widget.event.date;
+    _selectedDate = widget.event.date.toLocal();
     _pot = widget.event.pot; // Init pot
 
     // Load requests for this event

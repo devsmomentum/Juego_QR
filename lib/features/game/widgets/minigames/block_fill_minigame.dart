@@ -216,13 +216,17 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
   }
 
   void _checkWin() {
-    // Ganar si no quedan 0s (vacíos)
+    // Ganar si no quedan celdas vacías (0) que no sean pared (-1)
+    // BUGFIX: las celdas pared nunca se llenan → antes nunca se detectaba victoria
     bool hasEmpty = false;
     for (var row in _grid) {
-      if (row.contains(0)) {
-        hasEmpty = true;
-        break;
+      for (var cell in row) {
+        if (cell == 0) {
+          hasEmpty = true;
+          break;
+        }
       }
+      if (hasEmpty) break;
     }
 
     if (!hasEmpty) {

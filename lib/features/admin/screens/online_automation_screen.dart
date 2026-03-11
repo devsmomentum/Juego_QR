@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/app_config_service.dart';
 import '../../../shared/widgets/coin_image.dart';
 import '../../mall/models/power_item.dart';
+import '../../game/providers/online_schedule_provider.dart';
 
 class OnlineAutomationScreen extends StatefulWidget {
   const OnlineAutomationScreen({super.key});
@@ -114,6 +115,8 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                 children: [
                   _buildToggleCard(),
                   const SizedBox(height: 20),
+                  _buildModeCard(),
+                  const SizedBox(height: 20),
                   _buildSettingsCard(),
                 ],
               ),
@@ -220,7 +223,238 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
     );
   }
 
+  Widget _buildModeCard() {
+    final String mode = (_config['mode'] as String?) ?? 'automatic';
+    final List<String> hours = (_config['scheduled_hours'] is List)
+        ? List<String>.from(_config['scheduled_hours'] as List)
+        : [];
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Modo de Creación',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text(
+            'Solo un modo puede estar activo. "Automático" usa el intervalo; "Programado" usa horarios fijos (hora Venezuela).',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _ModeButton(
+                  label: 'Automático',
+                  icon: Icons.autorenew,
+                  selected: mode == 'automatic',
+                  onTap: () {
+                    setState(() => _config['mode'] = 'automatic');
+                    _saveConfig();
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ModeButton(
+                  label: 'Programado',
+                  icon: Icons.schedule,
+                  selected: mode == 'scheduled',
+                  onTap: () {
+                    setState(() => _config['mode'] = 'scheduled');
+                    _saveConfig();
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (mode == 'scheduled') ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Horarios programados (VEN)',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle,
+                      color: AppTheme.primaryPurple),
+                  onPressed: () => _addScheduledHour(hours),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (hours.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No hay horarios configurados. Presiona + para agregar.',
+                  style: TextStyle(color: Colors.white38, fontSize: 13),
+                ),
+              ),
+            ...hours.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final hour = entry.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time,
+                          color: AppTheme.primaryPurple, size: 20),
+                      const SizedBox(width: 12),
+                      Text(hour,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontFamily: 'Orbitron',
+                              fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            color: Colors.redAccent, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            hours.removeAt(idx);
+                            _config['scheduled_hours'] = hours;
+                          });
+                          _saveConfig();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            _buildNextEventPreview(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addScheduledHour(List<String> hours) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 12, minute: 0),
+      helpText: 'Selecciona hora Venezuela',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryPurple,
+              surface: Color(0xFF1A1A1D),
+            ),
+          ),
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: child!,
+          ),
+        );
+      },
+    );
+    if (picked != null) {
+      final formatted =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      if (!hours.contains(formatted)) {
+        setState(() {
+          hours.add(formatted);
+          hours.sort();
+          _config['scheduled_hours'] = hours;
+        });
+        _saveConfig();
+      }
+    }
+  }
+
+  Widget _buildNextEventPreview() {
+    final hours = (_config['scheduled_hours'] is List)
+        ? List<String>.from(_config['scheduled_hours'] as List)
+        : <String>[];
+    if (hours.isEmpty) return const SizedBox.shrink();
+
+    // VET = UTC-4 (Venezuela, no DST)
+    const vetOffsetHours = -4;
+    final nowUtc = DateTime.now().toUtc();
+    DateTime? nextSlot;
+
+    final todaySlots = <DateTime>[];
+    for (final h in hours) {
+      final parts = h.split(':');
+      if (parts.length < 2) continue;
+      final hr = int.tryParse(parts[0]);
+      final mn = int.tryParse(parts[1]);
+      if (hr == null || mn == null) continue;
+      // Hours stored in VET → convert to UTC for comparison
+      final utcHour = hr - vetOffsetHours;
+      todaySlots
+          .add(DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, utcHour, mn));
+    }
+    todaySlots.sort();
+
+    for (final slot in todaySlots) {
+      if (slot.isAfter(nowUtc)) {
+        nextSlot = slot;
+        break;
+      }
+    }
+    nextSlot ??=
+        todaySlots.isNotEmpty ? todaySlots.first.add(const Duration(days: 1)) : null;
+
+    if (nextSlot == null) return const SizedBox.shrink();
+
+    final local = nextSlot.toLocal();
+    final diff = nextSlot.difference(nowUtc);
+    final hh = diff.inHours;
+    final mm = diff.inMinutes % 60;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryPurple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.event_available,
+              color: AppTheme.primaryPurple, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Próximo evento: ${DateFormat('HH:mm').format(local)} (hora VEN) — en ${hh}h ${mm}m',
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSettingsCard() {
+    final String mode = (_config['mode'] as String?) ?? 'automatic';
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -246,7 +480,9 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          _buildSlider('Intervalo (minutos)', 'interval_minutes', 10, 1440, 1),
+          // Show interval slider only in automatic mode
+          if (mode == 'automatic')
+            _buildSlider('Intervalo (minutos)', 'interval_minutes', 10, 1440, 1),
           _buildSlider('Copa Mín. Jugadores', 'min_players', 5, 20, 1),
           _buildSlider('Copa Máx. Jugadores', 'max_players', 20, 60, 1),
           _buildSlider('Cant. Mín. Minijuegos', 'min_games', 2, 6, 1),
@@ -392,6 +628,59 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppTheme.primaryPurple.withOpacity(0.15)
+              : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? AppTheme.primaryPurple
+                : Colors.white.withOpacity(0.1),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon,
+                color: selected ? AppTheme.primaryPurple : Colors.white38,
+                size: 28),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : Colors.white54,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

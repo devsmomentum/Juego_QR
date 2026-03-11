@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -92,6 +93,14 @@ class _EventLaunchCountdownOverlayState
 
     if (!mounted) return;
     setState(() => _done = true);
+
+    // Jitter: distributes startGame() calls over 0–3 s so 50 clients
+    // don't hit the DB simultaneously when a manual event is started.
+    final jitter = Duration(milliseconds: Random().nextInt(3000));
+    debugPrint('⏱️ Launch overlay jitter: ${jitter.inMilliseconds} ms');
+    await Future.delayed(jitter);
+
+    if (!mounted) return;
     widget.onComplete();
   }
 

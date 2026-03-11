@@ -88,6 +88,10 @@ serve(async (req) => {
         throw new Error("Email, password and name are required");
       }
 
+      if (!name.trim().includes(" ")) {
+        throw new Error("Ingresa Nombre y Apellido");
+      }
+
       // Server-side: cedula and phone are REQUIRED
       if (!cedula || !phone) {
         return new Response(
@@ -411,9 +415,6 @@ serve(async (req) => {
         if (trimmedName.length > 50) {
           throw new Error("El nombre no puede exceder 50 caracteres");
         }
-        if (!trimmedName.includes(" ")) {
-          throw new Error("Ingresa Nombre y Apellido");
-        }
         const lowerName = trimmedName.toLowerCase();
         for (const word of bannedWords) {
           if (lowerName.includes(word)) {
@@ -435,8 +436,15 @@ serve(async (req) => {
         if (e164Regex.test(phoneValue)) {
           // Ya viene en E.164 — se usa tal cual
         } else if (legacyVERegex.test(phoneValue)) {
-          // Convertir formato legacy venezolano a E.164
+          // Convertir formato legacy venezolano a E.164 (0412...)
           phoneValue = "+58" + phoneValue.substring(1);
+        } else if (/^(58)?(412|414|424|416|426|422)\d{7}$/.test(phoneValue)) {
+          // Venezuelan number without + but with or without 58 prefix
+          if (!phoneValue.startsWith("58")) {
+            phoneValue = "+58" + phoneValue;
+          } else {
+            phoneValue = "+" + phoneValue;
+          }
         } else {
           throw new Error(
             "Formato de teléfono inválido. Usa formato internacional (+584121234567) o local (04121234567)",
@@ -488,11 +496,11 @@ serve(async (req) => {
         .select("email_verified")
         .eq("id", user.id)
         .single();
-        
+
       if (currentProfileError || !currentProfile) {
         throw new Error("No se pudo cargar el perfil actual");
       }
-      
+
       const isEmailVerified = currentProfile.email_verified === true;
 
       // Validate email
@@ -507,7 +515,7 @@ serve(async (req) => {
         // Only process if email actually changed OR if it hasn't been verified yet.
         console.log("Email check:", { trimmedEmail, userEmail: user.email, isEmailVerified });
         if (trimmedEmail !== user.email || !isEmailVerified) {
-          
+
           const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
           const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
