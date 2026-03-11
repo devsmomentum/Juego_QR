@@ -329,15 +329,15 @@ serve(async (req: Request) => {
 
             if (osAppId && osApiKey) {
                 const eventStartTime = eventDate;
-                const notificationTime = new Date(eventStartTime.getTime() - (5 * 60 * 1000));
+                const notificationTime = new Date(eventStartTime.getTime() - (10 * 60 * 1000));
                 const now = new Date();
 
                 const notificationBody: any = {
                     app_id: osAppId,
                     headings: { "es": "⚡ ¡Competencia Proxima!", "en": "⚡ Upcoming Event!" },
                     contents: {
-                        "es": "La competencia online comienza en 5 minutos. ¡Entra ya!",
-                        "en": "The online competition starts in 5 minutes. Join now!"
+                        "es": "La competencia online comienza en 10 minutos. ¡Entra ya!",
+                        "en": "The online competition starts in 10 minutes. Join now!"
                     },
                     data: { "event_id": eventId, "type": "event_reminder" }
                 };

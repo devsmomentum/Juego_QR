@@ -796,6 +796,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
             builder: (_) => WinnerCelebrationScreen(
               eventId: scenario.id,
               playerPosition: 0, // Will be corrected by screen if participant
@@ -1573,6 +1574,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
             builder: (_) => WinnerCelebrationScreen(
               eventId: scenario.id,
               playerPosition: 0,

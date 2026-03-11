@@ -267,6 +267,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
         builder: (_) => WinnerCelebrationScreen(
           eventId: gameProvider.currentEventId ?? '',
           playerPosition: position,

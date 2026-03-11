@@ -241,6 +241,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
+          settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
           builder: (_) => WinnerCelebrationScreen(
             eventId: gameProvider.currentEventId ?? '',
             playerPosition: position,
@@ -961,6 +962,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       if (navigator.mounted) {
         navigator.pushAndRemoveUntil(
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
             builder: (_) => WinnerCelebrationScreen(
               eventId: gameProvider.currentEventId ?? '',
               playerPosition: playerPosition,

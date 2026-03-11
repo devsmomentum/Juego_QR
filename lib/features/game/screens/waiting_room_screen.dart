@@ -95,6 +95,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
         builder: (_) => WinnerCelebrationScreen(
           eventId: widget.eventId,
           playerPosition: playerPosition,

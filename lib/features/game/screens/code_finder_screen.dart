@@ -218,6 +218,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
         builder: (_) => WinnerCelebrationScreen(
           eventId: gameProvider.currentEventId ?? widget.scenario.id,
           playerPosition: position,

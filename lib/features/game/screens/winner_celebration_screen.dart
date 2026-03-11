@@ -574,8 +574,12 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
         '';
     final isNightImage = playerProvider.isDarkMode;
 
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isTablet = MediaQuery.of(context).size.width > 600;
+    final isSmallScreen = screenHeight < 700;
+
     debugPrint(
-        "🏆 WinnerScreen Build: eventId=${widget.eventId}, leaderboardSize=${gameProvider.leaderboard.length}, isLoading=${gameProvider.isLoading}, internalIsLoading=$_isLoading");
+        "🏆 WinnerScreen Build: h=$screenHeight, eventId=${widget.eventId}, leaderboardSize=${gameProvider.leaderboard.length}, isLoading=${gameProvider.isLoading}, internalIsLoading=$_isLoading");
 
     return WillPopScope(
       onWillPop: () async => false, // Prevent back button
@@ -733,496 +737,534 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                 ),
               )
             else
-              SafeArea(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 20),
-                    child: Column(
-                      children: [
-                        // Title
-                        const Text(
-                          'Resultados del Evento',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFFD700),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        // Sync-incomplete banner: shown if data didn't arrive in time
-                        if (_podiumSyncIncomplete)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: Colors.orange.withOpacity(0.5),
-                                  width: 1),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.info_outline,
-                                    color: Colors.orange, size: 20),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'La sincronización del podio puede tardar unos momentos. Sal y vuelve a entrar al evento para ver los resultados actualizados.',
-                                    style: TextStyle(
-                                      color: Colors.orange,
-                                      fontSize: 12,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (_finalPosition > 0)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0xFF0D0D0F).withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                      color:
-                                          _getPositionColor().withOpacity(0.6),
-                                      width: 1.5),
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 30, vertical: 15),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color: _getPositionColor()
-                                            .withOpacity(0.2),
-                                        width: 1.0),
-                                    color:
-                                        _getPositionColor().withOpacity(0.02),
-                                  ),
-                                  child: Column(children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          _getMedalEmoji(),
-                                          style: const TextStyle(fontSize: 40),
-                                        ),
-                                        const SizedBox(width: 15),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'TU POSICIÓN',
-                                              style: TextStyle(
-                                                color: Colors.white70,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                                letterSpacing: 1.5,
-                                              ),
-                                            ),
-                                            Text(
-                                              '#$_finalPosition',
-                                              style: TextStyle(
-                                                fontSize: 36,
-                                                fontWeight: FontWeight.w900,
-                                                color: _getPositionColor(),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    if (_prizes
-                                        .containsKey(currentPlayerId)) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black45,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                              color: const Color(0xFFFFD700)),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const CoinImage(size: 20),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              "+${_prizes[currentPlayerId]} ",
-                                              style: const TextStyle(
-                                                color: Color(0xFFFFD700),
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                                shadows: [
-                                                  Shadow(
-                                                      color: Colors.black,
-                                                      blurRadius: 2)
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    ] else if (widget.prizeWon != null &&
-                                        widget.prizeWon! > 0) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black45,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                              color: const Color(0xFFFFD700)),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const CoinImage(size: 20),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              "+${widget.prizeWon} ",
-                                              style: const TextStyle(
-                                                color: Color(0xFFFFD700),
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    ]
-                                  ]),
-                                ),
-                              ),
-                            ),
-                          )
-                        else if (_isLoadingPodium)
-                          // Still loading podium data — don't show "No participaste" yet
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0xFF0D0D0F).withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                      color:
-                                          AppTheme.accentGold.withOpacity(0.6),
-                                      width: 1.5),
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 16),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color: AppTheme.accentGold
-                                            .withOpacity(0.2),
-                                        width: 1.0),
-                                    color:
-                                        AppTheme.accentGold.withOpacity(0.02),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppTheme.accentGold,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Text(
-                                        'Cargando tu posición...',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 14),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0xFF0D0D0F).withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                      color: AppTheme.primaryPurple
-                                          .withOpacity(0.6),
-                                      width: 1.5),
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color: AppTheme.primaryPurple
-                                            .withOpacity(0.2),
-                                        width: 1.0),
-                                    color: AppTheme.primaryPurple
-                                        .withOpacity(0.02),
-                                  ),
-                                  child: const Text(
-                                    'No participaste en esta competencia.\nAquí tienes el podio final:',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: Colors.white70, fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                        const SizedBox(height: 20),
-
-                        // Top 3 Podium (from game_players.final_placement)
-                        if (_podiumWinners.isNotEmpty)
-                          Builder(builder: (context) {
-                            final first = _podiumWinners.firstWhere(
-                                (w) => w['final_placement'] == 1,
-                                orElse: () => {});
-                            final second = _podiumWinners.firstWhere(
-                                (w) => w['final_placement'] == 2,
-                                orElse: () => {});
-                            final third = _podiumWinners.firstWhere(
-                                (w) => w['final_placement'] == 3,
-                                orElse: () => {});
-
-                            return Column(
-                              children: [
-                                const Text(
-                                  'PODIO DE LA CARRERA',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                    fontFamily: 'Orbitron',
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(
-                                        sigmaX: 10, sigmaY: 10),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(5),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0D0D0F)
-                                            .withOpacity(0.6),
-                                        borderRadius: BorderRadius.circular(24),
-                                        border: Border.all(
-                                            color: AppTheme.accentGold
-                                                .withOpacity(0.6),
-                                            width: 1.5),
-                                      ),
-                                      child: Container(
-                                        clipBehavior: Clip.antiAlias,
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          border: Border.all(
-                                              color: AppTheme.accentGold
-                                                  .withOpacity(0.2),
-                                              width: 1.0),
-                                          color: AppTheme.accentGold
-                                              .withOpacity(0.02),
-                                        ),
-                                        child: Container(
-                                          constraints: const BoxConstraints(
-                                            minHeight: 180,
-                                            maxHeight: 280,
-                                          ),
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              // 2nd place
-                                              if (second.isNotEmpty)
-                                                Expanded(
-                                                  child: _buildPodiumColumn(
-                                                    second,
-                                                    2,
-                                                    110,
-                                                    const Color(0xFFC0C0C0),
-                                                  ),
-                                                )
-                                              else
-                                                const Expanded(
-                                                    child: SizedBox()),
-                                              // 1st place
-                                              if (first.isNotEmpty)
-                                                Expanded(
-                                                  child: _buildPodiumColumn(
-                                                    first,
-                                                    1,
-                                                    150,
-                                                    const Color(0xFFFFD700),
-                                                  ),
-                                                )
-                                              else
-                                                const Expanded(
-                                                    child: SizedBox()),
-                                              // 3rd place
-                                              if (third.isNotEmpty)
-                                                Expanded(
-                                                  child: _buildPodiumColumn(
-                                                    third,
-                                                    3,
-                                                    90,
-                                                    const Color(0xFFCD7F32),
-                                                  ),
-                                                )
-                                              else
-                                                const Expanded(
-                                                    child: SizedBox()),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          })
-                        else if (_isLoadingPodium)
-                          const CircularProgressIndicator(
-                              color: AppTheme.accentGold)
-                        else
-                          const Text(
-                            'Fallo en la sincronización del podio. Sal y vuelve a entrar a la competencia para ver las posiciones respectivas.',
+              Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          SizedBox(
+                              height:
+                                  screenHeight * (isSmallScreen ? 0.03 : 0.08)),
+                          // Header Title
+                          Text(
+                            '¡COMPETENCIA\nFINALIZADA!',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white54),
+                            style: TextStyle(
+                              color: AppTheme.accentGold,
+                              fontSize: isSmallScreen ? 20 : 28,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: isSmallScreen ? 1.5 : 4,
+                              fontFamily: 'Orbitron',
+                              shadows: const [
+                                Shadow(
+                                    color: AppTheme.accentGold, blurRadius: 15),
+                              ],
+                            ),
                           ),
-
-                        const SizedBox(height: 30),
-
-                        // Final Info and Button
-                        Column(
-                          children: [
+                          SizedBox(height: isSmallScreen ? 6 : 10),
+                          // Sync-incomplete banner: shown if data didn't arrive in time
+                          if (_podiumSyncIncomplete)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: Colors.orange.withOpacity(0.5),
+                                    width: 1),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      color: Colors.orange, size: 20),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'La sincronización del podio puede tardar unos momentos. Sal y vuelve a entrar al evento para ver los resultados actualizados.',
+                                      style: TextStyle(
+                                        color: Colors.orange,
+                                        fontSize: 12,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (_finalPosition > 0)
                             ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(24),
                               child: BackdropFilter(
                                 filter:
                                     ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 12),
+                                  padding: const EdgeInsets.all(5),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(16),
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                        color: _getPositionColor()
+                                            .withOpacity(0.6),
+                                        width: 1.5),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.stars,
-                                          color: Colors.white, size: 20),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        '$_completedClues Pistas completadas',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 20 : 30,
+                                        vertical: isSmallScreen ? 8 : 15),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: _getPositionColor()
+                                              .withOpacity(0.2),
+                                          width: 1.0),
+                                      color:
+                                          _getPositionColor().withOpacity(0.02),
+                                    ),
+                                    child: Column(children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            _getMedalEmoji(),
+                                            style:
+                                                const TextStyle(fontSize: 40),
+                                          ),
+                                          const SizedBox(width: 15),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'TU POSICIÓN',
+                                                style: TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 1.5,
+                                                ),
+                                              ),
+                                              Text(
+                                                '#$_finalPosition',
+                                                style: TextStyle(
+                                                  fontSize: 36,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: _getPositionColor(),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                    ],
+                                      if (_prizes
+                                          .containsKey(currentPlayerId)) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black45,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: const Color(0xFFFFD700)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const CoinImage(size: 20),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                "+${_prizes[currentPlayerId]} ",
+                                                style: const TextStyle(
+                                                  color: Color(0xFFFFD700),
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  shadows: [
+                                                    Shadow(
+                                                        color: Colors.black,
+                                                        blurRadius: 2)
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      ] else if (widget.prizeWon != null &&
+                                          widget.prizeWon! > 0) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black45,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: const Color(0xFFFFD700)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const CoinImage(size: 20),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                "+${widget.prizeWon} ",
+                                                style: const TextStyle(
+                                                  color: Color(0xFFFFD700),
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      ]
+                                    ]),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (_isLoadingPodium)
+                            // Still loading podium data — don't show "No participaste" yet
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: BackdropFilter(
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                        color: AppTheme.accentGold
+                                            .withOpacity(0.6),
+                                        width: 1.5),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 20, vertical: 16),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: AppTheme.accentGold
+                                              .withOpacity(0.2),
+                                          width: 1.0),
+                                      color:
+                                          AppTheme.accentGold.withOpacity(0.02),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppTheme.accentGold,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Text(
+                                          'Cargando tu posición...',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: BackdropFilter(
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                        color: AppTheme.primaryPurple
+                                            .withOpacity(0.6),
+                                        width: 1.5),
+                                  ),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: isSmallScreen ? 8 : 12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: AppTheme.primaryPurple
+                                              .withOpacity(0.2),
+                                          width: 1.0),
+                                      color: AppTheme.primaryPurple
+                                          .withOpacity(0.02),
+                                    ),
+                                    child: const Text(
+                                      'No participaste en esta competencia.\nAquí tienes el podio final:',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color: Colors.white70, fontSize: 13),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(24),
+
+                          SizedBox(height: isSmallScreen ? 10 : 20),
+
+                          // Top 3 Podium (from game_players.final_placement)
+                          if (_podiumWinners.isNotEmpty)
+                            () {
+                              final first = _podiumWinners.firstWhere(
+                                  (w) => w['final_placement'] == 1,
+                                  orElse: () => {});
+                              final second = _podiumWinners.firstWhere(
+                                  (w) => w['final_placement'] == 2,
+                                  orElse: () => {});
+                              final third = _podiumWinners.firstWhere(
+                                  (w) => w['final_placement'] == 3,
+                                  orElse: () => {});
+
+                              // Responsive pedestal heights - tighter on small phones
+                              final baseH = screenHeight *
+                                  (isTablet
+                                      ? 0.25
+                                      : (isSmallScreen ? 0.18 : 0.22));
+                              final h1 = baseH;
+                              final h2 = baseH * 0.75;
+                              final h3 = baseH * 0.6;
+
+                              return Column(
+                                children: [
+                                  Text(
+                                    'PODIO DE LA CARRERA',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: isSmallScreen ? 14 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 2,
+                                      fontFamily: 'Orbitron',
+                                    ),
+                                  ),
+                                  SizedBox(height: isSmallScreen ? 10 : 20),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                          sigmaX: 10, sigmaY: 10),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0D0D0F)
+                                              .withOpacity(0.6),
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                          border: Border.all(
+                                              color: AppTheme.accentGold
+                                                  .withOpacity(0.6),
+                                              width: 1.5),
+                                        ),
+                                        child: Container(
+                                          clipBehavior: Clip.antiAlias,
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            border: Border.all(
+                                                color: AppTheme.accentGold
+                                                    .withOpacity(0.2),
+                                                width: 1.0),
+                                            color: AppTheme.accentGold
+                                                .withOpacity(0.02),
+                                          ),
+                                          child: Container(
+                                            constraints: BoxConstraints(
+                                              minHeight: baseH + 30,
+                                              maxHeight: baseH + 130,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10),
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                // 2nd place
+                                                if (second.isNotEmpty)
+                                                  Expanded(
+                                                    child: _buildPodiumColumn(
+                                                      second,
+                                                      2,
+                                                      h2,
+                                                      const Color(0xFFC0C0C0),
+                                                    ),
+                                                  )
+                                                else
+                                                  const Expanded(
+                                                      child: SizedBox()),
+                                                // 1st place
+                                                if (first.isNotEmpty)
+                                                  Expanded(
+                                                    child: _buildPodiumColumn(
+                                                      first,
+                                                      1,
+                                                      h1,
+                                                      const Color(0xFFFFD700),
+                                                    ),
+                                                  )
+                                                else
+                                                  const Expanded(
+                                                      child: SizedBox()),
+                                                // 3rd place
+                                                if (third.isNotEmpty)
+                                                  Expanded(
+                                                    child: _buildPodiumColumn(
+                                                      third,
+                                                      3,
+                                                      h3,
+                                                      const Color(0xFFCD7F32),
+                                                    ),
+                                                  )
+                                                else
+                                                  const Expanded(
+                                                      child: SizedBox()),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }.call()
+                          else if (_isLoadingPodium)
+                            const CircularProgressIndicator(
+                                color: AppTheme.accentGold)
+                          else
+                            const Text(
+                              'Fallo en la sincronización del podio. Sal y vuelve a entrar a la competencia para ver las posiciones respectivas.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 12),
+                            ),
+
+                          SizedBox(height: isSmallScreen ? 8 : 30),
+
+                          // Final Info and Button
+                          Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
                                 child: BackdropFilter(
                                   filter:
                                       ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                   child: Container(
-                                    padding: const EdgeInsets.all(5),
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: isSmallScreen ? 6 : 12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF0D0D0F)
-                                          .withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(24),
-                                      border: Border.all(
-                                          color: const Color(0xFF9D4EDD)
-                                              .withOpacity(0.6),
-                                          width: 1.5),
+                                      color: Colors.white.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                            color: const Color(0xFF9D4EDD)
-                                                .withOpacity(0.2),
-                                            width: 1.0),
-                                        color: const Color(0xFF9D4EDD)
-                                            .withOpacity(0.02),
-                                      ),
-                                      child: TextButton(
-                                        onPressed: () {
-                                          Navigator.of(context)
-                                              .pushAndRemoveUntil(
-                                            MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const ScenariosScreen()),
-                                            (route) => false,
-                                          );
-                                        },
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 18),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(20),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.stars,
+                                            color: Colors.white, size: 20),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          '$_completedClues Pistas completadas',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: isSmallScreen ? 14 : 16,
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                        child: const Text(
-                                          'VOLVER AL INICIO',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 1.5,
-                                            fontFamily: 'Orbitron',
-                                            color: Colors.white,
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: isSmallScreen ? 8 : 24),
+                              // Re-adding the button with tablet-friendly constraints
+                              Center(
+                                child: Container(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 400),
+                                  width: double.infinity,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                          sigmaX: 10, sigmaY: 10),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0D0D0F)
+                                              .withOpacity(0.6),
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                          border: Border.all(
+                                              color: const Color(0xFF9D4EDD)
+                                                  .withOpacity(0.6),
+                                              width: 1.5),
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            border: Border.all(
+                                                color: const Color(0xFF9D4EDD)
+                                                    .withOpacity(0.2),
+                                                width: 1.0),
+                                            color: const Color(0xFF9D4EDD)
+                                                .withOpacity(0.02),
+                                          ),
+                                          child: TextButton(
+                                            onPressed: () {
+                                              Navigator.of(context)
+                                                  .pushAndRemoveUntil(
+                                                MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const ScenariosScreen()),
+                                                (route) => false,
+                                              );
+                                            },
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 18),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'VOLVER AL INICIO',
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 1.5,
+                                                fontFamily: 'Orbitron',
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1230,11 +1272,11 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                      ],
+                            ],
+                          ),
+                          const SizedBox(height: 30),
+                        ],
+                      ),
                     ),
                   ),
                 ),

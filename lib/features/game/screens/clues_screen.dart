@@ -201,6 +201,7 @@ class _CluesScreenState extends State<CluesScreen> {
         "🎯 Calculated position: $position (from leaderboard size: ${gameProvider.leaderboard.length})");
 
     final route = MaterialPageRoute(
+      settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
       builder: (_) => WinnerCelebrationScreen(
         eventId: widget.eventId,
         playerPosition: position,
