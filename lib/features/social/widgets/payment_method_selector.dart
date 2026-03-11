@@ -61,6 +61,18 @@ class PaymentMethodSelector extends StatelessWidget {
           ),
           
           const SizedBox(height: 12),
+
+          _buildMethodTile(
+            context,
+            isDarkMode: isDarkMode,
+            id: 'stripe',
+            name: 'Tarjeta de Crédito / Débito',
+            icon: Icons.credit_card_rounded,
+            color: Color(0xFF635BFF), // Stripe brand purple
+            description: 'Visa, Mastercard, Amex — pago en USD',
+          ),
+          
+          const SizedBox(height: 12),
           
           _buildMethodTile(
             context,
