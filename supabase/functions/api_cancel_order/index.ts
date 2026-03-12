@@ -74,15 +74,13 @@ serve(async (req) => {
             throw new Error("Server Misconfiguration: Missing PAGO_PAGO_API_KEY")
         }
 
-        const PAGO_PAGO_URL = Deno.env.get('PAGO_PAGO_CANCEL_URL')
-        if (!PAGO_PAGO_URL) {
-            throw new Error("Server Misconfiguration: Missing PAGO_PAGO_CANCEL_URL")
-        }
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')
+        const cancelUrl = `${supabaseUrl}/functions/v1/api_cancel_order`
 
         console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago`)
 
         // 3. Cancel on Provider (PUT per documentation)
-        const response = await fetch(PAGO_PAGO_URL, {
+        const response = await fetch(cancelUrl, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',

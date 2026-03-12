@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/player_provider.dart';
+import '../providers/payment_method_provider.dart';
+import 'add_withdrawal_method_dialog.dart';
 
 /// Modal widget for manual Pago Móvil payment validation.
 ///
-/// Shows the validation code (concept), and allows the user to input
-/// their phone number and transfer reference to validate the payment.
+/// Shows the validation code (concept), lets the user select an existing
+/// pago móvil or add a new one, and input the transfer reference.
 class PaymentValidationWidget extends StatefulWidget {
   /// The clover_orders.id (UUID) of the pending order.
   final String orderId;
@@ -30,22 +34,101 @@ class PaymentValidationWidget extends StatefulWidget {
 }
 
 class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
+  static const Map<String, String> _bankNames = {
+    '0102': 'Banco de Venezuela',
+    '0104': 'Venezolano de Crédito',
+    '0105': 'Banco Mercantil',
+    '0108': 'Banco Provincial',
+    '0114': 'Bancaribe',
+    '0115': 'Banco Exterior',
+    '0128': 'Banco Caroní',
+    '0134': 'Banesco',
+    '0137': 'Banco Sofitasa',
+    '0138': 'Banco Plaza',
+    '0151': 'BFC Fondo Común',
+    '0156': '100% Banco',
+    '0157': 'DelSur',
+    '0163': 'Banco del Tesoro',
+    '0166': 'Banco Agrícola',
+    '0168': 'Bancrecer',
+    '0169': 'Mi Banco',
+    '0171': 'Banco Activo',
+    '0172': 'Bancamiga',
+    '0174': 'Banplus',
+    '0175': 'Banco Bicentenario',
+    '0177': 'BANFANB',
+    '0178': 'N58 Banco Digital',
+    '0191': 'BNC',
+  };
+
   final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
   final _referenceController = TextEditingController();
 
   bool _isValidating = false;
+  bool _isLoadingMethods = true;
   String? _errorMessage;
   bool _codeCopied = false;
 
+  List<Map<String, dynamic>> _paymentMethods = [];
+  String? _selectedMethodId;
+  String? _selectedPhone;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPaymentMethods();
+  }
+
   @override
   void dispose() {
-    _phoneController.dispose();
     _referenceController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadPaymentMethods() async {
+    setState(() => _isLoadingMethods = true);
+    try {
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final userId = playerProvider.currentPlayer?.userId;
+      if (userId == null) return;
+
+      final methods = await Supabase.instance.client
+          .from('user_payment_methods')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _paymentMethods = List<Map<String, dynamic>>.from(methods);
+        // Auto-select first method if available
+        if (_paymentMethods.isNotEmpty && _selectedMethodId == null) {
+          _selectedMethodId = _paymentMethods.first['id']?.toString();
+          _selectedPhone = _paymentMethods.first['phone_number']?.toString();
+        }
+      });
+    } catch (e) {
+      debugPrint('[PaymentValidation] Error loading methods: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingMethods = false);
+    }
+  }
+
+  Future<void> _openAddMethodDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => const AddWithdrawalMethodDialog(),
+    );
+    if (result == true) {
+      await _loadPaymentMethods();
+    }
+  }
+
   Future<void> _validate() async {
+    if (_selectedPhone == null || _selectedPhone!.isEmpty) {
+      setState(() => _errorMessage = 'Selecciona un pago móvil');
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -55,10 +138,10 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
 
     try {
       final response = await Supabase.instance.client.functions.invoke(
-        'validate-mpay-payment',
+        'validate_mpay_api',
         body: {
           'order_id': widget.orderId,
-          'phone': _phoneController.text.trim(),
+          'phone': _selectedPhone!,
           'reference': _referenceController.text.trim(),
           'concept': widget.validationCode,
         },
@@ -69,7 +152,6 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
       final data = response.data as Map<String, dynamic>?;
 
       if (response.status == 200 && data?['success'] == true) {
-        // Success — return true to parent
         Navigator.of(context).pop(true);
       } else {
         setState(() {
@@ -79,7 +161,6 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
       }
     } on FunctionException catch (e) {
       if (!mounted) return;
-      // Parse the error from the edge function response
       final details = e.details;
       String message = 'Error al validar el pago';
       if (details is Map) {
@@ -238,30 +319,8 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
                 ),
                 const SizedBox(height: 24),
 
-                // Phone Field
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(11),
-                  ],
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration(
-                    label: 'Teléfono',
-                    hint: '04121234567',
-                    icon: Icons.phone,
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Ingresa el teléfono';
-                    }
-                    if (value.length < 10) {
-                      return 'Teléfono inválido';
-                    }
-                    return null;
-                  },
-                ),
+                // Pago Móvil Selector Section
+                _buildPaymentMethodSelector(),
                 const SizedBox(height: 16),
 
                 // Reference Field
@@ -341,7 +400,7 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
                     Expanded(
                       flex: 2,
                       child: ElevatedButton(
-                        onPressed: _isValidating ? null : _validate,
+                        onPressed: (_isValidating || _selectedPhone == null) ? null : _validate,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.accentGold,
                           foregroundColor: Colors.black,
@@ -383,6 +442,199 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
         ),
       ),
     );
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'PAGO MÓVIL EMISOR',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.5,
+              ),
+            ),
+            GestureDetector(
+              onTap: _isValidating ? null : _openAddMethodDialog,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_circle_outline,
+                      color: AppTheme.accentGold, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Añadir nuevo',
+                    style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_isLoadingMethods)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.accentGold,
+                ),
+              ),
+            ),
+          )
+        else if (_paymentMethods.isEmpty)
+          GestureDetector(
+            onTap: _openAddMethodDialog,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.03),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.accentGold.withOpacity(0.3),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.account_balance_outlined,
+                      size: 32, color: Colors.white24),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No tienes pago móvil registrado',
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toca para añadir uno',
+                    style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...(_paymentMethods.map((method) {
+            final methodId = method['id']?.toString();
+            final isSelected = _selectedMethodId == methodId;
+            final bankCode = method['bank_code'] ?? '???';
+            final phone = method['phone_number'] ?? '???';
+            final bankName = _bankNames[bankCode] ?? 'Banco $bankCode';
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                onTap: _isValidating
+                    ? null
+                    : () {
+                        setState(() {
+                          _selectedMethodId = methodId;
+                          _selectedPhone = phone;
+                        });
+                      },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.accentGold.withOpacity(0.1)
+                        : Colors.white.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppTheme.accentGold
+                          : Colors.white.withOpacity(0.1),
+                      width: isSelected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppTheme.accentGold.withOpacity(0.15)
+                              : Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.account_balance_rounded,
+                          color: isSelected
+                              ? AppTheme.accentGold
+                              : Colors.white38,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bankName,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.white70,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatPhoneDisplay(phone),
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white70
+                                    : Colors.white38,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isSelected)
+                        Icon(Icons.check_circle,
+                            color: AppTheme.accentGold, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          })),
+      ],
+    );
+  }
+
+  /// Converts E.164 phone (+584121234567) to local display (04121234567)
+  String _formatPhoneDisplay(String phone) {
+    if (phone.startsWith('+58')) {
+      return '0${phone.substring(3)}';
+    }
+    if (phone.startsWith('58') && phone.length >= 12) {
+      return '0${phone.substring(2)}';
+    }
+    return phone;
   }
 
   InputDecoration _inputDecoration({

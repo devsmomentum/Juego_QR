@@ -97,7 +97,7 @@ class PagoAPagoService {
     }
   }
 
-  /// Validates a Pago Móvil payment via the `validate-mpay-payment` Edge Function.
+  /// Validates a Pago Móvil payment via the `validate_mpay_api` Edge Function.
   Future<Map<String, dynamic>> validateMpayPayment({
     required String orderId,
     required String phone,
@@ -108,7 +108,7 @@ class PagoAPagoService {
       debugPrint('[PagoAPagoService] Validating mpay for order: $orderId');
 
       final response = await _client.functions.invoke(
-        'validate-mpay-payment',
+        'validate_mpay_api',
         body: {
           'order_id': orderId,
           'phone': phone,
