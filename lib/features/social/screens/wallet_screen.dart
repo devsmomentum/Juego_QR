@@ -32,6 +32,7 @@ import '../../wallet/repositories/transaction_repository.dart';
 import '../../wallet/widgets/transaction_card.dart';
 import '../../wallet/providers/payment_method_provider.dart';
 import '../../wallet/widgets/edit_payment_method_dialog.dart';
+import '../../../core/services/stripe_service.dart';
 import '../../../shared/widgets/coin_image.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -719,8 +720,8 @@ class _WalletScreenState extends State<WalletScreen> {
       builder: (ctx) => PaymentMethodSelector(
         onMethodSelected: (methodId) async {
           Navigator.pop(ctx);
-            if (methodId == 'pago_movil') {
-            
+
+          if (methodId == 'pago_movil') {
             LoadingOverlay.show(context);
             try {
               // Check if user has a payment method
@@ -753,6 +754,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 SnackBar(content: Text('Error validando métodos: $e')),
               );
             }
+
+          } else if (methodId == 'stripe') {
+            // Stripe: show plan selector with card payment
+            _showStripePlanSelectorDialog();
 
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -980,6 +985,223 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
           );
         }
+      ),
+    );
+  }
+
+  /// Shows a plan selector for Stripe (credit/debit card) payments.
+  void _showStripePlanSelectorDialog() {
+    String? selectedPlanId;
+
+    final combinedFuture = Future.wait([
+      CloverPlanService(supabaseClient: Supabase.instance.client).fetchActivePlans(),
+      Future.value(0.0), // No gateway fee for Stripe (fee is built into Stripe's pricing)
+    ]);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF635BFF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFF635BFF).withOpacity(0.3), width: 1),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF151517),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF635BFF).withOpacity(0.5), width: 1.5),
+                ),
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Title
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF635BFF).withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.credit_card_rounded, color: Color(0xFF635BFF), size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Pagar con Tarjeta',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Visa, Mastercard, Amex',
+                        style: TextStyle(color: Colors.white38, fontSize: 12),
+                      ),
+                      const SizedBox(height: 20),
+
+                      const Text(
+                        'Selecciona un plan de tréboles:',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+
+                      FutureBuilder<List<dynamic>>(
+                        future: combinedFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const SizedBox(
+                              height: 150,
+                              child: LoadingIndicator(),
+                            );
+                          }
+
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Error: ${snapshot.error}',
+                                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                              ),
+                            );
+                          }
+
+                          final plans = (snapshot.data?[0] as List<CloverPlan>?) ?? [];
+                          plans.sort((a, b) => a.cloversQuantity.compareTo(b.cloversQuantity));
+
+                          Widget buildPlanItem(CloverPlan plan) {
+                            return CloverPlanCard(
+                              plan: plan,
+                              isSelected: selectedPlanId == plan.id,
+                              feePercentage: 0.0, // No extra fee shown for Stripe
+                              onTap: () {
+                                setDialogState(() => selectedPlanId = plan.id);
+                              },
+                            );
+                          }
+
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (plans.length >= 3)
+                                Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(child: buildPlanItem(plans[0])),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: buildPlanItem(plans[1])),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 150,
+                                          child: buildPlanItem(plans[2]),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                )
+                              else
+                                Wrap(
+                                  alignment: WrapAlignment.center,
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: plans.map((p) => SizedBox(width: 150, child: buildPlanItem(p))).toList(),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Actions
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: _isLoading ? null : () => Navigator.pop(ctx),
+                            child: const Text('Cancelar', style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: (_isLoading || selectedPlanId == null)
+                                ? null
+                                : () async {
+                                    Navigator.pop(ctx); // Close dialog first
+                                    setState(() => _isLoading = true);
+                                    try {
+                                      final result = await StripeService.initiateStripePurchase(
+                                        planId: selectedPlanId!,
+                                        context: context,
+                                      );
+
+                                      if (!mounted) return;
+
+                                      if (result == StripePaymentResult.success) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('¡Pago exitoso! Tus tréboles serán acreditados en instantes.'),
+                                            backgroundColor: Color(0xFF10B981),
+                                          ),
+                                        );
+                                        await Future.delayed(const Duration(seconds: 3));
+                                        if (mounted) {
+                                          await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+                                          await _loadRecentTransactions();
+                                        }
+                                      } else if (result == StripePaymentResult.cancelled) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Pago cancelado.')),
+                                        );
+                                      }
+                                      // StripePaymentResult.failed already shows its own SnackBar inside StripeService
+                                    } finally {
+                                      if (mounted) setState(() => _isLoading = false);
+                                      _loadRecentTransactions();
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF635BFF),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            icon: _isLoading
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.lock_rounded, size: 16),
+                            label: const Text('Pagar con Tarjeta', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

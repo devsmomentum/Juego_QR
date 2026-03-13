@@ -616,9 +616,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
             // Nuevo efecto de ESCUDO ACTIVO
             // Don't show active shield if it's currently breaking
             // En minijuegos solo se muestra el ShieldBadge en el header, no este overlay
+            // [FIX] No mostrar en la pantalla de celebración/resultados
             if (powerProvider.isEffectActive('shield') &&
                 !_showShieldBreakAnimation &&
-                !context.read<ConnectivityProvider>().isInMinigame)
+                !context.read<ConnectivityProvider>().isInMinigame &&
+                ModalRoute.of(context)?.settings.name != 'WinnerCelebrationScreen')
               ShieldActiveEffect(
                   expiresAt: powerProvider.getPowerExpiration('shield')),
 

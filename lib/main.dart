@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'; // Importar Supabase
 import 'dart:ui'; // For Helper -> PointerDeviceKind
 import 'dart:io' show Platform;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'core/services/stripe_service.dart';
 
 // Imports existentes
 import 'features/auth/screens/splash_screen.dart';
@@ -173,6 +174,9 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('🛍️ [ERROR] Failed to load power default costs: $e');
   }
+
+  // Initialize Stripe (Android/iOS only — guard is inside the service)
+  await StripeService.init();
 
   // Initialize OneSignal
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {

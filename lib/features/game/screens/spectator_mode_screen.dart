@@ -399,6 +399,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         '🏆 SpectatorMode: Event completed. Redirecting to Podio...');
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
                         builder: (_) => WinnerCelebrationScreen(
                           eventId: widget.eventId,
                           playerPosition: 0,
