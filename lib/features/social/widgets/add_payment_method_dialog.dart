@@ -36,7 +36,7 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
     {'code': '0163', 'name': 'Banco del Tesoro'},
     {'code': '0166', 'name': 'Banco Agrícola de Venezuela'},
     {'code': '0168', 'name': 'Bancrecer'},
-    {'code': '0169', 'name': 'Mi Banco'},
+    {'code': '0169', 'name': 'R4'},
     {'code': '0171', 'name': 'Banco Activo'},
     {'code': '0172', 'name': 'Bancamiga'},
     {'code': '0174', 'name': 'Banplus'},

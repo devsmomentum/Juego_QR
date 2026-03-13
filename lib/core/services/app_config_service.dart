@@ -340,4 +340,47 @@ class AppConfigService {
         'android_store_url': '',
         'ios_store_url': '',
       };
+
+  // ---------------------------------------------------------------------------
+  // PAGO MÓVIL RECIPIENT
+  // ---------------------------------------------------------------------------
+
+  /// Reads the Pago Móvil recipient configuration.
+  /// Returns a map with: banco, cedula, telefono.
+  Future<Map<String, String>> getPagoMovilRecipient() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'pago_movil_recipient')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        final map = Map<String, dynamic>.from(response['value'] as Map);
+        return map.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+      }
+      return {'banco': '', 'cedula': '', 'telefono': ''};
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching pago_movil_recipient: $e');
+      return {'banco': '', 'cedula': '', 'telefono': ''};
+    }
+  }
+
+  /// Saves the Pago Móvil recipient configuration.
+  Future<bool> updatePagoMovilRecipient(Map<String, String> data) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'pago_movil_recipient',
+        'value': data,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] pago_movil_recipient updated: $data');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating pago_movil_recipient: $e');
+      return false;
+    }
+  }
 }

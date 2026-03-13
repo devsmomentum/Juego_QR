@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/services/app_config_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/player_provider.dart';
 import '../providers/payment_method_provider.dart';
@@ -51,7 +52,7 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
     '0163': 'Banco del Tesoro',
     '0166': 'Banco Agrícola',
     '0168': 'Bancrecer',
-    '0169': 'Mi Banco',
+    '0169': 'R4',
     '0171': 'Banco Activo',
     '0172': 'Bancamiga',
     '0174': 'Banplus',
@@ -68,15 +69,22 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
   bool _isLoadingMethods = true;
   String? _errorMessage;
   bool _codeCopied = false;
+  bool _dataCopied = false;
 
   List<Map<String, dynamic>> _paymentMethods = [];
   String? _selectedMethodId;
   String? _selectedPhone;
 
+  // Recipient data from app_config
+  String _recipientBanco = '';
+  String _recipientCedula = '';
+  String _recipientTelefono = '';
+
   @override
   void initState() {
     super.initState();
     _loadPaymentMethods();
+    _loadRecipientData();
   }
 
   @override
@@ -111,6 +119,21 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
       debugPrint('[PaymentValidation] Error loading methods: $e');
     } finally {
       if (mounted) setState(() => _isLoadingMethods = false);
+    }
+  }
+
+  Future<void> _loadRecipientData() async {
+    try {
+      final configService = AppConfigService(supabaseClient: Supabase.instance.client);
+      final data = await configService.getPagoMovilRecipient();
+      if (!mounted) return;
+      setState(() {
+        _recipientBanco = data['banco'] ?? '';
+        _recipientCedula = data['cedula'] ?? '';
+        _recipientTelefono = data['telefono'] ?? '';
+      });
+    } catch (e) {
+      debugPrint('[PaymentValidation] Error loading recipient data: $e');
     }
   }
 
@@ -317,6 +340,97 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Recipient Data Section
+                if (_recipientBanco.isNotEmpty || _recipientCedula.isNotEmpty || _recipientTelefono.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.12),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'DATOS DEL DESTINATARIO',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_recipientBanco.isNotEmpty)
+                          _buildRecipientRow(
+                            Icons.account_balance_rounded,
+                            'Banco',
+                            _bankNames[_recipientBanco] ?? 'Banco $_recipientBanco',
+                          ),
+                        if (_recipientCedula.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _buildRecipientRow(
+                            Icons.badge_outlined,
+                            'Cédula',
+                            'V$_recipientCedula',
+                          ),
+                        ],
+                        if (_recipientTelefono.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _buildRecipientRow(
+                            Icons.phone_rounded,
+                            'Teléfono',
+                            _recipientTelefono,
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              final montoStr = widget.amountVes != null
+                                  ? widget.amountVes!.toStringAsFixed(2)
+                                  : '---';
+                              final copyText = '$_recipientBanco\nV$_recipientCedula\n$_recipientTelefono\n$montoStr Bs';
+                              Clipboard.setData(ClipboardData(text: copyText));
+                              setState(() => _dataCopied = true);
+                              Future.delayed(const Duration(seconds: 2), () {
+                                if (mounted) setState(() => _dataCopied = false);
+                              });
+                            },
+                            icon: Icon(
+                              _dataCopied ? Icons.check : Icons.copy_all_rounded,
+                              size: 16,
+                              color: _dataCopied ? AppTheme.successGreen : AppTheme.accentGold,
+                            ),
+                            label: Text(
+                              _dataCopied ? 'Copiado' : 'Copiar datos',
+                              style: TextStyle(
+                                color: _dataCopied ? AppTheme.successGreen : AppTheme.accentGold,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: (_dataCopied ? AppTheme.successGreen : AppTheme.accentGold).withOpacity(0.5),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 const SizedBox(height: 24),
 
                 // Pago Móvil Selector Section
@@ -666,6 +780,34 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: AppTheme.dangerRed),
       ),
+    );
+  }
+
+  Widget _buildRecipientRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white38, size: 16),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: const TextStyle(
+            color: Colors.white38,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
     );
   }
 }
