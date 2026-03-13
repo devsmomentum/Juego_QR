@@ -15,8 +15,16 @@ class AddWithdrawalMethodDialog extends StatefulWidget {
 
 class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
   final _formKey = GlobalKey<FormState>();
+  String _selectedType = 'pago_movil'; // 'pago_movil' or 'stripe'
   String? _selectedBankCode;
+  final _emailController = TextEditingController();
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
 
   final List<Map<String, String>> _banks = [
     {'code': '0102', 'name': 'Banco de Venezuela'},
@@ -47,9 +55,17 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
 
   Future<void> _saveMethod() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedBankCode == null) {
+    
+    if (_selectedType == 'pago_movil' && _selectedBankCode == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona un banco')),
+      );
+      return;
+    }
+
+    if (_selectedType == 'stripe' && _emailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa tu email de Stripe')),
       );
       return;
     }
@@ -68,9 +84,11 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
 
       final data = PaymentMethodCreate(
         userId: player.userId,
-        bankCode: _selectedBankCode!,
-        phoneNumber: player.phone!,
-        dni: player.cedula!,
+        type: _selectedType,
+        bankCode: _selectedType == 'pago_movil' ? _selectedBankCode : null,
+        phoneNumber: _selectedType == 'pago_movil' ? player.phone : null,
+        dni: _selectedType == 'pago_movil' ? player.cedula : null,
+        identifier: _selectedType == 'stripe' ? _emailController.text.trim() : null,
         isDefault: false,
       );
 
@@ -138,25 +156,23 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentGold.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
+                    Expanded(
+                      child: _buildTypeSelector(
+                        'PAGO MÓVIL', 
+                        AppTheme.accentGold, 
+                        _selectedType == 'pago_movil',
+                        () => setState(() => _selectedType = 'pago_movil'),
                       ),
-                      child: const Icon(Icons.account_balance_rounded, color: AppTheme.accentGold, size: 20),
                     ),
-                    const SizedBox(width: 15),
-                    const Text(
-                      'AÑADIR PAGO MÓVIL',
-                      style: TextStyle(
-                        color: Colors.white, 
-                        fontWeight: FontWeight.bold, 
-                        fontSize: 15,
-                        fontFamily: 'Orbitron',
-                        letterSpacing: 1.2,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildTypeSelector(
+                        'STRIPE', 
+                        const Color(0xFF635BFF), // Stripe Purple
+                        _selectedType == 'stripe',
+                        () => setState(() => _selectedType = 'stripe'),
                       ),
                     ),
                   ],
@@ -168,63 +184,97 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.secondaryPink.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.lock_outline, color: AppTheme.secondaryPink, size: 20),
-                            const SizedBox(width: 10),
-                            const Expanded(
-                              child: Text(
-                                'Por seguridad, solo puedes retirar a cuentas asociadas a tu identidad registrada.',
-                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                      if (_selectedType == 'pago_movil') ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.secondaryPink.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.3)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.lock_outline, color: AppTheme.secondaryPink, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Por seguridad, solo puedes retirar a cuentas asociadas a tu identidad registrada.',
+                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildReadOnlyField('Cédula de Identidad', dni, Icons.badge),
-                      const SizedBox(height: 12),
-                      _buildReadOnlyField('Teléfono Móvil', phone, Icons.phone_android),
-                      const SizedBox(height: 20),
-                      DropdownButtonFormField<String>(
-                        dropdownColor: const Color(0xFF1C1C1E),
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                        hint: const Text(
-                          'Selecciona tu banco',
-                          style: TextStyle(color: Colors.white60, fontSize: 14),
-                        ),
-                        decoration: _inputDecoration('Banco'),
-                        value: _selectedBankCode,
-                        isExpanded: true,
-                        menuMaxHeight: 300,
-                        selectedItemBuilder: (BuildContext context) {
-                          return _banks.map<Widget>((bank) {
-                            return Text(
-                              '${bank['code']} - ${bank['name']}',
-                              style: const TextStyle(color: Colors.white),
-                              overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 20),
+                        _buildReadOnlyField('Cédula de Identidad', dni, Icons.badge),
+                        const SizedBox(height: 12),
+                        _buildReadOnlyField('Teléfono Móvil', phone, Icons.phone_android),
+                        const SizedBox(height: 20),
+                        DropdownButtonFormField<String>(
+                          dropdownColor: const Color(0xFF1C1C1E),
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          hint: const Text(
+                            'Selecciona tu banco',
+                            style: TextStyle(color: Colors.white60, fontSize: 14),
+                          ),
+                          decoration: _inputDecoration('Banco'),
+                          value: _selectedBankCode,
+                          isExpanded: true,
+                          menuMaxHeight: 300,
+                          selectedItemBuilder: (BuildContext context) {
+                            return _banks.map<Widget>((bank) {
+                              return Text(
+                                '${bank['code']} - ${bank['name']}',
+                                style: const TextStyle(color: Colors.white),
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            }).toList();
+                          },
+                          items: _banks.map((bank) {
+                            return DropdownMenuItem(
+                              value: bank['code'],
+                              child: Text(
+                                '${bank['code']} - ${bank['name']}',
+                                style: const TextStyle(color: Colors.white),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             );
-                          }).toList();
-                        },
-                        items: _banks.map((bank) {
-                          return DropdownMenuItem(
-                            value: bank['code'],
-                            child: Text(
-                              '${bank['code']} - ${bank['name']}',
-                              style: const TextStyle(color: Colors.white),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) => setState(() => _selectedBankCode = val),
-                      ),
+                          }).toList(),
+                          onChanged: (val) => setState(() => _selectedBankCode = val),
+                        ),
+                      ] else ...[
+                        const Text(
+                          'CONFIGURACIÓN STRIPE',
+                          style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          decoration: _inputDecoration('Email de tu cuenta Stripe').copyWith(
+                            prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF635BFF), size: 20),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) return 'Por favor ingresa un email';
+                            if (!value.contains('@')) return 'Email inválido';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF635BFF).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF635BFF).withOpacity(0.3)),
+                          ),
+                          child: const Text(
+                            'Asegúrate de que este email corresponde a tu cuenta de Stripe para evitar retrasos en el procesamiento.',
+                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -242,8 +292,8 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _saveMethod,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.accentGold,
-                          foregroundColor: Colors.black,
+                          backgroundColor: _selectedType == 'pago_movil' ? AppTheme.accentGold : const Color(0xFF635BFF),
+                          foregroundColor: _selectedType == 'pago_movil' ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -251,10 +301,13 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                           elevation: 0,
                         ),
                         child: _isLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2, 
+                                color: _selectedType == 'pago_movil' ? Colors.black : Colors.white
+                              ),
                             )
                           : const Text('GUARDAR', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0)),
                       ),
@@ -263,6 +316,35 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeSelector(String label, Color color, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? color : Colors.white.withOpacity(0.1),
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white38,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Orbitron',
+            letterSpacing: 0.5,
           ),
         ),
       ),

@@ -4,16 +4,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Data Transfer Object for creating a payment method
 class PaymentMethodCreate {
   final String userId;
-  final String bankCode;
-  final String phoneNumber;
-  final String dni;
+  final String? bankCode;
+  final String? phoneNumber;
+  final String? dni;
+  final String type;
+  final String? identifier;
   final bool isDefault;
 
   PaymentMethodCreate({
     required this.userId,
-    required this.bankCode,
-    required this.phoneNumber,
-    required this.dni,
+    this.bankCode,
+    this.phoneNumber,
+    this.dni,
+    this.type = 'pago_movil',
+    this.identifier,
     this.isDefault = false,
   });
 
@@ -22,6 +26,8 @@ class PaymentMethodCreate {
         'bank_code': bankCode,
         'phone_number': phoneNumber,
         'dni': dni,
+        'type': type,
+        'identifier': identifier,
         'is_default': isDefault,
       };
 }
@@ -74,6 +80,8 @@ class PaymentMethodRepository implements IPaymentMethodRepository {
         'bank_code': data.bankCode,
         'phone_number': data.phoneNumber,
         'dni': data.dni,
+        'type': data.type,
+        'identifier': data.identifier,
         'is_default': data.isDefault,
       }).eq('id', id);
     } catch (e) {

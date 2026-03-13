@@ -80,17 +80,20 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Future<void> _loadRecentTransactions() async {
+    setState(() => _isLoadingHistory = true);
     try {
       final txs = await _transactionRepository.getMyTransactions(limit: 5);
       if (mounted) {
         setState(() {
           _recentTransactions = txs;
-          _isLoadingHistory = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoadingHistory = false);
       debugPrint("Error loading history: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingHistory = false);
+      }
     }
   }
 
@@ -416,15 +419,19 @@ class _WalletScreenState extends State<WalletScreen> {
                                             if (confirm != true) return;
  
                                             setState(() => _isLoadingHistory = true);
-                                            final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
-                                                  backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
-                                                ),
-                                              );
-                                              _loadRecentTransactions();
+                                            final messenger = ScaffoldMessenger.of(context);
+                                            try {
+                                              final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
+                                              if (mounted) {
+                                                messenger.showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
+                                                    backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                                  ),
+                                                );
+                                              }
+                                            } finally {
+                                              if (mounted) _loadRecentTransactions();
                                             }
                                           }
                                         : null,
@@ -1143,55 +1150,61 @@ class _WalletScreenState extends State<WalletScreen> {
                             onPressed: _isLoading ? null : () => Navigator.pop(ctx),
                             child: const Text('Cancelar', style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
                           ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: (_isLoading || selectedPlanId == null)
-                                ? null
-                                : () async {
-                                    Navigator.pop(ctx); // Close dialog first
-                                    setState(() => _isLoading = true);
-                                    try {
-                                      final result = await StripeService.initiateStripePurchase(
-                                        planId: selectedPlanId!,
-                                        context: context,
-                                      );
-
-                                      if (!mounted) return;
-
-                                      if (result == StripePaymentResult.success) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('¡Pago exitoso! Tus tréboles serán acreditados en instantes.'),
-                                            backgroundColor: Color(0xFF10B981),
-                                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: ElevatedButton.icon(
+                              onPressed: (_isLoading || selectedPlanId == null)
+                                  ? null
+                                  : () async {
+                                      Navigator.pop(ctx); // Close dialog first
+                                      setState(() => _isLoading = true);
+                                      try {
+                                        final result = await StripeService.initiateStripePurchase(
+                                          planId: selectedPlanId!,
+                                          context: context,
                                         );
-                                        await Future.delayed(const Duration(seconds: 3));
-                                        if (mounted) {
-                                          await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
-                                          await _loadRecentTransactions();
+
+                                        if (!mounted) return;
+
+                                        if (result == StripePaymentResult.success) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('¡Pago exitoso! Tus tréboles serán acreditados en instantes.'),
+                                              backgroundColor: Color(0xFF10B981),
+                                            ),
+                                          );
+                                          await Future.delayed(const Duration(seconds: 3));
+                                          if (mounted) {
+                                            await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+                                            await _loadRecentTransactions();
+                                          }
+                                        } else if (result == StripePaymentResult.cancelled) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Pago cancelado.')),
+                                          );
                                         }
-                                      } else if (result == StripePaymentResult.cancelled) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Pago cancelado.')),
-                                        );
+                                        // StripePaymentResult.failed already shows its own SnackBar inside StripeService
+                                      } finally {
+                                        if (mounted) setState(() => _isLoading = false);
+                                        _loadRecentTransactions();
                                       }
-                                      // StripePaymentResult.failed already shows its own SnackBar inside StripeService
-                                    } finally {
-                                      if (mounted) setState(() => _isLoading = false);
-                                      _loadRecentTransactions();
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF635BFF),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: 0,
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF635BFF),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              icon: _isLoading
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.lock_rounded, size: 16),
+                              label: const Text(
+                                'Pagar',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            icon: _isLoading
-                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Icon(Icons.lock_rounded, size: 16),
-                            label: const Text('Pagar con Tarjeta', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -1332,14 +1345,18 @@ class _WalletScreenState extends State<WalletScreen> {
 
   void _showWithdrawPlanDialog(Map<String, dynamic> method) {
     String? selectedPlanId;
+    final type = method['type'] ?? 'pago_movil';
+    final isStripe = type == 'stripe';
     final bankCode = method['bank_code'] ?? '???';
     final phone = method['phone_number'] ?? '???';
+    final email = method['identifier'] ?? '???';
 
     // Combined future: check rate validity AND load plans in parallel
+    // Only check BCV rate for Pago Movil
     final configService = AppConfigService(supabaseClient: Supabase.instance.client);
     final combinedFuture = Future.wait([
       WithdrawalPlanService(supabaseClient: Supabase.instance.client).fetchActivePlans(),
-      configService.isBcvRateValid(),
+      isStripe ? Future.value(true) : configService.isBcvRateValid(),
     ]);
 
     showDialog(
@@ -1350,23 +1367,35 @@ class _WalletScreenState extends State<WalletScreen> {
             backgroundColor: const Color(0xFF1A1A1D),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: const BorderSide(color: AppTheme.secondaryPink, width: 1),
+              side: BorderSide(
+                color: isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink, 
+                width: 1
+              ),
             ),
             title: Row(
               children: [
-                const Icon(Icons.publish_rounded, color: AppTheme.secondaryPink, size: 28),
+                Icon(
+                  isStripe ? Icons.credit_card_rounded : Icons.publish_rounded, 
+                  color: isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink, 
+                  size: 28
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Retirar Tréboles',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(
+                          color: Colors.white, 
+                          fontWeight: FontWeight.bold, 
+                          fontSize: 16,
+                          fontFamily: 'Orbitron'
+                        ),
                       ),
                       Text(
-                        'A: $bankCode - $phone',
-                        style: const TextStyle(color: Colors.white60, fontSize: 12),
+                        isStripe ? 'A: Stripe ($email)' : 'A: $bankCode - $phone',
+                        style: const TextStyle(color: Colors.white60, fontSize: 11),
                       ),
                     ],
                   ),
@@ -1379,9 +1408,11 @@ class _WalletScreenState extends State<WalletScreen> {
                 future: combinedFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
+                    return SizedBox(
                       height: 200,
-                      child: LoadingIndicator(color: AppTheme.secondaryPink),
+                      child: LoadingIndicator(
+                        color: isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink
+                      ),
                     );
                   }
 
@@ -1457,18 +1488,18 @@ class _WalletScreenState extends State<WalletScreen> {
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppTheme.secondaryPink.withOpacity(0.2)
-                                    : Colors.white.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
+                                decoration: BoxDecoration(
                                   color: isSelected
-                                      ? AppTheme.secondaryPink
-                                      : Colors.white.withOpacity(0.1),
-                                  width: isSelected ? 2 : 1,
+                                      ? (isStripe ? const Color(0xFF635BFF).withOpacity(0.2) : AppTheme.secondaryPink.withOpacity(0.2))
+                                      : Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? (isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink)
+                                        : Colors.white.withOpacity(0.1),
+                                    width: isSelected ? 2 : 1,
+                                  ),
                                 ),
-                              ),
                               child: Row(
                                 children: [
                                   // Icon
@@ -1476,12 +1507,12 @@ class _WalletScreenState extends State<WalletScreen> {
                                     width: 48,
                                     height: 48,
                                     decoration: BoxDecoration(
-                                      color: AppTheme.secondaryPink.withOpacity(0.2),
+                                      color: (isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink).withOpacity(0.2),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Center(
                                       child: Text(
-                                        plan.icon ?? '💸',
+                                        isStripe ? '💳' : (plan.icon ?? '💸'),
                                         style: const TextStyle(fontSize: 24),
                                       ),
                                     ),
@@ -1519,14 +1550,16 @@ class _WalletScreenState extends State<WalletScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(
-                                        plan.formattedAmountUsd,
-                                        style: TextStyle(
-                                          color: isSelected ? AppTheme.secondaryPink : Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
+                                        Text(
+                                          plan.formattedAmountUsd,
+                                          style: TextStyle(
+                                            color: isSelected 
+                                                ? (isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink) 
+                                                : Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                          ),
                                         ),
-                                      ),
                                       const Text(
                                         'USD',
                                         style: TextStyle(color: Colors.white54, fontSize: 12),
@@ -1545,9 +1578,12 @@ class _WalletScreenState extends State<WalletScreen> {
                         );
                       }).toList(),
                       if (_isLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: LoadingIndicator(color: AppTheme.secondaryPink, fontSize: 14),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: LoadingIndicator(
+                            color: isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink, 
+                            fontSize: 14
+                          ),
                         ),
                     ],
                   );
@@ -1582,7 +1618,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             }
                           },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.secondaryPink,
+                      backgroundColor: isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink,
                       disabledBackgroundColor: Colors.grey.withOpacity(0.3),
                     ),
                     child: Text(
@@ -1659,6 +1695,8 @@ class _WalletScreenState extends State<WalletScreen> {
         'api_withdraw_funds',
         body: {
           'plan_id': planId,
+          'payment_method_id': method['id'],
+          // Legacy support or fallback (optional since we've updated it)
           'bank': method['bank_code'],
           'dni': method['dni'],
           'phone': method['phone_number'],

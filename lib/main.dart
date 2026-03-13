@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'; // Importar Supabase
 import 'dart:ui'; // For Helper -> PointerDeviceKind
 import 'dart:io' show Platform;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/services/stripe_service.dart';
 
 // Imports existentes
@@ -153,12 +154,28 @@ Future<void> main() async {
   await dotenv.load(fileName: ".env");
 
   final supabaseUrl = dotenv.env['SUPABASE_URL']!;
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY']!;
   debugPrint('🚀 [DEBUG-V2] CONECTANDO A SUPABASE: $supabaseUrl');
+
+  // --- PROJECT CHANGE GUARD ---
+  // If the project URL changed, we MUST clear the local session to avoid 401 errors.
+  try {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? lastUrl = prefs.getString('last_supabase_url');
+    if (lastUrl != null && lastUrl != supabaseUrl) {
+      debugPrint('⚠️ [GUARD] Project change detected! Clearing old session data...');
+      await SecureLocalStorage().removePersistedSession();
+      await prefs.clear(); // Clear all prefs for the new project
+    }
+    await prefs.setString('last_supabase_url', supabaseUrl);
+  } catch (e) {
+    debugPrint('⚠️ [GUARD] Failed to run project change guard: $e');
+  }
 
   // Inicializar Supabase
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
     authOptions: FlutterAuthClientOptions(
       localStorage: SecureLocalStorage(),
     ),
@@ -180,14 +197,19 @@ Future<void> main() async {
 
   // Initialize OneSignal
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
-    OneSignal.initialize(dotenv.env['ONESIGNAL_APP_ID']!);
-    OneSignal.Notifications.requestPermission(true);
+    final oneSignalAppId = dotenv.env['ONESIGNAL_APP_ID'];
+    if (oneSignalAppId != null && oneSignalAppId.isNotEmpty) {
+      OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+      OneSignal.initialize(oneSignalAppId);
+      OneSignal.Notifications.requestPermission(true);
 
-    // --- AUTO-TAGGING: Distinguir Dev/Prod sin crear dos apps ---
-    final String envTag = kDebugMode ? 'dev' : 'prod';
-    OneSignal.User.addTagWithKey("app_env", envTag);
-    debugPrint('🏷️ OneSignal user tagged as: $envTag');
+      // --- AUTO-TAGGING: Distinguir Dev/Prod sin crear dos apps ---
+      final String envTag = kDebugMode ? 'dev' : 'prod';
+      OneSignal.User.addTagWithKey("app_env", envTag);
+      debugPrint('🏷️ OneSignal user tagged as: $envTag');
+    } else {
+      debugPrint('⚠️ [WARN] ONESIGNAL_APP_ID not found in .env. Push notifications disabled.');
+    }
   }
 
   // 3. La configuración de orientación y UI Overlay es solo para MÓVIL (Android/iOS)

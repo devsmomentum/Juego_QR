@@ -15,25 +15,31 @@ serve(async (req) => {
 
   try {
     // 1. AUTHENTICATE USER
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization")! },
-        },
-      }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const authHeader = req.headers.get("Authorization");
 
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser();
-
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized", success: false }), {
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No authorization header", success: false }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
+    }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error("[stripe-create-pi] Auth Error:", authError);
+      return new Response(
+        JSON.stringify({ 
+          error: "Sesión inválida o expirada. Por favor, logueate de nuevo.", 
+          details: authError?.message,
+          success: false 
+        }), 
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
+      );
     }
 
     // 2. PARSE REQUEST — only plan_id from client (price validated server-side)
@@ -104,9 +110,8 @@ serve(async (req) => {
         plan_name: plan.name,
         clovers_amount: String(cloversQuantity),
       },
-      // Allows saving the payment method for future use (optional)
-      // automatic_payment_methods: { enabled: true },
-      payment_method_types: ["card"],
+      // Allows Google Pay, Apple Pay, and other methods managed in Stripe Dashboard
+      automatic_payment_methods: { enabled: true },
     });
 
     console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntent.id}`);

@@ -256,16 +256,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                     const SnackBar(content: Text('Cancelando orden...')),
                                   );
                                   
-                                  final success = await _repository.cancelOrder(item.id);
-                                  
-                                  if (mounted) {
-                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(success ? 'Orden cancelada exitosamente' : 'Error al cancelar'),
-                                        backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
-                                      ),
-                                    );
-                                    if (success) _loadData();
+                                  try {
+                                    final success = await _repository.cancelOrder(item.id);
+                                    if (mounted) {
+                                       ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(success ? 'Orden cancelada exitosamente' : 'Error al cancelar'),
+                                          backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    _loadData();
                                   }
                                 }
                               : null,
