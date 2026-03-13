@@ -644,6 +644,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   /// Completa una pista y retorna los datos del servidor incluyendo coins_earned.
   /// Retorna null si falla, o un Map con success, raceCompleted, coins_earned.
+  ///
+  /// [clueId] DEBE pasarse siempre que esté disponible para evitar race conditions
+  /// con _currentClueIndex (puede cambiar por fetchClues concurrentes).
   Future<Map<String, dynamic>?> completeCurrentClue(String answer,
       {String? clueId}) async {
     String targetId;
@@ -651,15 +654,24 @@ class GameProvider extends ChangeNotifier implements IResettable {
     if (clueId != null) {
       targetId = clueId;
     } else {
-      if (_currentClueIndex >= _clues.length) return null;
+      if (_currentClueIndex >= _clues.length) {
+        debugPrint('⚠️ completeCurrentClue: _currentClueIndex ($_currentClueIndex) >= _clues.length (${_clues.length})');
+        return null;
+      }
       targetId = _clues[_currentClueIndex].id;
     }
 
     // --- ACTUALIZACIÓN OPTIMISTA ---
-    int localIndex = _clues.indexWhere((c) => c.id == targetId);
+    final int localIndex = _clues.indexWhere((c) => c.id == targetId);
+    // Guardar estado previo para rollback en caso de fallo
+    final int prevClueIndex = _currentClueIndex;
+    bool didOptimisticUpdate = false;
+
     if (localIndex != -1) {
       _clues[localIndex].isCompleted = true;
+      didOptimisticUpdate = true;
       if (localIndex + 1 < _clues.length) {
+        _clues[localIndex + 1].isLocked = false; // Desbloquear siguiente pista
         _currentClueIndex = localIndex + 1;
       }
       notifyListeners();
@@ -670,35 +682,46 @@ class GameProvider extends ChangeNotifier implements IResettable {
           eventId: _currentEventId);
 
       if (data != null) {
-        // Success
-        // Success
-        // CRITICAL FIX: Only treat as Globally Completed if backend says so (raceCompletedGlobal)
-        // 'raceCompleted' in previous logic might have meant "User Finished".
-        // We rely on 'raceCompletedGlobal' which comes from the RPC.
         if (data['raceCompletedGlobal'] == true) {
           debugPrint("🏆 GLOBAL Race Completed confirmed by RPC!");
           _setRaceCompleted(true, 'Clue Completion (RPC)');
         } else {
           debugPrint(
               "👤 User finished clues, but Race is NOT globally finished yet.");
-          // Ensure we DO NOT set _isRaceCompleted = true here.
-          // The user should go to Waiting Room.
         }
 
-        // [PERFORMANCE] Fire-and-forget: El RPC ya hizo todo atómicamente y
-        // la actualización optimista ya refrescó el UI. Este fetch es solo
-        // para confirmar estado desde el servidor, no debe bloquear.
+        // Fire-and-forget: confirmar estado desde el servidor
         unawaited(fetchClues(silent: true));
         unawaited(fetchLeaderboard());
         return data;
       } else {
+        // RPC falló: revertir estado optimista para que el usuario pueda reintentar
+        debugPrint('⚠️ completeCurrentClue: RPC returned null, reverting optimistic state');
+        if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
+          _clues[localIndex].isCompleted = false;
+          if (localIndex + 1 < _clues.length) {
+            _clues[localIndex + 1].isLocked = true;
+          }
+          _currentClueIndex = prevClueIndex;
+          notifyListeners();
+        }
+        // Intentar refrescar del servidor para obtener estado real
+        unawaited(fetchClues(silent: true));
         return null;
       }
     } catch (e) {
       debugPrint('Error completing clue: $e');
-      // En caso de error de red, aún retornamos éxito local
-      // ya que la actualización optimista ya se hizo
-      return {'success': true, 'coins_earned': 0, 'error': e.toString()};
+      // Error de red: revertir estado optimista
+      if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
+        _clues[localIndex].isCompleted = false;
+        if (localIndex + 1 < _clues.length) {
+          _clues[localIndex + 1].isLocked = true;
+        }
+        _currentClueIndex = prevClueIndex;
+        notifyListeners();
+      }
+      unawaited(fetchClues(silent: true));
+      return null;
     }
   }
 

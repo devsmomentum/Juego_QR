@@ -906,7 +906,8 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   } else {
     debugPrint('--- COMPLETING CLUE (background): ${clue.id} ---');
     clueCompletionFuture =
-        gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN");
+        gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN",
+            clueId: clue.id);
   }
 
   // También lanzar el refresh de perfil en paralelo (no necesita el RPC aún)
@@ -1015,17 +1016,23 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       return;
     }
   } else {
-    // RPC falló: la actualización optimista ya está hecha, pero avisamos
+    // RPC falló: el Provider ya revirtió el estado optimista.
+    // Mostramos error pero permitimos que el diálogo de celebración aparezca
+    // para que el usuario pueda volver al mapa y reintentar.
     if (navigator.mounted) {
       ScaffoldMessenger.of(navigator.context).showSnackBar(
         const SnackBar(
             content:
-                Text('Error al guardar el progreso. Verifica tu conexión.'),
-            backgroundColor: AppTheme.dangerRed),
+                Text('Error al guardar el progreso. Verifica tu conexión e inténtalo de nuevo.'),
+            backgroundColor: AppTheme.dangerRed,
+            duration: Duration(seconds: 5)),
       );
     }
-    // No retornamos: dejamos que muestre el diálogo de celebración igualmente
-    // para no interrumpir la experiencia del jugador.
+    // Salir directamente al mapa para que reintente con estado limpio
+    if (navigator.mounted) {
+      navigator.pop();
+    }
+    return;
   }
 
   if (!navigator.mounted) return;
