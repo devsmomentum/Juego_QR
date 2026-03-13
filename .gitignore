@@ -90,3 +90,4 @@ Terminos_y_Condiciones_Maphunter.pdf
 
 # Java heap dumps
 *.hprof
+supabase/import_map.json

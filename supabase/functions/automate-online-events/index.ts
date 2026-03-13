@@ -108,20 +108,26 @@ serve(async (req: Request) => {
             const pendingMs = pendingWaitMinutes * 60 * 1000;
             let targetDate: Date | null = null;
 
+            // Compute "today" in VET to avoid date mismatch when UTC date
+            // has crossed midnight while VET hasn't (affects hours 21:00-23:59 VET).
+            const nowVetMs = now.getTime() + VET_OFFSET_HOURS * 3_600_000;
+            const nowVet = new Date(nowVetMs);
+
             for (const hourStr of scheduledHours) {
                 const parts = hourStr.split(':');
                 const h = parseInt(parts[0], 10);
                 const m = parseInt(parts[1] || '0', 10);
                 if (isNaN(h) || isNaN(m)) continue;
 
-                // Build today's scheduled time: hours are in VET (UTC-4), convert to UTC
-                const utcHour = h - VET_OFFSET_HOURS; // e.g. 15:00 VET → 19:00 UTC
-                const scheduled = new Date(Date.UTC(
-                    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), utcHour, m, 0, 0
-                ));
+                // Build today's scheduled time: compute in VET date, then convert to UTC.
+                // Using the VET date avoids the bug where late-night VET hours (21-23)
+                // would land on the wrong day because now.getUTCDate() is already tomorrow.
+                const scheduledUtcMs = Date.UTC(
+                    nowVet.getUTCFullYear(), nowVet.getUTCMonth(), nowVet.getUTCDate(), h, m, 0, 0
+                ) - VET_OFFSET_HOURS * 3_600_000; // VET → UTC
+                const scheduled = new Date(scheduledUtcMs);
                 // The trigger fires pending_wait_minutes BEFORE the scheduled hour
                 const triggerTime = new Date(scheduled.getTime() - pendingMs);
-                const diffMs = now.getTime() - triggerTime.getTime();
 
                 // The event should be created anytime between triggerTime and the scheduled hour.
                 // This covers: exact trigger moment, late cron fires, and cases where

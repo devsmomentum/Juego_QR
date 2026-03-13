@@ -155,6 +155,9 @@ Future<void> main() async {
   final supabaseUrl = dotenv.env['SUPABASE_URL']!;
   debugPrint('🚀 [DEBUG-V2] CONECTANDO A SUPABASE: $supabaseUrl');
 
+  // Invalidate cached session if the Supabase project changed (e.g. dev→prod)
+  await SecureLocalStorage.clearIfProjectChanged(supabaseUrl);
+
   // Inicializar Supabase
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
