@@ -104,8 +104,8 @@ class _TimeStampAnimationState extends State<TimeStampAnimation>
     );
 
     _mainController.forward().then((_) {
-      // [FIX] Reducido de 1s a 800ms para respuesta más rápida
-      Future.delayed(const Duration(milliseconds: 800), _triggerComplete);
+      // [FIX] Aumentado a 1.8s para que el usuario pueda ver el trébol con calma y orgullo
+      Future.delayed(const Duration(milliseconds: 1800), _triggerComplete);
     });
   }
 

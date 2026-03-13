@@ -87,6 +87,15 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
     final hasSeen = prefs.getBool('has_seen_tutorial_CLUE_SCANNER') ?? false;
     if (hasSeen) return;
 
+    // Evitar mostrar si está congelado
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (gameProvider.isFrozen) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _showClueScannerTutorial();
+      });
+      return;
+    }
+
     final steps =
         MasterTutorialContent.getStepsForSection('CLUE_SCANNER', context);
     if (steps.isEmpty) return;

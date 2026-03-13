@@ -208,13 +208,18 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     if (mounted) setState(() => _activeButtonIndex = -1);
   }
 
+  bool _isGameFinished = false;
+
   void _handleRoundSuccess() {
+    if (_isGameFinished) return;
+    
     setState(() {
       _isPlayerTurn = false;
       _statusMessage = '¡BIEN!';
     });
 
     if (_sequence.length >= _currentDifficulty) {
+      _isGameFinished = true;
       _stopTimer();
       widget.onSuccess();
     } else {

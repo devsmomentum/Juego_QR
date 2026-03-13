@@ -614,6 +614,14 @@ class PowerEffectProvider extends ChangeNotifier
     }
   }
 
+  /// Notifica que el usuario ha recibido tréboles (ej. por recompensa o saboteo)
+  void notifyCloversReceived(int amount) {
+    _feedbackQueue.add(PowerFeedbackEvent(
+      PowerFeedbackType.cloversReceived,
+      message: amount.toString(),
+    ));
+  }
+
   /// Fix 3.6: Verifica si un ID fue procesado vía Broadcast con expiración por TTL (5s).
   /// El PG Changes path llega ~300ms después del Broadcast, por lo que 5s de TTL
   /// garantiza deduplicación sin retener entradas indefinidamente.

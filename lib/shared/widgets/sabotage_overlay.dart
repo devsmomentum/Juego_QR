@@ -18,6 +18,8 @@ import '../../features/game/widgets/effects/steal_failed_effect.dart';
 import '../../features/game/widgets/effects/shield_break_effect.dart'; // Defender (Broken)
 import '../../features/game/widgets/effects/shield_breaking_effect.dart'; // Attacker (Blocked)
 import '../../features/game/widgets/effects/shield_active_effect.dart'; // NEW Shield Active Logic
+import '../../features/game/widgets/effects/clover_reward_effect.dart'; // NEW Reward Effect
+
 import '../models/player.dart';
 import '../../features/auth/providers/player_provider.dart';
 import '../../features/mall/models/power_item.dart'; // Required for PowerType
@@ -73,6 +75,11 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       '¡Te han robado tu última vida!\nNecesitas comprar más vidas para continuar.';
   bool _noLivesCanRetry = false;
   bool _noLivesShowShop = true;
+
+  // CLOVER REWARD STATE
+  bool _showCloverRewardAnimation = false;
+  int _cloverRewardAmount = 0;
+
 
   // NEW: Timer expiration subscription for guaranteed unlock
   StreamSubscription<EffectEvent>? _timerEventSubscription;
@@ -324,7 +331,20 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         _showGiftBanner(giftMsg);
         _playerProviderRef?.refreshProfile();
         break;
+
+      case PowerFeedbackType.cloversReceived:
+        final amount = int.tryParse(event.message) ?? 0;
+        if (amount > 0) {
+          setState(() {
+            _showCloverRewardAnimation = true;
+            _cloverRewardAmount = amount;
+          });
+          // Refresh profile to see new balance
+          _playerProviderRef?.refreshProfile();
+        }
+        break;
     }
+
   }
 
   void _triggerLocalDefenseAction(DefenseAction action) {
@@ -753,7 +773,19 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
               ),
 
             if (_showNoLivesFromSteal) _buildGameOverOverlay(),
+
+            if (_showCloverRewardAnimation)
+              CloverRewardEffect(
+                amount: _cloverRewardAmount,
+                onComplete: () {
+                  setState(() {
+                    _showCloverRewardAnimation = false;
+                    _cloverRewardAmount = 0;
+                  });
+                },
+              ),
           ],
+
         );
       },
       child: widget.child,

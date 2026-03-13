@@ -386,11 +386,14 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                 ),
                                 child: ElevatedButton.icon(
                                   icon: Icon(opt.icon, size: 20),
-                                  label: Text(opt.label,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          letterSpacing: 1)),
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(opt.label,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            letterSpacing: 1)),
+                                  ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.transparent,
                                     shadowColor: Colors.transparent,

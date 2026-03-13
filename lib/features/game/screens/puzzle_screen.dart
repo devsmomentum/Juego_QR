@@ -13,6 +13,9 @@ import '../providers/connectivity_provider.dart';
 import '../../mall/models/power_item.dart';
 import '../widgets/effects/blur_effect.dart';
 import '../providers/power_interfaces.dart';
+import '../providers/power_effect_provider.dart'; // NEW IMPORT
+import 'package:flutter/foundation.dart' show kDebugMode; // NEW IMPORT
+
 // --- Imports de Minijuegos Existentes ---
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
 import '../widgets/minigames/tic_tac_toe_minigame.dart';
@@ -81,6 +84,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   late GameProvider _gameProvider;
   late ConnectivityProvider _connectivityProvider;
   bool _isActive = true;
+  bool _isSuccessFlowActive = false; // Prevents double success/navigation
 
   @override
   void initState() {
@@ -141,13 +145,31 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void _showMinigameTutorial() async {
-    final player =
-        Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final player = playerProvider.currentPlayer;
+    
+    // 1. Solo para usuarios nuevos
+    if (!playerProvider.isNewlyRegistered) return;
+    
+    // 2. No para espectadores
     if (player?.role == 'spectator') return;
 
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_PUZZLE') ?? false;
     if (hasSeen) return;
+
+    // 3. No mostrar si está congelado (evitar que aparezca 'detrás' del overlay de congelado)
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (gameProvider.isFrozen) {
+      // Re-intentar en un momento si sigue siendo relevante
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _showMinigameTutorial();
+      });
+      return;
+    }
+
+    // Add a transition delay before showing the tutorial
+    await Future.delayed(const Duration(milliseconds: 500)); // Transition delay
 
     final steps = MasterTutorialContent.getStepsForSection('PUZZLE', context);
     if (steps.isEmpty) return;
@@ -376,8 +398,19 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   // Helper para marcar salida legal (Ganar o Rendirse)
   Future<void> _finishLegally() async {
-    setState(() => _legalExit = true);
-    // await _penaltyService.markGameFinishedLegally(); // Removed
+    if (!mounted) return;
+    setState(() {
+      _legalExit = true;
+      _isNavigatingToWinner = true; // Lock background navigation to let victory flow play
+    });
+  }
+
+  void _handleSuccess(Clue clue) {
+    if (_isSuccessFlowActive || !mounted) return;
+    setState(() => _isSuccessFlowActive = true);
+
+    _finishLegally();
+    _showSuccessDialog(context, clue);
   }
 
   @override
@@ -407,13 +440,15 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       }
 
       if ((gameProvider.lives <= 0 || forcedBlock)) {
-        // Si las vidas son 0, bloqueamos SIEMPRE, a menos que ya estemos navegando (legalExit)
-        // Pero si legalExit es true, probablemente ya deberíamos haber salido.
-        // El problema era que _legalExit bloqueaba la visualización del NoLivesWidget.
         return const NoLivesWidget();
       }
     }
 
+    // [FIX] REMOVED the auto-pop LoadingIndicator guard.
+    // This was causing a race condition: optimistic update would trigger this guard,
+    // which would Navigator.pop() the SUCCESS DIALOG that was just opening,
+    // leaving the user stuck in a black screen.
+    // Instead, we just trust the minigame UI or the onSuccess dialog to handle navigation.
     Widget gameWidget;
     // Cast seguro solicitado
     final onlineClue =
@@ -424,92 +459,92 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     switch (onlineClue.puzzleType) {
       case PuzzleType.slidingPuzzle:
         gameWidget =
-            SlidingPuzzleWrapper(clue: widget.clue, onFinish: _finishLegally);
+            SlidingPuzzleWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.ticTacToe:
         gameWidget =
-            TicTacToeWrapper(clue: widget.clue, onFinish: _finishLegally);
+            TicTacToeWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.hangman:
         gameWidget =
-            HangmanWrapper(clue: widget.clue, onFinish: _finishLegally);
+            HangmanWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.tetris:
-        gameWidget = TetrisWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget = TetrisWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.findDifference:
         gameWidget =
-            FindDifferenceWrapper(clue: widget.clue, onFinish: _finishLegally);
+            FindDifferenceWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.flags:
-        gameWidget = FlagsWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget = FlagsWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.minesweeper:
         gameWidget =
-            MinesweeperWrapper(clue: widget.clue, onFinish: _finishLegally);
+            MinesweeperWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.snake:
-        gameWidget = SnakeWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget = SnakeWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.blockFill:
         gameWidget =
-            BlockFillWrapper(clue: widget.clue, onFinish: _finishLegally);
+            BlockFillWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.memorySequence:
         gameWidget =
-            MemorySequenceWrapper(clue: widget.clue, onFinish: _finishLegally);
+            MemorySequenceWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.drinkMixer:
         gameWidget =
-            DrinkMixerWrapper(clue: widget.clue, onFinish: _finishLegally);
+            DrinkMixerWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.fastNumber:
         gameWidget =
-            FastNumberWrapper(clue: widget.clue, onFinish: _finishLegally);
+            FastNumberWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.bagShuffle:
         gameWidget =
-            BagShuffleWrapper(clue: widget.clue, onFinish: _finishLegally);
+            BagShuffleWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.emojiMovie:
         gameWidget =
-            EmojiMovieWrapper(clue: widget.clue, onFinish: _finishLegally);
+            EmojiMovieWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.virusTap:
         gameWidget =
-            VirusTapWrapper(clue: widget.clue, onFinish: _finishLegally);
+            VirusTapWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.droneDodge:
         gameWidget =
-            DroneDodgeWrapper(clue: widget.clue, onFinish: _finishLegally);
+            DroneDodgeWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.holographicPanels:
         gameWidget = HolographicPanelsWrapper(
-            clue: widget.clue, onFinish: _finishLegally);
+            clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.missingOperator:
         gameWidget =
-            MissingOperatorWrapper(clue: widget.clue, onFinish: _finishLegally);
+            MissingOperatorWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.primeNetwork:
         gameWidget =
-            PrimeNetworkWrapper(clue: widget.clue, onFinish: _finishLegally);
+            PrimeNetworkWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.percentageCalculation:
         gameWidget = PercentageCalculationWrapper(
-            clue: widget.clue, onFinish: _finishLegally);
+            clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.chronologicalOrder:
         gameWidget = ChronologicalOrderWrapper(
-            clue: widget.clue, onFinish: _finishLegally);
+            clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.capitalCities:
         gameWidget =
-            CapitalCitiesWrapper(clue: widget.clue, onFinish: _finishLegally);
+            CapitalCitiesWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.trueFalse:
         gameWidget =
-            TrueFalseWrapper(clue: widget.clue, onFinish: _finishLegally);
+            TrueFalseWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       default:
         gameWidget = const Center(child: Text("Minijuego no implementado"));
@@ -536,6 +571,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                 color: Colors.black.withOpacity(0.1), // Sutil oscurecimiento
               ),
             ),
+
         ],
       ),
     );
@@ -857,11 +893,11 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   // [FIX] Capturar Navigator ANTES de cualquier operación async
   final navigator = Navigator.of(context);
+  final rootContext = context;
+
+  debugPrint('🎉 SUCCESS FLOW STARTED for ${clue.id}');
 
   // ── DESACOPLADO DEL RPC ──────────────────────────────────────────────────
-  // Lanzar el RPC en background INMEDIATAMENTE sin bloquear el UI.
-  // El sello animado dura ~2.3s, que es tiempo más que suficiente para que
-  // el servidor responda. Ya no mostramos el spinner bloqueante.
   Future<Map<String, dynamic>?> clueCompletionFuture;
 
   if (clue.id.startsWith('demo_')) {
@@ -882,14 +918,16 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (!navigator.mounted) return;
 
-  // 1. Mostrar la Animación del Trébol Dorado INMEDIATAMENTE (sin spinner)
+  // 1. Mostrar la Animación del Trébol Dorado INMEDIATAMENTE
   bool sealCompleted = false;
   try {
     await showGeneralDialog(
       context: navigator.context,
       barrierDismissible: false,
+      barrierColor: Colors.black, // [FIX] Fully opaque barrier - prevents loading/effects from showing through
+      transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (dialogContext, _, __) => Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.85),
+        backgroundColor: Colors.black, // [FIX] Fully opaque - no bleed-through of underlying widget rebuilds
         body: TimeStampAnimation(
           index: ((clue.sequenceIndex - 1) % 9) + 1,
           onComplete: () {
@@ -905,17 +943,19 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     debugPrint('Error showing TimeStampAnimation: $e');
   }
 
-  // 2. Leer el resultado del RPC (el sello tardó ~2.3s, ya debió terminar)
+  // 2. Leer el resultado del RPC (el trébol tardó ~3.3s, el RPC ya debió terminar)
+  // [FIX] Sin delays intermedios - evita que el usuario vea el "cargando" del widget
+  // subyacente entre la animación del trébol y el diálogo de celebración.
   Map<String, dynamic>? result;
   int coinsEarned = 0;
   try {
-    result = await clueCompletionFuture;
+    // El RPC se lanzó ANTES de la animación (~3.3s atrás), así que debería responder inmediato.
+    // Timeout de 4s como safety net si la conexión es lenta.
+    result = await clueCompletionFuture.timeout(const Duration(seconds: 4));
     coinsEarned = result?['coins_earned'] ?? 0;
     debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
   } catch (e) {
-    debugPrint("Error completando pista (background): $e");
-    // La actualización optimista ya se hizo en game_provider.dart,
-    // así que el UI ya refleja la pista como completada.
+    debugPrint("Error completando pista (background/timeout): $e");
     result = {'success': true, 'coins_earned': 0};
   }
 
@@ -1004,6 +1044,7 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   await showDialog(
     context: navigator.context,
     barrierDismissible: false,
+    barrierColor: Colors.black.withOpacity(0.85), // [FIX] Darker barrier to prevent bleed-through
     builder: (dialogContext) => SuccessCelebrationDialog(
       clue: clue,
       showNextStep: showNextStep,
@@ -1026,289 +1067,241 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
 class SlidingPuzzleWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const SlidingPuzzleWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {}, // No-op, handled by onSuccess
       SlidingPuzzleMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class TicTacToeWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const TicTacToeWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       TicTacToeMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class HangmanWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const HangmanWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const HangmanWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       HangmanMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class TetrisWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const TetrisWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const TetrisWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       TetrisMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class FlagsWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const FlagsWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const FlagsWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       FlagsMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class MinesweeperWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const MinesweeperWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       MinesweeperMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class SnakeWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const SnakeWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const SnakeWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       SnakeMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class BlockFillWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const BlockFillWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       BlockFillMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 // Para FindDifference, asumo que existe un wrapper similar o debes crearlo si no existe en el archivo original
 class FindDifferenceWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const FindDifferenceWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       FindDifferenceMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class MemorySequenceWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const MemorySequenceWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       MemorySequenceMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class DrinkMixerWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const DrinkMixerWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       DrinkMixerMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class FastNumberWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const FastNumberWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       FastNumberMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class BagShuffleWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const BagShuffleWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       BagShuffleMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class EmojiMovieWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const EmojiMovieWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       EmojiMovieMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class VirusTapWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const VirusTapWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       VirusTapMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class DroneDodgeWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const DroneDodgeWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       DroneDodgeMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 // --- SCAFFOLD COMPARTIDO ACTUALIZADO (Soporta onFinish para Rendición Legal) ---
@@ -1599,133 +1592,112 @@ Widget _buildMinigameScaffold(
 
 class HolographicPanelsWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const HolographicPanelsWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       HolographicPanelsMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class MissingOperatorWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const MissingOperatorWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       MissingOperatorMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class PrimeNetworkWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const PrimeNetworkWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       PrimeNetworkMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class PercentageCalculationWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const PercentageCalculationWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       PercentageCalculationMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class ChronologicalOrderWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const ChronologicalOrderWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       ChronologicalOrderMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class CapitalCitiesWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const CapitalCitiesWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       CapitalCitiesMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class TrueFalseWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const TrueFalseWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       TrueFalseMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }

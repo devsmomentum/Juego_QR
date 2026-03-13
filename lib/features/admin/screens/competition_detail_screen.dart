@@ -895,8 +895,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("ACEPTAR TODOS",
-                style: TextStyle(color: Colors.white)),
+            child: const FittedBox(
+              child: Text("ACEPTAR TODOS",
+                  style: TextStyle(color: Colors.white)),
+            ),
           ),
         ],
       ),
@@ -1817,20 +1819,25 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Solicitudes Pendientes",
-                      style: TextStyle(
-                          color: AppTheme.secondaryPink,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Text("Solicitudes Pendientes",
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: AppTheme.secondaryPink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                  ),
                   if (widget.event.type == 'on_site')
                     TextButton.icon(
                       onPressed: () => _approveAll(pending),
                       icon:
                           const Icon(Icons.done_all, color: Colors.greenAccent),
-                      label: const Text("ACEPTAR TODOS",
-                          style: TextStyle(
-                              color: Colors.greenAccent,
-                              fontWeight: FontWeight.bold)),
+                      label: const FittedBox(
+                        child: Text("ACEPTAR TODOS",
+                            style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontWeight: FontWeight.bold)),
+                      ),
                     ),
                 ],
               ),

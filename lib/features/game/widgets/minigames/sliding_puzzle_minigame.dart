@@ -12,6 +12,7 @@ import '../../../../core/theme/app_theme.dart';
 import 'game_over_overlay.dart';
 import 'cyber_surrender_button.dart';
 import '../../../mall/screens/mall_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class SlidingPuzzleMinigame extends StatefulWidget {
   final Clue clue;
@@ -44,11 +45,16 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   bool _canRetry = false;
   bool _showShopButton = false;
 
+  // Audio State
+  late AudioPlayer _audioPlayer;
+  bool _isMusicPlaying = false;
+
   void _showOverlayState(
       {required String title,
       required String message,
       bool retry = false,
       bool showShop = false}) {
+    _stopMusic(); // Stop music when overlay shows (game paused/ended)
     setState(() {
       _showOverlay = true;
       _overlayTitle = title;
@@ -61,8 +67,36 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   @override
   void initState() {
     super.initState();
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    _audioPlayer.setVolume(0.5);
+
     _initializePuzzle();
     _startTimer();
+    _playMusic();
+  }
+
+  Future<void> _playMusic() async {
+    if (_isMusicPlaying) return;
+    try {
+      await _audioPlayer.play(AssetSource('audio/easy-arcade-hartzmann-main-version-28392-02-32.mp3'));
+      if (mounted) {
+        setState(() => _isMusicPlaying = true);
+      }
+    } catch (e) {
+      debugPrint("Error playing sliding puzzle music: $e");
+    }
+  }
+
+  Future<void> _stopMusic() async {
+    try {
+      await _audioPlayer.stop();
+      if (mounted) {
+        setState(() => _isMusicPlaying = false);
+      }
+    } catch (e) {
+      debugPrint("Error stopping sliding puzzle music: $e");
+    }
   }
 
   void _initializePuzzle() {
@@ -137,6 +171,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
     }
     if (won) {
       _stopTimer();
+      _stopMusic();
       widget.onSuccess();
     }
   }
@@ -208,6 +243,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   @override
   void dispose() {
     _timer.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -372,6 +408,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                         _secondsRemaining = 120;
                         _initializePuzzle();
                         _startTimer();
+                        _playMusic();
                       });
                     }
                   : null,
