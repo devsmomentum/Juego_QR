@@ -748,6 +748,51 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                                     ],
                                   ),
                                 ),
+                                if (_temperatureStatus == "CONGELADO")
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 80, left: 30, right: 30),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.4),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.cyanAccent.withOpacity(0.3),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.cyanAccent.withOpacity(0.05),
+                                            blurRadius: 10,
+                                          )
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.cyanAccent.withOpacity(0.8)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Expanded(
+                                            child: Text(
+                                              "Buscando señal GPS... Esto puede tardar unos segundos dependiendo de tu ubicación.",
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 // NEW: Proximity Help Button for users with GPS issues
                                 if (!showInput)
                                   Padding(

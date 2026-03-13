@@ -138,49 +138,16 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
       _nextDirection = Direction.right;
       _score = 0;
       _secondsRemaining = 90;
-      _isPlaying = false;
+      _isPlaying = true; // Started immediately
       _isGameOver = false;
       _crashAllowance = 3; // Reset intentos
       _generateFood();
-      _showingPreStart = true;
-      _preStartCount = 3;
+      _showingPreStart = false; // No more local countdown
+      _preStartCount = 0;
     });
 
-    _runPreStartCountdown();
-  }
-
-  void _runPreStartCountdown() {
-    _preStartTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      // Check for freeze state
-      final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause countdown
-
-      // [FIX] Pause timer if connectivity is bad
-      final connectivityByProvider =
-          Provider.of<ConnectivityProvider>(context, listen: false);
-      if (!connectivityByProvider.isOnline) {
-        return; // Skip tick
-      }
-
-      setState(() {
-        if (_preStartCount > 1) {
-          _preStartCount--;
-        } else if (_preStartCount == 1) {
-          _preStartCount = 0; // 0 will represent "YA!"
-        } else {
-          timer.cancel();
-          _showingPreStart = false;
-          _isPlaying = true;
-          _startCountdown();
-          _startGameLoop();
-        }
-      });
-    });
+    _startCountdown();
+    _startGameLoop();
   }
 
   void _startGameLoop() {
@@ -708,9 +675,6 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                         ),
                                       ),
                                     ),
-
-                                  if (_showingPreStart)
-                                    _buildPreStartOverlay(cellSize),
                                 ],
                               );
                             },
@@ -813,49 +777,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
     );
   }
 
-  Widget _buildPreStartOverlay(double cellSize) {
-    String text = _preStartCount > 0 ? "$_preStartCount" : "¡YA!";
-    Color textColor =
-        _preStartCount > 0 ? AppTheme.accentGold : AppTheme.successGreen;
-
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: Colors.black.withOpacity(0.4),
-      child: Center(
-        child: TweenAnimationBuilder<double>(
-          key: ValueKey(text),
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.elasticOut,
-          builder: (context, value, child) {
-            return Transform.scale(
-              scale: 0.5 + (value * 1.5),
-              child: Opacity(
-                opacity: value.clamp(0, 1),
-                child: child,
-              ),
-            );
-          },
-          child: Text(
-            text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 80,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                Shadow(
-                  color: textColor.withOpacity(0.5),
-                  blurRadius: 20,
-                  offset: const Offset(0, 0),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  // _buildPreStartOverlay removed completely.
 
   Widget _buildHeadEyes(double cellSize) {
     int quarterTurns = 0;

@@ -409,14 +409,20 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
+            color: const Color(0xFF0A0A0E).withOpacity(0.95), // Fondo mucho más sólido y oscuro
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
                 color: hasTarget
                     ? AppTheme.neonGreen.withOpacity(0.8)
-                    : Colors.white
-                        .withOpacity(0.05), // Highlight target block always
+                    : Colors.white.withOpacity(0.15),
                 width: hasTarget ? 2 : 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 10,
+                spreadRadius: 2,
+              )
+            ],
           ),
           child: Stack(
             children: [
@@ -426,7 +432,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                         (MediaQuery.of(context).size.width - 80),
                     top: d.position.dy * maxHeight,
                     child: Opacity(
-                      opacity: 0.3,
+                      opacity: 0.8, // Íconos mucho más visibles
                       child: Transform.rotate(
                         angle: d.rotation,
                         child: Icon(d.icon, color: Colors.white, size: d.size),
@@ -441,7 +447,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                       (MediaQuery.of(context).size.width - 80),
                   top: _targetPosition.dy * maxHeight,
                   child: Opacity(
-                    opacity: 0.3,
+                    opacity: 0.8, // Mismo opacity que los distractores
                     child: Icon(_targetIcon, color: Colors.white, size: 22),
                   ),
                 ),

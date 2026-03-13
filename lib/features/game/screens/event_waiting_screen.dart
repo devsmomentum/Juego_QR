@@ -450,7 +450,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
 
     final String headerText = _waitingForAdmin
         ? (isAutomatedOnline ? 'SALA DE ESPERA' : 'CUENTA REGRESIVA FINALIZADA')
-        : 'PREÁRATE';
+        : 'PREPÁRATE';
     final String titleText = _waitingForAdmin
         ? (isAutomatedOnline
             ? 'ESPERANDO JUGADORES...'
