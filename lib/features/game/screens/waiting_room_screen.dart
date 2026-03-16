@@ -6,9 +6,11 @@ import 'package:map_hunter/features/game/providers/game_provider.dart';
 import 'package:map_hunter/features/auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../shared/widgets/exit_protection_wrapper.dart';
 import '../widgets/race_track_widget.dart';
 import '../widgets/sponsor_banner.dart'; // NEW
 import '../providers/spectator_feed_provider.dart';
+import 'scenarios_screen.dart';
 
 import 'winner_celebration_screen.dart';
 
@@ -31,27 +33,47 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initWaitingRoom();
+    });
+  }
+
+  Future<void> _initWaitingRoom() async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    _gameProviderRef = gameProvider;
+
+    // Asegurar que las pistas, eventId y leaderboard estén cargados.
+    // Pueden estar vacíos después de una salida voluntaria + reingreso
+    // donde resetState limpió todo, o si HomeScreen.dispose ejecutó
+    // resetState en un post-frame callback posterior.
+    final needsFetch = gameProvider.totalClues == 0 ||
+        gameProvider.currentEventId != widget.eventId ||
+        gameProvider.leaderboard.isEmpty;
+
+    if (needsFetch) {
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      await gameProvider.fetchClues(
+        eventId: widget.eventId,
+        userId: playerProvider.currentPlayer?.userId,
+      );
+    }
+    if (!mounted) return;
+
+    // Ensure we are fetching updates (requiere _currentEventId válido)
+    gameProvider.startLeaderboardUpdates();
+
+    // Listen for global completion
+    gameProvider.addListener(_onGameProviderChange);
+
+    // Check immediately
+    gameProvider.checkRaceStatus();
+
+    // 🟢 START POLLING: Check race status every 5 seconds
+    // This acts as a fallback if Realtime fails
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
-        final gameProvider = Provider.of<GameProvider>(context, listen: false);
-        _gameProviderRef = gameProvider;
-
-        // Ensure we are fetching updates
-        gameProvider.startLeaderboardUpdates();
-
-        // Listen for global completion
-        gameProvider.addListener(_onGameProviderChange);
-
-        // Check immediately
+        debugPrint("⏳ WaitingRoom: Polling race status...");
         gameProvider.checkRaceStatus();
-
-        // 🟢 START POLLING: Check race status every 5 seconds
-        // This acts as a fallback if Realtime fails
-        _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-          if (mounted) {
-            debugPrint("⏳ WaitingRoom: Polling race status...");
-            gameProvider.checkRaceStatus();
-          }
-        });
       }
     });
   }
@@ -117,8 +139,24 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
     );
   }
 
+  void _handleExitCompetition() {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // Marcar como salida voluntaria ANTES de cualquier limpieza.
+    // Esto evita que GameSessionMonitor muestre el mensaje falso
+    // de "expulsado por un administrador".
+    gameProvider.markVoluntaryExit();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ScenariosScreen()),
+      (route) => false,
+    );
+  }
+
   Widget _buildBody(bool isDarkMode) {
-    return Scaffold(
+    return ExitProtectionWrapper(
+      title: '¿Salir de la competencia?',
+      message: 'No se perderá tu progreso.',
+      onExit: _handleExitCompetition,
+      child: Scaffold(
       backgroundColor: AppTheme.dSurface0,
       body: AnimatedCyberBackground(
         child: Stack(
@@ -481,6 +519,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

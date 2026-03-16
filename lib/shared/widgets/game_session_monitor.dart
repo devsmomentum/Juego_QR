@@ -63,11 +63,18 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
       debugPrint("   - Curr GP ID: null");
       debugPrint("   - Current Playing Event: $currentPlayingEventId");
       debugPrint("   - Race Completed: ${gameProvider.isRaceCompleted}");
+      debugPrint("   - Voluntary Exit: ${gameProvider.isVoluntaryExit}");
 
+      // VOLUNTARY EXIT: The player chose to leave via the exit dialog.
+      // Do NOT show the "admin kicked you" message.
+      if (gameProvider.isVoluntaryExit) {
+        debugPrint(
+            "🕒 GameSessionMonitor: ✅ Voluntary exit detected. Skipping kick.");
+        gameProvider.clearVoluntaryExit();
       // GRACE PERIOD: If the race is completed, this is a legitimate transition
       // (game_players.status changed to 'completed'), NOT a session loss.
       // Do NOT kick the player — let the race completion flow handle navigation.
-      if (gameProvider.isRaceCompleted) {
+      } else if (gameProvider.isRaceCompleted) {
         debugPrint(
             "🕒 GameSessionMonitor: ⚠️ GP ID disappeared but race is COMPLETED. Ignoring (transition grace).");
       } else if (currentPlayingEventId != null) {

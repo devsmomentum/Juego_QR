@@ -101,6 +101,12 @@ class GameProvider extends ChangeNotifier implements IResettable {
   bool _isFrozen = false; // Estado de congelamiento para minijuegos
   String? _currentUserId; // Check current user ID for leaderboard fetching
 
+  /// Flag que indica que el jugador abandonó la competencia voluntariamente.
+  /// Evita que GameSessionMonitor interprete la limpieza de estado como
+  /// una expulsión por parte de un administrador.
+  bool _voluntaryExit = false;
+  bool get isVoluntaryExit => _voluntaryExit;
+
   // Minigame Data from Supabase
   List<Map<String, String>> _minigameCapitals = [];
   List<Map<String, dynamic>> _minigameTFStatements = [];
@@ -179,6 +185,19 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   bool get hasCompletedAllClues =>
       totalClues > 0 && completedClues == totalClues;
+
+  /// Marca una salida voluntaria del jugador. Debe llamarse ANTES de
+  /// cualquier resetState/clearGameContext para que GameSessionMonitor
+  /// no muestre el mensaje de "expulsado por admin".
+  void markVoluntaryExit() {
+    _voluntaryExit = true;
+  }
+
+  /// Limpia la bandera de salida voluntaria. Se llama desde
+  /// GameSessionMonitor después de procesar la transición.
+  void clearVoluntaryExit() {
+    _voluntaryExit = false;
+  }
 
   GameProvider({required GameService gameService}) : _gameService = gameService;
 

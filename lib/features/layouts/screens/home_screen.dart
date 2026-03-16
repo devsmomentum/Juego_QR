@@ -6,6 +6,7 @@ import 'package:map_hunter/features/auth/providers/player_provider.dart';
 import 'package:map_hunter/core/theme/app_theme.dart';
 import 'package:map_hunter/features/game/screens/clues_screen.dart';
 import 'package:map_hunter/features/game/screens/event_waiting_screen.dart';
+import 'package:map_hunter/features/game/screens/waiting_room_screen.dart';
 import 'package:map_hunter/features/game/providers/event_provider.dart';
 import 'package:map_hunter/features/game/models/event.dart'; // IMPORTED THIS
 import 'package:map_hunter/features/game/providers/game_provider.dart';
@@ -40,10 +41,32 @@ class _HomeScreenState extends State<HomeScreen> {
   // Debug logic
   bool _forceGameStart = false;
 
+  /// Indica que HomeScreen redirigió a WaitingRoom sin que el usuario
+  /// saliera del evento. En este caso, dispose NO debe limpiar el estado
+  /// del juego, porque la sesión sigue activa.
+  bool _redirectedToWaitingRoom = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      // ── EARLY REDIRECT: Si el jugador ya completó todas las pistas y la carrera
+      // aún no terminó, ir directamente a WaitingRoom para evitar mostrar
+      // la vista de la carrera por un instante.
+      final gameProvider =
+          Provider.of<GameProvider>(context, listen: false);
+      if (gameProvider.hasCompletedAllClues && !gameProvider.isRaceCompleted) {
+        _redirectedToWaitingRoom = true;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => WaitingRoomScreen(eventId: widget.eventId),
+          ),
+        );
+        return;
+      }
+
       final playerProvider =
           Provider.of<PlayerProvider>(context, listen: false);
       final effectProvider =
@@ -161,15 +184,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    // Usamos la referencia guardada, no el context
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _gameProviderRef.resetState();
-      _playerProviderRef
-          .clearGameContext(); // ⚡ CRITICAL: Stops SabotageOverlay
-      _eventProviderRef.unsubscribeFromEventUpdates(); // P2: cleanup Realtime
+    // Si redirigimos a WaitingRoom, la sesión de juego sigue activa.
+    // NO debemos limpiar el estado del GameProvider.
+    if (!_redirectedToWaitingRoom) {
+      // Usamos la referencia guardada, no el context
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _gameProviderRef.resetState();
+        _playerProviderRef
+            .clearGameContext(); // ⚡ CRITICAL: Stops SabotageOverlay
+        _eventProviderRef.unsubscribeFromEventUpdates(); // P2: cleanup Realtime
+        debugPrint(
+            "HomeScreen disposed: Game Set Reset & Player Context Cleared");
+      });
+    } else {
       debugPrint(
-          "HomeScreen disposed: Game Set Reset & Player Context Cleared");
-    });
+          "HomeScreen disposed: Skipped reset (redirected to WaitingRoom)");
+    }
     // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
   }
