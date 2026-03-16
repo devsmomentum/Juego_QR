@@ -84,6 +84,10 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   bool _showingPreStart = false;
   Timer? _preStartTimer;
 
+  // Touch Control State
+  Offset _swipeStart = Offset.zero;
+  bool _swipeLocked = false;
+
   // Sponsor Logic
   Sponsor? _activeSponsor;
   final SponsorService _sponsorService = SponsorService();
@@ -548,25 +552,41 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
               const SizedBox(height: 10),
 
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Center(
-                    child: GestureDetector(
-                      onPanEnd: (details) {
-                        final velocity = details.velocity.pixelsPerSecond;
-                        if (velocity.distance < 100) return;
-                        if (velocity.dx.abs() > velocity.dy.abs()) {
-                          if (velocity.dx > 0)
-                            _onChangeDirection(Direction.right);
-                          else
-                            _onChangeDirection(Direction.left);
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanStart: (details) {
+                    _swipeStart = details.localPosition;
+                    _swipeLocked = false;
+                  },
+                  onPanUpdate: (details) {
+                    if (_swipeLocked) return;
+                    
+                    final delta = details.localPosition - _swipeStart;
+                    const threshold = 30.0;
+                    
+                    if (delta.distance > threshold) {
+                      if (delta.dx.abs() > delta.dy.abs()) {
+                        if (delta.dx > 0) {
+                          _onChangeDirection(Direction.right);
                         } else {
-                          if (velocity.dy > 0)
-                            _onChangeDirection(Direction.down);
-                          else
-                            _onChangeDirection(Direction.up);
+                          _onChangeDirection(Direction.left);
                         }
-                      },
+                      } else {
+                        if (delta.dy > 0) {
+                          _onChangeDirection(Direction.down);
+                        } else {
+                          _onChangeDirection(Direction.up);
+                        }
+                      }
+                      _swipeLocked = true;
+                    }
+                  },
+                  onPanEnd: (_) {
+                    _swipeLocked = false;
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Center(
                       child: AspectRatio(
                         key: _boardKey, // FORCE REBUILD ON CRASH
                         aspectRatio: cols / rows,
@@ -574,14 +594,13 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                           decoration: BoxDecoration(
                               color: const Color(0xFF121212),
                               border: Border.all(
-                                  color:
-                                      AppTheme.primaryPurple.withOpacity(0.4),
+                                  color: AppTheme.primaryPurple.withOpacity(0.4),
                                   width: 3),
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                    color: AppTheme.primaryPurple
-                                        .withOpacity(0.15),
+                                    color:
+                                        AppTheme.primaryPurple.withOpacity(0.15),
                                     blurRadius: 30,
                                     spreadRadius: 5)
                               ]),
@@ -640,8 +659,8 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                         margin: const EdgeInsets.all(0.5),
                                         decoration: BoxDecoration(
                                           color: isHead ? headColor : bodyColor,
-                                          borderRadius: BorderRadius.circular(
-                                              isHead ? 4 : 2),
+                                          borderRadius:
+                                              BorderRadius.circular(isHead ? 4 : 2),
                                           boxShadow: _isOrangeMode
                                               ? [
                                                   BoxShadow(
