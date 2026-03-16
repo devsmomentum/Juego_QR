@@ -26,16 +26,19 @@ class AuthService {
   /// Lanza una excepción con mensaje legible si falla.
   Future<String> login(String email, String password) async {
     try {
+      debugPrint('AuthService: Iniciando login para $email');
+      
       final response = await _supabase.functions.invoke(
         'auth-service/login',
         body: {'email': email, 'password': password},
         method: HttpMethod.post,
       );
 
-      if (response.status != 200) {
-        final error = response.data['error'] ?? 'Error desconocido';
+      final dynamic data = response.data;
 
-        // 403 = email not verified → clean up any local session state
+      if (response.status != 200) {
+        final error = (data is Map) ? (data['error'] ?? 'Error desconocido') : 'Error del servidor (${response.status})';
+
         if (response.status == 403) {
           try {
             await _supabase.auth.signOut();
@@ -44,17 +47,30 @@ class AuthService {
         throw error;
       }
 
-      final data = response.data;
+      if (data == null) throw 'No se recibió respuesta del servidor';
 
-      if (data['session'] != null) {
-        await _supabase.auth.setSession(data['session']['refresh_token']);
+      // Manejar el caso donde la respuesta no sea un Map directo (ej. si el SDK no decodifica automáticamente)
+      final Map<String, dynamic> payload;
+      if (data is Map) {
+        payload = Map<String, dynamic>.from(data);
+      } else {
+        throw 'Respuesta del servidor inválida: Se esperaba JSON';
+      }
 
-        if (data['user'] != null) {
-          final user = data['user'];
+      if (payload['session'] != null) {
+        final sessionData = payload['session'];
+        
+        // En Supabase 2.x, setSession requiere el refresh_token string
+        final String? refreshToken = sessionData['refresh_token'];
+        if (refreshToken == null) throw 'La sesión no contiene un token de refresco válido';
+        
+        await _supabase.auth.setSession(refreshToken);
+        
+        if (payload['user'] != null) {
+          final user = payload['user'];
 
-          // Verificar si el email ha sido confirmado (redundant safety check)
           if (user['email_confirmed_at'] == null) {
-            await logout(); // Limpiar cualquier sesión parcial
+            await logout(); 
             throw 'Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.';
           }
 
@@ -62,7 +78,7 @@ class AuthService {
         }
         throw 'No se recibió información del usuario';
       } else {
-        throw 'No se recibió sesión válida';
+        throw 'No se recibió una sesión válida';
       }
     } catch (e) {
       debugPrint('AuthService: Error logging in: $e');
@@ -272,6 +288,10 @@ class AuthService {
 
   /// Convierte errores de autenticación en mensajes legibles para el usuario.
   String _handleAuthError(dynamic e) {
+    if (e is FormatException) {
+      return 'Error de comunicación: El servidor envió una respuesta con formato inválido. (${e.message})';
+    }
+    
     String errorMsg = e.toString().toLowerCase();
 
     if (errorMsg.contains('invalid login credentials') ||

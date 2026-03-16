@@ -53,10 +53,22 @@ serve(async (req) => {
       serviceRoleKey
     );
 
-    // 3. HANDLE EVENTS
+    // 3. UNIFY ORDER FETCHING (for payment_intent events)
+    let existingOrder: any = null;
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    
+    if (event.type.startsWith("payment_intent.")) {
+      const { data: order } = await supabaseAdmin
+        .from("clover_orders")
+        .select("id, status, extra_data")
+        .eq("stripe_payment_intent_id", paymentIntent.id)
+        .maybeSingle();
+      existingOrder = order;
+    }
+
+    // 4. HANDLE EVENTS
     switch (event.type) {
       case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
         const paymentIntentId = paymentIntent.id;
         const userId = paymentIntent.metadata?.user_id;
         const cloversAmount = parseInt(paymentIntent.metadata?.clovers_amount ?? "0", 10);
@@ -68,31 +80,27 @@ serve(async (req) => {
           break;
         }
 
-        // Check if already processed (idempotency)
-        const { data: existingOrder } = await supabaseAdmin
-          .from("clover_orders")
-          .select("id, status")
-          .eq("stripe_payment_intent_id", paymentIntentId)
-          .single();
-
         if (!existingOrder) {
           console.error(`[stripe-webhook] No order found for PaymentIntent: ${paymentIntentId}`);
           break;
         }
 
-        if (existingOrder.status === "completed") {
-          console.log(`[stripe-webhook] Order already completed — skipping (idempotent). Order: ${existingOrder.id}`);
+        if (existingOrder.status === "completed" || existingOrder.status === "success") {
+          console.log(`[stripe-webhook] Order already processed — skipping. Order: ${existingOrder.id}`);
           break;
         }
 
-        // Update order status
+        // Update order status to 'success' to trigger the existing DB logic
         const { error: orderError } = await supabaseAdmin
           .from("clover_orders")
           .update({
-            status: "completed",
+            status: "success",
             extra_data: {
-              completed_at: new Date().toISOString(),
+              ...(existingOrder.extra_data || {}),
+              clovers_amount: cloversAmount, // Essential for the trigger 'tr_on_clover_order_paid'
               stripe_event_id: event.id,
+              completed_at: new Date().toISOString(),
+              payment_method_type: paymentIntent.payment_method_types?.[0],
             },
           })
           .eq("stripe_payment_intent_id", paymentIntentId);
@@ -102,51 +110,27 @@ serve(async (req) => {
           return new Response("DB Error", { status: 500 });
         }
 
-        // Credit tréboles to user profile
-        // Using RPC to atomically increment clovers
-        const { error: rpcError } = await supabaseAdmin.rpc("increment_clovers", {
-          p_user_id: userId,
-          p_amount: cloversAmount,
-        });
-
-        if (rpcError) {
-          console.error("[stripe-webhook] Error crediting clovers via RPC:", rpcError);
-          // Fallback: manual increment
-          const { data: profile } = await supabaseAdmin
-            .from("profiles")
-            .select("clovers")
-            .eq("id", userId)
-            .single();
-
-          const newClovers = (profile?.clovers ?? 0) + cloversAmount;
-
-          const { error: updateError } = await supabaseAdmin
-            .from("profiles")
-            .update({ clovers: newClovers })
-            .eq("id", userId);
-
-          if (updateError) {
-            console.error("[stripe-webhook] CRITICAL: Failed to credit clovers:", updateError);
-            return new Response("DB Error crediting clovers", { status: 500 });
-          }
-        }
-
-        console.log(`[stripe-webhook] ✅ Success: Credited ${cloversAmount} tréboles to user ${userId}`);
+        console.log(`[stripe-webhook] ✅ Success: Order marked as success. Trigger will handle clover increment for user ${userId}`);
         break;
       }
 
       case "payment_intent.payment_failed": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
         const paymentIntentId = paymentIntent.id;
         const failureMessage = paymentIntent.last_payment_error?.message ?? "Unknown error";
 
         console.log(`[stripe-webhook] payment_intent.payment_failed: ${paymentIntentId}, reason: ${failureMessage}`);
 
+        if (!existingOrder) {
+          console.error(`[stripe-webhook] No order found to mark as failed: ${paymentIntentId}`);
+          break;
+        }
+
         const { error } = await supabaseAdmin
           .from("clover_orders")
           .update({
-            status: "failed",
+            status: "error",
             extra_data: {
+              ...(existingOrder.extra_data || {}),
               failed_at: new Date().toISOString(),
               failure_reason: failureMessage,
               stripe_event_id: event.id,
@@ -163,12 +147,11 @@ serve(async (req) => {
       }
 
       case "payment_intent.canceled": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`[stripe-webhook] PaymentIntent canceled: ${paymentIntent.id}`);
 
         await supabaseAdmin
           .from("clover_orders")
-          .update({ status: "failed" })
+          .update({ status: "cancelled" }) 
           .eq("stripe_payment_intent_id", paymentIntent.id);
         break;
       }

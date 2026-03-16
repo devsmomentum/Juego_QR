@@ -2097,7 +2097,7 @@ BEGIN
             NEW.user_id, 
             NEW.id, 
             treboles_comprados, 
-            'Compra de tréboles - Ref: ' || NEW.pago_pago_order_id
+            'Compra de tréboles - Ref: ' || COALESCE(NEW.pago_pago_order_id, NEW.stripe_payment_intent_id, NEW.id::text)
         );
     END IF;
 
@@ -4277,7 +4277,7 @@ UNION ALL
     "co"."payment_url"
    FROM ("public"."clover_orders" "co"
      LEFT JOIN "public"."transaction_plans" "tp" ON (("co"."plan_id" = "tp"."id")))
-  WHERE ("co"."status" <> ALL (ARRAY['success'::"text", 'paid'::"text"]));
+  WHERE ("co"."status" <> ALL (ARRAY['success'::"text", 'paid'::"text", 'cancelled'::"text", 'canceled'::"text"]));
 
 
 ALTER VIEW "public"."user_activity_feed" OWNER TO "postgres";

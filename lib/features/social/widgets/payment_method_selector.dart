@@ -17,89 +17,92 @@ class PaymentMethodSelector extends StatelessWidget {
     final isDarkMode = playerProvider.isDarkMode;
     
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF151517),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         border: Border(top: BorderSide(color: AppTheme.accentGold.withOpacity(0.3))),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2)
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Selecciona el Método de Pago',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontFamily: 'Orbitron',
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
+            const SizedBox(height: 20),
+            const Text(
+              'Selecciona el Método de Pago',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontFamily: 'Orbitron',
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          
-          _buildMethodTile(
-            context,
-            isDarkMode: isDarkMode,
-            id: 'pago_movil',
-            name: 'Pago Móvil / Transferencia',
-            icon: Icons.phone_android,
-            color: AppTheme.accentGold,
-            description: 'Recarga instantánea en Bolívares'
-          ),
-          
-          const SizedBox(height: 12),
-
-          _buildMethodTile(
-            context,
-            isDarkMode: isDarkMode,
-            id: 'stripe',
-            name: 'Tarjeta de Crédito / Débito',
-            icon: Icons.credit_card_rounded,
-            color: Color(0xFF635BFF), // Stripe brand purple
-            description: 'Visa, Mastercard, Amex — pago en USD',
-          ),
-          
-          const SizedBox(height: 12),
-          
-          _buildMethodTile(
-            context,
-            isDarkMode: isDarkMode,
-            id: 'crypto', // Placeholder
-            name: 'Cripto (Próximamente)',
-            icon: Icons.currency_bitcoin,
-            color: Colors.grey,
-            description: 'USDT, BTC, ETH',
-            enabled: false,
-          ),
-
-          const SizedBox(height: 12),
-
-          _buildMethodTile(
-            context,
-            isDarkMode: isDarkMode,
-            id: 'zelle', // Placeholder
-            name: 'Zelle (Próximamente)',
-            icon: Icons.attach_money,
-            color: Colors.grey,
-            description: 'Recarga en Dólares',
-            enabled: false,
-          ),
-          
-          const SizedBox(height: 20),
-        ],
+            const SizedBox(height: 20),
+            
+            _buildMethodTile(
+              context,
+              isDarkMode: isDarkMode,
+              id: 'pago_movil',
+              name: 'Pago Móvil / Transferencia',
+              icon: Icons.phone_android,
+              color: AppTheme.accentGold,
+              description: 'Recarga instantánea en Bolívares'
+            ),
+            
+            const SizedBox(height: 12),
+  
+            _buildMethodTile(
+              context,
+              isDarkMode: isDarkMode,
+              id: 'stripe',
+              name: 'Tarjeta de Crédito / Débito',
+              icon: Icons.credit_card_rounded,
+              color: const Color(0xFF635BFF), // Stripe brand purple
+              description: 'Visa, Mastercard, Amex — pago en USD',
+            ),
+            
+            const SizedBox(height: 12),
+            
+            _buildMethodTile(
+              context,
+              isDarkMode: isDarkMode,
+              id: 'crypto', // Placeholder
+              name: 'Cripto (Próximamente)',
+              icon: Icons.currency_bitcoin,
+              color: Colors.grey,
+              description: 'USDT, BTC, ETH',
+              enabled: false,
+            ),
+  
+            const SizedBox(height: 12),
+  
+            _buildMethodTile(
+              context,
+              isDarkMode: isDarkMode,
+              id: 'zelle', // Placeholder
+              name: 'Zelle (Próximamente)',
+              icon: Icons.attach_money,
+              color: Colors.grey,
+              description: 'Recarga en Dólares',
+              enabled: false,
+            ),
+            
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }

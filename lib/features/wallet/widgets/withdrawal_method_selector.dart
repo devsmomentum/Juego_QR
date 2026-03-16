@@ -132,7 +132,7 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                               _loadMethods();
                             }
                           },
-                          child: const Text('Agregar Pago Móvil',
+                          child: const Text('Agregar Método',
                               style: TextStyle(color: AppTheme.accentGold)),
                         ),
                       ],
@@ -149,8 +149,21 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                   itemBuilder: (context, index) {
                     final method = provider.methods[index];
                     final isSelected = _selectedMethodId == method['id'];
-                    final bankCode = method['bank_code'] ?? '???';
-                    final phone = method['phone_number'] ?? '???';
+                    final type = method['type'] ?? 'pago_movil';
+                    final isStripe = type == 'stripe';
+                    
+                    final title = isStripe 
+                        ? 'Stripe' 
+                        : 'Pago Móvil - Banco ${method['bank_code'] ?? '???'}';
+                    final subtitle = isStripe 
+                        ? (method['identifier'] ?? 'Email no configurado')
+                        : (method['phone_number'] ?? 'Teléfono no configurado');
+                    final icon = isStripe 
+                        ? Icons.credit_card_rounded 
+                        : Icons.phone_android;
+                    final iconColor = isStripe 
+                        ? const Color(0xFF635BFF) 
+                        : AppTheme.secondaryPink;
                     
                     return Container(
                       decoration: BoxDecoration(
@@ -169,15 +182,14 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                           setState(() => _selectedMethodId = method['id']);
                           widget.onMethodSelected(method);
                         },
-                        leading: const Icon(Icons.phone_android,
-                            color: AppTheme.secondaryPink),
+                        leading: Icon(icon, color: iconColor),
                         title: Text(
-                          'Pago Móvil - Banco $bankCode',
+                          title,
                           style: const TextStyle(
                               color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          phone,
+                          subtitle,
                           style: const TextStyle(color: Colors.white70),
                         ),
                         trailing: Row(

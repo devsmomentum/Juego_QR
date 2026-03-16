@@ -37,6 +37,11 @@ class TransactionCard extends StatelessWidget {
          statusText = 'Pendiente';
          icon = Icons.access_time_rounded;
          break;
+       case 'cancelled':
+       case 'canceled':
+         statusText = 'Cancelado';
+         icon = Icons.block_rounded;
+         break;
        case 'failed':
        case 'error':
          statusText = 'Fallido';

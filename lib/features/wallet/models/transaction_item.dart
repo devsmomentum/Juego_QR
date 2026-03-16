@@ -59,6 +59,9 @@ class TransactionItem {
         return AppTheme.successGreen;
       case 'pending':
         return Colors.orangeAccent;
+      case 'cancelled':
+      case 'canceled':
+        return Colors.blueGrey;
       case 'failed':
       case 'error':
         return AppTheme.dangerRed;

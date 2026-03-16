@@ -11,35 +11,48 @@ class StripeService {
 
   /// Must be called once at app startup (e.g., in main.dart) on supported platforms.
   static Future<void> init() async {
-    // flutter_stripe only supports Android & iOS
-    if (!_isSupportedPlatform) {
-      debugPrint('[StripeService] Platform not supported — skipping init.');
-      return;
-    }
-
     if (_initialized) return;
 
     final publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'];
     if (publishableKey == null || publishableKey.isEmpty || publishableKey.contains('REEMPLAZAR')) {
-      debugPrint('[StripeService] WARNING: STRIPE_PUBLISHABLE_KEY not configured. Stripe payments will be unavailable.');
+      debugPrint('[StripeService] WARNING: STRIPE_PUBLISHABLE_KEY no configurada.');
       return;
     }
 
-    Stripe.publishableKey = publishableKey;
-    await Stripe.instance.applySettings();
-    _initialized = true;
-    debugPrint('[StripeService] Initialized with publishable key: ${publishableKey.substring(0, 12)}...');
+    try {
+      debugPrint('[StripeService] Intentando inicializar con clave: ${publishableKey.substring(0, 10)}...');
+      
+      if (kIsWeb) {
+        Stripe.publishableKey = publishableKey;
+        _initialized = true;
+        debugPrint('[StripeService] ✅ Inicializado para Web.');
+        return;
+      }
+
+      if (_isSupportedPlatform) {
+        Stripe.publishableKey = publishableKey;
+        await Stripe.instance.applySettings();
+        _initialized = true;
+        debugPrint('[StripeService] ✅ Inicializado para Móvil.');
+      }
+    } catch (e) {
+      _initialized = false;
+      debugPrint('[StripeService] ❌ Error crítico durante la inicialización: $e');
+    }
   }
 
   /// Returns true if Stripe can be used on the current platform.
   static bool get _isSupportedPlatform {
-    return defaultTargetPlatform == TargetPlatform.android ||
+    return kIsWeb || 
+        defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   /// Returns true if Stripe is fully ready to process payments.
   static bool get isAvailable {
-    return _isSupportedPlatform && _initialized;
+    // On Web, we often don't need explicit init if using stripe-js, 
+    // but the package handles it if publishableKey is set.
+    return _isSupportedPlatform && (kIsWeb || _initialized);
   }
 
   /// Initiates a Stripe purchase for the given plan ID.
@@ -54,11 +67,11 @@ class StripeService {
     required BuildContext context,
   }) async {
     if (!isAvailable) {
-      debugPrint('[StripeService] Stripe not available on this platform.');
+      debugPrint('[StripeService] Stripe not available. Init status: $_initialized, Web: $kIsWeb');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Stripe solo está disponible en dispositivos móviles.'),
+            content: Text('El servicio de Stripe no está disponible en este momento. Verifica tu configuración.'),
             backgroundColor: Colors.orange,
           ),
         );

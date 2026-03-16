@@ -32,12 +32,16 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    // CHANGED: Accept plan_id instead of raw amount (security: price validated server-side)
-    const { plan_id, bank, dni, phone, cta } = await req.json();
+    // Updated to accept payment_method_id
+    const { plan_id, payment_method_id, bank, dni, phone, cta } = await req.json();
 
-    if (!plan_id || !bank || !dni || (!phone && !cta)) {
+    if (!plan_id) {
+      throw new Error("Missing required field: plan_id");
+    }
+
+    if (!payment_method_id && (!bank || !dni || (!phone && !cta))) {
       throw new Error(
-        "Missing required fields: plan_id, bank, dni, and (phone or cta)",
+        "Missing required fields: plan_id and either payment_method_id or legacy fields (bank, dni, phone/cta)",
       );
     }
 
@@ -71,11 +75,133 @@ serve(async (req) => {
     const cloversCost = plan.amount;
     const amountUsd = plan.price;
 
+    // 2. FETCH AND VALIDATE PAYMENT METHOD
+    let withdrawalType = "pago_movil";
+    let finalBank = bank;
+    let finalDni = dni;
+    let finalPhone = phone;
+    let finalStripeEmail: string | null = null;
+
+    if (payment_method_id) {
+      const { data: pm, error: pmError } = await supabaseAdmin
+        .from("user_payment_methods")
+        .select("*")
+        .eq("id", payment_method_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (pmError || !pm) {
+        console.error("Payment method fetch error:", pmError);
+        throw new Error("Método de pago no encontrado");
+      }
+
+      withdrawalType = pm.type || "pago_movil";
+      if (withdrawalType === "stripe") {
+        finalStripeEmail = pm.identifier;
+        if (!finalStripeEmail) throw new Error("Email de Stripe no configurado");
+      } else {
+        finalBank = pm.bank_code;
+        finalDni = pm.dni;
+        finalPhone = pm.phone_number;
+      }
+    }
+
     console.log(
-      `[api_withdraw_funds] Plan validated: ${plan.name}, Clovers Cost: ${cloversCost}, Amount: $${amountUsd} USD`,
+      `[api_withdraw_funds] Plan validated: ${plan.name}, Clovers Cost: ${cloversCost}, Amount: $${amountUsd} USD, Type: ${withdrawalType}`,
     );
 
-    // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
+    // 3. COMMON LOGIC: VALIDATE BALANCE
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("clovers")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      throw new Error("Profile not found");
+    }
+
+    if (profile.clovers < cloversCost) {
+      throw new Error(
+        `Saldo insuficiente: Tienes ${profile.clovers} tréboles, necesitas ${cloversCost}`,
+      );
+    }
+
+    // Deduct clovers immediately (will refund on failure)
+    const { error: deductError } = await supabaseAdmin
+      .from("profiles")
+      .update({ clovers: profile.clovers - cloversCost })
+      .eq("id", user.id);
+
+    if (deductError) throw new Error("Error al descontar tréboles");
+
+    console.log(
+      `[api_withdraw_funds] Deducted ${cloversCost} clovers from user. New balance: ${profile.clovers - cloversCost}`,
+    );
+
+    // 4. BRANCH LOGIC BY TYPE
+    if (withdrawalType === "stripe") {
+      // --- STRIPE WITHDRAWAL FLOW ---
+      // For now, we record it as PENDING for manual processing
+      // In a real production app, you would call Stripe Payouts API here.
+      
+      const transactionId = `ST-${Date.now()}`;
+      
+      // Log Success (as pending/manual for now)
+      await supabaseAdmin.from("payment_transactions").insert({
+        user_id: user.id,
+        amount: amountUsd,
+        type: "WITHDRAWAL",
+        status: "PENDING", // PENDING since it needs manual fulfillment
+        provider_data: {
+          gateway: "stripe",
+          email: finalStripeEmail,
+          plan_id: plan.id,
+          plan_name: plan.name,
+          clovers_cost: cloversCost,
+          amount_usd: amountUsd,
+        },
+        order_id: transactionId,
+      });
+
+      // Log in Wallet Ledger
+      const { error: ledgerError } = await supabaseAdmin
+        .from("wallet_ledger")
+        .insert({
+          user_id: user.id,
+          amount: -cloversCost,
+          description: `Retiro Stripe: ${plan.name} - $${amountUsd} USD - Ref: ${finalStripeEmail}`,
+          order_id: null,
+          metadata: {
+            type: "withdrawal",
+            gateway: "stripe",
+            email: finalStripeEmail,
+            plan_id: plan.id,
+            plan_name: plan.name,
+            clovers_cost: cloversCost,
+            amount_usd: amountUsd,
+          },
+        });
+
+      if (ledgerError) console.error("Ledger Log Error (Non-Fatal):", ledgerError);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Retiro solicitado exitosamente. Se procesará pronto.",
+          data: {
+            type: "stripe",
+            email: finalStripeEmail,
+            amount_usd: amountUsd,
+            transaction_id: transactionId,
+          }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+
+    } else {
+      // --- PAGO MOVIL FLOW (EXISTING) ---
+      // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
      // Use order+limit instead of .single() so duplicate rows during DB cleanup
     // don't throw a 406 error and block all withdrawals.
     const { data: configRows, error: configError } = await supabaseAdmin
@@ -140,36 +266,7 @@ serve(async (req) => {
       `[api_withdraw_funds] Exchange: $${amountUsd} USD × ${bcvRate} = ${amountVes.toFixed(2)} VES`,
     );
 
-    // 4. CHECK & DEDUCT CLOVERS (using clovers_cost from plan)
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("clovers")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      throw new Error("Profile not found");
-    }
-
-    if (profile.clovers < cloversCost) {
-      throw new Error(
-        `Saldo insuficiente: Tienes ${profile.clovers} tréboles, necesitas ${cloversCost}`,
-      );
-    }
-
-    // Deduct clovers immediately
-    const { error: deductError } = await supabaseAdmin
-      .from("profiles")
-      .update({ clovers: profile.clovers - cloversCost })
-      .eq("id", user.id);
-
-    if (deductError) throw new Error("Error al descontar tréboles");
-
-    console.log(
-      `[api_withdraw_funds] Deducted ${cloversCost} clovers from user. New balance: ${profile.clovers - cloversCost}`,
-    );
-
-    // 5. CALL PAGO A PAGO WITH VES AMOUNT
+    // 4. CALL PAGO A PAGO WITH VES AMOUNT
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY")!;
     const PAGO_PAGO_WITHDRAW_URL = Deno.env.get("PAGO_PAGO_WITHDRAW_URL")!;
 
@@ -177,16 +274,16 @@ serve(async (req) => {
     // DNI: "V19400121" (with prefix)
     // Phone: "04242382511" (with leading zero)
     console.log(
-      `[api_withdraw_funds] Sending Withdrawal: DNI=${dni}, Phone=${phone}, Bank=${bank}, Amount=${amountVes.toFixed(2)} VES`,
+      `[api_withdraw_funds] Sending Withdrawal: DNI=${finalDni}, Phone=${finalPhone}, Bank=${finalBank}, Amount=${amountVes.toFixed(2)} VES`,
     );
 
     // IMPORTANT: Only send the 4 required fields for Pago Móvil
     // Do NOT include null/undefined fields like 'cta' as they may cause errors
     const payload: Record<string, unknown> = {
       amount: amountVes, // VES amount (converted from USD)
-      bank: bank,
-      phone: phone, // Keep as-is with leading zero
-      dni: dni,     // Keep as-is with prefix (V/E/J/P/G)
+      bank: finalBank,
+      phone: finalPhone, // Keep as-is with leading zero
+      dni: finalDni,     // Keep as-is with prefix (V/E/J/P/G)
     };
 
     let apiSuccess = false;
@@ -341,29 +438,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(
-      `[api_withdraw_funds] Withdrawal successful for plan ${plan.name}`,
-    );
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          ...apiResponseData,
-          plan: {
-            id: plan.id,
-            name: plan.name,
-            clovers_cost: cloversCost,
-            amount_usd: amountUsd,
-            amount_ves: amountVes,
-          },
-        },
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      },
-    );
+    } // Close else (branch for pago_movil)
   } catch (error) {
     console.error("Withdrawal flow error:", error);
     return new Response(
