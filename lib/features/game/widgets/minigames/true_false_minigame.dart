@@ -109,7 +109,9 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
       TFStatement("La capital de Estados Unidos es Nueva York.", false,
           correction: "Es Washington D.C."),
       TFStatement("Chile es el país más largo y angosto del mundo.", true),
-      TFStatement("El desierto del Sahara es el más caluroso.", true),
+      TFStatement("El desierto del Sahara es el desierto cálido más grande.",
+          true,
+          correction: "El desierto más grande es la Antártida (polar)."),
       TFStatement("Rusia es el país más grande por territorio.", true),
       TFStatement("El río Amazonas es el más caudaloso del mundo.", true),
       TFStatement("Australia es una isla y un continente.", true),
@@ -158,11 +160,11 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
           correction: "Se cree que se originó en la India."),
       TFStatement("La miel nunca caduca.", true),
       TFStatement("Los pulpos tienen tres corazones.", true),
-      TFStatement("El idioma más hablado del mundo es el inglés.", false,
-          correction: "Es el chino mandarín (nativos)."),
+      TFStatement(
+          "El idioma con más hablantes nativos es el chino mandarín.", true),
       TFStatement("Facebook fue creado por Mark Zuckerberg.", true),
-      TFStatement("Las cebras son blancas con rayas negras.", true,
-          correction: "Su piel es negra bajo el pelo."),
+      TFStatement("Las cebras son negras con rayas blancas.", true,
+          correction: "Genéticamente son negras; el blanco es ausencia de color."),
       TFStatement("El Monopoly se inventó durante la Gran Depresión.", true),
       TFStatement("Los mosquitos tienen dientes.", true,
           correction: "Tienen 47 pequeñas cerdas dentadas."),
@@ -178,16 +180,24 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
 
     if (mounted) {
       setState(() {
-        final dbStatements = gameProvider.minigameTFStatements
-            .map((e) => TFStatement(
-                e['statement'].toString(), e['isTrue'] as bool,
-                correction: e['correction']?.toString() ?? ""))
-            .toList();
+        // Combinar local + DB y eliminar duplicados
+        // Normalizamos el texto (trim y minúsculas) para usarlo como clave.
+        // Si hay colisión, la versión de la DB (dbMap) sobrescribe a la local.
+        final Map<String, TFStatement> integratedMap = {};
 
-        // Combinar local + DB y eliminar duplicados de texto simples
-        final combined = [...localStatements, ...dbStatements];
-        final seen = <String>{};
-        _allStatements = combined.where((s) => seen.add(s.text)).toList();
+        for (var s in localStatements) {
+          integratedMap[s.text.trim().toLowerCase()] = s;
+        }
+
+        for (var e in gameProvider.minigameTFStatements) {
+          final text = e['statement'].toString();
+          final isTrue = e['isTrue'] as bool;
+          final correction = e['correction']?.toString() ?? "";
+          integratedMap[text.trim().toLowerCase()] =
+              TFStatement(text, isTrue, correction: correction);
+        }
+
+        _allStatements = integratedMap.values.toList();
 
         if (_allStatements.isNotEmpty) {
           _startGame();
@@ -300,10 +310,12 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
             lives: newLives);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("¡INCORRECTO! -1 Vida"),
+          SnackBar(
+              content: Text(_currentStatement.isTrue
+                  ? "¡INCORRECTO! Era Verdadero."
+                  : "¡INCORRECTO! ${_currentStatement.correction}"),
               backgroundColor: AppTheme.dangerRed,
-              duration: Duration(milliseconds: 1000)),
+              duration: const Duration(milliseconds: 2500)),
         );
         _startTimer();
         // Maybe new round?

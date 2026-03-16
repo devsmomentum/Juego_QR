@@ -1,40 +1,20 @@
 -- ============================================================
--- Migración: 100 preguntas adicionales para Verdadero o Falso
--- Tabla: minigame_tf_statements (statement TEXT, is_true BOOL, correction TEXT)
--- Nota: el GameProvider lee esta tabla via loadMinigameData()
+-- Migración: preguntas para Verdadero o Falso
+-- Tabla: minigame_true_false
 -- ============================================================
 
 -- Asegurar que la tabla existe con la estructura correcta
-CREATE TABLE IF NOT EXISTS minigame_tf_statements (
-  id         BIGSERIAL PRIMARY KEY,
-  statement  TEXT    NOT NULL,
+CREATE TABLE IF NOT EXISTS minigame_true_false (
+  id         uuid    DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
+  statement  TEXT    NOT NULL UNIQUE,
   is_true    BOOLEAN NOT NULL,
   correction TEXT    NOT NULL DEFAULT ''
 );
 
--- Eliminar filas duplicadas (conserva la de menor id)
-DELETE FROM minigame_tf_statements
-WHERE id NOT IN (
-  SELECT MIN(id) FROM minigame_tf_statements GROUP BY statement
-);
-
--- Agregar constraint UNIQUE si no existe (por si la tabla ya existía sin él)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'minigame_tf_statements_statement_key'
-      AND conrelid = 'minigame_tf_statements'::regclass
-  ) THEN
-    ALTER TABLE minigame_tf_statements ADD CONSTRAINT minigame_tf_statements_statement_key UNIQUE (statement);
-  END IF;
-END
-$$;
-
-INSERT INTO minigame_tf_statements (statement, is_true, correction) VALUES
+INSERT INTO minigame_true_false (statement, is_true, correction) VALUES
 
 -- CIENCIA Y NATURALEZA
-('El corazón humano late aproximadamente 100 000 veces al día.', true, ''),
+('El sol es una estrella de tipo G2V (enana amarilla).', true, ''),
 ('La Luna produce su propia luz.', false, 'La Luna refleja la luz del Sol.'),
 ('El ADN tiene forma de doble hélice.', true, ''),
 ('Los canguros son originarios de Africa.', false, 'Son originarios de Australia.'),
@@ -90,42 +70,44 @@ INSERT INTO minigame_tf_statements (statement, is_true, correction) VALUES
 ('El Machu Picchu fue construido por los aztecas.', false, 'Fue construido por los incas.'),
 ('William Shakespeare nació y murió el mismo día del año.', true, ''),
 ('La primera bomba atómica se lanzó sobre Hiroshima.', true, ''),
-('El Imperio Mongol fue el más grande de la historia.', true, ''),
+('El Imperio Británico fue el más extenso de la historia por superficie total.', true, 'El Mongol fue el más grande de tierras contiguas.'),
 ('Marco Polo nació en Venecia.', true, ''),
-('El juego del ajedrez fue inventado en China.', false, 'Se originó en la India, aproximadamente en el siglo VI.'),
+('El juego del ajedrez fue inventado en India.', true, 'Se originó en la India, aproximadamente en el siglo VI.'),
 ('Cleopatra vivió más cerca en el tiempo del iPhone que de la construcción de las pirámides.', true, ''),
 ('La primera vuelta al mundo fue comandada por Cristóbal Colón.', false, 'Fue comandada por Fernando de Magallanes y completada por Elcano.'),
 ('La Estatua de la Libertad fue un regalo de Francia a EE.UU.', true, ''),
 ('Los mayas desarrollaron de forma independiente el concepto del número cero.', true, ''),
 ('La tinta china fue inventada en Egipto.', false, 'Se originó en China.'),
+('Juana de Arco fue quemada en la hoguera por cargos de herejía.', true, 'Aunque se le asoció con brujería, el cargo formal fue el de herejía.'),
 
 -- CIENCIA Y TECNOLOGÍA
-('El primer smartphone fue el iPhone de Apple.', false, 'El IBM Simon (1992) fue el primer smartphone.'),
+('El primer smartphone fue el IBM Simon (1992).', true, ''),
 ('La web (WWW) fue inventada por Tim Berners-Lee.', true, ''),
 ('El láser emite luz coherente y monocromática.', true, ''),
 ('El transistor fue inventado antes que el circuito integrado.', true, ''),
-('Python es un lenguaje de programación compilado.', false, 'Es interpretado.'),
+('Python es un lenguaje de programación interpretado.', true, ''),
 ('El satélite Sputnik fue el primero en orbitar la Tierra.', true, ''),
 ('Neil Armstrong fue el primer hombre en caminar en la Luna.', true, ''),
-('La luz visible solo representa una pequeña fracción del espectro electromagnético.', true, ''),
-('El acero es una mezcla de hierro y aluminio.', false, 'El acero es una aleación de hierro y carbono.'),
-('El primer videojuego comercial fue Pong.', false, 'Fue Computer Space (1971); Pong llegó en 1972.'),
+('La luz visible representa la mayoría del espectro electromagnético.', false, 'Solo representa una pequeña fracción.'),
+('El acero es una mezcla de hierro y carbono.', true, ''),
+('El primer videojuego comercial fue Pong.', false, 'Fue Computer Space (1971).'),
 ('Los rayos X son más energéticos que las ondas de radio.', true, ''),
 ('El ordenador Deep Blue venció a Garry Kasparov en ajedrez en 1997.', true, ''),
-('La batería fue inventada por Michael Faraday.', false, 'Fue inventada por Alessandro Volta.'),
-('El GPS funciona gracias a satélites en órbita.', true, ''),
+('La batería fue inventada por Alessandro Volta.', true, ''),
 ('Internet fue inicialmente una red militar llamada ARPANET.', true, ''),
 
 -- ENTRETENIMIENTO Y CULTURA POP
 ('Harry Potter fue publicado por primera vez en 1997.', true, ''),
-('La película más taquillera de la historia es Avengers: Endgame.', false, 'Avatar (2009) sigue siendo la más taquillera ajustada por tickets.'),
-('Mickey Mouse fue el primer personaje de Disney con sonido sincronizado.', true, ''),
+('Avatar (2009) es la película más taquillera de la historia.', true, ''),
+('Mickey Mouse fue el primer personaje animado con sonido sincronizado.', true, ''),
 ('Los Beatles eran originarios de Liverpool.', true, ''),
 ('El personaje de Sherlock Holmes fue creado por Arthur Conan Doyle.', true, ''),
-('La saga Star Wars comenzó con el Episodio I.', false, 'La saga comenzó con el Episodio IV en 1977.'),
+('La saga Star Wars comenzó con el Episodio IV en 1977.', true, ''),
 ('Minecraft fue creado por Notch (Markus Persson).', true, ''),
 ('El rey León está basado en la obra de Shakespeare Hamlet.', true, ''),
-('Taylor Swift comenzó su carrera como cantante de rap.', false, 'Comenzó como cantante de country.'),
-('El juego de Mesa Cluedo se llama Clue en North America.', true, '')
+('Taylor Swift comenzó su carrera como cantante de country.', true, ''),
+('El juego de mesa Cluedo se llama Clue en Norteamérica.', true, '')
 
-ON CONFLICT ON CONSTRAINT minigame_tf_statements_statement_key DO NOTHING;
+ON CONFLICT (statement) DO UPDATE 
+SET is_true = EXCLUDED.is_true, 
+    correction = EXCLUDED.correction;
