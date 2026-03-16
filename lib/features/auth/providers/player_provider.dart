@@ -208,16 +208,21 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   }
 
   /// Load shop items configuration from service.
-  /// Load shop items configuration from service.
   Future<void> loadShopItems() async {
     try {
       final configs = await _powerService.getPowerConfigs();
+      final String? eventId = _currentPlayer?.currentEventId;
 
-      // NEW: Fetch Spectator Prices if applicable
+      // Fetch overrides from DB: 1. Spectator Config (on event), 2. Mall Store Prices (on mall_stores)
       Map<String, dynamic> spectatorPrices = {};
-      if (_isSpectatorSession && _currentPlayer?.currentEventId != null) {
-        spectatorPrices = await _powerService
-            .getSpectatorConfig(_currentPlayer!.currentEventId!);
+      Map<String, int> mallStorePrices = {};
+
+      if (eventId != null) {
+        if (_isSpectatorSession) {
+          spectatorPrices = await _powerService.getSpectatorConfig(eventId);
+        } else {
+          mallStorePrices = await _powerService.getStorePrices(eventId);
+        }
       }
 
       // Refresh base items to ensure clean slate
@@ -239,16 +244,23 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
           }
         }
 
-        // NEW: Spectator Price Override
+        // Apply Price Override: Priority depends on current role/session
         int finalCost = item.cost;
-        if (_isSpectatorSession && spectatorPrices.containsKey(item.id)) {
-          finalCost = (spectatorPrices[item.id] as num).toInt();
+
+        if (_isSpectatorSession) {
+          if (spectatorPrices.containsKey(item.id)) {
+            finalCost = (spectatorPrices[item.id] as num).toInt();
+          }
+        } else {
+          if (mallStorePrices.containsKey(item.id)) {
+            finalCost = mallStorePrices[item.id]!;
+          }
         }
 
         return item.copyWith(
           durationSeconds: duration,
           description: newDesc,
-          cost: finalCost, // Apply override
+          cost: finalCost,
         );
       }).toList();
 

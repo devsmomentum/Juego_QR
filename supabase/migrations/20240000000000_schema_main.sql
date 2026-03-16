@@ -420,19 +420,32 @@ BEGIN
         v_is_spectator := TRUE;
     END IF;
 
-    -- 2. DETERMINE COST (Wait! Logic Shift)
-    -- If Spectator, check event config for overrides.
-    v_final_cost := p_cost;
+    -- 2. DETERMINE COST
+    v_final_cost := NULL;
+    
+    -- Fetch event-specific pricing
+    SELECT spectator_config INTO v_spectator_config
+    FROM public.events
+    WHERE id = p_event_id;
     
     IF v_is_spectator THEN
-       SELECT spectator_config INTO v_spectator_config
-       FROM public.events
-       WHERE id = p_event_id;
-       
-       -- Check if there is a custom price for this item
-       IF v_spectator_config IS NOT NULL AND (v_spectator_config->>p_item_id) IS NOT NULL THEN
-           v_final_cost := (v_spectator_config->>p_item_id)::INT;
-       END IF;
+        -- SPECTATORS: Only use spectator_config (Clovers)
+        IF v_spectator_config IS NOT NULL AND (v_spectator_config->>p_item_id) IS NOT NULL THEN
+            v_final_cost := (v_spectator_config->>p_item_id)::INT;
+        END IF;
+    ELSE
+        -- PLAYERS: Use mall_stores table (Automatic Event Config - Coins)
+        SELECT (p->>'cost')::INT INTO v_final_cost
+        FROM public.mall_stores ms,
+             jsonb_array_elements(ms.products) AS p
+        WHERE ms.event_id = p_event_id
+          AND p->>'id' = p_item_id
+        LIMIT 1;
+    END IF;
+
+    -- Fallback to input cost if still null
+    IF v_final_cost IS NULL THEN
+        v_final_cost := p_cost;
     END IF;
 
     -- 3. Check Funds

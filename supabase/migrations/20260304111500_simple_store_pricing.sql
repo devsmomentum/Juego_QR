@@ -43,19 +43,39 @@ BEGIN
     END IF;
 
     -- 2. DETERMINE COST
-    v_final_cost := p_cost;
+    v_final_cost := NULL;
     
     -- Fetch event-specific pricing
     SELECT store_prices, spectator_config INTO v_store_prices, v_spectator_config
     FROM public.events
     WHERE id = p_event_id;
     
-    -- PRIORITY 1: store_prices (Global Event Prices for all roles)
-    IF v_store_prices IS NOT NULL AND (v_store_prices->>p_item_id) IS NOT NULL THEN
-        v_final_cost := (v_store_prices->>p_item_id)::INT;
-    -- PRIORITY 2: spectator_config (Legacy/Specific for Spectators)
-    ELSIF v_is_spectator AND v_spectator_config IS NOT NULL AND (v_spectator_config->>p_item_id) IS NOT NULL THEN
-        v_final_cost := (v_spectator_config->>p_item_id)::INT;
+    IF v_is_spectator THEN
+        -- SPECTATORS: Only use spectator_config (Clovers)
+        IF v_spectator_config IS NOT NULL AND (v_spectator_config->>p_item_id) IS NOT NULL THEN
+            v_final_cost := (v_spectator_config->>p_item_id)::INT;
+        END IF;
+    ELSE
+        -- PLAYERS: Use store_prices or mall_stores (Coins)
+        -- PRIORITY 1: store_prices (Global Event Overrides)
+        IF v_store_prices IS NOT NULL AND (v_store_prices->>p_item_id) IS NOT NULL THEN
+            v_final_cost := (v_store_prices->>p_item_id)::INT;
+        END IF;
+
+        -- PRIORITY 2: mall_stores table (Automatic Event Config)
+        IF v_final_cost IS NULL THEN
+            SELECT (p->>'cost')::INT INTO v_final_cost
+            FROM public.mall_stores ms,
+                 jsonb_array_elements(ms.products) AS p
+            WHERE ms.event_id = p_event_id
+              AND p->>'id' = p_item_id
+            LIMIT 1;
+        END IF;
+    END IF;
+
+    -- Fallback to cost sent by client (last resort)
+    IF v_final_cost IS NULL THEN
+        v_final_cost := p_cost;
     END IF;
 
     -- 3. Check Funds
