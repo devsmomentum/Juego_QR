@@ -600,6 +600,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
   void completeLocalClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
+      // Solo marcar la pista específica por ID como completada.
+      // No se toca is_locked de ninguna otra pista: el servidor es la fuente
+      // de verdad para el desbloqueo (via submit_clue_answer → user_clue_progress).
       _clues[index].isCompleted = true;
       _hintActive = false;
       _activeHintText = null;
@@ -662,16 +665,21 @@ class GameProvider extends ChangeNotifier implements IResettable {
     }
 
     // --- ACTUALIZACIÓN OPTIMISTA ---
+    // FIX: Solo marcar la pista identificada por ID como completada.
+    // NO se desbloquea la siguiente pista en el cliente: el servidor es la
+    // única fuente de verdad para is_locked (via submit_clue_answer que escribe
+    // en user_clue_progress). El fetchClues(silent:true) posterior sincroniza
+    // el estado real desde el servidor de forma atómica.
     final int localIndex = _clues.indexWhere((c) => c.id == targetId);
-    // Guardar estado previo para rollback en caso de fallo
     final int prevClueIndex = _currentClueIndex;
     bool didOptimisticUpdate = false;
 
     if (localIndex != -1) {
       _clues[localIndex].isCompleted = true;
       didOptimisticUpdate = true;
+      // Avanzar el índice al siguiente sin previamente desbloquearlo aquí.
+      // El estado real de is_locked llega del servidor vía fetchClues(silent:true).
       if (localIndex + 1 < _clues.length) {
-        _clues[localIndex + 1].isLocked = false; // Desbloquear siguiente pista
         _currentClueIndex = localIndex + 1;
       }
       notifyListeners();
@@ -697,26 +705,20 @@ class GameProvider extends ChangeNotifier implements IResettable {
       } else {
         // RPC falló: revertir estado optimista para que el usuario pueda reintentar
         debugPrint('⚠️ completeCurrentClue: RPC returned null, reverting optimistic state');
+        // FIX: Rollback solo de la pista específica (by ID, no by index).
+        // No se revierte is_locked de la siguiente porque nunca se modificó.
         if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
           _clues[localIndex].isCompleted = false;
-          if (localIndex + 1 < _clues.length) {
-            _clues[localIndex + 1].isLocked = true;
-          }
           _currentClueIndex = prevClueIndex;
           notifyListeners();
         }
-        // Intentar refrescar del servidor para obtener estado real
         unawaited(fetchClues(silent: true));
         return null;
       }
     } catch (e) {
       debugPrint('Error completing clue: $e');
-      // Error de red: revertir estado optimista
       if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
         _clues[localIndex].isCompleted = false;
-        if (localIndex + 1 < _clues.length) {
-          _clues[localIndex + 1].isLocked = true;
-        }
         _currentClueIndex = prevClueIndex;
         notifyListeners();
       }
