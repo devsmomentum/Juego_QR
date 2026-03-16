@@ -110,6 +110,8 @@ class GameProvider extends ChangeNotifier implements IResettable {
   // Minigame Data from Supabase
   List<Map<String, String>> _minigameCapitals = [];
   List<Map<String, dynamic>> _minigameTFStatements = [];
+  List<Map<String, dynamic>> _minigameChronologicalEvents = [];
+  List<Map<String, dynamic>> _minigameEmojiMovies = [];
   bool _isMinigameDataLoading = false;
 
   // New: Current Sponsor
@@ -122,6 +124,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   List<Map<String, String>> get minigameCapitals => _minigameCapitals;
   List<Map<String, dynamic>> get minigameTFStatements => _minigameTFStatements;
+  List<Map<String, dynamic>> get minigameChronologicalEvents =>
+      _minigameChronologicalEvents;
+  List<Map<String, dynamic>> get minigameEmojiMovies => _minigameEmojiMovies;
   bool get isMinigameDataLoading => _isMinigameDataLoading;
 
   /// Sets the frozen state (called by PowerEffectProvider)
@@ -222,6 +227,8 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _isFrozen = false;
     _minigameCapitals = [];
     _minigameTFStatements = [];
+    _minigameChronologicalEvents = [];
+    _minigameEmojiMovies = [];
     _isMinigameDataLoading = false;
     _currentSponsor = null;
     _currentUserId = null;
@@ -894,7 +901,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       debugPrint('GameProvider: Error initializing game: $e');
       return false;
     } finally {
-      _isLoading = false;
+  _isLoading = false;
       notifyListeners();
     }
   }
@@ -911,8 +918,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   /// Carga los datos de los minijuegos desde Supabase si no han sido cargados.
   Future<void> loadMinigameData() async {
-    if (_minigameCapitals.isNotEmpty && _minigameTFStatements.isNotEmpty)
-      return;
+    if (_isMinigameDataLoading) return;
 
     _isMinigameDataLoading = true;
     notifyListeners();
@@ -921,14 +927,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
       final results = await Future.wait([
         _gameService.fetchMinigameCapitals(),
         _gameService.fetchMinigameTrueFalse(),
+        _gameService.fetchMinigameChronologicalOrder(),
+        _gameService.fetchMinigameEmojiMovies(),
       ]);
 
       _minigameCapitals = results[0] as List<Map<String, String>>;
-      final tfRaw = results[1] as List<Map<String, dynamic>>;
-      _minigameTFStatements = tfRaw;
+      _minigameTFStatements = results[1] as List<Map<String, dynamic>>;
+      _minigameChronologicalEvents = results[2] as List<Map<String, dynamic>>;
+      _minigameEmojiMovies = results[3] as List<Map<String, dynamic>>;
 
       debugPrint(
-          'GameProvider: Loaded ${_minigameCapitals.length} capitals and ${_minigameTFStatements.length} TF statements.');
+          'GameProvider: Loaded ${_minigameCapitals.length} capitals, ${_minigameTFStatements.length} TF statements, ${_minigameChronologicalEvents.length} chrono events, and ${_minigameEmojiMovies.length} movie events.');
     } catch (e) {
       debugPrint('GameProvider: Error loading minigame data: $e');
     } finally {

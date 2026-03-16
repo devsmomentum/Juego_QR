@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import '../../models/clue.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/connectivity_provider.dart';
@@ -26,10 +27,21 @@ class ChronologicalOrderMinigame extends StatefulWidget {
 }
 
 class HistoricalEvent {
-  final String description;
+  final String eventName;
   final int year;
+  final String description;
 
-  HistoricalEvent(this.description, this.year);
+  HistoricalEvent(this.eventName, this.year, this.description);
+
+  factory HistoricalEvent.fromMap(Map<String, dynamic> map) {
+    return HistoricalEvent(
+      map['eventName'] ?? map['event_name'] ?? 'Evento Desconocido',
+      map['year'] ?? 0,
+      map['description'] ?? '',
+    );
+  }
+
+  String get yearLabel => year < 0 ? '${year.abs()} a.C.' : '$year d.C.';
 }
 
 class _ChronologicalOrderMinigameState
@@ -52,29 +64,47 @@ class _ChronologicalOrderMinigameState
 
   Timer? _gameTimer;
 
-  // Repository of events
-  final List<HistoricalEvent> _allEvents = [
-    HistoricalEvent("Invención de la Rueda", -3500),
-    HistoricalEvent("Construcción Pirámides Giza", -2580),
-    HistoricalEvent("Caída del Imperio Romano", 476),
-    HistoricalEvent("Descubrimiento de América", 1492),
-    HistoricalEvent("Invención de la Imprenta", 1440),
-    HistoricalEvent("Revolución Francesa", 1789),
-    HistoricalEvent("Primer Vuelo Hermanos Wright", 1903),
-    HistoricalEvent("Llegada a la Luna", 1969),
-    HistoricalEvent("Lanzamiento del Primer iPhone", 2007),
-    HistoricalEvent("Invención World Wide Web", 1989),
-    HistoricalEvent("Caída Muro de Berlín", 1989),
-    HistoricalEvent("Hundimiento del Titanic", 1912),
-    HistoricalEvent("Fin de la Segunda Guerra Mundial", 1945),
-    HistoricalEvent("Primer transplante de corazón", 1967),
-    HistoricalEvent("Lanzamiento de Windows 95", 1995),
+  // Rich Fallback Repository
+  final List<HistoricalEvent> _fallbackEvents = [
+    HistoricalEvent("Invención de la Rueda", -3500, "Mesopotamia"),
+    HistoricalEvent("Pirámides de Giza", -2560, "Egipto"),
+    HistoricalEvent("Caída de Constantinopla", 1453, "Fin del Imperio Bizantino"),
+    HistoricalEvent("Descubrimiento de América", 1492, "Cristóbal Colón"),
+    HistoricalEvent("Invención de la Imprenta", 1440, "Johannes Gutenberg"),
+    HistoricalEvent("Revolución Francesa", 1789, "París"),
+    HistoricalEvent("Primer Vuelo Wright", 1903, "Kitty Hawk"),
+    HistoricalEvent("Llegada a la Luna", 1969, "Apolo 11"),
+    HistoricalEvent("Primer iPhone", 2007, "Apple"),
+    HistoricalEvent("Caída Muro de Berlín", 1989, "Alemania"),
+    HistoricalEvent("Hundimiento del Titanic", 1912, "Atlántico Norte"),
+    HistoricalEvent("Fin 2da Guerra Mundial", 1945, "Rendición de Japón"),
+    HistoricalEvent("Transplante Corazón", 1967, "Christian Barnard"),
+    HistoricalEvent("Windows 95", 1995, "Microsoft"),
+    HistoricalEvent("Ataques 11 de Septiembre", 2001, "Torres Gemelas"),
+    HistoricalEvent("Guerra Civil EE.UU.", 1861, "Conflicto Norte-Sur"),
+    HistoricalEvent("Publicación Evolución", 1859, "Charles Darwin"),
+    HistoricalEvent("Invención Teléfono", 1876, "Graham Bell"),
+    HistoricalEvent("Bombilla Eléctrica", 1879, "Thomas Edison"),
+    HistoricalEvent("Sputnik 1", 1957, "Era Espacial"),
   ];
 
   @override
   void initState() {
     super.initState();
-    _startGame();
+    _loadDataAndStart();
+  }
+
+  Future<void> _loadDataAndStart() async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    
+    // Fetch data if not loaded
+    if (gameProvider.minigameChronologicalEvents.isEmpty) {
+      await gameProvider.loadMinigameData();
+    }
+    
+    if (mounted) {
+      _startGame();
+    }
   }
 
   void _startGame() {
@@ -94,13 +124,10 @@ class _ChronologicalOrderMinigameState
         return;
       }
       setState(() {
-        // [FIX] Pause timer if connectivity is bad OR if game is frozen (sabotage)
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
-        final connectivityByProvider =
+        final connectivity =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
-          return; // Skip tick
-        }
+        if (!connectivity.isOnline || gameProvider.isFrozen) return;
 
         if (_secondsRemaining > 0) {
           _secondsRemaining--;
@@ -112,34 +139,41 @@ class _ChronologicalOrderMinigameState
   }
 
   void _generateRound() {
-    // Pick 4 random events
-    var shuffled = List<HistoricalEvent>.from(_allEvents)..shuffle();
-    _events = shuffled.take(4).toList();
-    // Shuffle them for the user to sort
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    List<HistoricalEvent> source = [];
+
+    if (gameProvider.minigameChronologicalEvents.isNotEmpty) {
+      source = gameProvider.minigameChronologicalEvents
+          .map((m) => HistoricalEvent.fromMap(m))
+          .toList();
+    } else {
+      source = List.from(_fallbackEvents);
+    }
+
+    source.shuffle();
+    _events = source.take(4).toList();
+    // Shuffle again for the user
     _events.shuffle();
+    setState(() {});
   }
 
   void _handleItemTap(int index) {
     if (_isGameOver) return;
 
-    // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
 
     setState(() {
       if (_selectedIndex == null) {
-        // Select first item
         _selectedIndex = index;
       } else if (_selectedIndex == index) {
-        // Deselect if same item tapped
         _selectedIndex = null;
       } else {
-        // Swap
         final temp = _events[_selectedIndex!];
         _events[_selectedIndex!] = _events[index];
         _events[index] = temp;
-        _selectedIndex = null; // Clear selection after swap
+        _selectedIndex = null;
       }
     });
   }
@@ -147,6 +181,7 @@ class _ChronologicalOrderMinigameState
   void _checkOrder() {
     if (_isGameOver) return;
 
+    // Check sorting
     bool correct = true;
     for (int i = 0; i < _events.length - 1; i++) {
       if (_events[i].year > _events[i + 1].year) {
@@ -165,6 +200,14 @@ class _ChronologicalOrderMinigameState
   Future<void> _handleMistake() async {
     _gameTimer?.cancel();
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+
+    // Create correction string
+    final sortedCorrectly = List<HistoricalEvent>.from(_events)
+      ..sort((a, b) => a.year.compareTo(b.year));
+    final correctionText = sortedCorrectly
+        .map((e) => "${e.eventName} (${e.yearLabel})")
+        .join("\n↓\n");
+
     if (playerProvider.currentPlayer != null) {
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
       if (!mounted) return;
@@ -172,16 +215,43 @@ class _ChronologicalOrderMinigameState
       if (newLives <= 0) {
         _endGame(
             win: false,
-            reason: "Orden incorrecto. Sin vidas.",
+            reason: "Orden incorrecto.\n\n$correctionText",
             lives: newLives);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("¡ORDEN INCORRECTO! -1 Vida"),
-              backgroundColor: AppTheme.dangerRed,
-              duration: Duration(milliseconds: 1000)),
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppTheme.surfaceDark,
+            title: const Text("ORDEN INCORRECTO",
+                style: TextStyle(color: AppTheme.dangerRed)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("El orden correcto era:",
+                    style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 12),
+                Text(correctionText,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _generateRound();
+                  _startTimer();
+                },
+                child: const Text("REINTENTAR",
+                    style: TextStyle(color: AppTheme.accentGold)),
+              ),
+            ],
+          ),
         );
-        _startTimer();
       }
     }
   }
@@ -203,8 +273,8 @@ class _ChronologicalOrderMinigameState
 
       setState(() {
         _showOverlay = true;
-        _overlayTitle = "GAME OVER";
-        _overlayMessage = reason ?? "Perdiste";
+        _overlayTitle = currentLives <= 0 ? "GAME OVER" : "INTENTA DE NUEVO";
+        _overlayMessage = reason ?? "Orden incorrecto";
         _canRetry = currentLives > 0;
         _showShopButton = true;
       });
@@ -212,11 +282,6 @@ class _ChronologicalOrderMinigameState
   }
 
   void _resetGame() {
-    setState(() {
-      _isGameOver = false;
-      _showOverlay = false;
-      _selectedIndex = null;
-    });
     _startGame();
   }
 
@@ -231,102 +296,164 @@ class _ChronologicalOrderMinigameState
     return Stack(
       children: [
         Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+            // Timer & Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.white10),
+              ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.timer, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  Text("Tiempo: $_secondsRemaining",
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 16)),
+                  Row(
+                    children: [
+                      const Icon(Icons.timer, color: AppTheme.accentGold),
+                      const SizedBox(width: 8),
+                      Text("$_secondsRemaining s",
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const Text("ORDENA LOS EVENTOS",
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          letterSpacing: 1.2)),
                 ],
               ),
             ),
+
+            const SizedBox(height: 5),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.0),
               child: Text(
-                "Toca dos tarjetas para intercambiarlas\n(Más antiguo arriba)",
+                "Selecciona dos tarjetas para intercambiar su posición.\nEl más antiguo debe ir arriba.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: Colors.white60, fontSize: 13),
               ),
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 15),
+
+            // Events List
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: _events.length,
               itemBuilder: (context, index) {
-                final isSelected = _selectedIndex == index;
-                return GestureDetector(
-                  onTap: () => _handleItemTap(index),
-                  child: Card(
-                    key: ValueKey(_events[index].description),
-                    color: isSelected
-                        ? AppTheme.primaryPurple
-                        : Colors.blueGrey[800],
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: isSelected
-                            ? const BorderSide(
-                                color: AppTheme.accentGold, width: 2)
-                            : BorderSide.none),
-                    child: ListTile(
-                      visualDensity: VisualDensity.compact,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 12),
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor:
-                            isSelected ? Colors.white : Colors.cyan,
-                        child: Text("${index + 1}",
-                            style: TextStyle(
-                                color: isSelected
-                                    ? AppTheme.primaryPurple
-                                    : Colors.white,
-                                fontSize: 14)),
+                  final isSelected = _selectedIndex == index;
+                  final event = _events[index];
+
+                  return GestureDetector(
+                    onTap: () => _handleItemTap(index),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: isSelected
+                            ? LinearGradient(colors: [
+                                AppTheme.primaryPurple,
+                                AppTheme.primaryPurple.withOpacity(0.7)
+                              ])
+                            : const LinearGradient(colors: [
+                                Color(0xFF2C3E50),
+                                Color(0xFF1A252F)
+                              ]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                    color: AppTheme.accentGold.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    spreadRadius: 2)
+                              ]
+                            : [],
+                        border: Border.all(
+                          color: isSelected
+                              ? AppTheme.accentGold
+                              : Colors.white10,
+                          width: isSelected ? 2 : 1,
+                        ),
                       ),
-                      title: Text(
-                        _events[index].description,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 14),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              isSelected ? Colors.white24 : Colors.cyan[700],
+                          child: Text("${index + 1}",
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        title: AutoSizeText(
+                          event.eventName,
+                          maxLines: 1,
+                          minFontSize: 12,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: event.description.isNotEmpty
+                            ? AutoSizeText(
+                                event.description,
+                                maxLines: 2,
+                                minFontSize: 10,
+                                style: const TextStyle(
+                                    color: Colors.white54, fontSize: 12))
+                            : null,
+                        trailing: Icon(
+                          Icons.swap_vert,
+                          color: isSelected ? AppTheme.accentGold : Colors.white24,
+                        ),
                       ),
-                      trailing: Icon(Icons.swap_vert,
-                          color:
-                              isSelected ? AppTheme.accentGold : Colors.white54,
-                          size: 20),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+
+            // Action Button
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
+              padding: const EdgeInsets.fromLTRB(30, 10, 30, 30),
+              child: Container(
+                width: double.infinity,
+                height: 55,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.accentGold.withOpacity(0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
                 ),
-                onPressed: _checkOrder,
-                child: const Text("VERIFICAR ORDEN",
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black)),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentGold,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30)),
+                  ),
+                  onPressed: _checkOrder,
+                  child: const Text("VERIFICAR ORDEN",
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.1)),
+                ),
               ),
             ),
-            const SizedBox(height: 10),
           ],
         ),
+
         if (_showOverlay)
           GameOverOverlay(
             title: _overlayTitle,

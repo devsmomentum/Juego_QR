@@ -1515,7 +1515,11 @@ Widget _buildMinigameScaffold(
                                       clue.puzzleType == PuzzleType.ticTacToe ||
                                       clue.puzzleType == PuzzleType.tetris ||
                                       clue.puzzleType == PuzzleType.hangman ||
-                                      clue.puzzleType == PuzzleType.fastNumber);
+                                      clue.puzzleType == PuzzleType.fastNumber ||
+                                      clue.puzzleType == PuzzleType.capitalCities ||
+                                      clue.puzzleType == PuzzleType.emojiMovie ||
+                                      clue.puzzleType == PuzzleType.trueFalse ||
+                                      clue.puzzleType == PuzzleType.chronologicalOrder);
 
                               // Horizontal padding only if NOT a full-screen precision game like Dodge
                               final hPadding =
@@ -1610,7 +1614,7 @@ class HolographicPanelsWrapper extends StatelessWidget {
       HolographicPanelsMinigame(
           clue: clue,
           onSuccess: () => onSuccess(clue)),
-      isScrollable: true);
+      isScrollable: false);
 }
 
 class MissingOperatorWrapper extends StatelessWidget {
@@ -1626,7 +1630,7 @@ class MissingOperatorWrapper extends StatelessWidget {
       MissingOperatorMinigame(
           clue: clue,
           onSuccess: () => onSuccess(clue)),
-      isScrollable: true);
+      isScrollable: false);
 }
 
 class PrimeNetworkWrapper extends StatelessWidget {
@@ -1642,7 +1646,7 @@ class PrimeNetworkWrapper extends StatelessWidget {
       PrimeNetworkMinigame(
           clue: clue,
           onSuccess: () => onSuccess(clue)),
-      isScrollable: true);
+      isScrollable: false);
 }
 
 class PercentageCalculationWrapper extends StatelessWidget {
@@ -1658,7 +1662,7 @@ class PercentageCalculationWrapper extends StatelessWidget {
       PercentageCalculationMinigame(
           clue: clue,
           onSuccess: () => onSuccess(clue)),
-      isScrollable: true);
+      isScrollable: false);
 }
 
 class ChronologicalOrderWrapper extends StatelessWidget {

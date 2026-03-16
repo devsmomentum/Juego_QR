@@ -640,6 +640,45 @@ class GameService {
     }
   }
 
+  /// Obtiene los datos del minijuego de orden cronológico desde Supabase.
+  Future<List<Map<String, dynamic>>> fetchMinigameChronologicalOrder() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from('minigame_chronological_order')
+          .select('event_name, year, description');
+
+      return response
+          .map((e) => {
+                'eventName': e['event_name'].toString(),
+                'year': e['year'] as int,
+                'description': e['description']?.toString() ?? '',
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('GameService: Error fetching minigame chronological order: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene los datos del minijuego de adivina la película desde Supabase.
+  Future<List<Map<String, dynamic>>> fetchMinigameEmojiMovies() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from('minigame_emoji_movies')
+          .select('emojis, valid_answers');
+
+      return response
+          .map((e) => {
+                'emojis': e['emojis'].toString(),
+                'validAnswers': List<String>.from(e['valid_answers'] as List),
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('GameService: Error fetching minigame emoji movies: $e');
+      return [];
+    }
+  }
+
   /// Obtiene el estado de un game_player específico por su ID.
   /// Retorna el string del estado ('active', 'spectator', etc) o null si no existe.
   Future<String?> getGamePlayerStatus(String gamePlayerId) async {

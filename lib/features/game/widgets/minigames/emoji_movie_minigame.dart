@@ -13,6 +13,7 @@ import '../../../auth/providers/player_provider.dart';
 import '../../../mall/screens/mall_screen.dart';
 import 'package:map_hunter/features/game/services/emoji_movie_service.dart';
 import 'package:map_hunter/features/game/models/emoji_movie_problem.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 
 class EmojiMovieMinigame extends StatefulWidget {
   final Clue clue;
@@ -53,7 +54,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
 
   // Service
   late EmojiMovieService _movieService;
-  List<EmojiMovieProblem> _allMovies = []; // Cache fetched movies
+  // Cache fetched movies
   final List<String> _usedEmojiSets = []; // Track used emojis to avoid repeats
 
   // Animations
@@ -63,7 +64,6 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   @override
   void initState() {
     super.initState();
-    _movieService = EmojiMovieService(Supabase.instance.client);
 
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -73,7 +73,17 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
         .chain(CurveTween(curve: Curves.elasticIn))
         .animate(_shakeController);
 
-    _initializeGameData();
+    _loadDataAndStart();
+  }
+
+  Future<void> _loadDataAndStart() async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (gameProvider.minigameEmojiMovies.isEmpty) {
+      await gameProvider.loadMinigameData();
+    }
+    if (mounted) {
+      _initializeGameData();
+    }
   }
 
   void _startGameTimer() {
@@ -85,25 +95,23 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       if (gameProvider.isFrozen) return;
 
-      // [FIX] Pause timer if connectivity is bad
-      final connectivityByProvider =
+      final connectivity =
           Provider.of<ConnectivityProvider>(context, listen: false);
-      if (!connectivityByProvider.isOnline) {
-        return; // Skip tick
-      }
+      if (!connectivity.isOnline) return;
 
       if (_secondsRemaining > 0) {
         setState(() => _secondsRemaining--);
       } else {
         _gameTimer?.cancel();
-        _loseLife("¡Tiempo agotado!");
+        _handleMistake("¡Tiempo agotado!");
       }
     });
   }
 
-  Future<void> _initializeGameData() async {
+  void _initializeGameData() {
     setState(() => _isLoading = true);
 
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final question = widget.clue.riddleQuestion;
     final answer = widget.clue.riddleAnswer;
 
@@ -117,54 +125,33 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
     String correctAnswer;
 
     if (hasCustomData) {
-      // Use Admin configured data
       _displayEmojis = question!;
       correctAnswer = answer!.trim();
       _validAnswers = [correctAnswer.toLowerCase()];
-
-      // Even if using custom data, we need fetched data for WRONG options
-      if (_allMovies.isEmpty) {
-        _allMovies = await _movieService.fetchAllMovies();
-      }
-
-      _generateOptions(correctAnswer);
+      _generateOptions(correctAnswer, gameProvider.minigameEmojiMovies);
       setState(() => _isLoading = false);
       _startGameTimer();
     } else {
-      // Use Random Data (Fetched from DB)
-      if (_allMovies.isEmpty) {
-        _allMovies = await _movieService.fetchAllMovies();
-      }
+      final allMovies = gameProvider.minigameEmojiMovies;
 
-      if (_allMovies.isNotEmpty) {
+      if (allMovies.isNotEmpty) {
         final random = Random();
-        
-        // Filter out movies already used in this round
-        final availableMovies = _allMovies.where((m) => !_usedEmojiSets.contains(m.emojis)).toList();
-        
-        // If we ran out of movies (unlikely with fallback), clear used history
-        final pool = availableMovies.isEmpty ? _allMovies : availableMovies;
-        
+        final availableMovies =
+            allMovies.where((m) => !_usedEmojiSets.contains(m['emojis'])).toList();
+        final pool = availableMovies.isEmpty ? allMovies : availableMovies;
         final problem = pool[random.nextInt(pool.length)];
-        _usedEmojiSets.add(problem.emojis);
 
-        _displayEmojis = problem.emojis;
-        if (problem.validAnswers.isEmpty) {
-          _displayEmojis = "❓❓";
-          correctAnswer = "error";
-          _validAnswers = ["error"];
-        } else {
-          correctAnswer = problem.validAnswers.first;
-          _validAnswers = problem.validAnswers;
-        }
+        _usedEmojiSets.add(problem['emojis']);
+        _displayEmojis = problem['emojis'];
+        _validAnswers = List<String>.from(problem['validAnswers']);
+        correctAnswer = _validAnswers.first;
 
-        _generateOptions(correctAnswer);
+        _generateOptions(correctAnswer, allMovies);
       } else {
-        // DB is empty or offline, and no local fallback
-        _displayEmojis = "⚠️";
-        correctAnswer = "Sin conexión";
+        _displayEmojis = "🎬";
+        correctAnswer = "Sin datos";
         _validAnswers = ["error"];
-        _options = ["Reintentar", "Sin Datos", "Error DB", "Offline"];
+        _options = ["Error", "DB", "Offline", "Reintentar"];
       }
 
       setState(() => _isLoading = false);
@@ -172,29 +159,24 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
     }
   }
 
-  void _generateOptions(String correctAnswer) {
+  void _generateOptions(String correctAnswer, List<Map<String, dynamic>> allMovies) {
     Set<String> optionsSet = {correctAnswer};
     final random = Random();
 
-    // If no movies are loaded, provide default options
-    if (_allMovies.isEmpty) {
-      _options = [correctAnswer, "Option 1", "Option 2", "Option 3", "Option 4", "Option 5"];
+    if (allMovies.isEmpty) {
+      _options = [correctAnswer, "Harry Potter", "Titanic", "Avatar"];
       _options.shuffle();
       return;
     }
 
-    // Use all movies in db as potential distractors
-    // Increase to 6 options for higher difficulty
-    // Ensure we have enough unique options from _allMovies
     int attempts = 0;
-    while (optionsSet.length < 6 && attempts < 100) {
+    while (optionsSet.length < 4 && attempts < 100) {
       attempts++;
-      final problem = _allMovies[random.nextInt(_allMovies.length)];
-      if (problem.validAnswers.isEmpty) continue;
+      final problem = allMovies[random.nextInt(allMovies.length)];
+      final answers = List<String>.from(problem['validAnswers']);
+      if (answers.isEmpty) continue;
 
-      final candidate = problem.validAnswers.first;
-
-      // Avoid adding the correct answer or very similar answers
+      final candidate = answers.first;
       bool isSimilarToCorrect = _validAnswers.any((valid) =>
           candidate.toLowerCase().contains(valid.toLowerCase()) ||
           valid.toLowerCase().contains(candidate.toLowerCase()));
@@ -204,15 +186,12 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       }
     }
 
-    // If we still don't have 6 options, fill with generic ones
-    while (optionsSet.length < 6) {
-      optionsSet.add("Opción ${optionsSet.length + 1}");
+    while (optionsSet.length < 4) {
+      optionsSet.add("Película ${optionsSet.length + 1}");
     }
 
     _options = optionsSet.toList();
     _options.shuffle();
-
-    // Capitalize first letter of each option
     _options = _options.map((opt) {
       if (opt.isEmpty) return opt;
       return opt[0].toUpperCase() + opt.substring(1);
@@ -229,20 +208,16 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
   void _checkAnswer(String selectedOption) {
     if (_isGameOver) return;
 
-    // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
 
-    // Safety check for options like "Sin Datos"
     if (_validAnswers.contains("error") && selectedOption == "Reintentar") {
       _resetGame();
       return;
     }
 
     final normalizedSelection = selectedOption.toLowerCase();
-
-    // Normalize logic
     bool isCorrect =
         _validAnswers.any((ans) => normalizedSelection == ans.toLowerCase());
 
@@ -250,14 +225,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       _handleSuccess();
     } else {
       _shakeController.forward(from: 0.0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Incorrecto"),
-          backgroundColor: AppTheme.dangerRed,
-          duration: Duration(milliseconds: 500),
-        ),
-      );
-      _loseLife("Respuesta incorrecta");
+      _handleMistake("Respuesta incorrecta");
     }
   }
 
@@ -273,45 +241,89 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       });
       widget.onSuccess();
     } else {
-      // Soft reset for next movie
       _initializeGameData();
     }
   }
 
-  Future<void> _loseLife(String reason) async {
+  Future<void> _handleMistake(String reason) async {
     _gameTimer?.cancel();
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
     if (playerProvider.currentPlayer != null) {
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
-
       if (!mounted) return;
 
+      final correctAnswerDisplay = _validAnswers.first[0].toUpperCase() + _validAnswers.first.substring(1);
+
       if (newLives <= 0) {
-        _showOverlayState(
-            title: "GAME OVER",
-            message: "Te has quedado sin vidas.",
-            retry: false,
-            showShop: true);
+        _endGame(
+            win: false,
+            reason: "$reason.\n\nLa respuesta era: $correctAnswerDisplay",
+            lives: newLives);
       } else {
-        _showOverlayState(
-            title: "¡FALLASTE!", message: reason, retry: true, showShop: false);
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppTheme.surfaceDark,
+            title: const Text("¡RESPUESTA INCORRECTA!",
+                style: TextStyle(color: AppTheme.dangerRed, fontSize: 18)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("La película para",
+                    style: TextStyle(color: Colors.white70)),
+                Text(_displayEmojis,
+                    style: const TextStyle(fontSize: 40)),
+                const Text("es:", style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 10),
+                Text(correctAnswerDisplay,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: AppTheme.accentGold,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _initializeGameData();
+                },
+                child: const Text("CONTINUAR",
+                    style: TextStyle(color: AppTheme.accentGold)),
+              ),
+            ],
+          ),
+        );
       }
     }
   }
 
-  void _showOverlayState(
-      {required String title,
-      required String message,
-      bool retry = false,
-      bool showShop = false}) {
+  void _endGame({required bool win, String? reason, int? lives}) {
+    _gameTimer?.cancel();
     setState(() {
-      _showOverlay = true;
-      _overlayTitle = title;
-      _overlayMessage = message;
-      _canRetry = retry;
-      _showShopButton = showShop;
+      _isGameOver = true;
     });
+
+    if (win) {
+      widget.onSuccess();
+    } else {
+      final currentLives = lives ??
+          Provider.of<PlayerProvider>(context, listen: false)
+              .currentPlayer
+              ?.lives ??
+          0;
+
+      setState(() {
+        _showOverlay = true;
+        _overlayTitle = currentLives <= 0 ? "GAME OVER" : "INTENTA DE NUEVO";
+        _overlayMessage = reason ?? "Respuesta incorrecta";
+        _canRetry = currentLives > 0;
+        _showShopButton = true;
+      });
+    }
   }
 
   void _resetGame() {
@@ -319,7 +331,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       _isGameOver = false;
       _showOverlay = false;
       _moviesGuessed = 0;
-      _usedEmojiSets.clear(); // Clear used history on reset
+      _usedEmojiSets.clear();
       _secondsRemaining = _gameDurationSeconds;
     });
     _initializeGameData();
@@ -339,124 +351,127 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(MediaQuery.of(context).size.height < 700 ? 12.0 : 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Timer
+              // Header Card
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(12),
+                margin: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).size.height < 700 ? 5 : 15),
                 decoration: BoxDecoration(
                   color: isLowTime
                       ? AppTheme.dangerRed.withOpacity(0.2)
-                      : Colors.black45,
-                  borderRadius: BorderRadius.circular(20),
+                      : Colors.black26,
+                  borderRadius: BorderRadius.circular(15),
                   border: Border.all(
-                      color:
-                          isLowTime ? AppTheme.dangerRed : AppTheme.accentGold),
+                      color: isLowTime ? AppTheme.dangerRed : Colors.white10),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.movie, color: AppTheme.accentGold, size: 16),
-                    const SizedBox(width: 5),
-                    Text("$_moviesGuessed/$_targetMovies",
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 15),
-                    Icon(Icons.timer,
-                        color: isLowTime
-                            ? AppTheme.dangerRed
-                            : AppTheme.accentGold),
-                    const SizedBox(width: 5),
-                    Text("$minutes:$seconds",
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontFamily: 'monospace')),
+                    Row(
+                      children: [
+                        Icon(Icons.timer, 
+                            color: isLowTime ? AppTheme.dangerRed : AppTheme.accentGold),
+                        const SizedBox(width: 8),
+                        Text("$minutes:$seconds",
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryPurple.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text("$_moviesGuessed/$_targetMovies",
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
+                    ),
                   ],
                 ),
               ),
 
-              // Emojis Display
-              Text(
-                _displayEmojis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 48,
-                  letterSpacing: 4,
+              const Text("ADIVINA LA PELÍCULA",
+                  style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 14,
+                      letterSpacing: 1.2)),
+
+              SizedBox(height: MediaQuery.of(context).size.height < 700 ? 2 : 10),
+
+              Center(
+                child: Container(
+                  height: MediaQuery.of(context).size.height < 700 ? 100 : 160,
+                  alignment: Alignment.center,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _displayEmojis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 64,
+                        shadows: [
+                          Shadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 5))
+                        ]
+                      ),
+                    ),
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
 
-              // MULTIPLE CHOICE BUTTONS (2x2 GRID)
-              if (_options.length >= 4)
-                AnimatedBuilder(
-                  animation: _shakeController,
-                  builder: (context, child) {
-                    return Transform.translate(
-                      offset: Offset(
-                          _shakeAnimation.value *
-                              (_shakeController.status ==
-                                      AnimationStatus.forward
-                                  ? 1
-                                  : -1),
-                          0),
-                      child: child,
-                    );
-                  },
-                  child:
-                      // Options Grid (Higher difficulty with more options)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 2.5, // Adjusted for more options
-                          ),
-                          itemCount: _options.length,
-                          itemBuilder: (context, index) {
-                            final option = _options[index];
-                            return ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white10,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                  side: const BorderSide(color: Colors.white24),
-                                ),
-                              ),
-                              onPressed: () => _checkAnswer(option),
-                              child: Text(
-                                option,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          },
+              // Options Grid
+              AnimatedBuilder(
+                animation: _shakeController,
+                builder: (context, child) {
+                  return Transform.translate(
+                    offset: Offset(_shakeAnimation.value * (_shakeController.status == AnimationStatus.forward ? 1 : -1), 0),
+                    child: child,
+                  );
+                },
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 2.5,
+                  children: _options.map((option) {
+                    return ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2C3E50),
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: const BorderSide(color: Colors.white10),
                         ),
                       ),
+                      onPressed: () => _checkAnswer(option),
+                      child: AutoSizeText(
+                        option,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        minFontSize: 10,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
                 ),
+              ),
             ],
           ),
         ),
 
-        // Overlay
         if (_showOverlay)
           GameOverOverlay(
             title: _overlayTitle,
@@ -464,57 +479,17 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
             onRetry: _canRetry ? _resetGame : null,
             onGoToShop: _showShopButton
                 ? () async {
-                    await Navigator.push(
-                      context,
+                    await Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const MallScreen()),
                     );
                     if (!context.mounted) return;
-                    final player =
-                        Provider.of<PlayerProvider>(context, listen: false)
-                            .currentPlayer;
-                    if ((player?.lives ?? 0) > 0) {
-                      _resetGame();
-                      setState(() {
-                        _showOverlay = false;
-                      });
-                    }
+                    final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+                    if ((player?.lives ?? 0) > 0) _resetGame();
                   }
                 : null,
             onExit: () => Navigator.pop(context),
           ),
       ],
-    );
-  }
-
-  Widget _buildOptionButton(String text) {
-    return SizedBox(
-      height: 85, // Fixed height for consistency
-      child: ElevatedButton(
-        onPressed: () => _checkAnswer(text),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.black54,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          side: const BorderSide(color: AppTheme.accentGold),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          elevation: 4,
-        ),
-        child: Center(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 15, // Slightly smaller to fit
-              fontWeight: FontWeight.bold,
-              height: 1.1,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ),
     );
   }
 }

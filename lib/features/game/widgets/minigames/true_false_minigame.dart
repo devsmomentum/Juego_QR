@@ -303,23 +303,61 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
       if (!mounted) return;
 
+      final correctionText = _currentStatement.isTrue
+          ? "La afirmación era VERDADERA."
+          : (_currentStatement.correction.isNotEmpty
+              ? _currentStatement.correction
+              : "La afirmación era FALSA.");
+
       if (newLives <= 0) {
         _endGame(
             win: false,
-            reason: "Incorrecto. ${_currentStatement.correction}",
+            reason: "Incorrecto.\n\n$correctionText",
             lives: newLives);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(_currentStatement.isTrue
-                  ? "¡INCORRECTO! Era Verdadero."
-                  : "¡INCORRECTO! ${_currentStatement.correction}"),
-              backgroundColor: AppTheme.dangerRed,
-              duration: const Duration(milliseconds: 2500)),
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppTheme.surfaceDark,
+            title: const Text("¡RESPUESTA INCORRECTA!",
+                style: TextStyle(color: AppTheme.dangerRed, fontSize: 18)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Sobre:", style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 8),
+                Text(_currentStatement.text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16)),
+                const SizedBox(height: 15),
+                const Text("La realidad es:",
+                    style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 8),
+                Text(correctionText,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: AppTheme.accentGold,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _generateRound();
+                  _startTimer();
+                },
+                child: const Text("CONTINUAR",
+                    style: TextStyle(color: AppTheme.accentGold)),
+              ),
+            ],
+          ),
         );
-        _startTimer();
-        // Maybe new round?
-        _generateRound();
       }
     }
   }
@@ -341,8 +379,8 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
 
       setState(() {
         _showOverlay = true;
-        _overlayTitle = "GAME OVER";
-        _overlayMessage = reason ?? "Perdiste";
+        _overlayTitle = currentLives <= 0 ? "GAME OVER" : "INTENTA DE NUEVO";
+        _overlayMessage = reason ?? "Respuesta incorrecta";
         _canRetry = currentLives > 0;
         _showShopButton = true;
       });
@@ -360,7 +398,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                       _allStatements.first.text.contains("Error"))
               ? const Center(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       CircularProgressIndicator(color: AppTheme.accentGold),
                       SizedBox(height: 10),
@@ -370,6 +408,7 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                   ),
                 )
               : Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Título con Glow Cibernético
@@ -401,7 +440,9 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 35),
+                    SizedBox(
+                        height:
+                            MediaQuery.of(context).size.height < 700 ? 5 : 15),
 
                     // Stats Bar (Glassmorphic)
                     Row(
@@ -427,12 +468,15 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 30),
+                    SizedBox(
+                        height:
+                            MediaQuery.of(context).size.height < 700 ? 5 : 15),
 
                     // Statement Card (Panel principal)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(28),
+                      padding: EdgeInsets.all(
+                          MediaQuery.of(context).size.height < 700 ? 16 : 28),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(28),
@@ -447,30 +491,47 @@ class _TrueFalseMinigameState extends State<TrueFalseMinigame> {
                         ],
                       ),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            constraints: BoxConstraints(
+                              minHeight:
+                                  MediaQuery.of(context).size.height < 700
+                                      ? 80
+                                      : 180,
+                            ),
+                            padding: EdgeInsets.all(
+                                MediaQuery.of(context).size.height < 700
+                                    ? 12
+                                    : 24),
                             decoration: BoxDecoration(
                               color: AppTheme.accentGold.withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(Icons.psychology_outlined,
-                                color: AppTheme.accentGold, size: 32),
+                                color: AppTheme.accentGold,
+                                size: MediaQuery.of(context).size.height < 700
+                                    ? 24
+                                    : 32),
                           ),
-                          const SizedBox(height: 20),
-                          Text(
+                          const SizedBox(height: 15),
+                          AutoSizeText(
                             _currentStatement.text,
                             textAlign: TextAlign.center,
+                            maxLines: 4,
+                            minFontSize: 14,
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
-                                height: 1.4),
+                                height: 1.3),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 50),
+                    SizedBox(
+                        height:
+                            MediaQuery.of(context).size.height < 700 ? 10 : 30),
 
                     // Buttons de Acción
                     Row(
