@@ -88,9 +88,9 @@ class GamePhoneInputField extends StatelessWidget {
             keyboardType: TextInputType.phone,
             inputFormatters: [
               FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(
-                selectedCode.maxLength + 1, // +1 por posible cero inicial
-              ),
+              // Impide cero inicial: el código de país ya se muestra aparte.
+              _NoLeadingZeroFormatter(),
+              LengthLimitingTextInputFormatter(selectedCode.maxLength),
             ],
             decoration: InputDecoration(
               labelText: 'NÚMERO DE TELÉFONO',
@@ -401,5 +401,23 @@ class _CountryCodePickerSheetState extends State<_CountryCodePickerSheet> {
         ],
       ),
     );
+  }
+}
+
+/// Formatter que impide escribir "0" como primer dígito.
+///
+/// El código de país (+58, +57, etc.) ya se muestra en el selector separado,
+/// por lo que el campo solo debe aceptar el número local sin cero inicial.
+class _NoLeadingZeroFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.startsWith('0')) {
+      // Rechazar: mantener el valor anterior.
+      return oldValue;
+    }
+    return newValue;
   }
 }

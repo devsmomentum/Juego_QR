@@ -77,11 +77,7 @@ class ProfileRegistrationProvider extends ChangeNotifier {
   /// Elimina el "0" inicial del número local si existe (convención venezolana).
   /// Retorna `null` si el número está vacío tras sanitizar.
   String? get formattedPhone {
-    final digits = sanitizeNumber(_phoneNumber);
-    if (digits.isEmpty) return null;
-
-    // Eliminar cero inicial del número local (ej: 0412... → 412...)
-    final localNumber = digits.startsWith('0') ? digits.substring(1) : digits;
+    final localNumber = sanitizeNumber(_phoneNumber);
     if (localNumber.isEmpty) return null;
 
     // dialCode ya incluye "+" (ej: "+58")
@@ -101,12 +97,13 @@ class ProfileRegistrationProvider extends ChangeNotifier {
     if (digits.isEmpty) {
       return 'El número debe contener dígitos';
     }
-    // Eliminar cero inicial para la validación de longitud
-    final localDigits = digits.startsWith('0') ? digits.substring(1) : digits;
-    if (localDigits.length < minDigits) {
+    if (digits.startsWith('0')) {
+      return 'No incluyas el cero inicial';
+    }
+    if (digits.length < minDigits) {
       return 'Mínimo $minDigits dígitos';
     }
-    if (localDigits.length > _selectedCountryCode.maxLength) {
+    if (digits.length > _selectedCountryCode.maxLength) {
       return 'Máximo ${_selectedCountryCode.maxLength} dígitos';
     }
     return null;
