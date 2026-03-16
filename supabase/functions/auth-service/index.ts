@@ -151,17 +151,6 @@ serve(async (req) => {
             "Formato de cédula inválido. Usa V12345678 o E12345678",
           );
         }
-
-        // Verificar si la cédula ya existe (buscar en campo 'dni' de la BD)
-        const { data: existingCedula } = await supabaseClient
-          .from("profiles")
-          .select("id")
-          .eq("dni", sanitizedCedula)
-          .single();
-
-        if (existingCedula) {
-          throw new Error("Esta cédula ya está registrada");
-        }
       }
 
       // Validar formato de teléfono E.164: +[código país][número local]
@@ -183,20 +172,63 @@ serve(async (req) => {
             "Formato de teléfono inválido. Usa formato internacional (+584121234567) o local (04121234567)",
           );
         }
+      }
 
-        // Verificar si el teléfono ya existe
-        const { data: existingPhone } = await supabaseClient
-          .from("profiles")
-          .select("id")
-          .eq("phone", sanitizedPhone)
-          .single();
+      // ── PRE-FLIGHT UNIQUENESS CHECKS ────────────────────────────────
+      // Use service role client to bypass RLS and reliably check for
+      // existing cedula/phone BEFORE calling signUp.
+      // This provides user-friendly error messages instead of the generic
+      // "Database error saving new user" that Supabase Auth returns when
+      // the trigger fails due to a constraint violation.
+      // ────────────────────────────────────────────────────────────────
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const serviceClient = serviceKey
+        ? createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey, {
+            auth: { persistSession: false },
+          })
+        : null;
 
-        if (existingPhone) {
-          throw new Error("Este teléfono ya está registrado");
+      if (serviceClient) {
+        if (sanitizedCedula) {
+          const { data: existingCedula } = await serviceClient
+            .from("profiles")
+            .select("id")
+            .eq("dni", sanitizedCedula)
+            .maybeSingle();
+
+          if (existingCedula) {
+            return new Response(
+              JSON.stringify({ error: "Esta cédula ya está registrada" }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+        }
+
+        if (sanitizedPhone) {
+          const { data: existingPhone } = await serviceClient
+            .from("profiles")
+            .select("id")
+            .eq("phone", sanitizedPhone)
+            .maybeSingle();
+
+          if (existingPhone) {
+            return new Response(
+              JSON.stringify({ error: "Este teléfono ya está registrado" }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
         }
       }
 
-      // Attempt signUp — handle duplicate user gracefully
+      // ── ATOMIC SIGN-UP ──────────────────────────────────────────────
+      // signUp creates the row in auth.users.
+      // The DB trigger `handle_new_user` runs INSIDE THE SAME transaction
+      // and creates the full profile (with dni, phone, clovers, etc.).
+      //
+      // If the trigger fails (e.g. duplicate dni/phone constraint), the
+      // entire transaction rolls back automatically – NO orphan auth user
+      // is ever left behind. No manual retry/rollback logic needed.
+      // ────────────────────────────────────────────────────────────────
       let data, error;
       try {
         const signUpResult = await supabaseClient.auth.signUp({
@@ -213,147 +245,91 @@ serve(async (req) => {
         data = signUpResult.data;
         error = signUpResult.error;
       } catch (signUpError: any) {
-        // Race condition: user might have been created between check and signUp
-        if (
-          signUpError?.message?.includes("already registered") ||
-          signUpError?.message?.includes("already exists")
-        ) {
+        const msg = signUpError?.message ?? "";
+
+        // Duplicate email (race condition between pre-check and signUp)
+        if (msg.includes("already registered") || msg.includes("already exists")) {
           return new Response(
-            JSON.stringify({
-              error: "Este correo ya está registrado. Intenta iniciar sesión.",
-            }),
-            {
-              status: 409,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
+            JSON.stringify({ error: "Este correo ya está registrado. Intenta iniciar sesión." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
+
+        // Trigger-originated constraint violations bubble up through signUp
+        if (msg.includes("profiles_dni_key") || msg.includes("duplicate key") && msg.includes("dni")) {
+          return new Response(
+            JSON.stringify({ error: "Esta cédula ya está registrada" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        if (msg.includes("profiles_phone_key") || msg.includes("duplicate key") && msg.includes("phone")) {
+          return new Response(
+            JSON.stringify({ error: "Este teléfono ya está registrado" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Generic trigger failure fallback
+        if (msg.includes("Database error saving new user")) {
+          return new Response(
+            JSON.stringify({
+              error: "No se pudo completar el registro. La cédula o el teléfono ya están en uso por otra cuenta.",
+            }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
         throw signUpError;
       }
 
       if (error) {
-        // Handle Supabase auth errors for duplicate users
-        if (
-          error.message?.includes("already registered") ||
-          error.message?.includes("already exists") ||
-          error.message?.includes("is invalid")
-        ) {
+        const msg = error.message ?? "";
+
+        if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("is invalid")) {
           return new Response(
-            JSON.stringify({
-              error: "Este correo ya está registrado. Intenta iniciar sesión.",
-            }),
-            {
-              status: 409,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
+            JSON.stringify({ error: "Este correo ya está registrado. Intenta iniciar sesión." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
+
+        // Constraint violations from the trigger
+        if (msg.includes("profiles_dni_key")) {
+          return new Response(
+            JSON.stringify({ error: "Esta cédula ya está registrada" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        if (msg.includes("profiles_phone_key")) {
+          return new Response(
+            JSON.stringify({ error: "Este teléfono ya está registrado" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Generic trigger failure — Supabase Auth wraps constraint violations
+        // in "Database error saving new user". The pre-checks above should
+        // catch most cases, but this handles race conditions.
+        if (msg.includes("Database error saving new user")) {
+          return new Response(
+            JSON.stringify({
+              error: "No se pudo completar el registro. La cédula o el teléfono ya están en uso por otra cuenta.",
+            }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
         throw error;
       }
 
-      // Supabase anti-enumeration: if user already exists, signUp returns
-      // a user object with empty identities array instead of an error.
+      // Supabase anti-enumeration: existing user → empty identities array
       if (
         data?.user &&
         (!data.user.identities || data.user.identities.length === 0)
       ) {
         return new Response(
-          JSON.stringify({
-            error: "Este correo ya está registrado. Intenta iniciar sesión.",
-          }),
-          {
-            status: 409,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
+          JSON.stringify({ error: "Este correo ya está registrado. Intenta iniciar sesión." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
-      }
-
-      // Ensure the user starts with 100 coins and persist cedula/phone.
-      // We use the Service Role key to bypass RLS and safely upsert the profile.
-      if (data?.user?.id) {
-        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-        if (!serviceKey) {
-          throw new Error(
-            "Missing SUPABASE_SERVICE_ROLE_KEY. Set it in Supabase Edge Function secrets to initialize profile coins.",
-          );
-        }
-
-        const serviceClient = createClient(
-          Deno.env.get("SUPABASE_URL") ?? "",
-          serviceKey,
-          { auth: { persistSession: false } },
-        );
-
-        // Strategy: Wait briefly for any potential triggers to create the profile
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        let profileUpdated = false;
-        let profileError = null;
-        const maxRetries = 3;
-
-        for (let i = 0; i < maxRetries; i++) {
-          // 1. Try to UPDATE first (assuming trigger might have created it)
-          const { data: updatedProfile, error: updateError } =
-            await serviceClient
-              .from("profiles")
-              .update({
-                email,
-                name,
-                role: "user",
-                dni: sanitizedCedula,
-                phone: sanitizedPhone,
-              })
-              .eq("id", data.user.id)
-              .select()
-              .maybeSingle();
-
-          if (!updateError && updatedProfile) {
-            console.log(
-              "Profile successfully updated (likely created by trigger).",
-            );
-            profileUpdated = true;
-            break;
-          }
-
-          // 2. If update found nothing (or failed), try to INSERT
-          const { error: insertError } = await serviceClient
-            .from("profiles")
-            .insert({
-              id: data.user.id,
-              email,
-              name,
-              role: "user",
-              clovers: 0,
-              dni: sanitizedCedula,
-              phone: sanitizedPhone,
-            });
-
-          if (!insertError) {
-            console.log("Profile successfully inserted manually.");
-            profileUpdated = true;
-            break;
-          }
-
-          profileError = insertError;
-          console.log(
-            `Attempt ${i + 1} failed: ${insertError?.message}. Retrying...`,
-          );
-
-          // Wait before next retry
-          await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
-        }
-
-        if (!profileUpdated && profileError) {
-          // Manejar errores de constraint único con mensajes amigables
-          if (profileError.message?.includes("profiles_dni_key")) {
-            throw new Error("Esta cédula ya está registrada");
-          }
-          if (profileError.message?.includes("profiles_phone_key")) {
-            throw new Error("Este teléfono ya está registrado");
-          }
-          // If it's the FK error still, we bubble it up but it's very unlikely now
-          throw profileError;
-        }
       }
 
       return new Response(JSON.stringify(data), {

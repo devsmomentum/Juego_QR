@@ -121,6 +121,10 @@ class AuthService {
 
   /// Registra un nuevo usuario con nombre, email y password.
   ///
+  /// El registro es ATÓMICO: la Edge Function llama a signUp() y el trigger
+  /// `handle_new_user` crea el perfil completo dentro de la misma transacción.
+  /// Si algo falla, se hace rollback automático — nunca quedan usuarios huérfanos.
+  ///
   /// Retorna el ID del usuario creado en caso de éxito.
   /// Lanza una excepción con mensaje legible si falla.
   Future<String> register(String name, String email, String password,
@@ -139,40 +143,21 @@ class AuthService {
       );
 
       if (response.status != 200) {
-        final error = response.data['error'] ?? 'Error desconocido';
-        // 409 = user already exists (race condition handled gracefully)
-        // Just rethrow the user-friendly message from the server
+        final data = response.data;
+        final error = (data is Map) ? (data['error'] ?? 'Error desconocido') : 'Error del servidor (${response.status})';
         throw error;
       }
 
       final data = response.data;
 
       if (data['user'] != null) {
-        // Si hay usuario, el registro fue exitoso a nivel de BD.
-        // Si hay sesión, la guardamos. Si no (porque requiere confirmación), seguimos igual.
+        // Si hay sesión, la guardamos (auto-login).
+        // Si no hay sesión (requiere confirmación de email), continuamos igual.
         if (data['session'] != null) {
           await _supabase.auth.setSession(data['session']['refresh_token']);
         }
 
-        final userId = data['user']['id'] as String;
-
-        // Delay para permitir que la BD sincronice el perfil (Trigger)
-        await Future.delayed(const Duration(seconds: 1));
-
-        // Actualización explícita de datos extra en perfil si tenemos sesión
-        // Si no tenemos sesión (email sin confirmar), esto fallará por RLS, así que lo omitimos o lo intentamos con catch
-        if ((cedula != null || phone != null) && data['session'] != null) {
-          try {
-            await _supabase.from('profiles').update({
-              if (cedula != null) 'cedula': cedula,
-              if (phone != null) 'phone': phone,
-            }).eq('id', userId);
-          } catch (e) {
-            debugPrint('Warning: Could not update extra profile fields: $e');
-          }
-        }
-
-        return userId;
+        return data['user']['id'] as String;
       }
       throw 'No se recibió información del usuario';
     } catch (e) {
@@ -320,6 +305,9 @@ class AuthService {
     if (errorMsg.contains('profiles_id_fkey') ||
         errorMsg.contains('foreign key constraint')) {
       return 'Este correo ya está registrado. Intenta iniciar sesión.';
+    }
+    if (errorMsg.contains('database error saving new user')) {
+      return 'No se pudo completar el registro. La cédula o el teléfono ya están en uso por otra cuenta.';
     }
     if (errorMsg.contains('is invalid') && errorMsg.contains('email')) {
       return 'Este correo ya está registrado. Intenta iniciar sesión.';
