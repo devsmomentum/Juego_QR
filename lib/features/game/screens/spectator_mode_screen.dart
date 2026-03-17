@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -45,12 +46,20 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   late Stream<GameEvent> _eventStream;
   bool _hasNavigatedToPodium =
       false; // Prevent double-navigation when event completes
+  Timer? _completionPollingTimer; // Fallback: polling si Realtime falla (Web)
 
   @override
   void initState() {
     super.initState();
     final supabase = Supabase.instance.client;
     _eventStream = EventService(supabase).getEventStream(widget.eventId);
+
+    // Polling de reconciliación cada 15s para detectar status=completed
+    // cuando Realtime falla (ej. Web tab inactivo).
+    _completionPollingTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _pollEventCompletion(),
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -317,8 +326,42 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
     );
   }
 
+  /// Polling fallback: consulta al servidor si el evento está completed.
+  /// Cubre el edge case donde el WebSocket de Realtime falla en Web.
+  Future<void> _pollEventCompletion() async {
+    if (_hasNavigatedToPodium || !mounted) return;
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('status')
+          .eq('id', widget.eventId)
+          .maybeSingle();
+      if (response == null || !mounted) return;
+      final status = response['status'] as String?;
+      if (status == 'completed' && !_hasNavigatedToPodium) {
+        _hasNavigatedToPodium = true;
+        _completionPollingTimer?.cancel();
+        debugPrint('🏆 SpectatorMode: Polling detected completed. Redirecting to Podio...');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
+            builder: (_) => WinnerCelebrationScreen(
+              eventId: widget.eventId,
+              playerPosition: 0,
+              totalCluesCompleted: 0,
+              prizeWon: 0,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ SpectatorMode polling error: $e');
+    }
+  }
+
   @override
   void dispose() {
+    _completionPollingTimer?.cancel();
     // Restaurar rol de espectador al salir
     // Usamos microtask para asegurar que se ejecute sin erores de contexto
     Future.microtask(() {

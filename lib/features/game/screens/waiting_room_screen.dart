@@ -26,6 +26,7 @@ class WaitingRoomScreen extends StatefulWidget {
 class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   // Store reference to avoid unsafe lookup in dispose
   GameProvider? _gameProviderRef;
+  bool _isNavigating = false; // Guard: evita doble-navegación
 
   Timer? _pollingTimer;
 
@@ -99,6 +100,10 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   }
 
   void _navigateToWinnerScreen() {
+    if (_isNavigating || !mounted) return;
+    _isNavigating = true;
+    _pollingTimer?.cancel();
+
     // Navigate to WinnerCelebrationScreen
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:map_hunter/features/game/models/event.dart';
 import 'package:provider/provider.dart';
 import 'package:map_hunter/features/auth/providers/player_provider.dart';
@@ -8,8 +9,8 @@ import 'package:map_hunter/features/game/screens/clues_screen.dart';
 import 'package:map_hunter/features/game/screens/event_waiting_screen.dart';
 import 'package:map_hunter/features/game/screens/waiting_room_screen.dart';
 import 'package:map_hunter/features/game/providers/event_provider.dart';
-import 'package:map_hunter/features/game/models/event.dart'; // IMPORTED THIS
 import 'package:map_hunter/features/game/providers/game_provider.dart';
+import '../../game/screens/winner_celebration_screen.dart';
 import '../../game/providers/spectator_feed_provider.dart'; // NEW
 import '../../game/screens/live_feed_screen.dart'; // NEW
 import '../../social/screens/inventory_screen.dart';
@@ -45,6 +46,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// saliera del evento. En este caso, dispose NO debe limpiar el estado
   /// del juego, porque la sesión sigue activa.
   bool _redirectedToWaitingRoom = false;
+
+  /// Guard: evita doble-navegación al podio desde múltiples fuentes
+  /// (Realtime, polling, EventProvider rebuild).
+  bool _isNavigatingToPodium = false;
+
+  /// Polling de reconciliación: red de seguridad si Realtime falla o
+  /// la pestaña del navegador estuvo inactiva (Web lifecycle).
+  Timer? _raceCompletionPollingTimer;
 
   @override
   void initState() {
@@ -85,6 +94,18 @@ class _HomeScreenState extends State<HomeScreen> {
       // cuando el admin activa el evento, sin depender únicamente de EventWaitingScreen
       final eventProvider = Provider.of<EventProvider>(context, listen: false);
       eventProvider.subscribeToEventUpdates(widget.eventId);
+
+      // ── CENTRALIZADO: Listener de fin de carrera en HomeScreen ──
+      // Garantiza navegación al Podio sin importar qué tab esté activo
+      // (CluesScreen, InventoryScreen, LeaderboardScreen).
+      gameProvider.addListener(_onRaceCompletedCheck);
+
+      // Polling de reconciliación cada 10s: cubre el caso donde
+      // Web pierde el WebSocket al cambiar de pestaña y Realtime no entrega.
+      _raceCompletionPollingTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _pollRaceStatus(),
+      );
 
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     });
@@ -180,13 +201,71 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // ── CENTRALIZADO: Listener que reacciona a GameProvider.isRaceCompleted ──
+  void _onRaceCompletedCheck() {
+    if (_isNavigatingToPodium || !mounted) return;
+    if (_gameProviderRef.isRaceCompleted) {
+      debugPrint('🏆 HomeScreen: Race completed detected via GameProvider listener');
+      _navigateToPodium();
+    }
+  }
+
+  /// Polling de reconciliación: consulta al servidor si la carrera terminó.
+  /// Cubre el edge case donde Web pierde Realtime al estar en background.
+  void _pollRaceStatus() {
+    if (_isNavigatingToPodium || !mounted) return;
+    _gameProviderRef.checkRaceStatus();
+    // Si checkRaceStatus() detecta completed, _setRaceCompleted dispara
+    // notifyListeners() → _onRaceCompletedCheck() se encarga de navegar.
+  }
+
+  /// Navegación centralizada al Podio. Único punto de salida para evitar
+  /// doble-navegación entre Realtime, polling y EventProvider rebuild.
+  void _navigateToPodium() {
+    if (_isNavigatingToPodium || !mounted) return;
+    _isNavigatingToPodium = true;
+    _raceCompletionPollingTimer?.cancel();
+    _gameProviderRef.removeListener(_onRaceCompletedCheck);
+
+    debugPrint('🏆 HomeScreen: Navigating to Podio...');
+
+    final playerProvider = _playerProviderRef;
+    final gameProvider = _gameProviderRef;
+
+    final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+    final leaderboard = gameProvider.leaderboard;
+    int position = 0;
+    if (leaderboard.isNotEmpty) {
+      final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
+      position = index >= 0 ? index + 1 : leaderboard.length + 1;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
+          builder: (_) => WinnerCelebrationScreen(
+            eventId: widget.eventId,
+            playerPosition: position,
+            totalCluesCompleted: gameProvider.completedClues,
+            prizeWon: gameProvider.currentPrizeWon,
+          ),
+        ),
+        (route) => false,
+      );
+    });
+  }
+
   // Removed _showWelcomeTutorial as it is no longer required in Home/Mode selection
 
   @override
   void dispose() {
+    _raceCompletionPollingTimer?.cancel();
+    _gameProviderRef.removeListener(_onRaceCompletedCheck);
     // Si redirigimos a WaitingRoom, la sesión de juego sigue activa.
     // NO debemos limpiar el estado del GameProvider.
-    if (!_redirectedToWaitingRoom) {
+    if (!_redirectedToWaitingRoom && !_isNavigatingToPodium) {
       // Usamos la referencia guardada, no el context
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _gameProviderRef.resetState();
@@ -198,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } else {
       debugPrint(
-          "HomeScreen disposed: Skipped reset (redirected to WaitingRoom)");
+          "HomeScreen disposed: Skipped reset (redirected to WaitingRoom or Podium)");
     }
     // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
@@ -326,6 +405,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final event = _cachedEvent;
+
+    // ── COMPLETED → Podio: Si EventProvider entrega status=completed, navegar ──
+    // Esto cubre el caso donde GameProvider.isRaceCompleted aún no se actualizó
+    // (ej. subscribeToRaceStatus no estaba activo o Realtime se perdió).
+    if (event != null && event.isCompleted && !_isNavigatingToPodium) {
+      // Asegurar que GameProvider también lo sepa (idempotente)
+      final gp = Provider.of<GameProvider>(context, listen: false);
+      if (!gp.isRaceCompleted) {
+        debugPrint('🏆 HomeScreen.build: EventProvider says completed but GameProvider disagrees. Syncing...');
+        // Disparar checkRaceStatus para que se sincronice y notifique
+        gp.checkRaceStatus();
+      }
+      _navigateToPodium();
+    }
 
     // Only show waiting screen if event is pending (NOT yet activated by admin)
     // The event transitions to 'active' ONLY when an admin calls start_event RPC
