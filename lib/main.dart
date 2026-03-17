@@ -57,6 +57,7 @@ import 'features/game/repositories/power_repository_impl.dart';
 import 'features/game/strategies/power_strategy_factory.dart';
 import 'features/game/repositories/game_request_repository.dart';
 import 'features/mall/providers/shop_provider.dart';
+import 'features/game/providers/game_flow_provider.dart';
 
 import 'core/storage/secure_local_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -379,6 +380,13 @@ class _MapHunterAppState extends State<MapHunterApp>
         ),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AppModeProvider()),
+        ChangeNotifierProvider(create: (context) {
+          final provider = GameFlowProvider();
+          final authService = Provider.of<AuthService>(context, listen: false);
+          authService.onLogout(() async => provider.resetState());
+          provider.restorePendingAction();
+          return provider;
+        }),
 
         // --- NEW: SRP-Segregated Providers ---
         ChangeNotifierProvider(create: (context) {

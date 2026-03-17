@@ -62,6 +62,7 @@ import '../widgets/no_lives_widget.dart';
 import 'waiting_room_screen.dart'; // NEW IMPORT
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
+import '../providers/game_flow_provider.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -890,10 +891,12 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
 void _showSuccessDialog(BuildContext context, Clue clue) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+  final gameFlowProvider = Provider.of<GameFlowProvider>(context, listen: false);
 
-  // [FIX] Capturar Navigator ANTES de cualquier operación async
+  // [FIX] Capturar Navigator y ruta del PuzzleScreen ANTES de cualquier operación async
   final navigator = Navigator.of(context);
   final rootContext = context;
+  final puzzleRoute = ModalRoute.of(context); // Para removeRoute confiable en onMapReturn
 
   debugPrint('🎉 SUCCESS FLOW STARTED for ${clue.id}');
 
@@ -934,7 +937,19 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
           onComplete: () {
             if (!sealCompleted && dialogContext.mounted) {
               sealCompleted = true;
-              Navigator.pop(dialogContext);
+              // [FIX] Usar removeRoute en vez de pop() para evitar cerrar
+              // accidentalmente la _BlockingPageRoute si un poder se activó
+              // encima de esta animación.
+              final sealRoute = ModalRoute.of(dialogContext);
+              if (sealRoute != null) {
+                try {
+                  Navigator.of(dialogContext).removeRoute(sealRoute);
+                } catch (_) {
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                }
+              } else {
+                Navigator.pop(dialogContext);
+              }
             }
           },
         ),
@@ -1037,7 +1052,22 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (!navigator.mounted) return;
 
-  // 4. Mostrar el panel de celebración "¡Pista Completada!"
+  // 4. Registrar intención de celebración en GameFlowProvider
+  gameFlowProvider.recordClueCompletion(PendingCelebration(
+    clueId: clue.id,
+    clueSequenceIndex: clue.sequenceIndex,
+    coinsEarned: coinsEarned,
+  ));
+
+  // [FIX] Siempre mostrar el diálogo de celebración, sin importar si hay un
+  // poder bloqueante activo. El diálogo se empuja como ruta por ENCIMA de la
+  // _BlockingPageRoute, así que es visible e interactuable. Esto elimina las
+  // race conditions donde la celebración diferida nunca se mostraba porque
+  // _isBlockingActive y _isPowerBlocking quedaban desincronizados.
+
+  // 5. Mostrar el panel de celebración "¡Pista Completada!"
+  gameFlowProvider.markCelebrationShowing();
+
   final clues = gameProvider.clues;
   final currentIdx = clues.indexWhere((c) => c.id == clue.id);
   Clue? nextClue;
@@ -1059,10 +1089,20 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       coinsEarned: coinsEarned,
       nextClueHint: nextClueHint,
       onMapReturn: () {
+        gameFlowProvider.consumePendingCelebration();
         Navigator.of(dialogContext).pop();
         Future.delayed(const Duration(milliseconds: 100), () {
-          if (navigator.mounted) {
-            navigator.pop();
+          if (navigator.mounted && puzzleRoute != null) {
+            // [FIX] Usar removeRoute para sacar el PuzzleScreen específicamente,
+            // sin importar si hay una _BlockingPageRoute encima (el SabotageOverlay
+            // la limpiará cuando el poder expire).
+            try {
+              navigator.removeRoute(puzzleRoute);
+            } catch (_) {
+              if (navigator.mounted) navigator.maybePop();
+            }
+          } else if (navigator.mounted) {
+            navigator.maybePop();
           }
         });
       },

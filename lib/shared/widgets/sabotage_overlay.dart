@@ -29,6 +29,11 @@ import '../../features/game/widgets/minigames/game_over_overlay.dart';
 import '../../features/mall/screens/mall_screen.dart';
 import '../../core/services/effect_timer_service.dart'; // NEW: For timer expiration events
 import '../../features/game/providers/connectivity_provider.dart';
+import '../../features/game/providers/game_flow_provider.dart';
+import '../../features/game/widgets/success_celebration_dialog.dart';
+import '../../features/game/models/clue.dart';
+import '../../features/game/screens/winner_celebration_screen.dart';
+import '../../features/game/screens/waiting_room_screen.dart';
 
 class SabotageOverlay extends StatefulWidget {
   final Widget child;
@@ -55,6 +60,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
   // Control de bloqueo de navegación
   bool _isBlockingActive = false;
+  Route<void>? _blockingRoute; // Instancia específica para removeRoute seguro
 
   // EVENT DRIVEN STATE
   StreamSubscription<PowerFeedbackEvent>? _feedbackSubscription;
@@ -89,6 +95,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
   PowerEffectManager? _powerManagerRef;
   PlayerProvider? _playerProviderRef;
   GameProvider? _gameProviderRef;
+  GameFlowProvider? _gameFlowProviderRef;
   String? _lastKnownGamePlayerId;
 
   @override
@@ -108,6 +115,7 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
           Provider.of<PowerEffectManager>(context, listen: false);
       _gameProviderRef = Provider.of<GameProvider>(context, listen: false);
       _playerProviderRef = Provider.of<PlayerProvider>(context, listen: false);
+      _gameFlowProviderRef = Provider.of<GameFlowProvider>(context, listen: false);
 
       debugPrint(
           '[DEBUG]    powerManager present: ${_powerManagerRef != null}');
@@ -411,6 +419,12 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
     _powerReaderRef?.removeListener(_handlePowerChanges);
     _playerProviderRef?.removeListener(_onPlayerChanged);
 
+    // [FIX] Limpiar ruta bloqueante al dispose para evitar rutas huérfanas
+    // si el SabotageOverlay es recreado (e.g. cambio de tema).
+    if (_isBlockingActive) {
+      _forcePopBlockingRoute();
+    }
+
     super.dispose();
   }
 
@@ -434,8 +448,9 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
       if (gpId == null || gpId.isEmpty) {
         if (_isBlockingActive) {
           debugPrint(
-              "✅ DESBLOQUEANDO NAVEGACIÓN (Hard Gate triggered) - Skipping pop (AuthMonitor clears stack) ✅");
-          _isBlockingActive = false;
+              "✅ DESBLOQUEANDO NAVEGACIÓN (Hard Gate triggered) ✅");
+          _forcePopBlockingRoute();
+          _gameFlowProviderRef?.onPowerBlockingEnded();
         }
         return;
       }
@@ -465,36 +480,161 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
 
       if (shouldBlock && !_isBlockingActive) {
         _isBlockingActive = true;
+        _gameFlowProviderRef?.onPowerBlockingStarted();
         debugPrint(
             "⛔ BLOQUEANDO NAVEGACIÓN por sabotaje (freeze/black_screen) ⛔");
-        rootNavigatorKey.currentState?.push(_BlockingPageRoute()).then((_) {
-          // Cuando la ruta se cierre (pop), actualizamos el estado
-          // Esto maneja el caso donde el usuario pudiera cerrarlo (aunque no debería poder)
+        _blockingRoute = _BlockingPageRoute();
+        rootNavigatorKey.currentState?.push(_blockingRoute!).then((_) {
           if (mounted) {
             _isBlockingActive = false;
+            _blockingRoute = null;
             debugPrint('🔓 [UI-UNLOCK] Ruta de bloqueo cerrada via .then()');
           }
         });
       } else if (!shouldBlock && _isBlockingActive) {
         debugPrint("✅ DESBLOQUEANDO NAVEGACIÓN ✅");
         _forcePopBlockingRoute();
+        _gameFlowProviderRef?.onPowerBlockingEnded();
+        // Verificar si hay celebración diferida pendiente tras el poder
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _checkDeferredCelebration();
+        });
       }
     }); // Close PostFrameCallback
   }
 
-  /// Forces pop of blocking route with safety checks
+  /// Removes the blocking route using [Navigator.removeRoute], with
+  /// fallback to [Navigator.pop] if removeRoute fails.
+  ///
+  /// A diferencia de `Navigator.pop()`, [removeRoute] remueve la ruta exacta
+  /// sin importar si hay otros diálogos apilados encima (e.g. el diálogo de
+  /// celebración de pista). Si removeRoute falla, se intenta pop() como
+  /// fallback de emergencia para evitar que el usuario quede permanentemente
+  /// bloqueado.
   void _forcePopBlockingRoute() {
     if (!_isBlockingActive) return;
 
     final navigator = rootNavigatorKey.currentState;
-    if (navigator != null && navigator.canPop()) {
-      debugPrint('🔓 [UI-UNLOCK] Ejecutando pop de _BlockingPageRoute');
-      navigator.pop();
+    final route = _blockingRoute;
+    if (navigator != null && route != null) {
+      try {
+        debugPrint('🔓 [UI-UNLOCK] removeRoute de _BlockingPageRoute');
+        navigator.removeRoute(route);
+      } catch (e) {
+        debugPrint('⚠️ [UI-UNLOCK] removeRoute failed, intentando pop: $e');
+        // Fallback: intentar pop directo para evitar bloqueo permanente
+        try {
+          if (navigator.canPop()) {
+            navigator.pop();
+          }
+        } catch (_) {
+          debugPrint('⚠️ [UI-UNLOCK] pop fallback también falló');
+        }
+      }
     } else {
       debugPrint(
-          '⚠️ [UI-UNLOCK] No se puede hacer pop, pero marcando _isBlockingActive=false');
+          '⚠️ [UI-UNLOCK] No route/navigator, marcando _isBlockingActive=false');
     }
     _isBlockingActive = false;
+    _blockingRoute = null;
+  }
+
+  /// Verifica si hay una celebración de pista diferida por un poder bloqueante.
+  ///
+  /// Se invoca cuando un poder termina. Si [GameFlowProvider] tiene una
+  /// celebración pendiente, se muestra el diálogo desde aquí para
+  /// garantizar que la progresión no se pierda.
+  void _checkDeferredCelebration() {
+    final gameFlowProvider = _gameFlowProviderRef;
+    if (gameFlowProvider == null || !gameFlowProvider.hasCelebrationReady) return;
+
+    final gameProvider = _gameProviderRef;
+    final playerProvider = _playerProviderRef;
+    if (gameProvider == null || playerProvider == null) return;
+
+    final pending = gameFlowProvider.pendingCelebration!;
+    debugPrint('🎯 [SabotageOverlay] Showing deferred celebration for ${pending.clueId}');
+
+    // Verificar estado actual de la carrera (pudo cambiar durante el poder)
+    if (gameProvider.isRaceCompleted || gameProvider.hasCompletedAllClues) {
+      gameFlowProvider.consumePendingCelebration();
+
+      int playerPosition = 0;
+      final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+      if (gameProvider.leaderboard.isNotEmpty) {
+        final index =
+            gameProvider.leaderboard.indexWhere((p) => p.id == currentPlayerId);
+        playerPosition =
+            index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
+      } else {
+        playerPosition = 999;
+      }
+
+      if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
+        rootNavigatorKey.currentState?.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => WaitingRoomScreen(
+              eventId: gameProvider.currentEventId ?? '',
+            ),
+          ),
+        );
+      } else {
+        rootNavigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
+            builder: (_) => WinnerCelebrationScreen(
+              eventId: gameProvider.currentEventId ?? '',
+              playerPosition: playerPosition,
+              totalCluesCompleted: gameProvider.completedClues,
+            ),
+          ),
+          (route) => route.isFirst,
+        );
+      }
+      return;
+    }
+
+    // Mostrar diálogo de celebración diferida
+    gameFlowProvider.markCelebrationShowing();
+
+    final clues = gameProvider.clues;
+    final currentIdx = clues.indexWhere((c) => c.id == pending.clueId);
+    final clue = currentIdx != -1 ? clues[currentIdx] : null;
+    if (clue == null) {
+      gameFlowProvider.consumePendingCelebration();
+      return;
+    }
+
+    Clue? nextClue;
+    if (currentIdx + 1 < clues.length) {
+      nextClue = clues[currentIdx + 1];
+    }
+
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator == null) return;
+
+    showDialog(
+      context: navigator.context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.85),
+      builder: (dialogContext) => SuccessCelebrationDialog(
+        clue: clue,
+        showNextStep: nextClue != null,
+        totalClues: clues.length,
+        coinsEarned: pending.coinsEarned,
+        nextClueHint:
+            nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null,
+        onMapReturn: () {
+          gameFlowProvider.consumePendingCelebration();
+          Navigator.of(dialogContext).pop();
+          // Pop puzzle screen si aún está mostrándose
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            rootNavigatorKey.currentState?.maybePop();
+          });
+        },
+      ),
+    );
   }
 
   void _showLifeStealBanner(String message,
@@ -565,6 +705,22 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         final isFreeze = powerProvider.isEffectActive('freeze');
         final isBlur = powerProvider.isEffectActive('blur_screen');
         final isInvisible = powerProvider.isEffectActive('invisibility');
+
+        // [FAILSAFE] Detectar _BlockingPageRoute huérfana: si no hay ningún
+        // poder bloqueante activo pero _isBlockingActive sigue true, forzar limpieza.
+        // Esto cubre edge cases donde el listener de _handlePowerChanges no
+        // disparó (e.g., suscripción re-creada, mounted=false en PostFrameCallback).
+        final isNotAdmin = playerProvider.currentPlayer?.role != 'admin';
+        final currentShouldBlock = isNotAdmin && (isFreeze || isBlackScreen);
+        if (!currentShouldBlock && _isBlockingActive) {
+          debugPrint('🚨 [FAILSAFE] BlockingRoute huérfana detectada en build — forzando limpieza');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _forcePopBlockingRoute();
+            _gameFlowProviderRef?.onPowerBlockingEnded();
+            _checkDeferredCelebration();
+          });
+        }
 
         final activeSlug = powerProvider.activePowerSlug;
         final effectId = powerProvider.activeEffectId;
@@ -870,13 +1026,14 @@ class _BlockingPageRoute extends ModalRoute<void> {
   @override
   Widget buildPage(BuildContext context, Animation<double> animation,
       Animation<double> secondaryAnimation) {
-    // PopScope (o WillPopScope legado) atrapa el botón back
+    // PopScope atrapa el botón back; AbsorbPointer bloquea touches explícitamente
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
-        // Si queremos, podemos mostrar un toast aquí diciendo "Estás congelado"
-      },
-      child: const SizedBox.expand(), // Bloquea touches si no está cubierto
+      onPopInvoked: (didPop) {},
+      child: const AbsorbPointer(
+        absorbing: true,
+        child: SizedBox.expand(),
+      ),
     );
   }
 }
