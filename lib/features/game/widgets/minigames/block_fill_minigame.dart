@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../utils/minigame_logic_helper.dart';
@@ -34,8 +36,37 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
   late int _playerCol;
 
   Timer? _timer;
-  int _secondsRemaining = 20; // 20 segundos
+  int _secondsRemaining = 25; // Aumentado ligeramente para niveles complejos
   bool _isGameOver = false;
+
+  // Pool de variaciones de nivel
+  final List<_LevelPattern> _levelPool = [
+    // 1. El Clásico (Centro)
+    _LevelPattern(
+      obstacles: [const Point(2, 2)],
+      startPoint: const Point(0, 0),
+    ),
+    // 2. La Barrera (Línea discontinua)
+    _LevelPattern(
+      obstacles: [const Point(1, 1), const Point(1, 2), const Point(1, 3)],
+      startPoint: const Point(0, 2),
+    ),
+    // 3. Los Cuatro Pilares
+    _LevelPattern(
+      obstacles: [const Point(1, 1), const Point(1, 3), const Point(3, 1), const Point(3, 3)],
+      startPoint: const Point(2, 2),
+    ),
+    // 4. El Laberinto en L
+    _LevelPattern(
+      obstacles: [const Point(0, 1), const Point(1, 1), const Point(2, 1), const Point(2, 2), const Point(2, 3)],
+      startPoint: const Point(0, 0),
+    ),
+    // 5. Los Gemelos (Dos bloques grandes)
+    _LevelPattern(
+      obstacles: [const Point(1, 1), const Point(1, 2), const Point(3, 2), const Point(3, 3)],
+      startPoint: const Point(4, 0),
+    ),
+  ];
 
   // Overlay State
   bool _showOverlay = false;
@@ -98,19 +129,27 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
   }
 
   void _startNewGame({bool resetTimer = true}) {
-    // Generar laberinto con un solo bloque central como obstáculo
+    // Seleccionar un patrón aleatorio
+    final random = Random();
+    final pattern = _levelPool[random.nextInt(_levelPool.length)];
+
+    // Generar laberinto basado en el patrón
     _grid = List.generate(rows, (_) => List.filled(cols, 0));
 
-    // Un solo bloque central como pared
-    _grid[2][2] = -1;
+    // Aplicar obstáculos
+    for (var obs in pattern.obstacles) {
+      if (obs.x >= 0 && obs.x < rows && obs.y >= 0 && obs.y < cols) {
+        _grid[obs.x][obs.y] = -1;
+      }
+    }
 
     // Inicio
-    _playerRow = 0;
-    _playerCol = 0;
+    _playerRow = pattern.startPoint.x;
+    _playerCol = pattern.startPoint.y;
     _grid[_playerRow][_playerCol] = 2; // Visitado inicial
 
     if (resetTimer) {
-      _secondsRemaining = 20;
+      _secondsRemaining = 25;
     }
     _isGameOver = false;
     _startTimer();
@@ -156,35 +195,147 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
     });
   }
 
+  Future<bool?> _showCyberConfirmDialog() {
+    return showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 300),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: child,
+          ),
+        );
+      },
+      pageBuilder: (context, anim1, anim2) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.85,
+              padding: const EdgeInsets.all(4), // Space for double border
+              decoration: BoxDecoration(
+                color: AppTheme.accentGold.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: AppTheme.accentGold.withOpacity(0.4),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.accentGold.withOpacity(0.1),
+                    blurRadius: 30,
+                  )
+                ],
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF151517),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppTheme.accentGold,
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.accentGold.withOpacity(0.1),
+                      ),
+                      child: const Icon(Icons.refresh_rounded, 
+                        color: AppTheme.accentGold, size: 40),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "¿REINICIAR NIVEL?",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'Orbitron',
+                        letterSpacing: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Reiniciar el nivel te costará 1 VIDA.\n¿Deseas continuar?",
+                      style: TextStyle(
+                        color: Colors.white70, 
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text("CANCELAR", 
+                              style: TextStyle(
+                                color: Colors.white54, 
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              )),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.dangerRed.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                )
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.dangerRed,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text("REINICIAR", 
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _undoMove() async {
     if (_isGameOver) return;
 
     // Preguntar confirmación o avisar que cuesta una vida
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¿Reiniciar Nivel?",
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
-            "Reiniciar el nivel te costará 1 VIDA. ¿Deseas continuar?",
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child:
-                const Text("CANCELAR", style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppTheme.dangerRed),
-            child: const Text("REINICIAR (-1 ❤️)",
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    final bool? confirm = await _showCyberConfirmDialog();
 
     if (confirm == true) {
       _timer?.cancel();
@@ -206,10 +357,85 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
         } else {
           // Reiniciar nivel con el tiempo completo
           _startNewGame(resetTimer: true);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("Nivel reiniciado. -1 Vida"),
-            backgroundColor: Colors.orange,
-          ));
+          
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              content: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningOrange.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppTheme.warningOrange.withOpacity(0.4),
+                    width: 1,
+                  ),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1D),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.warningOrange,
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.warningOrange.withOpacity(0.2),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warningOrange.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.history_rounded, 
+                          color: AppTheme.warningOrange, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "SISTEMA REINICIADO",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                letterSpacing: 1,
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "Se ha descontado -1 ❤️ de tu cuenta",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
         }
       }
     }
@@ -410,12 +636,27 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
 
               const SizedBox(height: 20),
 
-              TextButton(
-                  onPressed: _showOverlay
-                      ? null
-                      : _undoMove, // Disable if overlay is up
-                  child: const Text("Reiniciar Nivel",
-                      style: TextStyle(color: Colors.orange, fontSize: 16))),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 40),
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _showOverlay ? null : _undoMove,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text("REINICIAR NIVEL", 
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    )),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orangeAccent,
+                    side: BorderSide(color: Colors.orangeAccent.withOpacity(0.5), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 20),
             ],
@@ -463,4 +704,14 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
       ),
     );
   }
+}
+
+class _LevelPattern {
+  final List<Point<int>> obstacles;
+  final Point<int> startPoint;
+
+  _LevelPattern({
+    required this.obstacles,
+    required this.startPoint,
+  });
 }

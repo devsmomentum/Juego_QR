@@ -173,10 +173,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.emoji_events,
-                      color: Colors.white,
-                      size: 32,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: Colors.white, size: 24),
+                          onPressed: () => gameProvider.fetchLeaderboard(),
+                          tooltip: 'Refrescar ranking',
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.emoji_events,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -228,19 +238,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             // Rest of the leaderboard
             if (displayLeaderboard.isNotEmpty)
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: displayLeaderboard.length,
-                itemBuilder: (context, index) {
-                  final player = displayLeaderboard[index];
-                  return LeaderboardCard(
-                    player: player,
-                    rank: index + 1,
-                    isTopThree: index < 3,
-                  );
-                },
+              child: RefreshIndicator(
+                onRefresh: () => gameProvider.fetchLeaderboard(),
+                color: AppTheme.accentGold,
+                backgroundColor: currentSurface,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: displayLeaderboard.length,
+                  itemBuilder: (context, index) {
+                    final player = displayLeaderboard[index];
+                    return LeaderboardCard(
+                      player: player,
+                      rank: index + 1,
+                      isTopThree: index < 3,
+                    );
+                  },
                 ),
               ),
+            ),
             ],
           ),
         ),

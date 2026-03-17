@@ -28,7 +28,7 @@ class SlidingPuzzleMinigame extends StatefulWidget {
   State<SlidingPuzzleMinigame> createState() => _SlidingPuzzleMinigameState();
 }
 
-class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
+class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with WidgetsBindingObserver {
   // Configuración
   final int gridSize = 3;
   late List<int> tiles;
@@ -67,6 +67,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _audioPlayer = AudioPlayer();
     _audioPlayer.setReleaseMode(ReleaseMode.loop);
     _audioPlayer.setVolume(0.5);
@@ -74,6 +75,17 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
     _initializePuzzle();
     _startTimer();
     _playMusic();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _audioPlayer.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_isMusicPlaying && !_isGameOver && !_showOverlay) {
+        _audioPlayer.resume();
+      }
+    }
   }
 
   Future<void> _playMusic() async {
@@ -242,6 +254,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer.cancel();
     _audioPlayer.dispose();
     super.dispose();

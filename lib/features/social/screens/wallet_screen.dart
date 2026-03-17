@@ -156,153 +156,175 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
 
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 10),
-                      // Balance Card with Custom Clover Icon - GLASSMORPISM STYLE
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(34),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(34),
-                              border: Border.all(
-                                color: const Color(0xFF10B981).withOpacity(0.6),
-                                width: 1.5,
-                              ),
-                            ),
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    final playerProvider =
+                        Provider.of<PlayerProvider>(context, listen: false);
+                    await playerProvider.refreshProfile();
+                    await _loadRecentTransactions();
+                    await _loadRechargeFlag();
+                    await _loadPaymentMethods();
+                  },
+                  color: AppTheme.accentGold,
+                  backgroundColor: const Color(0xFF151517),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        // Balance Card with Custom Clover Icon - GLASSMORPISM STYLE
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(34),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                             child: Container(
-                              padding: const EdgeInsets.all(24),
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(30),
+                                color:
+                                    const Color(0xFF10B981).withOpacity(0.25),
+                                borderRadius: BorderRadius.circular(34),
                                 border: Border.all(
-                                  color: const Color(0xFF10B981).withOpacity(0.2),
-                                  width: 1.0,
+                                  color:
+                                      const Color(0xFF10B981).withOpacity(0.6),
+                                  width: 1.5,
                                 ),
-                                color: const Color(0xFF10B981).withOpacity(0.02),
                               ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'TRÉBOLES:',
-                                        style: TextStyle(
-                                          color: isDarkMode ? Colors.white : Colors.black87,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 1.2,
-                                          fontFamily: 'Orbitron',
-                                        ),
-                                      ),
-                                      Flexible(
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerRight,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                cloverBalance.toString(),
-                                                style: TextStyle(
-                                                  color: isDarkMode ? Colors.white : Colors.black87,
-                                                  fontSize: 42,
-                                                  fontWeight: FontWeight.w900,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              const CoinImage(
-                                                size: 28,
-                                              ),
-                                            ],
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(30),
+                                  border: Border.all(
+                                    color: const Color(0xFF10B981)
+                                        .withOpacity(0.2),
+                                    width: 1.0,
+                                  ),
+                                  color:
+                                      const Color(0xFF10B981).withOpacity(0.02),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'TRÉBOLES:',
+                                          style: TextStyle(
+                                            color: isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 1.2,
+                                            fontFamily: 'Orbitron',
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                        Flexible(
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerRight,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  cloverBalance.toString(),
+                                                  style: TextStyle(
+                                                    color: isDarkMode
+                                                        ? Colors.white
+                                                        : Colors.black87,
+                                                    fontSize: 42,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                const CoinImage(
+                                                  size: 28,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
 
+                        const SizedBox(height: 40),
 
-                      const SizedBox(height: 40),
-
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Opacity(
-                              opacity: _isLoading ? 0.5 : 1.0,
-                              child: _buildActionButton(
-                                icon: _rechargeEnabled == false
-                                    ? Icons.construction
-                                    : Icons.add_circle_outline,
-                                label: 'RECARGAR',
-                                color: _rechargeEnabled == false
-                                    ? Colors.grey
-                                    : AppTheme.accentGold,
-                                onTap: _isLoading
-                                    ? () {}
-                                    : () {
-                                        if (_rechargeEnabled == false) {
-                                          _showRechargeMaintenance();
-                                        } else {
-                                          _showRechargeDialog();
-                                        }
-                                      },
+                        // Action Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Opacity(
+                                opacity: _isLoading ? 0.5 : 1.0,
+                                child: _buildActionButton(
+                                  icon: _rechargeEnabled == false
+                                      ? Icons.construction
+                                      : Icons.add_circle_outline,
+                                  label: 'RECARGAR',
+                                  color: _rechargeEnabled == false
+                                      ? Colors.grey
+                                      : AppTheme.accentGold,
+                                  onTap: _isLoading
+                                      ? () {}
+                                      : () {
+                                          if (_rechargeEnabled == false) {
+                                            _showRechargeMaintenance();
+                                          } else {
+                                            _showRechargeDialog();
+                                          }
+                                        },
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Opacity(
-                              opacity: _isLoading ? 0.5 : 1.0,
-                              child: _buildActionButton(
-                                icon: Icons.remove_circle_outline,
-                                label: 'RETIRAR',
-                                color: AppTheme.secondaryPink,
-                                onTap: _isLoading ? () {} : () => _showWithdrawDialog(),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Opacity(
+                                opacity: _isLoading ? 0.5 : 1.0,
+                                child: _buildActionButton(
+                                  icon: Icons.remove_circle_outline,
+                                  label: 'RETIRAR',
+                                  color: AppTheme.secondaryPink,
+                                  onTap: _isLoading
+                                      ? () {}
+                                      : () => _showWithdrawDialog(),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Recent Transactions Section - PREVIOUS STYLE (DOUBLE BORDER)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 1,
-                          ),
+                          ],
                         ),
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
+
+                        const SizedBox(height: 40),
+
+                        // Recent Transactions Section - PREVIOUS STYLE (DOUBLE BORDER)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(24),
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(28),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                              width: 2,
+                              color: Colors.white.withOpacity(0.2),
+                              width: 1,
                             ),
                           ),
+                          child: Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.3),
+                                width: 2,
+                              ),
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -311,9 +333,12 @@ class _WalletScreenState extends State<WalletScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: AppTheme.accentGold.withOpacity(0.1),
+                                        color: AppTheme.accentGold
+                                            .withOpacity(0.1),
                                         shape: BoxShape.circle,
-                                        border: Border.all(color: AppTheme.accentGold.withOpacity(0.2)),
+                                        border: Border.all(
+                                            color: AppTheme.accentGold
+                                                .withOpacity(0.2)),
                                       ),
                                       child: const Icon(
                                         Icons.history,
@@ -325,7 +350,9 @@ class _WalletScreenState extends State<WalletScreen> {
                                     Text(
                                       'HISTORIAL RECIENTE',
                                       style: TextStyle(
-                                        color: isDarkMode ? Colors.white : Colors.black87,
+                                        color: isDarkMode
+                                            ? Colors.white
+                                            : Colors.black87,
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
                                         fontFamily: 'Orbitron',
@@ -338,9 +365,11 @@ class _WalletScreenState extends State<WalletScreen> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => const TransactionHistoryScreen(),
+                                            builder: (_) =>
+                                                const TransactionHistoryScreen(),
                                           ),
-                                        ).then((_) => _loadRecentTransactions());
+                                        ).then(
+                                            (_) => _loadRecentTransactions());
                                       },
                                       child: const Text(
                                         'Ver Todo',
@@ -354,101 +383,155 @@ class _WalletScreenState extends State<WalletScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 24),
-                            
-                            if (_isLoadingHistory)
-                               const Center(child: LoadingIndicator(fontSize: 14))
-                            else if (_recentTransactions.isEmpty)
-                              Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
-                                  child: Text(
-                                    'No hay transacciones recientes',
-                                    style: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
+                                if (_isLoadingHistory)
+                                  const Center(
+                                      child: LoadingIndicator(fontSize: 14))
+                                else if (_recentTransactions.isEmpty)
+                                  Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 20.0),
+                                      child: Text(
+                                        'No hay transacciones recientes',
+                                        style: TextStyle(
+                                            color: isDarkMode
+                                                ? Colors.white38
+                                                : Colors.black38),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: _recentTransactions.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 8),
+                                    itemBuilder: (context, index) {
+                                      return TransactionCard(
+                                        item: _recentTransactions[index],
+                                        onResumePayment:
+                                            _recentTransactions[index]
+                                                    .canResumePayment
+                                                ? () async {
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (_) =>
+                                                            const TransactionHistoryScreen(),
+                                                      ),
+                                                    ).then((_) =>
+                                                        _loadRecentTransactions());
+                                                  }
+                                                : null,
+                                        onCancelOrder:
+                                            _recentTransactions[index].canCancel
+                                                ? () async {
+                                                    final confirm =
+                                                        await showDialog<bool>(
+                                                      context: context,
+                                                      builder: (context) =>
+                                                          AlertDialog(
+                                                        backgroundColor:
+                                                            isDarkMode
+                                                                ? AppTheme
+                                                                    .cardBg
+                                                                : Colors.white,
+                                                        title: Text(
+                                                            'Cancelar Orden',
+                                                            style: TextStyle(
+                                                                color: isDarkMode
+                                                                    ? Colors
+                                                                        .white
+                                                                    : const Color(
+                                                                        0xFF1A1A1D))),
+                                                        content: Text(
+                                                          '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                                          style: TextStyle(
+                                                              color: isDarkMode
+                                                                  ? Colors
+                                                                      .white70
+                                                                  : const Color(
+                                                                      0xFF4A4A5A)),
+                                                        ),
+                                                        actions: [
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                    context,
+                                                                    false),
+                                                            child: const Text(
+                                                                'No',
+                                                                style: TextStyle(
+                                                                    color: Colors
+                                                                        .white54)),
+                                                          ),
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                    context,
+                                                                    true),
+                                                            child: const Text(
+                                                                'Sí, Cancelar',
+                                                                style: TextStyle(
+                                                                    color: AppTheme
+                                                                        .dangerRed)),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+
+                                                    if (confirm != true) return;
+
+                                                    setState(() =>
+                                                        _isLoadingHistory = true);
+                                                    final messenger =
+                                                        ScaffoldMessenger.of(
+                                                            context);
+                                                    try {
+                                                      final success =
+                                                          await _transactionRepository
+                                                              .cancelOrder(
+                                                                  _recentTransactions[
+                                                                          index]
+                                                                      .id);
+                                                      if (mounted) {
+                                                        messenger.showSnackBar(
+                                                          SnackBar(
+                                                            content: Text(success
+                                                                ? 'Orden cancelada'
+                                                                : 'Error al cancelar'),
+                                                            backgroundColor:
+                                                                success
+                                                                    ? AppTheme
+                                                                        .successGreen
+                                                                    : AppTheme
+                                                                        .dangerRed,
+                                                          ),
+                                                        );
+                                                      }
+                                                    } finally {
+                                                      if (mounted)
+                                                        _loadRecentTransactions();
+                                                    }
+                                                  }
+                                                : null,
+                                      );
+                                    },
                                   ),
-                                ),
-                              )
-                            else
-                              ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: _recentTransactions.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                                itemBuilder: (context, index) {
-                                  // Use standard TransactionCard but perhaps slightly more compact if needed
-                                  // For now, using the standard one is consistent.
-                                  return TransactionCard(
-                                    item: _recentTransactions[index],
-                                    // We can disable buttons here if we want strictly read-only preview
-                                    // or allow resume functionality. I'll allow resume.
-                                    onResumePayment: _recentTransactions[index].canResumePayment
-                                        ? () async {
-                                           // Navigate to Full History for context
-                                           Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => const TransactionHistoryScreen(),
-                                              ),
-                                            ).then((_) => _loadRecentTransactions());
-                                          }
-                                        : null,
-                                    onCancelOrder: _recentTransactions[index].canCancel
-                                        ? () async {
-                                            // Cancel Logic with Confirmation
-                                            final confirm = await showDialog<bool>(
-                                              context: context,
-                                              builder: (context) => AlertDialog(
-                                                backgroundColor: isDarkMode ? AppTheme.cardBg : Colors.white,
-                                                title: Text('Cancelar Orden', style: TextStyle(color: isDarkMode ? Colors.white : const Color(0xFF1A1A1D))),
-                                                content: Text(
-                                                  '¿Estás seguro de que quieres cancelar esta orden pendiente?',
-                                                  style: TextStyle(color: isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A)),
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(context, false),
-                                                    child: const Text('No', style: TextStyle(color: Colors.white54)),
-                                                  ),
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(context, true),
-                                                    child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                            
-                                            if (confirm != true) return;
- 
-                                            setState(() => _isLoadingHistory = true);
-                                            final messenger = ScaffoldMessenger.of(context);
-                                            try {
-                                              final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
-                                              if (mounted) {
-                                                messenger.showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
-                                                    backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
-                                                  ),
-                                                );
-                                              }
-                                            } finally {
-                                              if (mounted) _loadRecentTransactions();
-                                            }
-                                          }
-                                        : null,
-                                  );
-                                },
-                               ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-    );
+        );
 
     final content = widget.hideScaffold 
         ? mainColumn 

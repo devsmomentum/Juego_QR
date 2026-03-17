@@ -416,82 +416,88 @@ class _CluesScreenState extends State<CluesScreen> {
                                       ],
                                     ),
                                   )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    itemCount: gameProvider.clues.length,
-                                    itemBuilder: (context, index) {
-                                      final clue = gameProvider.clues[index];
-                                      final int currentIndex =
-                                          gameProvider.currentClueIndex;
-                                      final bool isPast = index < currentIndex;
-                                      final bool isFuture = index > currentIndex;
-                                      final bool isCurrent = index == currentIndex;
+                                : RefreshIndicator(
+                                    onRefresh: () => gameProvider.fetchClues(eventId: widget.eventId),
+                                    color: AppTheme.accentGold,
+                                    backgroundColor: const Color(0xFF1A1A1D),
+                                    child: ListView.builder(
+                                      physics: const AlwaysScrollableScrollPhysics(),
+                                      padding: const EdgeInsets.all(16),
+                                      itemCount: gameProvider.clues.length,
+                                      itemBuilder: (context, index) {
+                                        final clue = gameProvider.clues[index];
+                                        final int currentIndex =
+                                            gameProvider.currentClueIndex;
+                                        final bool isPast = index < currentIndex;
+                                        final bool isFuture = index > currentIndex;
+                                        final bool isCurrent = index == currentIndex;
 
-                                      if (isCurrent) {
-                                        debugPrint(
-                                            "DEBUG: Clue $index (Current) - isLocked: ${clue.isLocked}, isCompleted: ${clue.isCompleted}, scanned: ${_scannedClues.contains(clue.id)}");
-                                      }
+                                        if (isCurrent) {
+                                          debugPrint(
+                                              "DEBUG: Clue $index (Current) - isLocked: ${clue.isLocked}, isCompleted: ${clue.isCompleted}, scanned: ${_scannedClues.contains(clue.id)}");
+                                        }
 
-                                      final bool showLockIcon =
-                                          isFuture || (isCurrent && clue.isLocked);
+                                        final bool showLockIcon =
+                                            isFuture || (isCurrent && clue.isLocked);
 
-                                      return ClueCard(
-                                        clue: clue,
-                                        isLocked: showLockIcon,
-                                        onTap: () async {
-                                          if (isFuture) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                  content: Text(
-                                                      "Debes completar la pista anterior primero.")),
-                                            );
-                                            return;
-                                          }
-
-                                          if (isPast ||
-                                              (isCurrent && clue.isCompleted)) {
-                                            _showCompletedClueDialog(context, clue);
-                                            return;
-                                          }
-
-                                          if (isCurrent) {
-                                            final player =
-                                                Provider.of<PlayerProvider>(context,
-                                                        listen: false)
-                                                    .currentPlayer;
-                                            final gameProvider =
-                                                Provider.of<GameProvider>(context,
-                                                    listen: false);
-
-                                            if (player?.role == 'spectator') {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        PuzzleScreen(clue: clue)),
+                                        return ClueCard(
+                                          clue: clue,
+                                          isLocked: showLockIcon,
+                                          onTap: () async {
+                                            if (isFuture) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                    content: Text(
+                                                        "Debes completar la pista anterior primero.")),
                                               );
                                               return;
                                             }
 
-                                            if ((player?.lives ?? 0) <= 0 ||
-                                                gameProvider.lives <= 0) {
-                                              Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                      builder: (_) => const Scaffold(
-                                                          backgroundColor:
-                                                              Colors.black,
-                                                          body: NoLivesWidget())));
+                                            if (isPast ||
+                                                (isCurrent && clue.isCompleted)) {
+                                              _showCompletedClueDialog(context, clue);
                                               return;
                                             }
 
-                                            ClueNavigatorService.navigateToClue(
-                                                context, clue);
-                                          }
-                                        },
-                                      );
-                                    },
+                                            if (isCurrent) {
+                                              final player =
+                                                  Provider.of<PlayerProvider>(context,
+                                                          listen: false)
+                                                      .currentPlayer;
+                                              final gameProvider =
+                                                  Provider.of<GameProvider>(context,
+                                                      listen: false);
+
+                                              if (player?.role == 'spectator') {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          PuzzleScreen(clue: clue)),
+                                                );
+                                                return;
+                                              }
+
+                                              if ((player?.lives ?? 0) <= 0 ||
+                                                  gameProvider.lives <= 0) {
+                                                Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                        builder: (_) => const Scaffold(
+                                                            backgroundColor:
+                                                                Colors.black,
+                                                            body: NoLivesWidget())));
+                                                return;
+                                              }
+
+                                              ClueNavigatorService.navigateToClue(
+                                                  context, clue);
+                                            }
+                                          },
+                                        );
+                                      },
+                                    ),
                                   ),
                   ),
                 ],

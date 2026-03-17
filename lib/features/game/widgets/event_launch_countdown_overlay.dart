@@ -20,7 +20,7 @@ class EventLaunchCountdownOverlay extends StatefulWidget {
 
 class _EventLaunchCountdownOverlayState
     extends State<EventLaunchCountdownOverlay>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   /// Current value shown on screen. We start at 5 and go to 0 → "¡YA!"
   int _counter = 5;
   bool _showGo = false;
@@ -50,12 +50,26 @@ class _EventLaunchCountdownOverlayState
       ),
     );
 
+    WidgetsBinding.instance.addObserver(this);
     _audio.setVolume(0.9);
     _runCountdown();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _audio.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      // resume if countdown still active
+      if (!_done) {
+        _audio.resume();
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulse.dispose();
     _audio.dispose();
     super.dispose();

@@ -17,7 +17,7 @@ class StoryIntroScreen extends StatefulWidget {
 }
 
 class _StoryIntroScreenState extends State<StoryIntroScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _mainController;
   late AnimationController _particleController;
   late AnimationController _textController;
@@ -58,7 +58,18 @@ class _StoryIntroScreenState extends State<StoryIntroScreen>
     
     // Initialize and play background music
     _audioPlayer = AudioPlayer();
+    WidgetsBinding.instance.addObserver(this);
     _playBackgroundMusic();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _audioPlayer.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      // Resume if we haven't disposed/completed the screen
+      _audioPlayer.resume();
+    }
   }
   
   Future<void> _playBackgroundMusic() async {
@@ -74,6 +85,7 @@ class _StoryIntroScreenState extends State<StoryIntroScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _mainController.dispose();
     _particleController.dispose();
     _textController.dispose();
