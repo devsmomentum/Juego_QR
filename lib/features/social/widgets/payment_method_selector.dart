@@ -68,10 +68,11 @@ class PaymentMethodSelector extends StatelessWidget {
               context,
               isDarkMode: isDarkMode,
               id: 'stripe',
-              name: 'Tarjeta de Crédito / Débito',
+              name: 'Tarjeta de Crédito / Débito (Próximamente)',
               icon: Icons.credit_card_rounded,
-              color: const Color(0xFF635BFF), // Stripe brand purple
+              color: Colors.grey, 
               description: 'Visa, Mastercard, Amex — pago en USD',
+              enabled: false,
             ),
             
             const SizedBox(height: 12),
