@@ -602,7 +602,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       debugPrint("🧹 ScenariosScreen: Forcing Game State Cleanup...");
       _cleanupGameState();
 
-      _loadEvents();
+      _refreshData();
       // Empezar a precargar el video del primer avatar para que sea instantáneo
       VideoPreloadService()
           .preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
@@ -727,6 +727,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       // Show tutorial if first time viewing scenarios
       _showScenariosTutorial();
     }
+  }
+
+  Future<void> _refreshData() async {
+    await _loadEvents();
   }
 
   void _showScenariosTutorial() async {
@@ -2072,7 +2076,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                       children: [
                         _buildLocalSection(),
                         _buildScenariosContent(scenarios),
-                        const WalletScreen(hideScaffold: true),
+                        // WalletScreen and ProfileScreen are separate widgets,
+                        // their RefreshIndicators should be implemented within their own files.
+                        WalletScreen(hideScaffold: true),
                         const ProfileScreen(hideScaffold: true),
                       ],
                     ),
@@ -2496,7 +2502,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                             ),
                           ),
                           Positioned(
-                            right: 0,
+                            right: 50, // Adjusted to make space for refresh
                             top: 10,
                             child: GestureDetector(
                               onTap: _showLogoutDialog,
@@ -2530,6 +2536,47 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                   child: const Icon(
                                     Icons.logout_rounded,
                                     color: AppTheme.dangerRed,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 10,
+                            child: GestureDetector(
+                              onTap: _refreshData, // Call _refreshData to refresh
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: currentAction.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: currentAction.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: currentAction,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            currentAction.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      )
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.refresh_rounded,
+                                    color: currentAction,
                                     size: 22,
                                   ),
                                 ),
@@ -2650,183 +2697,114 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                         PointerDeviceKind.touch,
                                         PointerDeviceKind.mouse
                                       }),
-                                      child: PageView.builder(
-                                        controller: _pageController,
-                                        onPageChanged: (index) => setState(
-                                            () => _currentPage = index),
-                                        itemCount: scenarios.length,
-                                        itemBuilder: (context, index) {
-                                          final scenario = scenarios[index];
-                                          return AnimatedBuilder(
-                                            animation: _pageController,
-                                            builder: (context, child) {
-                                              double value = 1.0;
-                                              if (_pageController
-                                                  .position.haveDimensions) {
-                                                value = (_pageController.page! -
-                                                        index)
-                                                    .abs();
-                                                value = (1 - (value * 0.3))
-                                                    .clamp(0.0, 1.0);
-                                              } else {
-                                                value = index == _currentPage
-                                                    ? 1.0
-                                                    : 0.7;
-                                              }
-                                              return Align(
-                                                alignment: Alignment
-                                                    .bottomCenter, // Pushes the card towards the dots
-                                                child: Container(
-                                                  margin: EdgeInsets
-                                                      .zero, // Removed margin to lower it more
+                                      child: RefreshIndicator(
+                                        onRefresh: _refreshData,
+                                        color: AppTheme.accentGold,
+                                        backgroundColor: const Color(0xFF151517),
+                                        child: PageView.builder(
+                                          controller: _pageController,
+                                          onPageChanged: (index) => setState(
+                                              () => _currentPage = index),
+                                          itemCount: scenarios.length,
+                                          itemBuilder: (context, index) {
+                                            final scenario = scenarios[index];
+                                            return AnimatedBuilder(
+                                              animation: _pageController,
+                                              builder: (context, child) {
+                                                double value = 1.0;
+                                                if (_pageController
+                                                    .position.haveDimensions) {
+                                                  value = (_pageController.page! -
+                                                          index)
+                                                      .abs();
+                                                  value = (1 - (value * 0.3))
+                                                      .clamp(0.0, 1.0);
+                                                } else {
+                                                  value = index == _currentPage
+                                                      ? 1.0
+                                                      : 0.7;
+                                                }
+                                                return Align(
+                                                  alignment: Alignment.bottomCenter,
                                                   child: SizedBox(
-                                                    height: Curves.easeOut
-                                                            .transform(value) *
-                                                        constraints.maxHeight *
-                                                        1.0, // Occupy 100% of available height
-                                                    width: Curves.easeOut
-                                                            .transform(value) *
-                                                        360, // Slightly wider to match new height
+                                                    height: Curves.easeOut.transform(value) * constraints.maxHeight,
+                                                    width: Curves.easeOut.transform(value) * 360,
                                                     child: child,
                                                   ),
-                                                ),
-                                              );
-                                            },
-                                            child: GestureDetector(
-                                              onTap: () {
-                                                // Don't intercept tap if user is banned - let the banned button handle it
-                                                if (_banStatusMap[
-                                                            scenario.id] !=
-                                                        'banned' &&
-                                                    _banStatusMap[
-                                                            scenario.id] !=
-                                                        'suspended') {
-                                                  // Show choice dialog between Player and Spectator
-                                                  if (scenario.isCompleted) {
-                                                    _onScenarioSelected(
-                                                        scenario);
-                                                  } else {
-                                                    final role = _eventRoleMap[scenario.id];
-                                                    if (role == 'player') {
+                                                );
+                                              },
+                                              child: GestureDetector(
+                                                onTap: () {
+                                                  if (_banStatusMap[scenario.id] != 'banned' && _banStatusMap[scenario.id] != 'suspended') {
+                                                    if (scenario.isCompleted) {
                                                       _onScenarioSelected(scenario);
-                                                    } else if (role == 'spectator') {
-                                                      _onSpectatorSelected(scenario);
                                                     } else {
-                                                      _showJoinOptionDialog(
-                                                          scenario);
+                                                      final role = _eventRoleMap[scenario.id];
+                                                      if (role == 'player') {
+                                                        _onScenarioSelected(scenario);
+                                                      } else if (role == 'spectator') {
+                                                        _onSpectatorSelected(scenario);
+                                                      } else {
+                                                        _showJoinOptionDialog(scenario);
+                                                      }
                                                     }
                                                   }
-                                                }
-                                              },
-                                              child: Container(
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 10),
-                                                decoration: BoxDecoration(
-                                                    color: currentSurface,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            30),
-                                                    boxShadow: [
-                                                      BoxShadow(
-                                                          color: Colors.black
-                                                              .withOpacity(
-                                                                  isDarkMode
-                                                                      ? 0.5
-                                                                      : 0.2),
-                                                          blurRadius: 20,
-                                                          offset: const Offset(
-                                                              0, 10))
-                                                    ]),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(30),
-                                                  child: Stack(
-                                                    fit: StackFit.expand,
-                                                    children: [
-                                                      scenario.imageUrl.isNotEmpty &&
-                                                              scenario.imageUrl
-                                                                  .startsWith(
-                                                                      'http')
-                                                          ? Image.network(
-                                                              scenario.imageUrl,
-                                                              fit: (scenario.type == 'online')
-                                                                  ? BoxFit
-                                                                      .contain
-                                                                  : BoxFit
-                                                                      .cover,
-                                                              errorBuilder: (c, e, s) => Image.asset(
-                                                                  'assets/images/logo4.1.png',
-                                                                  fit: BoxFit
-                                                                      .contain))
-                                                          : Image.asset(
-                                                              'assets/images/logo4.1.png',
-                                                              fit: BoxFit.contain),
-                                                      Container(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          gradient:
-                                                              LinearGradient(
-                                                            begin: Alignment
-                                                                .topCenter,
-                                                            end: Alignment
-                                                                .bottomCenter,
-                                                            colors: [
-                                                              Colors
-                                                                  .transparent,
-                                                              Colors.black
-                                                                  .withOpacity(
-                                                                      isDarkMode
-                                                                          ? 0.6
-                                                                          : 0.4),
-                                                              Colors.black
-                                                                  .withOpacity(
-                                                                      isDarkMode
-                                                                          ? 0.9
-                                                                          : 0.7)
-                                                            ],
-                                                            stops: const [
-                                                              0.3,
-                                                              0.7,
-                                                              1.0
-                                                            ],
+                                                },
+                                                child: Stack(
+                                                  children: [
+                                                    // Background Image and Gradient
+                                                    Positioned.fill(
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(24),
+                                                        child: scenario.imageUrl.isNotEmpty
+                                                            ? Image.network(scenario.imageUrl, fit: BoxFit.cover)
+                                                            : Container(color: Colors.black54),
+                                                      ),
+                                                    ),
+                                                    Positioned.fill(
+                                                      child: DecoratedBox(
+                                                        decoration: BoxDecoration(
+                                                          borderRadius: BorderRadius.circular(24),
+                                                          gradient: LinearGradient(
+                                                            begin: Alignment.topCenter,
+                                                            end: Alignment.bottomCenter,
+                                                            colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
                                                           ),
                                                         ),
                                                       ),
-                                                      // STATUS BADGE at the TOP CENTER (only EN CURSO or countdown)
-                                                      Positioned(
-                                                        top: 12,
-                                                        left: 0,
-                                                        right: 0,
-                                                        child: Center(
-                                                          child: Row(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: [
-                                                              if (scenario.status == 'active')
-                                                                Container(
-                                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                                  decoration: BoxDecoration(
-                                                                    color: AppTheme.successGreen.withOpacity(0.8),
-                                                                    borderRadius: BorderRadius.circular(20),
-                                                                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                                                    ),
+                                                    // Status Badges
+                                                    Positioned(
+                                                      top: 20,
+                                                      right: 20,
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                                        children: [
+                                                          if (scenario.status == 'active')
+                                                            Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                              decoration: BoxDecoration(
+                                                                color: AppTheme.successGreen.withOpacity(0.85),
+                                                                borderRadius: BorderRadius.circular(20),
+                                                                border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                                                              ),
+                                                              child: const Row(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                  Icon(Icons.play_arrow, color: Colors.white, size: 16),
+                                                                  SizedBox(width: 6),
+                                                                  Text(
+                                                                    'EN CURSO',
+                                                                    style: TextStyle(
+                                                                      color: Colors.white,
+                                                                      fontWeight: FontWeight.bold,
+                                                                      fontSize: 12,
+                                                                      letterSpacing: 0.5,
+                                                                    ),
                                                                   ),
-                                                                  child: const Row(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      Icon(Icons.play_circle_fill, color: Colors.white, size: 16),
-                                                                      SizedBox(width: 6),
-                                                                      Text(
-                                                                        'EN CURSO',
-                                                                        style: TextStyle(
-                                                                          color: Colors.white,
-                                                                          fontWeight: FontWeight.bold,
-                                                                          fontSize: 12,
-                                                                          letterSpacing: 0.5,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                )
+                                                                ],
+                                                              ),
+                                                            )
                                                               else if (scenario.date != null && !scenario.isCompleted && scenario.date!.isBefore(DateTime.now()))
                                                                 // Date passed but not active yet = waiting for admin
                                                                 Container(
@@ -2861,7 +2839,6 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                             ],
                                                           ),
                                                         ),
-                                                      ),
 
                                                       Align(
                                                         alignment: Alignment.bottomCenter,
@@ -3154,15 +3131,14 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                     ],
                                                   ),
                                                 ),
-                                              ),
-                                            ),
-                                          );
+                                              );
                                         },
                                       ),
-                                    );
-                        },
+                                    ),
+                                  );
+                          },
+                        ),
                       ),
-                    ),
                     // PAGE INDICATOR (DOTS)
                     if (scenarios.isNotEmpty)
                       Padding(

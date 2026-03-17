@@ -107,7 +107,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (widget.hideScaffold) {
-      return mainScroll;
+      return RefreshIndicator(
+        onRefresh: () async {
+          final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+          await playerProvider.refreshProfile();
+        },
+        color: AppTheme.accentGold,
+        backgroundColor: const Color(0xFF151517),
+        child: mainScroll,
+      );
     }
 
     return Scaffold(
@@ -135,7 +143,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: AnimatedCyberBackground(showBackgroundBase: false),
           ),
           // MAIN CONTENT
-          SafeArea(child: mainScroll),
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                final playerProvider =
+                    Provider.of<PlayerProvider>(context, listen: false);
+                await playerProvider.refreshProfile();
+              },
+              color: AppTheme.accentGold,
+              backgroundColor: const Color(0xFF151517),
+              child: mainScroll,
+            ),
+          ),
         ],
       ),
     );

@@ -73,13 +73,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bool isDarkMode = true;
+    final isDarkMode = true; // FORCE DARK MODE for cyberpunk aesthetic
     final playerProvider = Provider.of<PlayerProvider>(context);
+
+    // Dynamic colors
+    final Color currentSurface = const Color(0xFF151517);
+    final Color currentText = Colors.white;
+    final Color currentTextSec = Colors.white70;
+
     final player = playerProvider.currentPlayer;
 
     if (player == null) {
       return const Scaffold(
-        backgroundColor: AppTheme.darkBg,
+        backgroundColor: Color(0xFF151517),
         body: Center(
           child: LoadingIndicator(),
         ),
@@ -102,213 +108,233 @@ class _InventoryScreenState extends State<InventoryScreen> {
               children: [
                 Positioned.fill(
                   child: Image.asset(
-                    playerProvider.isDarkMode
-                        ? 'assets/images/fotogrupalnoche.png'
-                        : 'assets/images/personajesgrupal.png',
+                    'assets/images/fotogrupalnoche.png', // Default to night/dark image
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                   ),
-                ), // Added comma explicitly
-                // Removed dark overlay as requested
-                // Removed dark overlay as requested
+                ),
                 SafeArea(
-                  child: Column(
-                    children: [
-                      // Header
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Inventario',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w900,
-                                      fontFamily: 'Orbitron',
-                                      letterSpacing: 1.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Column(
+                        children: [
+                          // Header
+                          Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
+                                      Text(
+                                        'Inventario',
+                                        style: TextStyle(
+                                          color: currentText,
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                          fontFamily: 'Orbitron',
+                                          letterSpacing: 1.5,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black,
+                                              blurRadius: 10,
+                                            )
+                                          ],
                                         ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF151517),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: AppTheme.accentGold
+                                                    .withOpacity(0.8),
+                                                width: 1.5,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.5),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 2,
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                    Icons.monetization_on,
+                                                    size: 16,
+                                                    color: AppTheme.accentGold),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${player.coins}',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: currentText,
+                                                    fontFamily: 'Orbitron',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: BackdropFilter(
+                                    filter: ImageFilter.blur(
+                                        sigmaX: 10, sigmaY: 10),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0D0D0F)
+                                            .withOpacity(0.85),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: AppTheme.secondaryPink
+                                              .withOpacity(0.6),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
-                                          gradient: AppTheme.goldGradient,
                                           borderRadius:
-                                              BorderRadius.circular(20),
+                                              BorderRadius.circular(13),
+                                          border: Border.all(
+                                            color: AppTheme.secondaryPink
+                                                .withOpacity(0.2),
+                                            width: 1,
+                                          ),
                                         ),
-                                        child: Row(
+                                        child: Column(
                                           children: [
-                                            const Icon(Icons.monetization_on,
-                                                size: 16, color: Colors.amber),
-                                            const SizedBox(width: 4),
+                                            const Icon(
+                                              Icons.inventory_2,
+                                              color: AppTheme.secondaryPink,
+                                              size: 28,
+                                            ),
+                                            const SizedBox(height: 4),
                                             Text(
-                                              '${player.coins}',
-                                              style: const TextStyle(
+                                              '${player.inventory.length}',
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                color: Colors.white,
+                                                fontSize: 18,
+                                                color: currentText,
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter:
-                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0D0D0F)
-                                        .withOpacity(0.6),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: AppTheme.secondaryPink
-                                          .withOpacity(0.6),
-                                      width: 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppTheme.secondaryPink
-                                            .withOpacity(0.1),
-                                        blurRadius: 12,
+                          ),
+
+                          // Inventory items grid with RefreshIndicator support even when empty
+                          Expanded(
+                            child: RefreshIndicator(
+                              onRefresh: _fetchInventory,
+                              color: AppTheme.accentGold,
+                              backgroundColor: const Color(0xFF151517),
+                              child: player.inventory.isEmpty
+                                  ? SingleChildScrollView(
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(),
+                                      child: SizedBox(
+                                        height: constraints.maxHeight - 150,
+                                        child: _buildEmptyState(context),
                                       ),
-                                    ],
-                                  ),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(13),
-                                      border: Border.all(
-                                        color: AppTheme.secondaryPink
-                                            .withOpacity(0.2),
-                                        width: 1,
+                                    )
+                                  : GridView.builder(
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(),
+                                      padding: const EdgeInsets.all(16),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        crossAxisSpacing: 12,
+                                        mainAxisSpacing: 12,
+                                        childAspectRatio: 0.85,
                                       ),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        const Icon(
-                                          Icons.inventory_2,
-                                          color: AppTheme.secondaryPink,
-                                          size: 28,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${player.inventory.length}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18,
-                                            color: Colors.white,
+                                      itemCount: uniqueItems.length,
+                                      itemBuilder: (context, index) {
+                                        final itemId = uniqueItems[index];
+                                        final count =
+                                            inventoryCounts[itemId] ?? 1;
+
+                                        final itemDef = PowerItem.getShopItems()
+                                            .firstWhere(
+                                          (item) => item.id == itemId,
+                                          orElse: () => PowerItem(
+                                            id: itemId,
+                                            name: 'Poder Misterioso',
+                                            description: 'Poder desconocido',
+                                            type: PowerType.buff,
+                                            cost: 0,
+                                            icon: '⚡',
                                           ),
-                                        ),
-                                      ],
+                                        );
+
+                                        final effectProvider =
+                                            Provider.of<PowerEffectReader>(
+                                                context);
+
+                                        final isDefensive = [
+                                          'shield',
+                                          'invisibility',
+                                          'return'
+                                        ].contains(itemDef.id);
+
+                                        bool isActive = false;
+                                        bool isDisabled = false;
+                                        String? disabledLabel;
+
+                                        if (isDefensive) {
+                                          isActive = effectProvider
+                                              .isEffectActive(itemDef.id);
+                                          if (!isActive) {
+                                            if (!effectProvider
+                                                .canActivateDefensePower(
+                                                    itemDef.id)) {
+                                              isDisabled = true;
+                                              disabledLabel = 'Defensa en uso';
+                                            }
+                                          }
+                                        }
+
+                                        return InventoryItemCard(
+                                          item: itemDef,
+                                          count: count,
+                                          isActive: isActive,
+                                          isDisabled: isDisabled,
+                                          disabledLabel: disabledLabel,
+                                          onUse: () => _handleItemUse(
+                                              context, itemDef, player.id),
+                                        );
+                                      },
                                     ),
-                                  ),
-                                ),
-                              ),
                             ),
-                          ],
-                        ),
-                      ),
-
-                      // Inventory items grid
-                      Expanded(
-                        child: player.inventory.isEmpty
-                            ? _buildEmptyState(context)
-                            : GridView.builder(
-                                padding: const EdgeInsets.all(16),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 0.85,
-                                ),
-                                itemCount: uniqueItems.length,
-                                itemBuilder: (context, index) {
-                                  final itemId = uniqueItems[index];
-                                  final count = inventoryCounts[itemId] ?? 1;
-
-                                  // Buscamos la definición del item para pintarlo (Nombre, Icono)
-                                  // Si no existe en la lista estática, creamos un placeholder.
-                                  final itemDef =
-                                      PowerItem.getShopItems().firstWhere(
-                                    (item) => item.id == itemId,
-                                    orElse: () => PowerItem(
-                                      id: itemId,
-                                      name: 'Poder Misterioso',
-                                      description: 'Poder desconocido',
-                                      type: PowerType.buff,
-                                      cost: 0,
-                                      icon: '⚡',
-                                    ),
-                                  );
-
-                                  final effectProvider =
-                                      Provider.of<PowerEffectReader>(context);
-
-                                  // Logic for Defense Power Exclusivity
-                                  // 1. Identify if this item is a defense power
-                                  final isDefensive = [
-                                    'shield',
-                                    'invisibility',
-                                    'return'
-                                  ].contains(itemDef.id);
-
-                                  bool isActive = false;
-                                  bool isDisabled = false;
-                                  String? disabledLabel;
-
-                                  if (isDefensive) {
-                                    // Check if THIS specific power is active
-                                    isActive = effectProvider
-                                        .isEffectActive(itemDef.id);
-
-                                    // Check if we should disable it (because another defense is active)
-                                    if (!isActive) {
-                                      // Now we can use the interface directly!
-                                      if (!effectProvider
-                                          .canActivateDefensePower(
-                                              itemDef.id)) {
-                                        isDisabled = true;
-                                        disabledLabel = 'Defensa en uso';
-                                      }
-                                    }
-                                  }
-
-                                  if (isDefensive) {
-                                    debugPrint(
-                                        '🔘 [UI-SYNC] Button State for ${itemDef.id}: Active=$isActive, Disabled=$isDisabled');
-                                  }
-
-                                  return InventoryItemCard(
-                                    item: itemDef,
-                                    count: count,
-                                    isActive: isActive,
-                                    isDisabled: isDisabled,
-                                    disabledLabel: disabledLabel,
-                                    onUse: () => _handleItemUse(
-                                        context, itemDef, player.id),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],

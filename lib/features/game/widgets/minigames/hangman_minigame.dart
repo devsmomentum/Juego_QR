@@ -299,12 +299,19 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                   ),
                 ),
 
-                const Text(
-                  "AHORCADO",
-                  style: TextStyle(
-                      color: AppTheme.accentGold,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => AppTheme.goldGradient.createShader(bounds),
+                    child: const Text(
+                      "AHORCADO",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w900),
+                    ),
+                  ),
                 ),
 
                 // Pista
@@ -379,23 +386,35 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                             children: word.split('').map((char) {
                               final isGuessed = _guessedLetters.contains(char);
                               return Container(
-                                width: 20, // Smaller width
-                                height: 28, // Smaller height
+                                width: 26,
+                                height: 34,
+                                margin: const EdgeInsets.symmetric(horizontal: 1.5),
                                 decoration: BoxDecoration(
-                                  border: Border(
-                                      bottom: BorderSide(
+                                  color: isGuessed
+                                      ? AppTheme.accentGold.withOpacity(0.15)
+                                      : Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
                                     color: isGuessed
                                         ? AppTheme.accentGold
-                                        : Colors.white54,
-                                    width: 2,
-                                  )),
+                                        : Colors.white10,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: isGuessed
+                                      ? [
+                                          BoxShadow(
+                                            color: AppTheme.accentGold.withOpacity(0.2),
+                                            blurRadius: 4,
+                                          )
+                                        ]
+                                      : [],
                                 ),
                                 child: Center(
                                   child: Text(
                                     isGuessed ? char : '',
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 16, // Smaller font
+                                      fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -409,64 +428,17 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                   ),
                 ),
 
-                // Teclado
+                // Teclado QWERTY Premium
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      childAspectRatio:
-                          1.15, // Flatter buttons to save vertical space
-                      crossAxisSpacing: 3,
-                      mainAxisSpacing: 3,
-                    ),
-                    itemCount: 26,
-                    itemBuilder: (context, index) {
-                      final letter = String.fromCharCode(65 + index);
-                      final isGuessed = _guessedLetters.contains(letter);
-                      final isCorrect = _word.contains(letter);
-
-                      Color bgColor = Colors.white10;
-                      Color textColor = Colors.white;
-
-                      if (isGuessed) {
-                        if (isCorrect) {
-                          bgColor = AppTheme.successGreen;
-                          textColor = Colors.black;
-                        } else {
-                          bgColor = Colors.black38;
-                          textColor = Colors.grey;
-                        }
-                      }
-
-                      return GestureDetector(
-                        onTap: isGuessed ? null : () => _onLetterGuess(letter),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: bgColor,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: isGuessed
-                                  ? Colors.transparent
-                                  : Colors.white24,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              letter,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 14, // Smaller font
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  child: Column(
+                    children: [
+                      _buildKeyboardRow(['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P']),
+                      const SizedBox(height: 8),
+                      _buildKeyboardRow(['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L']),
+                      const SizedBox(height: 8),
+                      _buildKeyboardRow(['Z', 'X', 'C', 'V', 'B', 'N', 'M']),
+                    ],
                   ),
                 ),
 
@@ -505,6 +477,86 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
               },
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildKeyboardRow(List<String> letters) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: letters.map((letter) => _buildKey(letter)).toList(),
+    );
+  }
+
+  Widget _buildKey(String letter) {
+    final isGuessed = _guessedLetters.contains(letter);
+    final isCorrect = _word.contains(letter);
+
+    Color bgColor = Colors.white.withOpacity(0.05);
+    Color borderColor = Colors.white.withOpacity(0.15);
+    Color textColor = Colors.white;
+
+    if (isGuessed) {
+      if (isCorrect) {
+        bgColor = AppTheme.successGreen.withOpacity(0.9);
+        borderColor = AppTheme.successGreen;
+        textColor = Colors.black;
+      } else {
+        bgColor = Colors.white10;
+        borderColor = Colors.transparent;
+        textColor = Colors.white24;
+      }
+    }
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2.5),
+        child: GestureDetector(
+          onTap: isGuessed ? null : () => _onLetterGuess(letter),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            height: 48,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: borderColor, width: 1.5),
+              boxShadow: isGuessed
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 4,
+                        offset: const Offset(0, 3),
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.05),
+                        blurRadius: 1,
+                        offset: const Offset(0, -1),
+                      ),
+                    ],
+            ),
+            child: Center(
+              child: Text(
+                letter,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  shadows: isGuessed && isCorrect
+                      ? []
+                      : [
+                          const Shadow(
+                            color: Colors.black26,
+                            offset: Offset(0, 1),
+                            blurRadius: 2,
+                          )
+                        ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

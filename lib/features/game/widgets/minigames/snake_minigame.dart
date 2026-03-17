@@ -31,8 +31,8 @@ enum Direction { up, down, left, right }
 
 class _SnakeMinigameState extends State<SnakeMinigame> {
   // Config
-  static const int rows = 15; // Reduced from 20 to enlarge view
-  static const int cols = 15; // Reduced from 20 to enlarge view
+  static const int rows = 12; // Compact grid for bigger cells
+  static const int cols = 12; // Compact grid for bigger cells
 
   // Overlay State
   bool _showOverlay = false;
@@ -59,8 +59,8 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
   // Game State
   List<Point<int>> _snake = [
-    const Point(7, 7)
-  ]; // Adjusted start position for smaller grid
+    const Point(6, 6)
+  ]; // Centered start position for 12x12 grid
   List<Point<int>> _obstacles = [];
   bool _isOrangeMode = false;
 
@@ -73,6 +73,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
   // Intentos Locales
   int _crashAllowance = 3;
+  Direction? _lastPressedDirection;
 
   // Timer
   Timer? _gameLoop;
@@ -135,7 +136,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
     _preStartTimer?.cancel();
 
     setState(() {
-      _snake = [const Point(7, 7), const Point(6, 7), const Point(5, 7)];
+      _snake = [const Point(6, 6), const Point(5, 6), const Point(4, 6)];
       _obstacles = [];
       _isOrangeMode = false;
       _direction = Direction.right;
@@ -549,7 +550,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
 
               Expanded(
                 child: GestureDetector(
@@ -592,7 +593,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                         aspectRatio: cols / rows,
                         child: Container(
                           decoration: BoxDecoration(
-                              color: const Color(0xFF121212),
+                              color: const Color(0xFF0A0A0B),
                               border: Border.all(
                                   color: AppTheme.primaryPurple.withOpacity(0.4),
                                   width: 3),
@@ -610,14 +611,15 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                               return Stack(
                                 clipBehavior: Clip.none,
                                 children: [
+                                  // Grid de Fondo Neon
                                   CustomPaint(
                                     size: Size(constraints.maxWidth,
                                         constraints.maxHeight),
                                     painter: GridPainter(rows, cols,
-                                        Colors.white.withOpacity(0.04)),
+                                        AppTheme.primaryPurple.withOpacity(0.08)),
                                   ),
 
-                                  // Render Obstacles
+                                  // Render Obstacles (Rocas con estilo)
                                   ..._obstacles.map((obs) {
                                     return Positioned(
                                       left: obs.x * cellSize,
@@ -625,12 +627,20 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                       child: Container(
                                         width: cellSize,
                                         height: cellSize,
+                                        margin: const EdgeInsets.all(1),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey[700],
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                          border:
-                                              Border.all(color: Colors.white24),
+                                          gradient: LinearGradient(
+                                            colors: [Colors.grey[800]!, Colors.grey[900]!],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(4),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.5),
+                                              blurRadius: 2,
+                                            )
+                                          ],
                                         ),
                                       ),
                                     );
@@ -641,22 +651,19 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                     final index = entry.key;
                                     final part = entry.value;
                                     final isHead = index == 0;
-                                    Color bodyColor = _isOrangeMode
-                                        ? Colors.orange
-                                        : Colors.greenAccent[700]!;
-                                    Color headColor = _isOrangeMode
-                                        ? Colors.deepOrange
-                                        : AppTheme.successGreen;
+                                    final isTail = index == _snake.length - 1;
+
+                                    Color headColor = _isOrangeMode ? Colors.orangeAccent : AppTheme.successGreen;
+                                    Color bodyColor = _isOrangeMode ? Colors.orange.withOpacity(0.8) : Colors.greenAccent[400]!.withOpacity(0.8);
 
                                     return Positioned(
-                                      key: ValueKey(
-                                          'snake_${index}_${part.x}_${part.y}'),
+                                      key: ValueKey('snake_${index}_${part.x}_${part.y}'),
                                       left: part.x * cellSize,
                                       top: part.y * cellSize,
                                       child: Container(
                                         width: cellSize,
                                         height: cellSize,
-                                        margin: const EdgeInsets.all(0.5),
+                                        margin: EdgeInsets.all(isHead ? 0.5 : 1.5),
                                         decoration: BoxDecoration(
                                           color: isHead ? headColor : bodyColor,
                                           borderRadius:
@@ -676,20 +683,30 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
                                       ),
                                     );
                                   }),
-                                  // Render Food (with null check safety)
+
+                                  // Comida (Manzana con brillo)
                                   if (_food != null)
                                     Positioned(
                                       left: _food!.x * cellSize,
                                       top: _food!.y * cellSize,
-                                      child: SizedBox(
+                                      child: Container(
                                         width: cellSize,
                                         height: cellSize,
-                                        child: Center(
+                                        alignment: Alignment.center,
+                                        child: TweenAnimationBuilder<double>(
+                                          tween: Tween(begin: 0.8, end: 1.1),
+                                          duration: const Duration(milliseconds: 600),
+                                          curve: Curves.easeInOutSine,
+                                          builder: (context, scale, child) {
+                                            return Transform.scale(
+                                              scale: scale,
+                                              child: child,
+                                            );
+                                          },
+                                          onEnd: () {}, // Handled by repeating tween if needed or just one-off pulse
                                           child: FittedBox(
                                             fit: BoxFit.contain,
-                                            child: Text("🍎",
-                                                style: TextStyle(
-                                                    fontSize: cellSize)),
+                                            child: const Text("🍎", style: TextStyle(fontSize: 20)),
                                           ),
                                         ),
                                       ),
@@ -707,7 +724,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
               // CONTROLES D-PAD COMPACTOS
               if (!_showOverlay) _buildDPad(),
-              const SizedBox(height: 10),
+              const SizedBox(height: 4),
             ],
           ),
 
@@ -757,41 +774,74 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
   Widget _buildDPad() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 0),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildDPadButton(
-              Icons.keyboard_arrow_up, () => _onChangeDirection(Direction.up)),
+          _buildDPadButton(Icons.keyboard_arrow_up, Direction.up),
+          const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildDPadButton(Icons.keyboard_arrow_left,
-                  () => _onChangeDirection(Direction.left)),
-              const SizedBox(width: 80),
-              _buildDPadButton(Icons.keyboard_arrow_right,
-                  () => _onChangeDirection(Direction.right)),
+              _buildDPadButton(Icons.keyboard_arrow_left, Direction.left),
+              const SizedBox(width: 70), // Tighter spacing
+              _buildDPadButton(Icons.keyboard_arrow_right, Direction.right),
             ],
           ),
-          _buildDPadButton(Icons.keyboard_arrow_down,
-              () => _onChangeDirection(Direction.down)),
+          const SizedBox(height: 4),
+          _buildDPadButton(Icons.keyboard_arrow_down, Direction.down),
         ],
       ),
     );
   }
 
-  Widget _buildDPadButton(IconData icon, VoidCallback onTap) {
+  Widget _buildDPadButton(IconData icon, Direction direction) {
+    final bool isPressed = _lastPressedDirection == direction;
+
     return GestureDetector(
-      onTapDown: (_) => onTap(),
-      child: Container(
-        width: 45,
-        height: 45,
+      onTapDown: (_) {
+        setState(() => _lastPressedDirection = direction);
+        _onChangeDirection(direction);
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted) setState(() => _lastPressedDirection = null);
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        width: 52,
+        height: 52,
+        transform: Matrix4.identity()..scale(isPressed ? 0.9 : 1.0),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white10),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isPressed
+                ? [AppTheme.accentGold, AppTheme.warningOrange]
+                : [
+                    Colors.white.withOpacity(0.12),
+                    Colors.white.withOpacity(0.05),
+                  ],
+          ),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: isPressed ? AppTheme.accentGold : Colors.white12,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isPressed
+                  ? AppTheme.accentGold.withOpacity(0.4)
+                  : Colors.black.withOpacity(0.2),
+              blurRadius: isPressed ? 10 : 5,
+              offset: isPressed ? Offset.zero : const Offset(0, 3),
+            ),
+          ],
         ),
-        child: Icon(icon, color: Colors.white54, size: 28),
+        child: Icon(
+          icon,
+          color: isPressed ? Colors.black : Colors.white.withOpacity(0.8),
+          size: 34,
+        ),
       ),
     );
   }
