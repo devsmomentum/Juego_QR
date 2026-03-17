@@ -4,12 +4,14 @@
 -- ============================================================
 
 -- Asegurar que la tabla existe con la estructura correcta
-CREATE TABLE IF NOT EXISTS minigame_true_false (
-  id         uuid    DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
-  statement  TEXT    NOT NULL UNIQUE,
-  is_true    BOOLEAN NOT NULL,
-  correction TEXT    NOT NULL DEFAULT ''
-);
+-- CREATE TABLE IF NOT EXISTS minigame_true_false (
+--   id         uuid    DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
+--   statement  TEXT    NOT NULL UNIQUE,
+--   is_true    BOOLEAN NOT NULL,
+--   correction TEXT    NOT NULL DEFAULT ''
+-- );
+
+ALTER TABLE minigame_true_false ADD CONSTRAINT unique_statement UNIQUE (statement);
 
 INSERT INTO minigame_true_false (statement, is_true, correction) VALUES
 
