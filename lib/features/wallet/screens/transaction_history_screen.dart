@@ -21,8 +21,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   final ITransactionRepository _repository = SupabaseTransactionRepository();
   late Future<List<TransactionItem>> _transactionsFuture;
   
-  String _selectedFilter = 'Todos'; // 'Todos', 'Exitoso', 'Pendiente', 'Fallido', 'Expirado'
-  final List<String> _filters = ['Todos', 'Exitoso', 'Pendiente', 'Fallido', 'Expirado'];
+  String _selectedFilter = 'Todos'; // 'Todos', 'Exitoso', 'Pendiente', 'Cancelado', 'Expirado'
+  final List<String> _filters = ['Todos', 'Exitoso', 'Pendiente', 'Cancelado', 'Expirado'];
 
   @override
   void initState() {
@@ -114,8 +114,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           return status == 'completed' || status == 'success' || status == 'paid';
         case 'Pendiente':
           return status == 'pending';
-        case 'Fallido':
-          return status == 'failed' || status == 'error';
+        case 'Cancelado':
+          return status == 'cancelled';
         case 'Expirado':
           return status == 'expired';
         default:
