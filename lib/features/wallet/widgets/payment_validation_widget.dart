@@ -174,7 +174,7 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
 
       final data = response.data as Map<String, dynamic>?;
 
-      if (response.status == 200 && data?['success'] == true) {
+      if (response.status == 200 && data?['success'] == true && data?['claimed'] == true) {
         Navigator.of(context).pop(true);
       } else {
         setState(() {

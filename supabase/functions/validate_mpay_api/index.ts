@@ -63,12 +63,13 @@ serve(async (req) => {
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY");
     if (!pagoApiKey) throw new Error("Missing PAGO_PAGO_API_KEY");
 
-    const validateUrl = "https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/validate_mpay_api";
+    const validateUrl = "https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/validate_mpay_api_v2";
 
     const validatePayload = {
       phone: phone,
       reference: reference,
-      concept: concept
+      concept: concept,
+      order_id: order_id,
     };
 
     // 6. HACER LA PETICIÓN EXTERNA
@@ -89,28 +90,32 @@ serve(async (req) => {
     // 7. PROCESAR RESPUESTA DE LA PASARELA
     const apiResponse = await response.json();
 
-    // === CASO A: Pago ya procesado ===
+    // === CASO A: Pago ya procesado (duplicado/reclamado) ===
     if (apiResponse.success === false && apiResponse.claimed === true) {
       await supabaseAdmin.from("mpay_validations").insert({
         user_id: user.id, order_id: order.id, phone, reference, concept,
         status: "already_claimed", api_response: apiResponse,
       });
-      
+
       return new Response(
         JSON.stringify({
           success: false,
           claimed: true,
           message: apiResponse.message || "Este pago ya fue procesado y reclamado anteriormente",
-          reference: apiResponse.reference || reference,
-          amount: apiResponse.amount || 0,
-          status: "completed"
+          reference: apiResponse.reference ?? reference,
+          amount: apiResponse.amount ?? null,
+          montoUsuario: apiResponse.montoUsuario ?? null,
+          order_status: apiResponse.order_status ?? "completed",
+          order_id: apiResponse.order_id ?? null,
+          payment_id: apiResponse.payment_id ?? null,
+          userId: user.id,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
     // === CASO B: Pago no encontrado ===
-    if (apiResponse.success === false) {
+    if (apiResponse.success === false && !apiResponse.claimed) {
       await supabaseAdmin.from("mpay_validations").insert({
         user_id: user.id, order_id: order.id, phone, reference, concept,
         status: "not_found", api_response: apiResponse,
@@ -119,60 +124,111 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
+          claimed: false,
           message: apiResponse.message || "No se encontró pago móvil con esos datos",
+          reference: apiResponse.reference ?? null,
+          amount: apiResponse.amount ?? null,
+          montoUsuario: apiResponse.montoUsuario ?? null,
+          order_status: apiResponse.order_status ?? null,
+          order_id: apiResponse.order_id ?? null,
+          payment_id: apiResponse.payment_id ?? null,
           searchParams: {
             phone: phone,
             reference: reference,
-            concept: concept || null
-          }
+            concept: concept || null,
+          },
+          userId: user.id,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    // === CASO C: Procesamiento Exitoso ===
+    // === CASO C: Pago encontrado pero no procesado aún ===
+    if (apiResponse.success === true && apiResponse.claimed === false) {
+      await supabaseAdmin.from("mpay_validations").insert({
+        user_id: user.id, order_id: order.id, phone, reference, concept,
+        status: "found_not_processed", api_response: apiResponse,
+      });
+
+      // NO actualizamos la orden — el pago aún no fue reclamado
+      return new Response(
+        JSON.stringify({
+          success: true,
+          claimed: false,
+          message: apiResponse.message || "Pago móvil encontrado pero no procesado",
+          reference: apiResponse.reference ?? null,
+          amount: apiResponse.amount ?? null,
+          montoUsuario: apiResponse.montoUsuario ?? null,
+          order_status: apiResponse.order_status ?? null,
+          order_id: apiResponse.order_id ?? null,
+          payment_id: apiResponse.payment_id ?? null,
+          userId: user.id,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
+    // === CASO D: Procesamiento Exitoso (success: true, claimed: true) ===
     const amountRaw = apiResponse.amount ?? order.extra_data?.amount_ves_total ?? 0;
     const amountUser = apiResponse.montoUsuario ?? amountRaw * 0.98;
     const feeTotal = amountRaw - amountUser;
+    const orderStatus = apiResponse.order_status ?? "paid";
 
-    // ACTUALIZAR BASE DE DATOS LOCAL
-    const updateOrderPromise = supabaseAdmin
-      .from("clover_orders")
-      .update({
-        status: "success",
-        transaction_id: apiResponse.reference ?? reference,
-        bank_reference: apiResponse.reference ?? reference,
-        extra_data: {
-          ...order.extra_data,
-          mpay_validation: {
-            phone, reference, concept, amount_raw: amountRaw, amount_user: amountUser,
-            fee_total: feeTotal, validated_at: new Date().toISOString(), api_response: apiResponse,
+    // Solo acreditamos tréboles si la orden fue pagada en su totalidad
+    const shouldCreditClovers = orderStatus === "paid";
+
+    if (shouldCreditClovers) {
+      // ACTUALIZAR BASE DE DATOS LOCAL → dispara trigger de tréboles
+      const updateOrderPromise = supabaseAdmin
+        .from("clover_orders")
+        .update({
+          status: "success",
+          transaction_id: apiResponse.reference ?? reference,
+          bank_reference: apiResponse.reference ?? reference,
+          extra_data: {
+            ...order.extra_data,
+            mpay_validation: {
+              phone, reference, concept, amount_raw: amountRaw, amount_user: amountUser,
+              fee_total: feeTotal, validated_at: new Date().toISOString(), api_response: apiResponse,
+            },
           },
-        },
-      })
-      .eq("id", order.id);
+        })
+        .eq("id", order.id);
 
-    const insertAuditPromise = supabaseAdmin.from("mpay_validations").insert({
-      user_id: user.id, order_id: order.id, phone, reference, concept,
-      status: "success", amount_raw: amountRaw, amount_user: amountUser,
-      fee_total: feeTotal, api_response: apiResponse,
-    });
+      const insertAuditPromise = supabaseAdmin.from("mpay_validations").insert({
+        user_id: user.id, order_id: order.id, phone, reference, concept,
+        status: "success", amount_raw: amountRaw, amount_user: amountUser,
+        fee_total: feeTotal, api_response: apiResponse,
+      });
 
-    const [updateResult] = await Promise.all([updateOrderPromise, insertAuditPromise]);
+      const [updateResult] = await Promise.all([updateOrderPromise, insertAuditPromise]);
 
-    if (updateResult.error) {
-      throw new Error("El pago se verificó pero hubo un error actualizando la orden local");
+      if (updateResult.error) {
+        throw new Error("El pago se verificó pero hubo un error actualizando la orden local");
+      }
+    } else {
+      // Orden cancelada: registrar auditoría sin acreditar tréboles
+      await supabaseAdmin.from("mpay_validations").insert({
+        user_id: user.id, order_id: order.id, phone, reference, concept,
+        status: "order_cancelled", amount_raw: amountRaw, amount_user: amountUser,
+        fee_total: feeTotal, api_response: apiResponse,
+      });
     }
 
-    // RESPUESTA DE ÉXITO EXACTA A LA DOCUMENTACIÓN
     return new Response(
       JSON.stringify({
-        success: true,
+        success: shouldCreditClovers,
         claimed: true,
-        message: apiResponse.message || "Pago procesado satisfactoriamente",
-        reference: apiResponse.reference || reference,
+        message: apiResponse.message || (shouldCreditClovers
+          ? "Pago procesado satisfactoriamente"
+          : "Pago procesado pero la orden fue cancelada"),
+        reference: apiResponse.reference ?? reference,
         amount: amountRaw,
-        montoUsuario: amountUser
+        montoUsuario: amountUser,
+        order_status: orderStatus,
+        order_id: apiResponse.order_id ?? null,
+        payment_id: apiResponse.payment_id ?? null,
+        userId: user.id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
