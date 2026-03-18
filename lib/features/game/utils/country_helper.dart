@@ -99,6 +99,8 @@ class CountryHelper {
     'Australia': '🇦🇺',
     'Nueva Zelanda': '🇳🇿',
     'Papúa Nueva Guinea': '🇵🇬',
+    'Fiji': '🇫🇯',
+    'Samoa': '🇼🇸',
     'Federación Rusa': '🇷🇺',
     'Russia': '🇷🇺',
     'Rusia': '🇷🇺',
