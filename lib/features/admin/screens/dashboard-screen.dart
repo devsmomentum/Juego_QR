@@ -21,6 +21,7 @@ import 'sponsors_management_screen.dart';
 import 'online_automation_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
 import 'event_metrics_screen.dart';
+import 'stripe_orders_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -40,7 +41,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Usuarios",
     "Compras",
     "Retiros",
-    "Métricas", // Renamed from "Reportes"
+    "Stripe",
+    "Métricas",
     "Minijuegos",
     "Patrocinadores",
     "Auditoría",
@@ -55,7 +57,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.people,
     Icons.local_offer,
     Icons.money_off,
-    Icons.analytics, // Icon for "Métricas" (formerly "Reportes")
+    Icons.credit_card,
+    Icons.analytics,
     Icons.games,
     Icons.business_center,
     Icons.history_edu,
@@ -130,11 +133,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const UserManagementScreen(), // Index 4
       const CloverPlansManagementScreen(), // Index 5 - Planes Compra
       const WithdrawalPlansManagementScreen(), // Index 6 - Planes Retiro
-      const EventMetricsScreen(), // Index 7 - Métricas
-      const _MinigamesListView(), // Index 8 - Minijuegos
-      const SponsorsManagementScreen(), // Index 9 - Patrocinadores
-      const AuditLogsScreen(), // Index 10 - Auditoría
-      const GlobalConfigScreen(), // Index 11 - Configuración
+      const StripeOrdersScreen(), // Index 7 - Stripe Orders
+      const EventMetricsScreen(), // Index 8 - Métricas
+      const _MinigamesListView(), // Index 9 - Minijuegos
+      const SponsorsManagementScreen(), // Index 10 - Patrocinadores
+      const AuditLogsScreen(), // Index 11 - Auditoría
+      const GlobalConfigScreen(), // Index 12 - Configuración
     ];
 
     return LayoutBuilder(
