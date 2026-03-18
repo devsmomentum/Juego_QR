@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum StripePaymentResult { success, cancelled, failed }
 
@@ -85,7 +86,12 @@ class StripeService {
       // 1. Call the Edge Function to create a PaymentIntent (server-side)
       final FunctionResponse response = await Supabase.instance.client.functions.invoke(
         'stripe-create-payment-intent',
-        body: {'plan_id': planId},
+        body: {
+          'plan_id': planId,
+          'is_web': kIsWeb,
+          'success_url': kIsWeb ? Uri.base.toString().split('?').first : null,
+          'cancel_url': kIsWeb ? Uri.base.toString().split('?').first : null,
+        },
       );
 
       if (response.status != 200) {
@@ -99,11 +105,29 @@ class StripeService {
       }
 
       final paymentData = data['data'] as Map<String, dynamic>;
-      final String clientSecret = paymentData['client_secret'] as String;
+      final String clientSecret = (paymentData['client_secret'] as String?) ?? '';
+      final String checkoutUrl = (paymentData['checkout_url'] as String?) ?? '';
       final int amountCents = paymentData['amount_cents'] as int;
       final String planName = (paymentData['plan'] as Map<String, dynamic>)['name'] as String;
 
-      debugPrint('[StripeService] PaymentIntent created: ${paymentData['payment_intent_id']}');
+      debugPrint('[StripeService] PaymentIntent/Session created: ${paymentData['payment_intent_id'] ?? 'N/A'}');
+
+      if (kIsWeb) {
+        if (checkoutUrl.isEmpty) {
+          throw Exception('No se recibió URL de Checkout para Web');
+        }
+        debugPrint('[StripeService] Redirigiendo a Stripe Checkout: $checkoutUrl');
+        
+        if (await canLaunchUrl(Uri.parse(checkoutUrl))) {
+          await launchUrl(
+            Uri.parse(checkoutUrl),
+            webOnlyWindowName: '_self', // Abre en la misma pestaña para mejor UX en PWA
+          );
+          return StripePaymentResult.success; // Retornamos éxito asumiendo que el webhook se encargará
+        } else {
+          throw Exception('No se pudo abrir la URL de pago');
+        }
+      }
 
       // 2. Initialize the Payment Sheet
       await Stripe.instance.initPaymentSheet(

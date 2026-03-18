@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,8 +42,8 @@ serve(async (req) => {
       );
     }
 
-    // 2. PARSE REQUEST — only plan_id from client (price validated server-side)
-    const { plan_id } = await req.json();
+    // 2. PARSE REQUEST
+    const { plan_id, is_web, success_url, cancel_url } = await req.json();
 
     if (!plan_id) {
       return new Response(
@@ -94,27 +94,82 @@ serve(async (req) => {
       throw new Error("Server Misconfiguration: Missing STRIPE_SECRET_KEY");
     }
 
-    // 6. CREATE STRIPE PAYMENT INTENT
+    const internalOrderId = crypto.randomUUID();
+    let paymentIntentId = "";
+    let clientSecret = "";
+    let checkoutUrl = "";
+
+    // 6. INITIALIZE STRIPE
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2024-06-20",
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
-      currency: "usd",
-      description: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
-      metadata: {
-        user_id: user.id,
-        plan_id: plan.id,
-        plan_name: plan.name,
-        clovers_amount: String(cloversQuantity),
-      },
-      // Allows Google Pay, Apple Pay, and other methods managed in Stripe Dashboard
-      automatic_payment_methods: { enabled: true },
-    });
+    if (is_web) {
+      // 6a. CREATE STRIPE CHECKOUT SESSION (Web)
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
+                description: plan.name,
+              },
+              unit_amount: amountCents,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        success_url: success_url || `${supabaseUrl}/auth/v1/verify`,
+        cancel_url: cancel_url || success_url,
+        metadata: {
+          user_id: user.id,
+          plan_id: plan.id,
+          plan_name: plan.name,
+          clovers_amount: String(cloversQuantity),
+          clover_order_id: internalOrderId,
+        },
+        payment_intent_data: {
+          metadata: {
+            user_id: user.id,
+            plan_id: plan.id,
+            plan_name: plan.name,
+            clovers_amount: String(cloversQuantity),
+            clover_order_id: internalOrderId,
+          },
+        },
+      });
+      checkoutUrl = session.url!;
+      // For Stripe Checkout, the payment_intent is often null until the payment is confirmed.
+      // We store the session.id as a reference to find the order in the webhook.
+      paymentIntentId = session.payment_intent as string || session.id; 
+    } else {
+      // 6b. CREATE STRIPE PAYMENT INTENT (Mobile)
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountCents,
+        currency: "usd",
+        description: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
+        metadata: {
+          user_id: user.id,
+          plan_id: plan.id,
+          plan_name: plan.name,
+          clovers_amount: String(cloversQuantity),
+          clover_order_id: internalOrderId,
+        },
+        automatic_payment_methods: { enabled: true },
+      });
+      paymentIntentId = paymentIntent.id;
+      clientSecret = paymentIntent.client_secret!;
+    }
 
-    console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntent.id}`);
+    if (!is_web) {
+      console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntentId}`);
+    } else {
+      console.log(`[stripe-create-pi] Created Checkout Session: ${checkoutUrl}`);
+    }
 
     // 7. PERSIST ORDER IN DATABASE
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -122,27 +177,27 @@ serve(async (req) => {
     const { error: dbError } = await supabaseAdmin
       .from("clover_orders")
       .insert({
+        id: internalOrderId,
         user_id: user.id,
         plan_id: plan.id,
         amount: amountUsd,
         currency: "USD",
         status: "pending",
         gateway: "stripe",
-        stripe_payment_intent_id: paymentIntent.id,
+        stripe_payment_intent_id: paymentIntentId || null,
         expires_at: expiresAt,
         extra_data: {
           plan_name: plan.name,
           clovers_amount: cloversQuantity,
           price_usd: amountUsd,
           initiated_at: new Date().toISOString(),
-          function_version: "stripe-v1",
+          function_version: "stripe-v2-web-support",
+          is_web: !!is_web,
         },
       });
 
     if (dbError) {
       console.error("[stripe-create-pi] DB Error:", dbError);
-      // Cancel the PaymentIntent if DB insert fails to avoid orphaned intents
-      await stripe.paymentIntents.cancel(paymentIntent.id).catch(console.error);
       throw new Error(`Database error: ${dbError.message}`);
     }
 
@@ -153,8 +208,9 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         data: {
-          client_secret: paymentIntent.client_secret,
-          payment_intent_id: paymentIntent.id,
+          client_secret: clientSecret,
+          payment_intent_id: paymentIntentId,
+          checkout_url: checkoutUrl,
           amount_cents: amountCents,
           amount_usd: amountUsd,
           clovers: cloversQuantity,
