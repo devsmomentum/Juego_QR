@@ -45,7 +45,7 @@ serve(async (req) => {
         // 1. Get order details — verify ownership via user_id
         const { data: order, error: fetchError } = await supabaseAdmin
             .from('clover_orders')
-            .select('pago_pago_order_id, status, user_id')
+            .select('pago_pago_order_id, status, user_id, extra_data')
             .eq('id', order_id)
             .single()
 
@@ -74,8 +74,7 @@ serve(async (req) => {
             throw new Error("Server Misconfiguration: Missing PAGO_PAGO_API_KEY")
         }
 
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')
-        const cancelUrl = `${supabaseUrl}/functions/v1/api_cancel_order`
+        const cancelUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_cancel_order`
 
         console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago`)
 
@@ -92,17 +91,26 @@ serve(async (req) => {
         const data = await response.json()
 
         if (!response.ok) {
-            console.error("Pago a Pago cancel failed:", data)
-            throw new Error(`Error de pasarela: ${data?.message || data?.error || response.status}`)
+            // If PAP says it's already cancelled, that's fine — just update locally
+            const errMsg = data?.message || data?.error || ''
+            const alreadyCancelled = errMsg.toLowerCase().includes('already cancelled')
+            
+            if (!alreadyCancelled) {
+                console.error("Pago a Pago cancel failed:", data)
+                throw new Error(`Error de pasarela: ${errMsg || response.status}`)
+            }
+            console.log(`[api_cancel_order] Order already cancelled on PAP, syncing local DB`)
         }
 
-        // 4. Update Local DB Status to 'cancelled'
+        // 4. Update Local DB Status to 'cancelled' (merge extra_data to preserve existing fields)
+        const existingExtra = order.extra_data ?? {}
         const { error: updateError } = await supabaseAdmin
             .from('clover_orders')
             .update({ 
                 status: 'cancelled',
                 updated_at: new Date().toISOString(),
                 extra_data: { 
+                    ...existingExtra,
                     cancelled_at: new Date().toISOString(),
                     cancellation_response: data 
                 }
@@ -111,10 +119,10 @@ serve(async (req) => {
 
         if (updateError) {
             console.error("Failed to update order status locally:", updateError)
-            // Still return success because the payment gateway cancelled it
-        } else {
-            console.log(`Order ${order_id} marked as cancelled in DB.`)
+            throw new Error("Orden cancelada en pasarela pero error actualizando estado local")
         }
+        
+        console.log(`Order ${order_id} marked as cancelled in DB.`)
 
         return new Response(JSON.stringify({ success: true, message: "Orden cancelada exitosamente" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
