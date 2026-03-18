@@ -64,9 +64,12 @@ serve(async (req) => {
       configMap["gateway_fee_percentage"] ?? "0",
     );
 
-    const amountVesBase = plan.price * bcvRate;
-    const feeVes = amountVesBase / (1 - gatewayFeePercent / 100);
-    const amountVes = amountVesBase + feeVes;
+    // Inflar el monto USD para absorber la comisión de PAP
+    // Así después de que PAP descuente su %, nos llega plan.price completo
+    const amountUsdToSend = plan.price / (1 - gatewayFeePercent / 100);
+
+    // Fallback en VES por si PAP no devuelve monto
+    const amountVesFallback = amountUsdToSend * bcvRate;
 
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const localOrderId = `MPAY-${Date.now()}-${user.id.substring(0, 8)}`;
@@ -78,8 +81,8 @@ serve(async (req) => {
       "https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_pay_orders";
 
     const pagoAPagoPayload = {
-      amount: amountVes,
-      currency: "VES",
+      amount: amountUsdToSend,
+      currency: "USD",
       email: profile.email,
       phone: profile.phone,
       motive: `Compra de plan: ${plan.name}`,
@@ -87,7 +90,6 @@ serve(async (req) => {
       type_order: "EXTERNAL",
       expires_at: expiresAt,
       alias: localOrderId,
-      convert_from_usd: false, // Ya hicimos la conversión localmente
       extra_data: { local_plan_id: plan.id, user_id: user.id, clovers_amount: plan.amount },
     };
 
@@ -113,6 +115,10 @@ serve(async (req) => {
     // Extraemos los datos que nos devolvió Pago a Pago
     const externalOrderId = pagoData.data.order_id;
     const paymentUrl = pagoData.data.payment_url;
+    // Monto real en VES que PAP calculó (lo que el usuario debe pagar)
+    const amountVesReal = pagoData.data.amount_ves ?? pagoData.data.amount ?? amountVesFallback;
+
+    console.log(`[api_pay_orders] PAP amount_ves: ${amountVesReal}, fallback: ${amountVesFallback}`);
 
     // 3. GENERAR CÓDIGO DE VALIDACIÓN ÚNICO
     const { data: validationCode, error: codeError } = await supabaseAdmin.rpc(
@@ -140,8 +146,9 @@ serve(async (req) => {
         validation_code: validationCode, // Código para validar Pago Móvil
         expires_at: expiresAt,
         extra_data: {
-          payment_url: paymentUrl, // Guardamos la URL
+          payment_url: paymentUrl,
           ...pagoAPagoPayload.extra_data,
+          amount_ves_total: amountVesReal,
         },
       })
       .select("id, validation_code")
@@ -155,8 +162,9 @@ serve(async (req) => {
         success: true,
         data: {
           db_order_id: insertedOrder.id,
+          external_order_id: externalOrderId,
           validation_code: insertedOrder.validation_code,
-          amount_ves: amountVes,
+          amount_ves: amountVesReal,
           payment_url: paymentUrl,
         },
       }),

@@ -10,6 +10,9 @@ class TransactionItem {
   final String type; // 'deposit', 'withdrawal', 'purchase_order'
   final String? paymentUrl;
   final double? fiatAmount;
+  final double? fiatAmountVes;
+  final String? pagoOrderId;
+  final String? gateway;
 
   const TransactionItem({
     required this.id,
@@ -20,6 +23,9 @@ class TransactionItem {
     required this.type,
     this.paymentUrl,
     this.fiatAmount,
+    this.fiatAmountVes,
+    this.pagoOrderId,
+    this.gateway,
   });
 
   static DateTime _toVenezuelaTime(DateTime dateTime) {
@@ -39,6 +45,9 @@ class TransactionItem {
       type: map['type'] ?? 'unknown',
       paymentUrl: map['payment_url'],
       fiatAmount: map['fiat_amount'] != null ? (map['fiat_amount'] as num).toDouble() : null,
+      fiatAmountVes: map['fiat_amount_ves'] != null ? (map['fiat_amount_ves'] as num).toDouble() : null,
+      pagoOrderId: map['pago_pago_order_id']?.toString(),
+      gateway: map['gateway']?.toString(),
     );
   }
 
@@ -48,6 +57,8 @@ class TransactionItem {
   bool get isPending => status == 'pending';
   
   bool get canResumePayment => isPending && paymentUrl != null && paymentUrl!.isNotEmpty;
+
+  bool get canValidateMpay => isPending && gateway == 'pago_movil' && pagoOrderId != null;
 
   bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order');
 

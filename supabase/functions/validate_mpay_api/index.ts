@@ -29,8 +29,8 @@ serve(async (req) => {
     // 2. PARSE REQUEST BODY
     const { phone: rawPhone, reference, concept, order_id } = await req.json();
 
-    if (!rawPhone || !reference || !concept || !order_id) {
-      throw new Error("Campos requeridos: phone, reference, concept, order_id");
+    if (!rawPhone || !reference || !order_id) {
+      throw new Error("Campos requeridos: phone, reference, order_id");
     }
 
     // Limpiar el teléfono
@@ -39,25 +39,46 @@ serve(async (req) => {
     else if (phone.startsWith("58") && phone.length >= 12) phone = "0" + phone.substring(2);
     phone = phone.replace(/[^0-9]/g, "");
 
-    // Validar referencia
-    if (!/^\d{4,8}$/.test(reference)) {
-      throw new Error("La referencia debe tener entre 4 y 8 dígitos numéricos");
+    // Validar referencia (últimos 4 dígitos)
+    if (!/^\d{4}$/.test(reference)) {
+      throw new Error("La referencia debe tener exactamente 4 dígitos numéricos");
     }
 
     // 3. ADMIN CLIENT
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey!);
 
-    // 4. VALIDAR LA ORDEN LOCALMENTE
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("clover_orders")
-      .select("id, user_id, status, validation_code, amount, extra_data")
-      .eq("pago_pago_order_id", order_id)
-      .single();
+    // 4. VALIDAR LA ORDEN LOCALMENTE (buscar por pago_pago_order_id o por id interno)
+    let order: any = null;
+    let orderError: any = null;
 
-    if (orderError || !order) throw new Error("Orden no encontrada");
+    // Intentar primero por pago_pago_order_id
+    const { data: orderByExternal, error: errExternal } = await supabaseAdmin
+      .from("clover_orders")
+      .select("id, user_id, status, validation_code, amount, extra_data, pago_pago_order_id")
+      .eq("pago_pago_order_id", order_id)
+      .maybeSingle();
+
+    if (orderByExternal) {
+      order = orderByExternal;
+    } else {
+      // Intentar por id interno (UUID)
+      const { data: orderById, error: errId } = await supabaseAdmin
+        .from("clover_orders")
+        .select("id, user_id, status, validation_code, amount, extra_data, pago_pago_order_id")
+        .eq("id", order_id)
+        .maybeSingle();
+
+      order = orderById;
+      orderError = errId;
+    }
+
+    if (!order) throw new Error("Orden no encontrada");
     if (order.user_id !== user.id) throw new Error("No autorizado para validar esta orden");
     if (order.status !== "pending") throw new Error(`Esta orden ya fue procesada (estado: ${order.status})`);
+
+    // Usar el pago_pago_order_id real para la API externa
+    const externalOrderId = order.pago_pago_order_id ?? order_id;
 
     // 5. CONFIGURAR CONEXIÓN A PAGO A PAGO
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY");
@@ -65,11 +86,10 @@ serve(async (req) => {
 
     const validateUrl = "https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/validate_mpay_api_v2";
 
-    const validatePayload = {
+    const validatePayload: Record<string, string> = {
       phone: phone,
       reference: reference,
-      concept: concept,
-      order_id: order_id,
+      order_id: externalOrderId,
     };
 
     // 6. HACER LA PETICIÓN EXTERNA
@@ -93,7 +113,7 @@ serve(async (req) => {
     // === CASO A: Pago ya procesado (duplicado/reclamado) ===
     if (apiResponse.success === false && apiResponse.claimed === true) {
       await supabaseAdmin.from("mpay_validations").insert({
-        user_id: user.id, order_id: order.id, phone, reference, concept,
+        user_id: user.id, order_id: order.id, phone, reference,
         status: "already_claimed", api_response: apiResponse,
       });
 

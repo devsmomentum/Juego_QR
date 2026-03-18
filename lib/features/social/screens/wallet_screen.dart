@@ -372,11 +372,8 @@ class _WalletScreenState extends State<WalletScreen> {
                                   // For now, using the standard one is consistent.
                                   return TransactionCard(
                                     item: _recentTransactions[index],
-                                    // We can disable buttons here if we want strictly read-only preview
-                                    // or allow resume functionality. I'll allow resume.
                                     onResumePayment: _recentTransactions[index].canResumePayment
                                         ? () async {
-                                           // Navigate to Full History for context
                                            Navigator.push(
                                               context,
                                               MaterialPageRoute(
@@ -384,6 +381,9 @@ class _WalletScreenState extends State<WalletScreen> {
                                               ),
                                             ).then((_) => _loadRecentTransactions());
                                           }
+                                        : null,
+                                    onValidateMpay: _recentTransactions[index].canValidateMpay
+                                        ? () => _openMpayValidation(_recentTransactions[index])
                                         : null,
                                     onCancelOrder: _recentTransactions[index].canCancel
                                         ? () async {
@@ -641,6 +641,42 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  Future<void> _openMpayValidation(TransactionItem item) async {
+    final bool? result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: PaymentValidationWidget(
+            orderId: item.pagoOrderId!,
+            amountVes: item.fiatAmountVes ?? item.fiatAmount,
+          ),
+        ),
+      ),
+    );
+
+    if (result == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Pago verificado! Actualizando saldo...'),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+        await _loadRecentTransactions();
+      }
+    } else {
+      if (mounted) _loadRecentTransactions();
+    }
+  }
+
   void _showRechargeMaintenance() {
     showDialog(
       context: context,
@@ -869,41 +905,6 @@ class _WalletScreenState extends State<WalletScreen> {
                           return Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (gatewayFee > 0) ...[
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.orange.withOpacity(0.6), width: 1.2),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      const Text(
-                                        'Nota:',
-                                        style: TextStyle(
-                                          color: Colors.orangeAccent, 
-                                          fontWeight: FontWeight.w900, 
-                                          fontSize: 14,
-                                          letterSpacing: 1.0,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'La pasarela cobra el ${gatewayFee.toStringAsFixed(0)}% de comisión',
-                                        style: const TextStyle(
-                                          color: Colors.orangeAccent, 
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                              ],
 
                               if (plans.length >= 3)
                                 Column(
@@ -1248,12 +1249,11 @@ class _WalletScreenState extends State<WalletScreen> {
       // Parse response
       final Map<String, dynamic> dataObj = responseData['data'] ?? responseData['result'] ?? responseData;
       final String? dbOrderId = dataObj['db_order_id']?.toString();
-      final String? validationCode = dataObj['validation_code']?.toString();
       final double? amountVes = (dataObj['amount_ves'] is num)
           ? (dataObj['amount_ves'] as num).toDouble()
           : double.tryParse(dataObj['amount_ves']?.toString() ?? '');
 
-      if (dbOrderId == null || dbOrderId.isEmpty || validationCode == null || validationCode.isEmpty) {
+      if (dbOrderId == null || dbOrderId.isEmpty) {
         throw Exception('Datos de validación no recibidos');
       }
 
@@ -1273,7 +1273,6 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
             child: PaymentValidationWidget(
               orderId: dbOrderId,
-              validationCode: validationCode,
               amountVes: amountVes,
             ),
           ),

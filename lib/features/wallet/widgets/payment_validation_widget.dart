@@ -10,14 +10,11 @@ import 'add_withdrawal_method_dialog.dart';
 
 /// Modal widget for manual Pago Móvil payment validation.
 ///
-/// Shows the validation code (concept), lets the user select an existing
-/// pago móvil or add a new one, and input the transfer reference.
+/// Lets the user select an existing pago móvil or add a new one,
+/// input the transfer reference, and optionally retry with cedula.
 class PaymentValidationWidget extends StatefulWidget {
-  /// The clover_orders.id (UUID) of the pending order.
+  /// The pago_pago_order_id of the pending order.
   final String orderId;
-
-  /// The validation_code the user must use as "Concepto" in their transfer.
-  final String validationCode;
 
   /// VES amount to display to the user.
   final double? amountVes;
@@ -25,7 +22,6 @@ class PaymentValidationWidget extends StatefulWidget {
   const PaymentValidationWidget({
     super.key,
     required this.orderId,
-    required this.validationCode,
     this.amountVes,
   });
 
@@ -68,8 +64,10 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
   bool _isValidating = false;
   bool _isLoadingMethods = true;
   String? _errorMessage;
-  bool _codeCopied = false;
+  String? _infoMessage;
   bool _dataCopied = false;
+  bool _showCedulaOption = false;
+  bool _useCedulaMode = false;
 
   List<Map<String, dynamic>> _paymentMethods = [];
   String? _selectedMethodId;
@@ -148,7 +146,7 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
   }
 
   Future<void> _validate() async {
-    if (_selectedPhone == null || _selectedPhone!.isEmpty) {
+    if (!_useCedulaMode && (_selectedPhone == null || _selectedPhone!.isEmpty)) {
       setState(() => _errorMessage = 'Selecciona un pago móvil');
       return;
     }
@@ -157,42 +155,101 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
     setState(() {
       _isValidating = true;
       _errorMessage = null;
+      _infoMessage = null;
     });
 
     try {
+      // En modo cédula, enviar la cédula del usuario como phone
+      String phoneToSend;
+      if (_useCedulaMode) {
+        final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+        final cedula = player?.cedula;
+        if (cedula == null || cedula.isEmpty) {
+          setState(() {
+            _isValidating = false;
+            _errorMessage = 'No tienes cédula registrada en tu perfil.';
+          });
+          return;
+        }
+        phoneToSend = cedula;
+      } else {
+        phoneToSend = _selectedPhone!;
+      }
+
+      final body = <String, dynamic>{
+        'order_id': widget.orderId,
+        'phone': phoneToSend,
+        'reference': _referenceController.text.trim(),
+      };
+
       final response = await Supabase.instance.client.functions.invoke(
         'validate_mpay_api',
-        body: {
-          'order_id': widget.orderId,
-          'phone': _selectedPhone!,
-          'reference': _referenceController.text.trim(),
-          'concept': widget.validationCode,
-        },
+        body: body,
       );
 
       if (!mounted) return;
 
       final data = response.data as Map<String, dynamic>?;
+      final success = data?['success'] == true;
+      final claimed = data?['claimed'] == true;
+      final orderStatus = data?['order_status']?.toString();
+      final message = data?['message']?.toString();
 
-      if (response.status == 200 && data?['success'] == true && data?['claimed'] == true) {
+      if (success && claimed) {
+        // CASO D (paid): Pago procesado y tréboles acreditados → cerrar diálogo
         Navigator.of(context).pop(true);
-      } else {
-        setState(() {
-          _errorMessage =
-              data?['error'] ?? data?['message'] ?? 'Error desconocido';
-        });
+        return;
       }
+
+      if (success && !claimed) {
+        // CASO C: Pago encontrado pero no procesado aún por la pasarela
+        setState(() {
+          _errorMessage = null;
+          _infoMessage = message ??
+              'Pago encontrado pero aún no procesado. Intenta de nuevo en unos minutos.';
+        });
+        return;
+      }
+
+      if (!success && claimed) {
+        // CASO A (duplicado) o CASO D (parcial/cancelado)
+        setState(() {
+          _infoMessage = null;
+          if (orderStatus == 'partially_paid') {
+            _errorMessage = message ??
+                'El monto pagado es menor al requerido. La orden no fue completada.';
+          } else {
+            _errorMessage = message ??
+                'Este pago ya fue procesado anteriormente. Usa otra referencia.';
+          }
+        });
+        return;
+      }
+
+      // CASO B: Pago no encontrado → mostrar opción de reintentar con cédula
+      setState(() {
+        _infoMessage = null;
+        _errorMessage = message ??
+            'No se encontró un pago con esos datos. Verifica la referencia y el teléfono.';
+        if (!_showCedulaOption) _showCedulaOption = true;
+      });
     } on FunctionException catch (e) {
       if (!mounted) return;
       final details = e.details;
-      String message = 'Error al validar el pago';
+      String msg = 'Error al validar el pago';
       if (details is Map) {
-        message = (details['error'] ?? details['message'] ?? message).toString();
+        msg = (details['error'] ?? details['message'] ?? msg).toString();
       }
-      setState(() => _errorMessage = message);
+      setState(() {
+        _infoMessage = null;
+        _errorMessage = msg;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = 'Error de conexión: $e');
+      setState(() {
+        _infoMessage = null;
+        _errorMessage = 'Error de conexión: $e';
+      });
     } finally {
       if (mounted) setState(() => _isValidating = false);
     }
@@ -259,87 +316,35 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
                 ),
                 const SizedBox(height: 20),
 
-                // Validation Code Section
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentGold.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.accentGold.withOpacity(0.4),
-                      width: 1.2,
+                // Amount Display
+                if (widget.amountVes != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentGold.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.accentGold.withOpacity(0.4),
+                        width: 1.2,
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'CONCEPTO DE PAGO',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            widget.validationCode,
-                            style: TextStyle(
-                              color: AppTheme.accentGold,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              fontFamily: 'Orbitron',
-                              letterSpacing: 4,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: Icon(
-                              _codeCopied ? Icons.check : Icons.copy,
-                              color: _codeCopied
-                                  ? AppTheme.successGreen
-                                  : Colors.white54,
-                              size: 20,
-                            ),
-                            onPressed: () {
-                              Clipboard.setData(
-                                ClipboardData(text: widget.validationCode),
-                              );
-                              setState(() => _codeCopied = true);
-                              Future.delayed(const Duration(seconds: 2), () {
-                                if (mounted) {
-                                  setState(() => _codeCopied = false);
-                                }
-                              });
-                            },
-                            tooltip: 'Copiar código',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Usa este código como concepto al hacer tu transferencia de Pago Móvil',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (widget.amountVes != null) ...[
-                        const SizedBox(height: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.payments_outlined, color: AppTheme.accentGold, size: 20),
+                        const SizedBox(width: 8),
                         Text(
                           'Monto: ${widget.amountVes!.toStringAsFixed(2)} Bs',
                           style: TextStyle(
                             color: AppTheme.accentGold,
-                            fontSize: 14,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
+
                 const SizedBox(height: 16),
 
                 // Recipient Data Section
@@ -443,25 +448,114 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(8),
+                    LengthLimitingTextInputFormatter(4),
                   ],
                   style: const TextStyle(color: Colors.white),
                   decoration: _inputDecoration(
-                    label: 'Referencia',
-                    hint: '12345678',
+                    label: 'Últimos 4 dígitos de la referencia',
+                    hint: '1234',
                     icon: Icons.receipt_long,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Ingresa la referencia';
+                      return 'Ingresa los últimos 4 dígitos';
                     }
                     if (value.length < 4) {
-                      return 'Mínimo 4 dígitos';
+                      return 'Debes ingresar 4 dígitos';
                     }
                     return null;
                   },
                 ),
+
+                // Cedula toggle (shown after first failed attempt)
+                if (_showCedulaOption) ...[
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => setState(() => _useCedulaMode = !_useCedulaMode),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: _useCedulaMode
+                            ? AppTheme.accentGold.withOpacity(0.1)
+                            : Colors.orange.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _useCedulaMode
+                              ? AppTheme.accentGold.withOpacity(0.5)
+                              : Colors.orange.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _useCedulaMode
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            color: _useCedulaMode
+                                ? AppTheme.accentGold
+                                : Colors.orange,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Validar con cédula',
+                              style: TextStyle(
+                                color: _useCedulaMode
+                                    ? AppTheme.accentGold
+                                    : Colors.orange.shade200,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (_useCedulaMode)
+                            Text(
+                              Provider.of<PlayerProvider>(context, listen: false)
+                                      .currentPlayer?.cedula ?? '',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
+
+                // Info Message (amber — found but not processed, etc.)
+                if (_infoMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.amber.withOpacity(0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Colors.amber, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _infoMessage!,
+                            style: TextStyle(
+                              color: Colors.amber.shade200,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // Error Message
                 if (_errorMessage != null) ...[
@@ -514,7 +608,10 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
                     Expanded(
                       flex: 2,
                       child: ElevatedButton(
-                        onPressed: (_isValidating || _selectedPhone == null) ? null : _validate,
+                        onPressed: (_isValidating ||
+                                (!_useCedulaMode && _selectedPhone == null))
+                            ? null
+                            : _validate,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.accentGold,
                           foregroundColor: Colors.black,
