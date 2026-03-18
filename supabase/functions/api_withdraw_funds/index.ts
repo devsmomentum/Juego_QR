@@ -269,7 +269,7 @@ serve(async (req) => {
     // 4. CALL PAGO A PAGO WITH VES AMOUNT
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY")!;
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const withdrawUrl = `${supabaseUrl}/functions/v1/api_instant_credit_delivery`;
+    const withdrawUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_instant_credit_delivery`;
 
     // NOTE: Keep DNI and Phone as-is - Pago a Pago expects exact format
     // DNI: "V19400121" (with prefix)
@@ -438,6 +438,18 @@ serve(async (req) => {
         },
       );
     }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: apiResponseData,
+        message: "Retiro procesado exitosamente.",
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
 
     } // Close else (branch for pago_movil)
   } catch (error) {
