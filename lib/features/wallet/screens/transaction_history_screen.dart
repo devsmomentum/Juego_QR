@@ -7,6 +7,7 @@ import '../models/transaction_item.dart';
 import '../repositories/transaction_repository.dart';
 import '../providers/wallet_provider.dart'; // Keep for balance refresh only
 import '../widgets/payment_webview_modal.dart';
+import '../widgets/payment_validation_widget.dart';
 import '../widgets/transaction_card.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
@@ -63,7 +64,40 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           backgroundColor: AppTheme.successGreen,
         ),
       );
-      _loadData(); // Reload list
+      _loadData();
+    }
+  }
+
+  void _onValidateMpay(TransactionItem item) async {
+    final bool? result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: PaymentValidationWidget(
+            orderId: item.pagoOrderId!,
+            amountVes: item.fiatAmountVes ?? item.fiatAmount,
+          ),
+        ),
+      ),
+    );
+
+    if (result == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Pago verificado! Actualizando saldo...'),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
+      Provider.of<WalletProvider>(context, listen: false).refreshBalance();
+      _loadData();
+    } else {
+      _loadData();
     }
   }
 
@@ -224,6 +258,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           item: item,
                           onResumePayment: item.canResumePayment
                               ? () => _onResumePayment(item.paymentUrl!)
+                              : null,
+                          onValidateMpay: item.canValidateMpay
+                              ? () => _onValidateMpay(item)
                               : null,
                           onCancelOrder: item.canCancel
                               ? () async {

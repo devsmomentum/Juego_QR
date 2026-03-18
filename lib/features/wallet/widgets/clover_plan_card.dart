@@ -106,6 +106,28 @@ class CloverPlanCard extends StatelessWidget {
                   ),
                 ),
               ),
+
+              // Gateway fee breakdown (only for pago móvil)
+              if (feePercentage != null && feePercentage! > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '+${feePercentage!.toStringAsFixed(0)}% pasarela',
+                  style: TextStyle(
+                    color: Colors.orangeAccent.withOpacity(0.6),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Total: \$${(plan.priceUsd / (1 - feePercentage! / 100)).toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color: Colors.orangeAccent.withOpacity(0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

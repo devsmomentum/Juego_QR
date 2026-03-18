@@ -268,7 +268,8 @@ serve(async (req) => {
 
     // 4. CALL PAGO A PAGO WITH VES AMOUNT
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY")!;
-    const PAGO_PAGO_WITHDRAW_URL = Deno.env.get("PAGO_PAGO_WITHDRAW_URL")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const withdrawUrl = `${supabaseUrl}/functions/v1/api_instant_credit_delivery`;
 
     // NOTE: Keep DNI and Phone as-is - Pago a Pago expects exact format
     // DNI: "V19400121" (with prefix)
@@ -290,7 +291,7 @@ serve(async (req) => {
     let apiResponseData: Record<string, unknown> | null = null;
 
     try {
-      const response = await fetch(PAGO_PAGO_WITHDRAW_URL, {
+      const response = await fetch(withdrawUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

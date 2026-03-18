@@ -7,15 +7,12 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/loading_overlay.dart';
-import '../../wallet/widgets/payment_webview_modal.dart'; // Added
+import '../../wallet/widgets/payment_validation_widget.dart';
 import 'profile_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../../shared/widgets/glitch_text.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/services/pago_a_pago_service.dart';
-import '../../../core/models/pago_a_pago_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../widgets/payment_profile_dialog.dart';
 import '../widgets/payment_method_selector.dart';
 import '../widgets/add_payment_method_dialog.dart';
@@ -383,150 +380,93 @@ class _WalletScreenState extends State<WalletScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 24),
-                                if (_isLoadingHistory)
-                                  const Center(
-                                      child: LoadingIndicator(fontSize: 14))
-                                else if (_recentTransactions.isEmpty)
-                                  Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 20.0),
-                                      child: Text(
-                                        'No hay transacciones recientes',
-                                        style: TextStyle(
-                                            color: isDarkMode
-                                                ? Colors.white38
-                                                : Colors.black38),
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  ListView.separated(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: _recentTransactions.length,
-                                    separatorBuilder: (_, __) =>
-                                        const SizedBox(height: 8),
-                                    itemBuilder: (context, index) {
-                                      return TransactionCard(
-                                        item: _recentTransactions[index],
-                                        onResumePayment:
-                                            _recentTransactions[index]
-                                                    .canResumePayment
-                                                ? () async {
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
-                                                            const TransactionHistoryScreen(),
-                                                      ),
-                                                    ).then((_) =>
-                                                        _loadRecentTransactions());
-                                                  }
-                                                : null,
-                                        onCancelOrder:
-                                            _recentTransactions[index].canCancel
-                                                ? () async {
-                                                    final confirm =
-                                                        await showDialog<bool>(
-                                                      context: context,
-                                                      builder: (context) =>
-                                                          AlertDialog(
-                                                        backgroundColor:
-                                                            isDarkMode
-                                                                ? AppTheme
-                                                                    .cardBg
-                                                                : Colors.white,
-                                                        title: Text(
-                                                            'Cancelar Orden',
-                                                            style: TextStyle(
-                                                                color: isDarkMode
-                                                                    ? Colors
-                                                                        .white
-                                                                    : const Color(
-                                                                        0xFF1A1A1D))),
-                                                        content: Text(
-                                                          '¿Estás seguro de que quieres cancelar esta orden pendiente?',
-                                                          style: TextStyle(
-                                                              color: isDarkMode
-                                                                  ? Colors
-                                                                      .white70
-                                                                  : const Color(
-                                                                      0xFF4A4A5A)),
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                    context,
-                                                                    false),
-                                                            child: const Text(
-                                                                'No',
-                                                                style: TextStyle(
-                                                                    color: Colors
-                                                                        .white54)),
-                                                          ),
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                    context,
-                                                                    true),
-                                                            child: const Text(
-                                                                'Sí, Cancelar',
-                                                                style: TextStyle(
-                                                                    color: AppTheme
-                                                                        .dangerRed)),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-
-                                                    if (confirm != true) return;
-
-                                                    setState(() =>
-                                                        _isLoadingHistory = true);
-                                                    final messenger =
-                                                        ScaffoldMessenger.of(
-                                                            context);
-                                                    try {
-                                                      final success =
-                                                          await _transactionRepository
-                                                              .cancelOrder(
-                                                                  _recentTransactions[
-                                                                          index]
-                                                                      .id);
-                                                      if (mounted) {
-                                                        messenger.showSnackBar(
-                                                          SnackBar(
-                                                            content: Text(success
-                                                                ? 'Orden cancelada'
-                                                                : 'Error al cancelar'),
-                                                            backgroundColor:
-                                                                success
-                                                                    ? AppTheme
-                                                                        .successGreen
-                                                                    : AppTheme
-                                                                        .dangerRed,
-                                                          ),
-                                                        );
-                                                      }
-                                                    } finally {
-                                                      if (mounted)
-                                                        _loadRecentTransactions();
-                                                    }
-                                                  }
-                                                : null,
-                                      );
-                                    },
+                            
+                            if (_isLoadingHistory)
+                               const Center(child: LoadingIndicator(fontSize: 14))
+                            else if (_recentTransactions.isEmpty)
+                              Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                                  child: Text(
+                                    'No hay transacciones recientes',
+                                    style: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
                                   ),
-                              ],
-                            ),
+                                ),
+                              )
+                            else
+                              ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _recentTransactions.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                itemBuilder: (context, index) {
+                                  // Use standard TransactionCard but perhaps slightly more compact if needed
+                                  // For now, using the standard one is consistent.
+                                  return TransactionCard(
+                                    item: _recentTransactions[index],
+                                    onResumePayment: _recentTransactions[index].canResumePayment
+                                        ? () async {
+                                           Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => const TransactionHistoryScreen(),
+                                              ),
+                                            ).then((_) => _loadRecentTransactions());
+                                          }
+                                        : null,
+                                    onValidateMpay: _recentTransactions[index].canValidateMpay
+                                        ? () => _openMpayValidation(_recentTransactions[index])
+                                        : null,
+                                    onCancelOrder: _recentTransactions[index].canCancel
+                                        ? () async {
+                                            // Cancel Logic with Confirmation
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                backgroundColor: isDarkMode ? AppTheme.cardBg : Colors.white,
+                                                title: Text('Cancelar Orden', style: TextStyle(color: isDarkMode ? Colors.white : const Color(0xFF1A1A1D))),
+                                                content: Text(
+                                                  '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                                  style: TextStyle(color: isDarkMode ? Colors.white70 : const Color(0xFF4A4A5A)),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: const Text('No', style: TextStyle(color: Colors.white54)),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            
+                                            if (confirm != true) return;
+ 
+                                            setState(() => _isLoadingHistory = true);
+                                            final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
+                                                  backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                                ),
+                                              );
+                                              _loadRecentTransactions();
+                                            }
+                                          }
+                                        : null,
+                                  );
+                                },
+                               ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                ),
                 ),
               ),
             ],
@@ -734,6 +674,42 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  Future<void> _openMpayValidation(TransactionItem item) async {
+    final bool? result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: PaymentValidationWidget(
+            orderId: item.pagoOrderId!,
+            amountVes: item.fiatAmountVes ?? item.fiatAmount,
+          ),
+        ),
+      ),
+    );
+
+    if (result == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Pago verificado! Actualizando saldo...'),
+          backgroundColor: AppTheme.successGreen,
+        ),
+      );
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+        await _loadRecentTransactions();
+      }
+    } else {
+      if (mounted) _loadRecentTransactions();
+    }
+  }
+
   void _showRechargeMaintenance() {
     showDialog(
       context: context,
@@ -861,6 +837,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
   void _showPlanSelectorDialog() {
     String? selectedPlanId;
+    final walletContext = context; // Capture WalletScreen context before dialog
     
     // Combined future to fetch plans and gateway fee together
     final configService = AppConfigService(supabaseClient: Supabase.instance.client);
@@ -962,41 +939,6 @@ class _WalletScreenState extends State<WalletScreen> {
                           return Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (gatewayFee > 0) ...[
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.orange.withOpacity(0.6), width: 1.2),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      const Text(
-                                        'Nota:',
-                                        style: TextStyle(
-                                          color: Colors.orangeAccent, 
-                                          fontWeight: FontWeight.w900, 
-                                          fontSize: 14,
-                                          letterSpacing: 1.0,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'La pasarela cobra el ${gatewayFee.toStringAsFixed(0)}% de comisión',
-                                        style: const TextStyle(
-                                          color: Colors.orangeAccent, 
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                              ],
 
                               if (plans.length >= 3)
                                 Column(
@@ -1042,18 +984,14 @@ class _WalletScreenState extends State<WalletScreen> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
-                            onPressed: _isLoading ? null : () => Navigator.pop(ctx),
+                            onPressed: () => Navigator.pop(ctx),
                             child: const Text('Cancelar', style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
                           ),
                           const SizedBox(width: 12),
                           ElevatedButton(
-                            onPressed: (_isLoading || selectedPlanId == null) ? null : () async {
-                              setState(() => _isLoading = true);
-                              await _initiatePayment(context, selectedPlanId!);
-                              if (mounted) {
-                                setState(() => _isLoading = false);
-                                Navigator.pop(ctx);
-                              }
+                            onPressed: selectedPlanId == null ? null : () {
+                              Navigator.pop(ctx); // Close dialog immediately
+                              _initiatePayment(walletContext, selectedPlanId!);
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.accentGold,
@@ -1062,9 +1000,7 @@ class _WalletScreenState extends State<WalletScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               elevation: 0,
                             ),
-                            child: _isLoading 
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                              : const Text('Pagar', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: const Text('Pagar', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -1319,6 +1255,9 @@ class _WalletScreenState extends State<WalletScreen> {
     try {
       debugPrint('[WalletScreen] Initiating payment for plan: $planId');
       
+      // Show loading overlay while edge function runs
+      LoadingOverlay.show(context);
+      
       // Call Edge Function directly with plan_id only (security: price validated server-side)
       final response = await Supabase.instance.client.functions.invoke(
         'api_pay_orders',
@@ -1328,6 +1267,7 @@ class _WalletScreenState extends State<WalletScreen> {
       );
 
       if (!mounted) return;
+      LoadingOverlay.hide(context);
 
       if (response.status != 200) {
         throw Exception('Error en servicio de pagos (${response.status}): ${response.data}');
@@ -1346,15 +1286,18 @@ class _WalletScreenState extends State<WalletScreen> {
 
       // Parse response
       final Map<String, dynamic> dataObj = responseData['data'] ?? responseData['result'] ?? responseData;
-      final String? paymentUrl = dataObj['payment_url']?.toString() ?? dataObj['url']?.toString();
+      final String? dbOrderId = dataObj['db_order_id']?.toString();
+      final double? amountVes = (dataObj['amount_ves'] is num)
+          ? (dataObj['amount_ves'] as num).toDouble()
+          : double.tryParse(dataObj['amount_ves']?.toString() ?? '');
 
-      if (paymentUrl == null || paymentUrl.isEmpty) {
-        throw Exception('URL de pago no recibida');
+      if (dbOrderId == null || dbOrderId.isEmpty) {
+        throw Exception('Datos de validación no recibidos');
       }
 
       if (!mounted) return;
 
-      // Open WebView as a Modal Bottom Sheet
+      // Show Pago Móvil Validation Modal
       final bool? result = await showModalBottomSheet<bool>(
         context: context,
         isScrollControlled: true,
@@ -1364,11 +1307,11 @@ class _WalletScreenState extends State<WalletScreen> {
         builder: (ctx) => SafeArea(
           child: Padding(
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: PaymentWebViewModal(paymentUrl: paymentUrl),
+            child: PaymentValidationWidget(
+              orderId: dbOrderId,
+              amountVes: amountVes,
             ),
           ),
         ),
@@ -1376,17 +1319,17 @@ class _WalletScreenState extends State<WalletScreen> {
 
       if (result == true) {
          if (!mounted) return;
-        //  ScaffoldMessenger.of(context).showSnackBar(
-        //    const SnackBar(
-        //      content: Text('¡Pago Exitoso! Verificando saldo...'),
-        //      backgroundColor: AppTheme.successGreen,
-        //    ),
-        //  );
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(
+             content: Text('¡Pago verificado! Actualizando saldo...'),
+             backgroundColor: AppTheme.successGreen,
+           ),
+         );
          
          await Future.delayed(const Duration(seconds: 2));
          if (mounted) {
             await Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
-            await _loadRecentTransactions(); // Refresh history to show success/pending
+            await _loadRecentTransactions();
          }
       } else {
          if (!mounted) return;
@@ -1399,6 +1342,7 @@ class _WalletScreenState extends State<WalletScreen> {
     } catch (e) {
       debugPrint('[WalletScreen] Payment error: $e');
       if (mounted) {
+        LoadingOverlay.hide(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
@@ -1716,50 +1660,6 @@ class _WalletScreenState extends State<WalletScreen> {
         },
       ),
     );
-  }
-
-  Future<void> _processWithdrawal(BuildContext context, double amount,
-      Map<String, dynamic> method) async {
-    try {
-      final playerProvider =
-          Provider.of<PlayerProvider>(context, listen: false);
-      final balance = playerProvider.currentPlayer?.clovers ?? 0;
-
-      if (balance < amount) throw Exception("Saldo insuficiente");
-
-      final apiKey = dotenv.env['PAGO_PAGO_API_KEY'] ?? '';
-      final service = PagoAPagoService(apiKey: apiKey);
-      final token = Supabase.instance.client.auth.currentSession?.accessToken;
-
-      if (token == null) throw Exception("No hay sesión activa");
-
-      // Construct STRICT Request based on User Payment Method
-      final request = WithdrawalRequest(
-        amount: amount,
-        bank: method['bank_code'],
-        dni: method['dni'], // From saved method (which came from profile)
-        phone: method['phone_number'], // From saved method
-        cta: null, // Mobile Payment only
-      );
-
-      final response = await service.withdrawFunds(request, token);
-
-      if (!mounted) return;
-
-      if (response.success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('¡Retiro exitoso!'),
-            backgroundColor: AppTheme.successGreen));
-        // Refresh logic would go here
-      } else {
-        throw Exception(response.message);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'), backgroundColor: AppTheme.dangerRed));
-      }
-    }
   }
 
   /// Process withdrawal using a withdrawal plan ID.

@@ -24,6 +24,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   // Power default costs
   Map<String, int> _powerDefaultCosts = {};
 
+  // Pago Móvil recipient
+  final _pmBancoController = TextEditingController();
+  final _pmCedulaController = TextEditingController();
+  final _pmTelefonoController = TextEditingController();
+
   // Version config
   final _latestVersionController = TextEditingController();
   final _minVersionController = TextEditingController();
@@ -51,6 +56,9 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   void dispose() {
     _exchangeRateController.dispose();
     _gatewayFeeController.dispose();
+    _pmBancoController.dispose();
+    _pmCedulaController.dispose();
+    _pmTelefonoController.dispose();
     _latestVersionController.dispose();
     _minVersionController.dispose();
     _apkUrlController.dispose();
@@ -68,7 +76,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         _configService.getGatewayFeePercentage(),
         _configService.isRechargeEnabled(),
         _configService.getVersionConfig(),
-        _configService.getPowerDefaultCosts(), // NEW
+        _configService.getPowerDefaultCosts(),
+        _configService.getPagoMovilRecipient(),
       ]);
       _exchangeRateController.text = (results[0] as double).toStringAsFixed(2);
       _gatewayFeeController.text = (results[1] as double).toStringAsFixed(2);
@@ -93,6 +102,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       _iosStoreUrlController.text =
           versionCfg['ios_store_url'] as String? ?? '';
       _maintenanceMode = versionCfg['maintenance_mode'] as bool? ?? false;
+
+      final pmRecipient = results[5] as Map<String, String>;
+      _pmBancoController.text = pmRecipient['banco'] ?? '';
+      _pmCedulaController.text = pmRecipient['cedula'] ?? '';
+      _pmTelefonoController.text = pmRecipient['telefono'] ?? '';
     } catch (e) {
       debugPrint('[GlobalConfigScreen] Error loading config: $e');
     } finally {
@@ -168,13 +182,18 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       final feeSuccess =
           await _configService.updateGatewayFeePercentage(gatewayFee);
       final powerSuccess = await _configService
-          .updatePowerDefaultCosts(_powerDefaultCosts); // NEW
+          .updatePowerDefaultCosts(_powerDefaultCosts);
+      final pmSuccess = await _configService.updatePagoMovilRecipient({
+        'banco': _pmBancoController.text.trim(),
+        'cedula': _pmCedulaController.text.trim(),
+        'telefono': _pmTelefonoController.text.trim(),
+      });
 
       // Also sync it globally immediately
       PowerItem.updateGlobalCosts(_powerDefaultCosts);
 
       if (mounted) {
-        if (rateSuccess && feeSuccess && powerSuccess) {
+        if (rateSuccess && feeSuccess && powerSuccess && pmSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Configuración guardada exitosamente'),
@@ -393,6 +412,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 24),
+
+            // Pago Móvil Recipient Section
+            _buildPagoMovilRecipientCard(),
 
             const SizedBox(height: 24),
 
@@ -848,6 +872,85 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
           ],
           const SizedBox(height: 20),
           child,
+        ],
+      ),
+    );
+  }
+  Widget _buildPagoMovilRecipientCard() {
+    return _buildConfigCard(
+      title: 'Pago Móvil Destinatario',
+      subtitle: 'Datos que verá el usuario al hacer Pago Móvil',
+      icon: Icons.phone_android,
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _pmBancoController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              labelText: 'Código de Banco',
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              hintText: 'Ej: 0134',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
+              prefixIcon: Icon(Icons.account_balance, color: AppTheme.accentGold.withOpacity(0.7), size: 20),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.primaryPurple),
+              ),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.05),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _pmCedulaController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              labelText: 'Cédula (sin la V)',
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              hintText: 'Ej: 12345678',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
+              prefixIcon: Icon(Icons.badge_outlined, color: AppTheme.accentGold.withOpacity(0.7), size: 20),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.primaryPurple),
+              ),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.05),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _pmTelefonoController,
+            keyboardType: TextInputType.phone,
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              labelText: 'Teléfono',
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              hintText: 'Ej: 04121234567',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
+              prefixIcon: Icon(Icons.phone_rounded, color: AppTheme.accentGold.withOpacity(0.7), size: 20),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.primaryPurple),
+              ),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.05),
+            ),
+          ),
         ],
       ),
     );

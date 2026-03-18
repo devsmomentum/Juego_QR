@@ -9,12 +9,14 @@ class TransactionCard extends StatelessWidget {
   final TransactionItem item;
   final VoidCallback? onResumePayment;
   final VoidCallback? onCancelOrder;
+  final VoidCallback? onValidateMpay;
 
   const TransactionCard({
     super.key,
     required this.item,
     this.onResumePayment,
     this.onCancelOrder,
+    this.onValidateMpay,
   });
 
   @override
@@ -208,11 +210,27 @@ class TransactionCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (item.canResumePayment || item.canCancel) ...[
+            if (item.canResumePayment || item.canValidateMpay || item.canCancel) ...[
               const Divider(height: 24, color: Colors.white10),
               Row(
                 children: [
-                   if (item.canResumePayment)
+                   if (item.canValidateMpay)
+                     Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: onValidateMpay,
+                        icon: const Icon(Icons.phone_android, size: 18),
+                        label: const Text('Completar Pago'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentGold,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    )
+                   else if (item.canResumePayment)
                      Expanded(
                       child: ElevatedButton.icon(
                         onPressed: onResumePayment,
@@ -229,7 +247,7 @@ class TransactionCard extends StatelessWidget {
                       ),
                     ),
                     
-                    if (item.canResumePayment && item.canCancel)
+                    if ((item.canResumePayment || item.canValidateMpay) && item.canCancel)
                       const SizedBox(width: 8),
 
                     if (item.canCancel)
