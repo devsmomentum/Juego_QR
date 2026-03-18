@@ -24,8 +24,8 @@ serve(async (req) => {
         // Descargar el PDF desde el bucket privado/público
         const { data, error } = await supabaseAdmin
             .storage
-            .from('documents')
-            .download('Terminos_y_Condiciones_Maphunter.pdf')
+            .from('legal')
+            .download('Terminos_y_Condiciones_Maphunter (1).pdf')
 
         if (error) {
             console.error('Error downloading PDF:', error)

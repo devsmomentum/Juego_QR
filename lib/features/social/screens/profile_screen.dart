@@ -1437,10 +1437,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final baseUrl =
           dotenv.env['SUPABASE_URL']?.replaceAll(RegExp(r'/$'), '') ?? '';
+      final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
       // Usamos el servicio centralizado que maneja el enmascaramiento (Blob URLs)
       final termsService = getTermsService();
-      await termsService.launchTerms(baseUrl);
+      await termsService.launchTerms(baseUrl, anonKey);
     } catch (e) {
       debugPrint('Error al abrir términos: $e');
     }
