@@ -183,6 +183,7 @@ Future<void> main() async {
     anonKey: supabaseAnonKey,
     authOptions: FlutterAuthClientOptions(
       localStorage: SecureLocalStorage(),
+      authFlowType: AuthFlowType.pkce,
     ),
   );
 

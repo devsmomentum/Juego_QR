@@ -209,31 +209,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Redirigir según el estado de la sesión
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // REGISTRATION SUCCESSFUL: Redirect always to Login wait for email
+      await Future.delayed(const Duration(milliseconds: 2500));
       if (!mounted) return;
 
+      // Ensure logout if a session was auto-created (so they must login/verify)
       if (playerProvider.isLoggedIn) {
-        // En un inicio de sesión exitoso, también iniciamos monitoreo
-        context.read<ConnectivityProvider>().startMonitoring();
-
-        // El usuario ya tiene sesión (auto-login tras registro)
-        final player = playerProvider.currentPlayer;
-        if (player?.role == 'admin') {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const DashboardScreen()),
-          );
-        } else {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
-          );
-        }
-      } else {
-        // No hay sesión (probablemente requiere confirmación de email)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
+        await playerProvider.logout();
       }
+
+      // Always return to LoginScreen to fulfill the "verification flow"
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
 

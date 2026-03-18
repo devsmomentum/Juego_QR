@@ -31,14 +31,28 @@ serve(async (req) => {
         throw new Error("Email and password are required");
       }
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
+      const { data, error: loginError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (loginError) {
+        const isUnconfirmed = loginError.message.toLowerCase().includes("confirm") || 
+                            loginError.message.toLowerCase().includes("verified");
+        
+        return new Response(
+          JSON.stringify({ 
+            error: loginError.message, 
+            unverified: isUnconfirmed 
+          }),
+          {
+            status: isUnconfirmed ? 403 : 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
 
-      // Check if email is confirmed (Login Guard - Server Side)
+      // Check if email is confirmed (Login Guard - Server Side, for when Confirm Email is OFF but we want to enforce it via metadata)
       if (
         data?.user?.email_confirmed_at === null ||
         data?.user?.email_confirmed_at === undefined
@@ -49,6 +63,7 @@ serve(async (req) => {
           JSON.stringify({
             error:
               "Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.",
+            unverified: true,
           }),
           {
             status: 403,
@@ -174,13 +189,7 @@ serve(async (req) => {
         }
       }
 
-      // ── PRE-FLIGHT UNIQUENESS CHECKS ────────────────────────────────
-      // Use service role client to bypass RLS and reliably check for
-      // existing cedula/phone BEFORE calling signUp.
-      // This provides user-friendly error messages instead of the generic
-      // "Database error saving new user" that Supabase Auth returns when
-      // the trigger fails due to a constraint violation.
-      // ────────────────────────────────────────────────────────────────
+      // ── PRE-FLIGHT AUTH CHECK ──────────────────────────────────────
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
       const serviceClient = serviceKey
         ? createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey, {
@@ -188,13 +197,24 @@ serve(async (req) => {
           })
         : null;
 
+      // Note: We avoid serviceClient.auth.admin.getUserByEmail due to environment issues.
+      // We will check for existence in the profiles table first.
+      let existingProfile = null;
+      if (serviceClient) {
+        const { data } = await serviceClient
+          .from("profiles")
+          .select("id, email")
+          .eq("email", email)
+          .maybeSingle();
+        existingProfile = data;
+      }
+
+      // ── PRE-FLIGHT UNIQUENESS CHECKS ────────────────────────────────
       if (serviceClient) {
         if (sanitizedCedula) {
-          const { data: existingCedula } = await serviceClient
-            .from("profiles")
-            .select("id")
-            .eq("dni", sanitizedCedula)
-            .maybeSingle();
+          const query = serviceClient.from("profiles").select("id").eq("dni", sanitizedCedula);
+          if (existingProfile) query.neq("id", existingProfile.id);
+          const { data: existingCedula } = await query.maybeSingle();
 
           if (existingCedula) {
             return new Response(
@@ -205,11 +225,9 @@ serve(async (req) => {
         }
 
         if (sanitizedPhone) {
-          const { data: existingPhone } = await serviceClient
-            .from("profiles")
-            .select("id")
-            .eq("phone", sanitizedPhone)
-            .maybeSingle();
+          const query = serviceClient.from("profiles").select("id").eq("phone", sanitizedPhone);
+          if (existingProfile) query.neq("id", existingProfile.id);
+          const { data: existingPhone } = await query.maybeSingle();
 
           if (existingPhone) {
             return new Response(
@@ -218,6 +236,58 @@ serve(async (req) => {
             );
           }
         }
+      }
+
+      // ── HANDLE PENDING VERIFICATION (Smart Resend) ──────────────────
+      // If profile exists, we assume user exists in auth.users.
+      // We try to resend to check confirmation status and trigger email.
+      if (existingProfile) {
+        const { error: resendError } = await supabaseClient.auth.resend({
+          type: 'signup',
+          email: email,
+        });
+
+        if (resendError) {
+          const resMsg = resendError.message.toLowerCase();
+          // If already confirmed, block with error
+          if (resMsg.includes("already confirmed") || resMsg.includes("verified")) {
+            return new Response(
+              JSON.stringify({ error: "Este correo ya está registrado. Intenta iniciar sesión." }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+          // If other error (like rate limit), report it
+          return new Response(
+            JSON.stringify({ error: resendError.message }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        console.log(`User ${email} exists and is unconfirmed. Updating profile and resent email.`);
+        
+        if (serviceClient) {
+          // Update profile with new data
+          await serviceClient.from("profiles").update({
+            name,
+            dni: sanitizedCedula,
+            phone: sanitizedPhone,
+          }).eq("id", existingProfile.id);
+
+          // Update auth metadata (defensive check)
+          const adminClient = serviceClient?.auth?.admin;
+          if (adminClient && typeof adminClient.updateUserById === 'function') {
+            await adminClient.updateUserById(existingProfile.id, {
+              user_metadata: { name, cedula: sanitizedCedula, phone: sanitizedPhone }
+            }).catch(e => console.error("Auth metadata update failed (non-critical):", e));
+          }
+        }
+
+        return new Response(JSON.stringify({ 
+          message: "Se ha reenviado el correo de verificación. Por favor revisa tu bandeja de entrada.",
+          user: existingProfile
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // ── ATOMIC SIGN-UP ──────────────────────────────────────────────

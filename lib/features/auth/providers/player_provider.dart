@@ -302,6 +302,15 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
+  Future<void> resendVerification(String email) async {
+    try {
+      await _authService.resendVerification(email);
+    } catch (e) {
+      debugPrint('Error resending verification: $e');
+      rethrow;
+    }
+  }
+
   Future<void> resetPassword(String email) async {
     try {
       await _authService.resetPassword(email);

@@ -4,6 +4,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
 import '../../../core/storage/secure_local_storage.dart';
 
+/// Excepción personalizada para errores de autenticación con metadatos.
+class AuthUserException implements Exception {
+  final String message;
+  final bool isUnverified;
+
+  AuthUserException(this.message, {this.isUnverified = false});
+
+  @override
+  String toString() => message;
+}
+
 /// Servicio de autenticación que encapsula la lógica de login, registro y logout.
 ///
 /// Implementa DIP al recibir [SupabaseClient] por constructor en lugar
@@ -38,13 +49,18 @@ class AuthService {
 
       if (response.status != 200) {
         final error = (data is Map) ? (data['error'] ?? 'Error desconocido') : 'Error del servidor (${response.status})';
+        final bool isUnverified = (data is Map) && data['unverified'] == true;
 
         if (response.status == 403) {
           try {
             await _supabase.auth.signOut();
           } catch (_) {}
         }
-        throw error;
+        
+        if (isUnverified) {
+          throw AuthUserException(_handleAuthError(error), isUnverified: true);
+        }
+        throw _handleAuthError(error);
       }
 
       if (data == null) throw 'No se recibió respuesta del servidor';
@@ -71,7 +87,7 @@ class AuthService {
 
           if (user['email_confirmed_at'] == null) {
             await logout(); 
-            throw 'Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.';
+            throw AuthUserException('Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.', isUnverified: true);
           }
 
           return user['id'] as String;
@@ -81,7 +97,21 @@ class AuthService {
         throw 'No se recibió una sesión válida';
       }
     } catch (e) {
+      if (e is AuthUserException) rethrow;
+      
       debugPrint('AuthService: Error logging in: $e');
+
+      // Detect unverified status inside FunctionException details
+      if (e is FunctionException) {
+        final details = e.details;
+        if (details is Map && details['unverified'] == true) {
+          throw AuthUserException(
+            _handleAuthError(details['error'] ?? 'Debes confirmar tu correo para entrar.'),
+            isUnverified: true,
+          );
+        }
+      }
+
       throw _handleAuthError(e);
     }
   }
@@ -194,6 +224,19 @@ class AuthService {
     } catch (e) {
       debugPrint('AuthService: Error closing server session (token already cleared locally): $e');
       // No re-lanzamos — el token local ya fue borrado, la App puede continuar
+    }
+  }
+
+  /// Reenvía el correo de verificación.
+  Future<void> resendVerification(String email) async {
+    try {
+      await _supabase.auth.resend(
+        type: OtpType.signup,
+        email: email.trim(),
+      );
+    } catch (e) {
+      debugPrint('AuthService: Error resending verification: $e');
+      throw _handleAuthError(e);
     }
   }
 
