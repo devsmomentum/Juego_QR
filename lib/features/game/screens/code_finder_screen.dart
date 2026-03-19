@@ -719,7 +719,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         )
-                      : AppTheme.mainGradient(context),
+                      : AppTheme.darkGradient,
                 ),
               ),
             ),

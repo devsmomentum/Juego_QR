@@ -7,6 +7,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:map_hunter/features/admin/services/admin_service.dart';
+import 'package:map_hunter/features/admin/models/sponsor.dart';
+import 'package:map_hunter/features/admin/services/sponsor_service.dart';
 import '../../game/models/event.dart';
 import '../../game/models/clue.dart';
 import '../../game/providers/event_provider.dart';
@@ -79,6 +81,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   late int _maxParticipants;
   late int _entryFee; // NEW: State for price
   late DateTime _selectedDate;
+  late String _eventType; // NEW
+  late int _configuredWinners; // NEW
+  late int _betTicketPrice; // NEW
+  String? _sponsorId; // NEW
+  Map<String, int> _spectatorPrices = {}; // NEW
+  List<Sponsor> _sponsors = []; // NEW
 
   XFile? _selectedImage;
   bool _isLoading = false;
@@ -205,6 +213,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     _entryFee = widget.event.entryFee; // NEW: Init
     _selectedDate = widget.event.date.toLocal();
     _pot = widget.event.pot; // Init pot
+    _eventType = widget.event.type; // NEW
+    _configuredWinners = widget.event.configuredWinners; // NEW
+    _betTicketPrice = widget.event.betTicketPrice; // NEW
+    _sponsorId = widget.event.sponsorId; // NEW
+    _spectatorPrices = Map<String, int>.from(widget.event.spectatorConfig.map(
+      (k, v) => MapEntry(k, (v as num).toInt()),
+    )); // NEW
 
     // Load requests for this event
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -270,7 +285,22 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       }
 
       _checkPrizeStatus(adminService); // Check on init
+      _loadSponsors(); // Load sponsors
     });
+  }
+
+  Future<void> _loadSponsors() async {
+    try {
+      final service = SponsorService();
+      final sponsors = await service.getSponsors();
+      if (mounted) {
+        setState(() {
+          _sponsors = sponsors;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading sponsors: $e");
+    }
   }
 
   Future<void> _checkPrizeStatus([AdminService? service]) async {
@@ -729,21 +759,18 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     setState(() => _isLoading = true);
 
     try {
-      final updatedEvent = GameEvent(
-        id: widget.event.id,
+      final updatedEvent = widget.event.copyWith(
         title: _title,
         description: _description,
-        locationName: _locationName,
-        latitude: _latitude,
-        longitude: _longitude,
-        date: _selectedDate,
-        createdByAdminId: widget.event.createdByAdminId,
-        imageUrl: widget.event
-            .imageUrl, // Will be updated by provider if _selectedImage is not null
         clue: _clue,
         maxParticipants: _maxParticipants,
         pin: _pin,
-        entryFee: _entryFee, // NEW: Save
+        entryFee: _entryFee,
+        type: _eventType,
+        configuredWinners: _configuredWinners,
+        betTicketPrice: _betTicketPrice,
+        sponsorId: _sponsorId,
+        spectatorConfig: _spectatorPrices,
       );
 
       await Provider.of<EventProvider>(context, listen: false)
@@ -1231,7 +1258,6 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppTheme.primaryPurple,
           tabs: const [
             Tab(text: "Detalles"),
             Tab(text: "Participantes"),
@@ -1398,6 +1424,68 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               ),
 
             // Fields
+            // --- Header Info (Type) ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _eventType == 'online'
+                        ? Colors.blueAccent.withOpacity(0.2)
+                        : Colors.orangeAccent.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _eventType == 'online'
+                          ? Colors.blueAccent
+                          : Colors.orangeAccent,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _eventType == 'online' ? Icons.public : Icons.location_on,
+                        size: 16,
+                        color: _eventType == 'online'
+                            ? Colors.blueAccent
+                            : Colors.orangeAccent,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _eventType == 'online' ? 'EVENTO ONLINE' : 'EVENTO PRESENCIAL',
+                        style: TextStyle(
+                          color: _eventType == 'online'
+                              ? Colors.blueAccent
+                              : Colors.orangeAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.event.isAutomated)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentGold.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.accentGold),
+                    ),
+                    child: const Text(
+                      'AUTOMATIZADO',
+                      style: TextStyle(
+                        color: AppTheme.accentGold,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
             TextFormField(
               initialValue: _title,
               readOnly: _isEventActive,
@@ -1419,6 +1507,34 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               onSaved: (v) => _description = v!,
             ),
             const SizedBox(height: 16),
+
+            // --- Sponsor Selection ---
+            if (_sponsors.isNotEmpty)
+              DropdownButtonFormField<String>(
+                value: _sponsorId,
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Patrocinador (Opcional)',
+                  prefixIcon: const Icon(Icons.star_border, color: Colors.white54),
+                ),
+                dropdownColor: AppTheme.cardBg,
+                style: const TextStyle(color: Colors.white),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text("Sin Patrocinador"),
+                  ),
+                  ..._sponsors.map((sponsor) {
+                    return DropdownMenuItem<String>(
+                      value: sponsor.id,
+                      child: Text(sponsor.name),
+                    );
+                  }).toList(),
+                ],
+                onChanged: _isEventActive
+                    ? null
+                    : (value) => setState(() => _sponsorId = value),
+              ),
+            if (_sponsors.isNotEmpty) const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1511,23 +1627,158 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               ],
             ),
             const SizedBox(height: 16),
-            // NEW: Entry Fee Field
-            TextFormField(
-              initialValue: _entryFee == 0 ? '' : _entryFee.toString(),
-              readOnly: _isEventActive,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white70 : Colors.white),
-              decoration: inputDecoration.copyWith(
-                labelText: 'Precio Entrada (Tréboles)',
-                suffix: const CoinImage(size: 16),
-                helperText: 'Deja vacío o 0 para GRATIS',
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onSaved: (v) =>
-                  _entryFee = (v == null || v.isEmpty) ? 0 : int.parse(v),
+
+            // Prices Row (Entry Fee + Bet Ticket)
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _entryFee == 0 ? '' : _entryFee.toString(),
+                    readOnly: _isEventActive,
+                    style: TextStyle(
+                        color: _isEventActive ? Colors.white70 : Colors.white),
+                    decoration: inputDecoration.copyWith(
+                      labelText: 'Precio Entrada',
+                      suffix: const CoinImage(size: 16),
+                      helperText: '0 para GRATIS',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onSaved: (v) =>
+                        _entryFee = (v == null || v.isEmpty) ? 0 : int.parse(v),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _betTicketPrice.toString(),
+                    readOnly: _isEventActive,
+                    style: TextStyle(
+                        color: _isEventActive ? Colors.white70 : Colors.white),
+                    decoration: inputDecoration.copyWith(
+                      labelText: 'Precio Apuesta',
+                      suffix: const CoinImage(size: 16),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onSaved: (v) =>
+                        _betTicketPrice = (v == null || v.isEmpty) ? 100 : int.parse(v),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
+
+            // Winners Selection
+            const Text("Configuración de Premios",
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.accentGold)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Cantidad de Ganadores:",
+                      style: TextStyle(color: Colors.white)),
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment<int>(value: 1, label: Text("1")),
+                      ButtonSegment<int>(value: 2, label: Text("2")),
+                      ButtonSegment<int>(value: 3, label: Text("3")),
+                    ],
+                    selected: {_configuredWinners},
+                    onSelectionChanged: _isEventActive
+                        ? null
+                        : (Set<int> newSelection) {
+                            setState(() {
+                              _configuredWinners = newSelection.first;
+                            });
+                          },
+                    style: ButtonStyle(
+                      backgroundColor: MaterialStateProperty.resolveWith<Color>(
+                        (Set<MaterialState> states) {
+                          if (states.contains(MaterialState.selected)) {
+                            return AppTheme.accentGold;
+                          }
+                          return Colors.transparent;
+                        },
+                      ),
+                      foregroundColor: MaterialStateProperty.resolveWith<Color>(
+                          (Set<MaterialState> states) {
+                        if (states.contains(MaterialState.selected)) {
+                          return Colors.black;
+                        }
+                        return Colors.white;
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // --- Pricing Section (NEW: Match Creation) ---
+            const Text("Tienda y Precios",
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.accentGold)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showGlobalPricesDialog(isSpectatorMode: false),
+                          icon: const Icon(Icons.shopping_bag_outlined),
+                          label: const Text("Precios Jugadores"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white24),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showGlobalPricesDialog(isSpectatorMode: true),
+                          icon: const Icon(Icons.visibility_outlined),
+                          label: const Text("Precios Espectadores"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.accentGold,
+                            side: const BorderSide(color: AppTheme.accentGold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "Estos precios sobrescriben los valores por defecto de los poderes en este evento.",
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
             TextFormField(
               initialValue: _clue,
               readOnly: _isEventActive,
@@ -1823,7 +2074,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     child: Text("Solicitudes Pendientes",
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: AppTheme.secondaryPink,
+                            color: AppTheme.accentGold,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
                   ),
@@ -1854,7 +2105,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
             const Text("Participantes Inscritos (Ranking)",
                 style: TextStyle(
-                    color: Colors.greenAccent,
+                    color: AppTheme.accentGold,
                     fontSize: 18,
                     fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
@@ -1943,13 +2194,15 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             return Card(
               color: AppTheme.cardBg,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: AppTheme.adminCardBorder),
+              ),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: AppTheme.primaryPurple.withOpacity(0.2),
+                  backgroundColor: AppTheme.accentGold.withOpacity(0.2),
                   child: Text("${index + 1}",
                       style: const TextStyle(
-                          color: AppTheme.primaryPurple,
+                          color: AppTheme.accentGold,
                           fontWeight: FontWeight.bold)),
                 ),
                 title: Text(clue.title,
@@ -2087,6 +2340,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                   return Card(
                     color: AppTheme.cardBg,
                     margin: const EdgeInsets.only(bottom: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: AppTheme.adminCardBorder),
+                    ),
                     child: ListTile(
                       leading: Container(
                         width: 60,
@@ -2180,12 +2437,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     );
   }
 
-  void _showGlobalPricesDialog() async {
+  void _showGlobalPricesDialog({bool isSpectatorMode = false}) async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StoreEditDialog(
         eventId: widget.event.id,
-        initialPrices: widget.event.storePrices,
+        initialPrices: isSpectatorMode ? _spectatorPrices : widget.event.storePrices,
         isGlobalMode: true,
       ),
     );
@@ -2193,12 +2450,22 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     if (result != null && result.containsKey('customPrices')) {
       try {
         final prices = Map<String, int>.from(result['customPrices']);
-        await context
-            .read<EventProvider>()
-            .updateEventStorePrices(widget.event.id, prices);
+        
+        if (isSpectatorMode) {
+          await context
+              .read<EventProvider>()
+              .updateEventSpectatorConfig(widget.event.id, prices);
+          setState(() {
+            _spectatorPrices = prices;
+          });
+        } else {
+          await context
+              .read<EventProvider>()
+              .updateEventStorePrices(widget.event.id, prices);
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Precios globales actualizados')),
+          SnackBar(content: Text('✅ Precios ${isSpectatorMode ? 'de espectador' : 'globales'} actualizados')),
         );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -73,6 +73,22 @@ class EventProvider with ChangeNotifier {
     }
   }
 
+  // Update ONLY spectator config
+  Future<void> updateEventSpectatorConfig(
+      String eventId, Map<String, dynamic> config) async {
+    try {
+      await _eventService.updateEventSpectatorConfig(eventId, config);
+      final index = _events.indexWhere((e) => e.id == eventId);
+      if (index != -1) {
+        _events[index] = _events[index].copyWith(spectatorConfig: config);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error updating spectator config: $e');
+      rethrow;
+    }
+  }
+
   // Actualizar status del evento
   Future<void> updateEventStatus(String eventId, String status) async {
     try {

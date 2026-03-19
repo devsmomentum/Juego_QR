@@ -15,7 +15,6 @@ class AppTheme {
   static const Color dSurface0 = Color(0xFF0D0D0F); // Background absolute
   static const Color dSurface1 = Color(0xFF1A1A1D); // Cards
   static const Color dSurface2 = Color(0xFF2D3436); // Modals/Overlays
-  static const Color dSurface3 = Color(0xFF3D4461); // Elevated
   static const Color dBorder = Color(0xFF3D3D4D);
   
   // --- LIGHT PALETTE (Crystal Clarity) ---
@@ -43,6 +42,11 @@ class AppTheme {
   static const Color warningOrange = Color(0xFFFF9F43);
   static const Color neonGreen = Color(0xFF00D9A3);
   
+  // UI Specific colors for visibility
+  static const Color adminCardBorder = Color(0x33FECB00); // 20% Gold
+  static const Color adminTabUnselected = Colors.white38;
+  static const Color adminTabSelected = dGoldMain;
+
   // Aliases for compatibility
   static const Color surfaceDark = dSurface1;
   static const Color accentGreen = neonGreen;
@@ -65,31 +69,23 @@ class AppTheme {
     end: Alignment.bottomRight,
   );
 
-  static LinearGradient mainGradient(BuildContext context) {
-    // Always dark gradient — UI is always dark-styled
-    return const LinearGradient(
-      colors: [dSurface0, dSurface1],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    );
-  }
+  static ThemeData get darkTheme => _buildTheme();
+  static ThemeData get lightTheme => _buildTheme(); // Fallback to dark if requested
 
-  static ThemeData get darkTheme => _buildTheme(Brightness.dark);
-  static ThemeData get lightTheme => _buildTheme(Brightness.light);
-
-  static ThemeData _buildTheme(Brightness brightness) {
-    // UI is always dark-styled — brightness only affects system overlays
+  static ThemeData _buildTheme() {
+    const Brightness brightness = Brightness.dark;
     const Color bg = dSurface0;
     const Color surface = dSurface1;
     const Color primary = dBrandMain;
     const Color textColor = Colors.white;
-    final Color textSec = Colors.white70;
+    const Color textSec = Colors.white70;
+    const Color borderColor = dBorder;
 
     return ThemeData(
       brightness: brightness,
       scaffoldBackgroundColor: bg,
       primaryColor: primary,
-      colorScheme: ColorScheme(
+      colorScheme: const ColorScheme(
         brightness: brightness,
         primary: primary,
         secondary: dGoldMain,
@@ -102,16 +98,19 @@ class AppTheme {
         onBackground: textColor,
         onError: Colors.white,
       ),
-      textTheme: TextTheme(
-        displayLarge: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
-        displayMedium: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textColor),
+      textTheme: const TextTheme(
+        displayLarge:
+            TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
+        displayMedium:
+            TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textColor),
         bodyLarge: TextStyle(fontSize: 16, color: textSec),
         bodyMedium: TextStyle(fontSize: 14, color: textSec),
-        labelLarge: const TextStyle(fontWeight: FontWeight.bold),
+        labelLarge: TextStyle(fontWeight: FontWeight.bold),
       ),
       cardTheme: CardThemeData(
         color: surface,
         elevation: 0,
+        shadowColor: Colors.black12,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -126,9 +125,29 @@ class AppTheme {
         filled: true,
         fillColor: surface,
         hintStyle: TextStyle(color: textColor.withOpacity(0.4), fontSize: 14),
+        labelStyle: const TextStyle(color: textSec),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: dBorder)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: primary, width: 2)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: borderColor)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: dGoldMain, width: 2)),
+      ),
+      tabBarTheme: const TabBarThemeData(
+        labelColor: dGoldMain,
+        unselectedLabelColor: Colors.white38,
+        indicator: UnderlineTabIndicator(
+          borderSide: BorderSide(color: dGoldMain, width: 3),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: bg,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: IconThemeData(color: textColor),
+        titleTextStyle: TextStyle(
+          color: textColor,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

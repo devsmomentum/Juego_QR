@@ -585,7 +585,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         )
-                      : AppTheme.mainGradient(context),
+                      : AppTheme.darkGradient,
                 ),
               ),
             ),

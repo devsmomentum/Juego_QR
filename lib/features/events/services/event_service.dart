@@ -209,7 +209,7 @@ class EventService {
     }
   }
 
-  // Actualizar status del evento (for non-activation state changes like 'completed')
+  // Update ONLY store prices
   Future<void> updateEventStorePrices(
       String eventId, Map<String, int> prices) async {
     try {
@@ -218,6 +218,19 @@ class EventService {
           .update({'store_prices': prices}).eq('id', eventId);
     } catch (e) {
       debugPrint('Error updating store prices: $e');
+      rethrow;
+    }
+  }
+
+  // Update ONLY spectator config
+  Future<void> updateEventSpectatorConfig(
+      String eventId, Map<String, dynamic> config) async {
+    try {
+      await _supabase
+          .from('events')
+          .update({'spectator_config': config}).eq('id', eventId);
+    } catch (e) {
+      debugPrint('Error updating spectator config: $e');
       rethrow;
     }
   }
