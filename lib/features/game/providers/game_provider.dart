@@ -931,10 +931,10 @@ class GameProvider extends ChangeNotifier implements IResettable {
         _gameService.fetchMinigameEmojiMovies(),
       ]);
 
-      _minigameCapitals = results[0] as List<Map<String, String>>;
-      _minigameTFStatements = results[1] as List<Map<String, dynamic>>;
-      _minigameChronologicalEvents = results[2] as List<Map<String, dynamic>>;
-      _minigameEmojiMovies = results[3] as List<Map<String, dynamic>>;
+      _minigameCapitals = (results[0] as List).map((e) => Map<String, String>.from(e as Map)).toList();
+      _minigameTFStatements = (results[1] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      _minigameChronologicalEvents = (results[2] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      _minigameEmojiMovies = (results[3] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
       debugPrint(
           'GameProvider: Loaded ${_minigameCapitals.length} capitals, ${_minigameTFStatements.length} TF statements, ${_minigameChronologicalEvents.length} chrono events, and ${_minigameEmojiMovies.length} movie events.');

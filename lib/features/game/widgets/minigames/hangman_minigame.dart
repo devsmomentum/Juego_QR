@@ -302,7 +302,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: ShaderMask(
-                    shaderCallback: (bounds) => AppTheme.goldGradient.createShader(bounds),
+                    shaderCallback: (bounds) =>
+                        AppTheme.goldGradient.createShader(bounds),
                     child: const Text(
                       "AHORCADO",
                       style: TextStyle(
@@ -388,7 +389,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                               return Container(
                                 width: 26,
                                 height: 34,
-                                margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 1.5),
                                 decoration: BoxDecoration(
                                   color: isGuessed
                                       ? AppTheme.accentGold.withOpacity(0.15)
@@ -403,7 +405,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                                   boxShadow: isGuessed
                                       ? [
                                           BoxShadow(
-                                            color: AppTheme.accentGold.withOpacity(0.2),
+                                            color: AppTheme.accentGold
+                                                .withOpacity(0.2),
                                             blurRadius: 4,
                                           )
                                         ]
@@ -430,12 +433,15 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
 
                 // Teclado QWERTY Premium
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   child: Column(
                     children: [
-                      _buildKeyboardRow(['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P']),
+                      _buildKeyboardRow(
+                          ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P']),
                       const SizedBox(height: 8),
-                      _buildKeyboardRow(['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L']),
+                      _buildKeyboardRow(
+                          ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L']),
                       const SizedBox(height: 8),
                       _buildKeyboardRow(['Z', 'X', 'C', 'V', 'B', 'N', 'M']),
                     ],

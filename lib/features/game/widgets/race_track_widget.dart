@@ -139,7 +139,7 @@ class RaceTrackWidget extends StatelessWidget {
     }
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: compact ? 10 : 20),
+      margin: EdgeInsets.symmetric(vertical: compact ? 4 : 8),
       padding: const EdgeInsets.all(4), // Espacio para el efecto de doble borde
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.03),
@@ -150,7 +150,7 @@ class RaceTrackWidget extends StatelessWidget {
         ),
       ),
       child: Container(
-        padding: EdgeInsets.all(compact ? 12 : 16),
+        padding: EdgeInsets.all(compact ? 8 : 10),
         decoration: BoxDecoration(
           color: const Color(0xFF151517), // Solid Dark
           borderRadius: BorderRadius.circular(20),
@@ -234,7 +234,7 @@ class RaceTrackWidget extends StatelessWidget {
 
                 // --- RACE TRACK (RENDERING ONLY via RaceViewData) ---
                 SizedBox(
-                  height: compact ? 95 : 120,
+                  height: compact ? 80 : 100,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       return Stack(

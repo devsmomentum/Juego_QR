@@ -49,6 +49,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   // Podium Winners Data (from game_players.final_placement)
   List<Map<String, dynamic>> _podiumWinners = [];
   bool _isLoadingPodium = true;
+  bool _isNavigating = false; // Guard to prevent duplicate navigation calls
 
   @override
   void initState() {
@@ -533,7 +534,10 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () async {
+                          if (_isNavigating) return;
+                          
                           Navigator.pop(ctx);
+                          setState(() => _isNavigating = true);
                           await playerProvider.logout();
                           if (mounted) {
                             Navigator.of(context).pushAndRemoveUntil(
@@ -1238,6 +1242,9 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                           ),
                                           child: TextButton(
                                             onPressed: () {
+                                              if (_isNavigating) return;
+                                              setState(() => _isNavigating = true);
+
                                               Navigator.of(context)
                                                   .pushAndRemoveUntil(
                                                 MaterialPageRoute(

@@ -231,6 +231,7 @@ class EventCreationProvider extends ChangeNotifier {
     if (value > 20) value = 20;
     if (value < 0) value = 0;
     _numberOfClues = value;
+    checkFormValidity(); // Update validity if they set it back to 0
     notifyListeners();
   }
 
@@ -370,6 +371,7 @@ class EventCreationProvider extends ChangeNotifier {
     } else {
       _clueForms = [];
     }
+    checkFormValidity(); // Trigger validity update when forms are generated
     notifyListeners();
   }
 
@@ -480,6 +482,9 @@ class EventCreationProvider extends ChangeNotifier {
       if (_latitude == null || _longitude == null) isValid = false;
     }
 
+    // CRITICAL: At least one minigame/clue required
+    if (_clueForms.isEmpty || _numberOfClues <= 0) isValid = false;
+
     // Validate key fields for all modes
     if (_entryFee == null) isValid = false;
 
@@ -504,7 +509,11 @@ class EventCreationProvider extends ChangeNotifier {
     // Final check
     checkFormValidity();
     if (!_isFormValid) {
-      onError("Faltan campos por completar");
+      if (_clueForms.isEmpty || _numberOfClues <= 0) {
+        onError("Debes agregar al menos un minijuego/pista");
+      } else {
+        onError("Faltan campos por completar");
+      }
       return false;
     }
 

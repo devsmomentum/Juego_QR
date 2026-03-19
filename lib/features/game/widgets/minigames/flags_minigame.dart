@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../utils/country_helper.dart';
 import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
@@ -179,8 +180,6 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     if (gameProvider.isFrozen) return; // Ignore input if frozen
 
-    if (gameProvider.isFrozen) return; // Ignore input if frozen
-
     // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
@@ -275,8 +274,6 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     }
   }
 
-  // Old dialog methods removed in favor of _showOverlayState
-
   List<String> _generateOptions() {
     if (_currentOptions != null) return _currentOptions!;
 
@@ -284,7 +281,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     final random = Random();
     final options = <String>{correctAnswer};
 
-    while (options.length < 6 && options.length < _allCountries.length) {
+    while (options.length < 4 && options.length < _allCountries.length) {
       final randomCountry =
           _allCountries[random.nextInt(_allCountries.length)]['name']!;
       options.add(randomCountry);
@@ -299,20 +296,15 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     setState(() {
       _isGameOver = true;
     });
-    // For victory, we might still want to call onSuccess directly,
-    // or show a victory overlay first. Use logic helper's standard if preferred,
-    // but here we just follow previous logic:
     widget.onSuccess();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 2. Implementación del Bloqueo de INTERFAZ (UI Hardening)
     return PopScope(
       canPop: false, // Prevent back button
       onPopInvoked: (didPop) {
         if (didPop) return;
-        // Optional: Show toast "Completa o sal del juego usando los botones"
       },
       child: Stack(
         children: [
@@ -410,18 +402,52 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
                               blurRadius: 10,
                               offset: const Offset(0, 5))
                         ],
-                        image: DecorationImage(
-                          fit: BoxFit.cover,
-                          image: NetworkImage(
-                              "https://flagcdn.com/w640/${_shuffledQuestions[_currentQuestionIndex]['code']}.png"),
-                        ),
+                      ),
+                      child: Builder(
+                        builder: (context) {
+                          final country = _shuffledQuestions[_currentQuestionIndex];
+                          final code = country['code']!;
+                          final name = country['name']!;
+                          
+                          return Image.network(
+                            "https://flagcdn.com/w640/$code.png",
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              // FALLBACK 1: Buscar Emoji en CountryHelper
+                              final emoji = CountryHelper.getEmoji(name);
+                              if (emoji != null) {
+                                return Center(
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 80),
+                                  ),
+                                );
+                              }
+                              
+                              // FALLBACK 2: Siglas
+                              return Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  child: Text(
+                                    code.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 40,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ),
 
                   const SizedBox(height: 40),
 
                   // Opciones
-                  if (!_showOverlay) // Hide options if overlay is ON to prevent interaction (AbsorbPointer handles it, but cleaner UI)
+                  if (!_showOverlay) // Hide options if overlay is ON
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,

@@ -989,6 +989,27 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   ),
                                 ],
                               ),
+                              if (provider.clueForms.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded,
+                                          color: Colors.orange.shade300,
+                                          size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          "Debes generar al menos 1 ${provider.eventType == 'online' ? 'minijuego' : 'pista'} para publicar.",
+                                          style: TextStyle(
+                                              color: Colors.orange.shade300,
+                                              fontSize: 12,
+                                              fontStyle: FontStyle.italic),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               if (provider.clueForms.isNotEmpty) ...[
                                 const SizedBox(height: 20),
                                 Row(

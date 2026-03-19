@@ -228,7 +228,7 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
                 const Text("La capital de esta bandera:",
                     style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 10),
-                Text(CountryHelper.getEmoji(_currentCountry),
+                Text(CountryHelper.getEmoji(_currentCountry) ?? "🏳️",
                     style: const TextStyle(fontSize: 60)),
                 const SizedBox(height: 10),
                 const Text("es:", style: TextStyle(color: Colors.white70)),
@@ -368,19 +368,48 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
                       child: Container(
                         height: MediaQuery.of(context).size.height < 700 ? 120 : 180,
                         alignment: Alignment.center,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            CountryHelper.getEmoji(_currentCountry),
-                            style: const TextStyle(
-                                fontSize: 120,
-                                shadows: [
-                                  Shadow(
-                                      color: Colors.black54,
-                                      blurRadius: 15,
-                                      offset: Offset(0, 8))
-                                ]),
-                          ),
+                        child: Builder(
+                          builder: (context) {
+                            final emoji = CountryHelper.getEmoji(_currentCountry);
+                            if (emoji != null) {
+                              return FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  emoji,
+                                  style: const TextStyle(
+                                      fontSize: 100,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              // FALLBACK: Nombre del país como último recurso
+                              return Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.accentGold.withOpacity(0.1),
+                                      blurRadius: 20,
+                                    ),
+                                  ],
+                                ),
+                                child: AutoSizeText(
+                                  _currentCountry.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2,
+                                  ),
+                                  maxLines: 1,
+                                  textAlign: TextAlign.center,
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ),
                     ),

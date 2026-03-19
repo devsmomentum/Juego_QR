@@ -2777,67 +2777,70 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                     // Status Badges
                                                     Positioned(
                                                       top: 20,
-                                                      right: 20,
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                                        children: [
-                                                          if (scenario.status == 'active')
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                              decoration: BoxDecoration(
-                                                                color: AppTheme.successGreen.withOpacity(0.85),
-                                                                borderRadius: BorderRadius.circular(20),
-                                                                border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                                                              ),
-                                                              child: const Row(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  Icon(Icons.play_arrow, color: Colors.white, size: 16),
-                                                                  SizedBox(width: 6),
-                                                                  Text(
-                                                                    'EN CURSO',
-                                                                    style: TextStyle(
-                                                                      color: Colors.white,
-                                                                      fontWeight: FontWeight.bold,
-                                                                      fontSize: 12,
-                                                                      letterSpacing: 0.5,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            )
-                                                              else if (scenario.date != null && !scenario.isCompleted && scenario.date!.isBefore(DateTime.now()))
-                                                                // Date passed but not active yet = waiting for admin
-                                                                Container(
-                                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors.orangeAccent.withOpacity(0.85),
-                                                                    borderRadius: BorderRadius.circular(20),
-                                                                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                                                                  ),
-                                                                  child: const Row(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      Icon(Icons.admin_panel_settings, color: Colors.white, size: 16),
-                                                                      SizedBox(width: 6),
-                                                                      Text(
-                                                                        'ESPERANDO ADMIN',
-                                                                        style: TextStyle(
-                                                                          color: Colors.white,
-                                                                          fontWeight: FontWeight.bold,
-                                                                          fontSize: 12,
-                                                                          letterSpacing: 0.5,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                )
-                                                              else if (scenario.date != null && !scenario.isCompleted)
-                                                                ScenarioCountdown(
-                                                                  targetDate: scenario.date!,
-                                                                  eventStatus: scenario.status,
+                                                      left: 0,
+                                                      right: 0,
+                                                      child: Center(
+                                                        child: Column(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            if (scenario.status == 'active')
+                                                              Container(
+                                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                                decoration: BoxDecoration(
+                                                                  color: AppTheme.successGreen.withOpacity(0.85),
+                                                                  borderRadius: BorderRadius.circular(20),
+                                                                  border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
                                                                 ),
-                                                            ],
+                                                                child: const Row(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: [
+                                                                    Icon(Icons.play_arrow, color: Colors.white, size: 16),
+                                                                    SizedBox(width: 6),
+                                                                    Text(
+                                                                      'EN CURSO',
+                                                                      style: TextStyle(
+                                                                        color: Colors.white,
+                                                                        fontWeight: FontWeight.bold,
+                                                                        fontSize: 12,
+                                                                        letterSpacing: 0.5,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              )
+                                                                else if (scenario.date != null && !scenario.isCompleted && scenario.date!.isBefore(DateTime.now()))
+                                                                  // Date passed but not active yet = waiting for admin
+                                                                  Container(
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors.orangeAccent.withOpacity(0.85),
+                                                                      borderRadius: BorderRadius.circular(20),
+                                                                      border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                                                                    ),
+                                                                    child: const Row(
+                                                                      mainAxisSize: MainAxisSize.min,
+                                                                      children: [
+                                                                        Icon(Icons.admin_panel_settings, color: Colors.white, size: 16),
+                                                                        SizedBox(width: 6),
+                                                                        Text(
+                                                                          'ESPERANDO ADMIN',
+                                                                          style: TextStyle(
+                                                                            color: Colors.white,
+                                                                            fontWeight: FontWeight.bold,
+                                                                            fontSize: 12,
+                                                                            letterSpacing: 0.5,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  )
+                                                                else if (scenario.date != null && !scenario.isCompleted)
+                                                                  ScenarioCountdown(
+                                                                    targetDate: scenario.date!,
+                                                                    eventStatus: scenario.status,
+                                                                  ),
+                                                              ],
+                                                            ),
                                                           ),
                                                         ),
 
