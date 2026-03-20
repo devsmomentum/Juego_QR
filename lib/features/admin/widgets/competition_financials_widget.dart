@@ -414,6 +414,8 @@ class _CompetitionFinancialsWidgetState
          final data = snapshot.data ?? {};
          debugPrint('💰 Financial Data: $data');
          final pot = data['pot'] ?? 0;
+         final bettingPot = data['betting_pot'] ?? 0;
+         final winnerId = data['winner_id'] as String?;
          
          // Logic to handle different RPC return structures
          List<dynamic> podium = [];
@@ -435,12 +437,29 @@ class _CompetitionFinancialsWidgetState
            child: Column(
              crossAxisAlignment: CrossAxisAlignment.start,
              children: [
-               _buildFinanceCard(
-                 title: 'POTE FINAL REPARTIDO',
-                 amount: '$pot ',
-                 icon: Icons.flag,
-                 color: AppTheme.primaryPurple,
-                 showCoin: true,
+               // --- POTS SUMMARY ---
+               Row(
+                 children: [
+                   Expanded(
+                     child: _buildFinanceCard(
+                       title: 'POTE COMPETENCIA (70%)',
+                       amount: '$pot ',
+                       icon: Icons.emoji_events,
+                       color: AppTheme.primaryPurple,
+                       showCoin: true,
+                     ),
+                   ),
+                   const SizedBox(width: 10),
+                   Expanded(
+                     child: _buildFinanceCard(
+                       title: 'POTE APUESTAS',
+                       amount: '$bettingPot ',
+                       icon: Icons.casino,
+                       color: Colors.amber,
+                       showCoin: true,
+                     ),
+                   ),
+                 ],
                ),
                const SizedBox(height: 20),
                
@@ -475,30 +494,77 @@ class _CompetitionFinancialsWidgetState
                   )
                else
                  ...podium.map((r) {
-                   final avatarId = r['avatar_id'] as String?;
+                   final int prizeAmount = (r['amount'] as num?)?.toInt() ?? 0;
+                   final int commission = (r['commission'] as num?)?.toInt() ?? 0;
+                   final int totalEarned = prizeAmount + commission;
+                   final bool isWinner = r['rank'] == 1;
                    return Card(
-                   color: Colors.white10,
-                   child: ListTile(
-                     leading: CircleAvatar(
-                       backgroundColor: r['rank'] == 1 ? Colors.amber : (r['rank'] == 2 ? Colors.grey : Colors.brown),
-                       // Use text as fallback if no image logic yet, but if avatarId is present we could use it
-                       // safely assuming we don't have the avatar assets logic here imported, fallback to rank
-                       child: Text('${r['rank']}'),
-                     ),
-                     title: Text('${r['name']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                     subtitle: Text('Posición #${r['rank']}', style: const TextStyle(color: Colors.white54)),
-                     trailing: Column(
-                       mainAxisAlignment: MainAxisAlignment.center,
-                       crossAxisAlignment: CrossAxisAlignment.end,
+                   color: isWinner ? Colors.amber.withOpacity(0.1) : Colors.white10,
+                   margin: const EdgeInsets.only(bottom: 8),
+                   child: Padding(
+                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                     child: Row(
                        children: [
-                         const Text('Premio', style: TextStyle(color: Colors.white30, fontSize: 10)),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('+${r['amount']} ', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                              const CoinImage(size: 16),
-                            ],
-                          ),
+                         CircleAvatar(
+                           backgroundColor: r['rank'] == 1 ? Colors.amber : (r['rank'] == 2 ? Colors.grey : Colors.brown),
+                           child: Text('${r['rank']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                         ),
+                         const SizedBox(width: 12),
+                         Expanded(
+                           child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+                               Text('${r['name']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                               Text('Posición #${r['rank']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                             ],
+                           ),
+                         ),
+                         Column(
+                           crossAxisAlignment: CrossAxisAlignment.end,
+                           children: [
+                             if (prizeAmount > 0) ...[
+                               const Text('Premio', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                               Row(
+                                 mainAxisSize: MainAxisSize.min,
+                                 children: [
+                                   Text('+$prizeAmount ', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 15)),
+                                   const CoinImage(size: 15),
+                                 ],
+                               ),
+                             ],
+                             if (commission > 0) ...[
+                               const SizedBox(height: 4),
+                               const Text('Comisión Apuestas', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                               Row(
+                                 mainAxisSize: MainAxisSize.min,
+                                 children: [
+                                   Text('+$commission ', style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 15)),
+                                   const CoinImage(size: 15),
+                                 ],
+                               ),
+                             ],
+                             if (prizeAmount == 0 && commission == 0) ...[
+                               const Text('Premio', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                               Row(
+                                 mainAxisSize: MainAxisSize.min,
+                                 children: [
+                                   const Text('0 ', style: TextStyle(color: Colors.white30, fontWeight: FontWeight.bold, fontSize: 15)),
+                                   const CoinImage(size: 15),
+                                 ],
+                               ),
+                             ],
+                             if (prizeAmount > 0 && commission > 0) ...[
+                               const Divider(height: 8),
+                               Row(
+                                 mainAxisSize: MainAxisSize.min,
+                                 children: [
+                                   Text('Total: $totalEarned ', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                   const CoinImage(size: 13),
+                                 ],
+                               ),
+                             ],
+                           ],
+                         ),
                        ],
                      ),
                    ),
@@ -525,61 +591,151 @@ class _CompetitionFinancialsWidgetState
                   )
                else
                  ...bettors.map((b) {
-                    final int net = b['net'] ?? 0;
-                    final bool isWinner = net > 0;
-                    final int totalWon = b['total_won'] ?? 0;
+                    final int totalBet = (b['total_bet'] as num?)?.toInt() ?? 0;
+                    final int totalWon = (b['total_won'] as num?)?.toInt() ?? 0;
+                    final bool isWinner = totalWon > 0;
+                    final List<dynamic> individualBets = b['individual_bets'] as List<dynamic>? ?? [];
+                    final String bettorName = b['name'] as String? ?? 'Apostador';
+                    final String initial = bettorName.isNotEmpty ? bettorName[0].toUpperCase() : '?';
                     
                     return Card(
                       color: isWinner ? Colors.green.withOpacity(0.1) : Colors.white.withOpacity(0.05),
                       margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                         leading: CircleAvatar(
-                           backgroundColor: Colors.blueGrey,
-                           child: Text((b['name'] as String).substring(0, 1).toUpperCase()),
-                         ),
-                         title: Text('${b['name']}', style: const TextStyle(color: Colors.white)),
-                         subtitle: Text('${b['bets_count']} apuesta(s)', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                         trailing: Row(
-                           mainAxisSize: MainAxisSize.min,
-                           children: [
-                             Column(
-                               crossAxisAlignment: CrossAxisAlignment.end,
-                               mainAxisAlignment: MainAxisAlignment.center,
-                               children: [
-                                  const Text('Apostado', style: TextStyle(color: Colors.white38, fontSize: 10)),
-                                   Row(
-                                     mainAxisSize: MainAxisSize.min,
-                                     children: [
-                                       Text('${b['total_bet']} ', style: const TextStyle(color: Colors.white70)),
-                                       const CoinImage(size: 12),
-                                     ],
-                                   ),
-                               ],
-                             ),
-                             const SizedBox(width: 16),
-                             Column(
-                               crossAxisAlignment: CrossAxisAlignment.end,
-                               mainAxisAlignment: MainAxisAlignment.center,
-                               children: [
-                                  const Text('Ganancia', style: TextStyle(color: Colors.white38, fontSize: 10)),
-                                   Row(
-                                     mainAxisSize: MainAxisSize.min,
-                                     children: [
-                                       Text(
-                                         totalWon > 0 ? '+$totalWon ' : '0 ', 
-                                         style: TextStyle(
-                                           color: totalWon > 0 ? Colors.greenAccent : Colors.white30, 
-                                           fontWeight: FontWeight.bold,
-                                           fontSize: 16
-                                         )
-                                       ),
-                                       const CoinImage(size: 16),
-                                     ],
-                                   ),
-                               ],
-                             ),
-                           ],
-                         ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+                          leading: CircleAvatar(
+                            backgroundColor: isWinner ? Colors.green.shade700 : Colors.blueGrey,
+                            child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                          title: Row(
+                            children: [
+                              Flexible(child: Text(bettorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                              if (isWinner) ...[
+                                const SizedBox(width: 6),
+                                const Icon(Icons.check_circle, color: Colors.greenAccent, size: 16),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text('${b['bets_count']} apuesta(s)', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                   const Text('Apostado', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('$totalBet ', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                        const CoinImage(size: 12),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                   const Text('Ganancia', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          totalWon > 0 ? '+$totalWon ' : '0 ', 
+                                          style: TextStyle(
+                                            color: totalWon > 0 ? Colors.greenAccent : Colors.white30, 
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15
+                                          )
+                                        ),
+                                        const CoinImage(size: 15),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          iconColor: Colors.white54,
+                          collapsedIconColor: Colors.white30,
+                          children: [
+                            const Divider(color: Colors.white12, height: 1),
+                            const SizedBox(height: 8),
+                            const Row(
+                              children: [
+                                Icon(Icons.flag, color: Colors.white38, size: 14),
+                                SizedBox(width: 6),
+                                Text('Apostó a:', style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            ...individualBets.map((bet) {
+                              final racerName = bet['racer_name'] as String? ?? 'Jugador';
+                              final amount = (bet['amount'] as num?)?.toInt() ?? 0;
+                              final bool won = bet['won'] == true;
+                              
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: won ? Colors.green.withOpacity(0.08) : Colors.white.withOpacity(0.04),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: won ? Colors.greenAccent.withOpacity(0.3) : Colors.white.withOpacity(0.06)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        won ? Icons.emoji_events : Icons.directions_run,
+                                        color: won ? Colors.greenAccent : Colors.lightBlueAccent,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          racerName,
+                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                        ),
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '$amount ',
+                                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w600, fontSize: 13),
+                                          ),
+                                          const CoinImage(size: 13),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: won ? Colors.greenAccent.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          won ? 'Ganó' : 'Perdió',
+                                          style: TextStyle(
+                                            color: won ? Colors.greenAccent : Colors.redAccent,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
                       ),
                     );
                  }).toList(),
@@ -594,39 +750,37 @@ class _CompetitionFinancialsWidgetState
   
   Widget _buildFinanceCard({required String title, required String amount, required IconData icon, required Color color, bool showCoin = false}) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: color.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 30),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+          const SizedBox(height: 4),
+          Row(
             children: [
-              Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(amount, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                  if (showCoin) ...[
-                    const SizedBox(width: 4),
-                    const CoinImage(size: 20),
-                  ],
-                ],
+              Flexible(
+                child: Text(amount, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
               ),
+              if (showCoin) ...[
+                const SizedBox(width: 4),
+                const CoinImage(size: 18),
+              ],
             ],
-          )
+          ),
         ],
       ),
     );

@@ -295,15 +295,79 @@ class AdminService {
   }
 
   /// Obtiene los resultados financieros detallados de un evento.
-  /// Agrega:
-  /// 1. Premios distribuidos (Podio) con fallback desde game_players
-  /// 2. Apuestas realizadas (Total y por usuario)
-  /// 3. Ganancias de apuestas (Wallet Ledger)
-  /// 4. Perfiles de usuarios (Nombres y Avatares)
+  /// Usa un RPC SECURITY DEFINER para poder leer prize_distributions
+  /// y wallet_ledger de TODOS los usuarios (bypass RLS).
   Future<Map<String, dynamic>> getDetailedEventFinancials(
       String eventId) async {
     debugPrint(
         '💰 AdminService: Getting DETAILED financial results for $eventId');
+    try {
+      // Use the SECURITY DEFINER RPC that bypasses RLS
+      final response = await _supabase.rpc(
+        'get_admin_event_financials',
+        params: {'p_event_id': eventId},
+      );
+
+      if (response == null) {
+        debugPrint('💰 RPC returned null');
+        return {'pot': 0, 'podium': [], 'bettors': []};
+      }
+
+      final data = Map<String, dynamic>.from(response);
+      debugPrint('💰 RPC success: ${data['success']}');
+
+      if (data['success'] != true) {
+        debugPrint('💰 RPC error: ${data['message']}');
+        // Fallback to client-side queries (old behavior)
+        return await _getDetailedEventFinancialsClientSide(eventId);
+      }
+
+      // Convert podium and bettors from JSONB arrays
+      final List<dynamic> podium = data['podium'] is List
+          ? (data['podium'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : [];
+      final List<dynamic> bettors = data['bettors'] is List
+          ? (data['bettors'] as List).map((e) {
+              final m = Map<String, dynamic>.from(e as Map);
+              // Ensure individual_bets is a proper list of maps
+              if (m['individual_bets'] is List) {
+                m['individual_bets'] = (m['individual_bets'] as List)
+                    .map((ib) => Map<String, dynamic>.from(ib as Map))
+                    .toList();
+              }
+              return m;
+            }).toList()
+          : [];
+
+      debugPrint('💰 Podium: ${podium.length} entries, Bettors: ${bettors.length} entries');
+      for (var p in podium) {
+        debugPrint('  🏆 #${p['rank']} ${p['name']}: premio=${p['amount']}, comision=${p['commission']}');
+      }
+      for (var b in bettors) {
+        debugPrint('  🎲 ${b['name']}: apostado=${b['total_bet']}, ganado=${b['total_won']}, bets=${(b['individual_bets'] as List?)?.length ?? 0}');
+      }
+
+      return {
+        'status': 'completed',
+        'pot': (data['pot'] as num?)?.toInt() ?? 0,
+        'betting_pot': (data['betting_pot'] as num?)?.toInt() ?? 0,
+        'winner_id': data['winner_id'],
+        'podium': podium,
+        'bettors': bettors,
+      };
+    } catch (e) {
+      debugPrint('💰 AdminService: RPC call failed: $e');
+      // Fallback to client-side queries
+      return await _getDetailedEventFinancialsClientSide(eventId);
+    }
+  }
+
+  /// Fallback: client-side queries if the RPC is not yet deployed.
+  /// Limited by RLS - only shows admin's own wallet_ledger/prizes.
+  Future<Map<String, dynamic>> _getDetailedEventFinancialsClientSide(
+      String eventId) async {
+    debugPrint(
+        '💰 AdminService: FALLBACK client-side financial results for $eventId');
     try {
       // 1. Fetch Prize Distributions (Podium)
       List<dynamic> prizeDistributions = [];
@@ -333,62 +397,95 @@ class AdminService {
         debugPrint('💰 Error fetching bets: $e');
       }
 
-      // 3. Fetch Wallet Ledger (Payouts for Bets)
-      // Use description-based filter (more reliable than JSONB metadata->> in PostgREST)
-      List<dynamic> payouts = [];
+      // 3. Fetch Wallet Ledger (All bet-related entries for this event)
+      List<dynamic> allBetLedgerEntries = [];
       try {
-        payouts = await _supabase
+        // Primary: search by event_id in JSONB metadata (most reliable)
+        allBetLedgerEntries = await _supabase
             .from('wallet_ledger')
             .select()
-            .ilike('description', '%Apuesta Ganada%')
             .contains('metadata', {'event_id': eventId});
-        debugPrint('💰 Bet payouts found: ${payouts.length}');
+        // Keep only bet-related entries
+        allBetLedgerEntries = allBetLedgerEntries.where((p) {
+          final meta = p['metadata'];
+          if (meta is Map) {
+            final type = meta['type']?.toString() ?? '';
+            return type == 'bet_payout' || type == 'runner_bet_commission';
+          }
+          return false;
+        }).toList();
+        debugPrint(
+            '💰 Bet ledger entries found: ${allBetLedgerEntries.length}');
       } catch (e) {
         debugPrint(
-            '💰 Error fetching wallet_ledger payouts (trying fallback): $e');
-        // Fallback: try simpler query without metadata filter
+            '💰 Error fetching wallet_ledger via contains: $e');
+        // Fallback: broader description-based query
         try {
-          payouts = await _supabase
+          final allEntries = await _supabase
               .from('wallet_ledger')
               .select()
-              .ilike('description', '%Apuesta Ganada%');
-          // Filter client-side by event_id in metadata
-          payouts = payouts.where((p) {
+              .or('description.ilike.%Apuesta%,description.ilike.%Comision%');
+          allBetLedgerEntries = allEntries.where((p) {
             final meta = p['metadata'];
             if (meta is Map) {
               return meta['event_id']?.toString() == eventId;
             }
             return false;
           }).toList();
-          debugPrint('💰 Bet payouts found (fallback): ${payouts.length}');
+          debugPrint(
+              '💰 Bet ledger entries found (fallback): ${allBetLedgerEntries.length}');
         } catch (e2) {
           debugPrint(
-              '💰 Error fetching wallet_ledger payouts (fallback also failed): $e2');
+              '💰 Error fetching wallet_ledger fallback: $e2');
         }
       }
 
+      // Separate: bet payouts (for bettors) vs runner commissions (for podium winner)
+      final List<dynamic> betPayouts = allBetLedgerEntries.where((p) {
+        final meta = p['metadata'];
+        if (meta is Map) {
+          final type = meta['type']?.toString();
+          return type == 'bet_payout';
+        }
+        return false;
+      }).toList();
+      final List<dynamic> runnerCommissions = allBetLedgerEntries.where((p) {
+        final meta = p['metadata'];
+        if (meta is Map) {
+          final type = meta['type']?.toString();
+          return type == 'runner_bet_commission';
+        }
+        return false;
+      }).toList();
+      debugPrint('💰 Bet payouts: ${betPayouts.length}, Runner commissions: ${runnerCommissions.length}');
+
       // 4. Fetch Event data for pot calculation
       int pot = 0;
+      String? winnerId;
       try {
         final eventData = await _supabase
             .from('events')
-            .select('pot, configured_winners')
+            .select('pot, configured_winners, winner_id')
             .eq('id', eventId)
             .single();
 
         // Use actual pot from DB (accumulated from real payments)
         final dbPot = (eventData['pot'] as num?)?.toInt() ?? 0;
         pot = (dbPot * 0.70).toInt();
-        debugPrint('💰 Pot from DB: $dbPot, distributable (70%): $pot');
+        winnerId = eventData['winner_id'] as String?;
+        debugPrint('💰 Pot from DB: $dbPot, distributable (70%): $pot, winner: $winnerId');
       } catch (e) {
         debugPrint('💰 Error calculating pot: $e');
       }
 
-      // 5. Collect User IDs to fetch profiles
+      // 5. Collect User IDs to fetch profiles (bettors + racers)
       final Set<String> userIds = {};
       for (var p in prizeDistributions) userIds.add(p['user_id'] as String);
-      for (var b in bets) userIds.add(b['user_id'] as String);
-      for (var p in payouts) userIds.add(p['user_id'] as String);
+      for (var b in bets) {
+        userIds.add(b['user_id'] as String);
+        userIds.add(b['racer_id'] as String); // racer profiles needed for bet details
+      }
+      for (var p in allBetLedgerEntries) userIds.add(p['user_id'] as String);
 
       // 6. Fetch Profiles
       Map<String, Map<String, dynamic>> profilesMap = {};
@@ -406,6 +503,14 @@ class AdminService {
       // 7. Build Podium
       List<Map<String, dynamic>> podium = [];
 
+      // Build a map of runner commissions by user_id
+      final Map<String, int> runnerCommissionMap = {};
+      for (var rc in runnerCommissions) {
+        final uid = rc['user_id'] as String;
+        final amount = (rc['amount'] as num).toInt();
+        runnerCommissionMap[uid] = (runnerCommissionMap[uid] ?? 0) + amount;
+      }
+
       if (prizeDistributions.isNotEmpty) {
         // Primary source: prize_distributions table
         for (var p in prizeDistributions) {
@@ -417,6 +522,7 @@ class AdminService {
             'avatar_id': profile['avatar_id'],
             'rank': p['position'],
             'amount': p['amount'],
+            'commission': runnerCommissionMap[uid] ?? 0,
           });
         }
       } else {
@@ -454,7 +560,8 @@ class AdminService {
               'name': profile['name'] ?? 'Usuario',
               'avatar_id': profile['avatar_id'],
               'rank': p['final_placement'],
-              'amount': 0, // Unknown from this source
+              'amount': 0,
+              'commission': runnerCommissionMap[uid] ?? 0,
             });
           }
         } catch (e) {
@@ -462,13 +569,16 @@ class AdminService {
         }
       }
 
-      // 8. Process Bettors
+      // 8. Process Bettors with individual bet details
       final Map<String, Map<String, dynamic>> bettorsMap = {};
 
-      // Sum Bets per user
+      // Sum Bets per user and build individual bet list
       for (var b in bets) {
         final uid = b['user_id'] as String;
         final amount = (b['amount'] as num).toInt();
+        final racerId = b['racer_id'] as String;
+        final racerProfile = profilesMap[racerId];
+        final racerName = racerProfile?['name'] as String? ?? 'Jugador';
 
         if (!bettorsMap.containsKey(uid)) {
           final profile = profilesMap[uid] ?? {};
@@ -479,15 +589,22 @@ class AdminService {
             'total_bet': 0,
             'total_won': 0,
             'bets_count': 0,
+            'individual_bets': <Map<String, dynamic>>[],
           };
         }
 
         bettorsMap[uid]!['total_bet'] += amount;
         bettorsMap[uid]!['bets_count'] += 1;
+        (bettorsMap[uid]!['individual_bets'] as List<Map<String, dynamic>>).add({
+          'racer_id': racerId,
+          'racer_name': racerName,
+          'amount': amount,
+          'won': racerId == winnerId,
+        });
       }
 
-      // Add Payouts from wallet_ledger
-      for (var p in payouts) {
+      // Add Payouts from wallet_ledger (bet_payout entries only)
+      for (var p in betPayouts) {
         final uid = p['user_id'] as String;
         final amount = (p['amount'] as num).toInt();
 
@@ -502,6 +619,7 @@ class AdminService {
             'total_bet': 0,
             'total_won': amount,
             'bets_count': 0,
+            'individual_bets': <Map<String, dynamic>>[],
           };
         }
       }
@@ -516,9 +634,15 @@ class AdminService {
       bettorsList.sort(
           (a, b) => (b['total_won'] as int).compareTo(a['total_won'] as int));
 
+      // 9. Calculate betting pot total (sum of all bets)
+      final int bettingPotTotal = bets.fold<int>(
+          0, (sum, b) => sum + (b['amount'] as num).toInt());
+
       return {
         'status': 'completed',
         'pot': pot,
+        'betting_pot': bettingPotTotal,
+        'winner_id': winnerId,
         'podium': podium,
         'bettors': bettorsList,
       };
