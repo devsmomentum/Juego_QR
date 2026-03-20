@@ -4166,7 +4166,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "dni" "text",
     "phone" "text",
     "email_verified" boolean DEFAULT true,
-    CONSTRAINT "profiles_dni_format_check" CHECK (("dni" ~* '^[VEJPG][0-9]+$'::"text")),
+    CONSTRAINT "profiles_dni_format_check" CHECK (("dni" ~* '^[A-Z0-9]+$'::"text")),
     CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['user'::"text", 'admin'::"text", 'user_staff'::"text"])))
 );
 

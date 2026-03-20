@@ -74,14 +74,20 @@ serve(async (req) => {
 
       // Check if user is banned
       if (data?.user?.id) {
-        const { data: profile, error: profileError } = await supabaseClient
-          .from("profiles")
-          .select("status")
-          .eq("id", data.user.id)
-          .single();
+        let profile = null;
+        try {
+          const { data: fetchedProfile, error: profileError } = await supabaseClient
+            .from("profiles")
+            .select("status")
+            .eq("id", data.user.id)
+            .single();
 
-        if (profileError) {
-          console.error("Error checking profile status:", profileError);
+          if (profileError) {
+            console.error("Error checking profile status:", profileError);
+          }
+          profile = fetchedProfile;
+        } catch (error: any) {
+          console.error("Critical error in edge function:", error);
         }
 
         if (profile && profile.status === "banned") {
@@ -143,34 +149,22 @@ serve(async (req) => {
         );
       }
 
-      // Sanitize inputs removing non-alphanumeric characters (dots, spaces, hyphens)
-      // except for the V/E prefix which is expected in the regex if not separated
+      // Sanitize inputs removing non-alphanumeric characters (dots, spaces, hyphens, parentheses)
+      const sanitize = (val: string) => val.replace(/[.\s\-()]/g, "").trim();
+      let sanitizedPhone = sanitize(phone || "");
+      const sanitizedCedula = sanitize(cedula || "").toUpperCase();
 
-      let sanitizedCedula = cedula;
-      if (cedula) {
-        // Remove dots, spaces, hyphens
-        sanitizedCedula = cedula.replace(/[\.\-\s]/g, "").toUpperCase();
-      }
-
-      let sanitizedPhone = phone;
-      if (phone) {
-        // Eliminar espacios, guiones y puntos pero conservar el "+" inicial
-        sanitizedPhone = phone.replace(/[\.\-\s]/g, "");
-      }
-
-      // Validar formato de cédula venezolana (V/E + 6-9 dígitos)
+      // VALIDATIONS
+      const cedulaRegex = /^[A-Z0-9]{5,20}$/i; // Más flexible para internacional
       if (sanitizedCedula) {
-        const cedulaRegex = /^[VE]\d{6,9}$/i;
         if (!cedulaRegex.test(sanitizedCedula)) {
           throw new Error(
-            "Formato de cédula inválido. Usa V12345678 o E12345678",
+            "Formato de identificación inválido. Debe tener entre 5 y 20 caracteres alfanuméricos.",
           );
         }
       }
 
       // Validar formato de teléfono E.164: +[código país][número local]
-      // Acepta formato internacional (+58412..., +1202..., +3491..., etc.)
-      // y también el formato venezolano legacy (04121234567)
       if (sanitizedPhone) {
         // E.164: "+" seguido de 7 a 15 dígitos
         const e164Regex = /^\+\d{7,15}$/;
@@ -891,9 +885,10 @@ serve(async (req) => {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Critical error in edge function:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

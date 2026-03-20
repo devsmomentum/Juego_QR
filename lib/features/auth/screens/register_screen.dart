@@ -45,8 +45,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _acceptedTerms = false;
   bool _isRegistering = false;
 
-  // Opciones de nacionalidad
-  final List<String> _nationalityTypes = ['V', 'E'];
+  // Opciones de nacionalidad: V (Venezolano), E (Extranjero), P (Pasaporte/Internacional)
+  final List<String> _nationalityTypes = ['V', 'E', 'P'];
 
   // Lista básica de palabras prohibidas (se puede expandir)
   final List<String> _bannedWords = [
@@ -478,22 +478,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                             color: Colors.white),
                                         keyboardType: TextInputType.number,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter
-                                              .digitsOnly,
-                                          LengthLimitingTextInputFormatter(9),
+                                           FilteringTextInputFormatter
+                                               .allow(RegExp(r'[0-9]')),
+                                           LengthLimitingTextInputFormatter(15),
                                         ],
                                         decoration: const InputDecoration(
-                                          labelText: 'CÉDULA/PASAPORTE',
+                                          labelText: 'CÉDULA / PASAPORTE',
                                           prefixIcon:
                                               Icon(Icons.badge_outlined),
                                           hintText: '12345678',
                                         ),
                                         validator: (value) {
-                                          if (value == null || value.isEmpty)
-                                            return 'Ingresa tu cédula';
-                                          if (value.length < 6)
-                                            return 'Mínimo 6 dígitos';
-                                          return null;
+                                           if (value == null || value.isEmpty)
+                                             return 'Ingresa tu identificación';
+                                           if (value.length < 5)
+                                             return 'Mínimo 5 caracteres';
+                                           return null;
                                         },
                                       ),
                                     ),
