@@ -76,18 +76,18 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
   InputDecoration _buildInputDecoration(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      prefixIcon: icon != null ? Icon(icon, color: AppTheme.primaryPurple) : null,
+      labelStyle: const TextStyle(color: Colors.black54),
+      prefixIcon: icon != null ? Icon(icon, color: AppTheme.lGoldText) : null,
       enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(12),
       ),
       focusedBorder: const OutlineInputBorder(
-        borderSide: BorderSide(color: AppTheme.primaryPurple),
-        borderRadius: BorderRadius.all(Radius.circular(8)),
+        borderSide: BorderSide(color: AppTheme.lGoldText, width: 2),
+        borderRadius: BorderRadius.all(Radius.circular(12)),
       ),
       filled: true,
-      fillColor: Colors.black.withOpacity(0.2),
+      fillColor: Colors.black.withOpacity(0.02),
     );
   }
 
@@ -270,20 +270,21 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
     final isEdit = widget.clue != null;
 
     return AlertDialog(
-      backgroundColor: AppTheme.cardBg,
+      backgroundColor: AppTheme.lSurface1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(isEdit ? "Editar Pista / Minijuego" : "Agregar Nueva Pista",
-          style: const TextStyle(color: Colors.white)),
+          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w900)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<PuzzleType>(
               value: _selectedType,
-              dropdownColor: AppTheme.darkBg,
+              dropdownColor: AppTheme.lSurface1,
               isExpanded: true,
               decoration:
                   _buildInputDecoration('Tipo de Minijuego', icon: Icons.games),
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               items: PuzzleType.values.map((type) {
                 return DropdownMenuItem(
                   value: type,
@@ -297,9 +298,7 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
                 if (val != null) {
                   setState(() {
                     _selectedType = val;
-                    if (_questionController.text.isEmpty) {
-                      _questionController.text = val.defaultQuestion;
-                    }
+                    _questionController.text = val.defaultQuestion;
                   });
                 }
               },
@@ -307,39 +306,39 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _titleController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: _buildInputDecoration('Título'),
             ),
             const SizedBox(height: 10),
             TextFormField(
               controller: _questionController,
               maxLines: 2,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: _buildInputDecoration('Pregunta / Instrucción'),
             ),
             const SizedBox(height: 10),
             if (!_selectedType.isAutoValidation)
               TextFormField(
                 controller: _answerController,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.black87),
                 decoration: _buildInputDecoration('Respuesta Correcta'),
               ),
             const SizedBox(height: 10),
             TextFormField(
               controller: _xpController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: _buildInputDecoration('Puntos XP'),
             ),
             const SizedBox(height: 10),
 
             const Text("📍 Geolocalización (Opcional)",
                 style: TextStyle(
-                    color: AppTheme.accentGold, fontWeight: FontWeight.bold)),
+                    color: AppTheme.lGoldText, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             TextFormField(
               controller: _hintController,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: _buildInputDecoration(
                   'Pista de Ubicación QR (ej: Detrás del árbol)',
                   icon: Icons.location_on),
@@ -352,7 +351,7 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
                     controller: _latController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.black87),
                     decoration: _buildInputDecoration('Latitud'),
                     onChanged: (v) => _latitude = double.tryParse(v),
                   ),
@@ -363,7 +362,7 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
                     controller: _longController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.black87),
                     decoration: _buildInputDecoration('Longitud'),
                     onChanged: (v) => _longitude = double.tryParse(v),
                   ),
@@ -402,14 +401,15 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
           ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text("Cancelar"),
+          child: const Text("Cancelar", style: TextStyle(color: Colors.black54)),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryPurple),
+              backgroundColor: AppTheme.lGoldAction,
+              foregroundColor: Colors.black),
           onPressed: _handleSave,
           child: Text(isEdit ? "Guardar" : "Agregar",
-              style: const TextStyle(color: Colors.white)),
+              style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );
