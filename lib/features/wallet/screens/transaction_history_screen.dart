@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/glitch_text.dart';
+import '../../../shared/widgets/loading_overlay.dart';
 import '../models/transaction_item.dart';
 import '../repositories/transaction_repository.dart';
 import '../providers/wallet_provider.dart'; // Keep for balance refresh only
@@ -289,12 +290,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                   
                                   if (confirm != true) return;
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Cancelando orden...')),
-                                  );
+                                  LoadingOverlay.show(context, message: 'Cancelando orden...');
                                   
                                   try {
                                     final success = await _repository.cancelOrder(item.id);
+                                    if (mounted) LoadingOverlay.hide(context);
                                     if (mounted) {
                                        ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
@@ -303,6 +303,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                         ),
                                       );
                                     }
+                                  } catch (_) {
+                                    if (mounted) LoadingOverlay.hide(context);
                                   } finally {
                                     _loadData();
                                   }

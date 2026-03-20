@@ -443,17 +443,23 @@ class _WalletScreenState extends State<WalletScreen> {
                                             );
                                             
                                             if (confirm != true) return;
- 
-                                            setState(() => _isLoadingHistory = true);
-                                            final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
-                                                  backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
-                                                ),
-                                              );
-                                              _loadRecentTransactions();
+
+                                            LoadingOverlay.show(context, message: 'Cancelando orden...');
+                                            try {
+                                              final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
+                                              if (mounted) LoadingOverlay.hide(context);
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
+                                                    backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                                  ),
+                                                );
+                                              }
+                                            } catch (_) {
+                                              if (mounted) LoadingOverlay.hide(context);
+                                            } finally {
+                                              if (mounted) _loadRecentTransactions();
                                             }
                                           }
                                         : null,

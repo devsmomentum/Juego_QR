@@ -74,35 +74,7 @@ serve(async (req) => {
             throw new Error("Server Misconfiguration: Missing PAGO_PAGO_API_KEY")
         }
 
-        const cancelUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_cancel_order`
-
-        console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago`)
-
-        // 3. Cancel on Provider (PUT per documentation)
-        const response = await fetch(cancelUrl, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'pago_pago_api': pagoApiKey
-            },
-            body: JSON.stringify({ order_id: externalId })
-        })
-
-        const data = await response.json()
-
-        if (!response.ok) {
-            // If PAP says it's already cancelled, that's fine — just update locally
-            const errMsg = data?.message || data?.error || ''
-            const alreadyCancelled = errMsg.toLowerCase().includes('already cancelled')
-            
-            if (!alreadyCancelled) {
-                console.error("Pago a Pago cancel failed:", data)
-                throw new Error(`Error de pasarela: ${errMsg || response.status}`)
-            }
-            console.log(`[api_cancel_order] Order already cancelled on PAP, syncing local DB`)
-        }
-
-        // 4. Update Local DB Status to 'cancelled' (merge extra_data to preserve existing fields)
+        // 3. Optimistic: Mark as cancelled in DB FIRST so client gets fast response
         const existingExtra = order.extra_data ?? {}
         const { error: updateError } = await supabaseAdmin
             .from('clover_orders')
@@ -112,18 +84,66 @@ serve(async (req) => {
                 extra_data: { 
                     ...existingExtra,
                     cancelled_at: new Date().toISOString(),
-                    cancellation_response: data 
                 }
             })
             .eq('id', order_id)
 
         if (updateError) {
             console.error("Failed to update order status locally:", updateError)
-            throw new Error("Orden cancelada en pasarela pero error actualizando estado local")
+            throw new Error("Error actualizando estado de la orden")
         }
-        
-        console.log(`Order ${order_id} marked as cancelled in DB.`)
 
+        console.log(`Order ${order_id} marked as cancelled in DB (optimistic).`)
+
+        // 4. Fire-and-forget: Cancel on Provider (best-effort, don't block response)
+        const cancelUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_cancel_order`
+        console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago (fire-and-forget)`)
+
+        // Don't await — let provider call run in background while we return 200 immediately
+        fetch(cancelUrl, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'pago_pago_api': pagoApiKey
+            },
+            body: JSON.stringify({ order_id: externalId }),
+            signal: AbortSignal.timeout(10_000),
+        })
+        .then(async (response) => {
+            const data = await response.json()
+            if (!response.ok) {
+                const errMsg = data?.message || data?.error || ''
+                if (!errMsg.toLowerCase().includes('already cancelled')) {
+                    console.warn("[api_cancel_order] Provider cancel failed:", data)
+                }
+            }
+            await supabaseAdmin
+                .from('clover_orders')
+                .update({
+                    extra_data: {
+                        ...existingExtra,
+                        cancelled_at: new Date().toISOString(),
+                        cancellation_response: data,
+                    }
+                })
+                .eq('id', order_id)
+            console.log(`[api_cancel_order] Provider cancel synced for ${order_id}`)
+        })
+        .catch((providerError) => {
+            console.warn(`[api_cancel_order] Provider cancel failed/timed out for ${order_id}:`, providerError)
+            supabaseAdmin
+                .from('clover_orders')
+                .update({
+                    extra_data: {
+                        ...existingExtra,
+                        cancelled_at: new Date().toISOString(),
+                        provider_cancel_error: String(providerError),
+                    }
+                })
+                .eq('id', order_id)
+        })
+
+        // Return immediately — DB is already updated
         return new Response(JSON.stringify({ success: true, message: "Orden cancelada exitosamente" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
