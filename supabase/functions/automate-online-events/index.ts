@@ -237,9 +237,9 @@ serve(async (req: Request) => {
         console.log(`Config: Players(${minPlayers}-${maxPlayers}), Games(${minGames}-${maxGames}), Fee(${minFee}-${maxFee} step ${feeStep})`);
         console.log(`Generated: ${playerCount} players, ${gameCount} games, ${entryFee} entry fee`);
 
-        const easyPool = ['slidingPuzzle', 'trueFalse', 'virusTap', 'flags'];
-        const mediumPool = ['memorySequence', 'emojiMovie', 'droneDodge', 'missingOperator', 'capitalCities'];
-        const hardPool = ['tetris', 'minesweeper', 'blockFill', 'holographicPanels', 'percentageCalculation', 'drinkMixer'];
+        const easyPool = ['slidingPuzzle', 'trueFalse', 'virusTap'];
+        const mediumPool = ['memorySequence', 'emojiMovie', 'droneDodge', 'capitalCities'];
+        const hardPool = ['tetris', 'minesweeper', 'blockFill', 'holographicPanels', 'drinkMixer'];
 
         const selectedPuzzles: string[] = [];
         const targetEasy = Math.min(easyPool.length, Math.ceil(gameCount * 0.4));
