@@ -52,17 +52,17 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: AppTheme.lSurface1,
+      fillColor: AppTheme.cardBg,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.1)),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.1)),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
       ),
-      labelStyle: const TextStyle(color: Colors.black54),
-      prefixIcon: icon != null ? Icon(icon, color: AppTheme.lGoldText) : null,
+      labelStyle: const TextStyle(color: Colors.white54),
+      prefixIcon: icon != null ? Icon(icon, color: AppTheme.accentGold) : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
@@ -134,11 +134,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
   Future<void> _fetchLeaderboard() async {
     try {
-      // 1. Fetch ranking from game_players (ordered by clues DESC, then arrival ASC)
+      // Fetch ranking from game_players with profile data via PostgREST join
       final playersData = await Supabase.instance.client
           .from('game_players')
           .select(
-              'user_id, completed_clues:completed_clues_count, last_active, coins, lives')
+              'user_id, completed_clues:completed_clues_count, last_active, coins, lives, profiles(name, email, avatar_id)')
           .eq('event_id', widget.event.id)
           .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
@@ -149,24 +149,18 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         return;
       }
 
-      // 2. Fetch profile data for these users
-      final userIds = playersData.map((e) => e['user_id'] as String).toList();
-      final profilesData = await Supabase.instance.client
-          .from('profiles')
-          .select('id, name, avatar_id')
-          .inFilter('id', userIds);
-
-      final Map<String, dynamic> profilesMap = {
-        for (var p in profilesData) p['id']: p
-      };
-
-      // 3. Combine data
-      final enrichedData = playersData.map((p) {
-        final profile = profilesMap[p['user_id']] ?? {};
+      // Flatten joined profile data into each row
+      final enrichedData = (playersData as List).map((p) {
+        final profile = p['profiles'];
         return {
-          ...p,
-          'name': profile['name'] ?? 'Usuario',
-          'avatar_id': profile['avatar_id'],
+          'user_id': p['user_id'],
+          'completed_clues': p['completed_clues'],
+          'last_active': p['last_active'],
+          'coins': p['coins'],
+          'lives': p['lives'],
+          'name': (profile is Map ? profile['name'] : null) ?? 'Usuario',
+          'email': profile is Map ? profile['email'] : null,
+          'avatar_id': profile is Map ? profile['avatar_id'] : null,
         };
       }).toList();
 
@@ -1124,16 +1118,15 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.lSurface0,
+      backgroundColor: AppTheme.darkBg,
       appBar: AppBar(
-        backgroundColor: AppTheme.lSurface1,
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.05),
-        iconTheme: const IconThemeData(color: Colors.black87),
+        backgroundColor: AppTheme.cardBg,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           widget.event.title,
           style: const TextStyle(
-            color: Colors.black87,
+            color: Colors.white,
             fontWeight: FontWeight.w900,
           ),
           overflow: TextOverflow.ellipsis,
@@ -1262,7 +1255,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black54),
+            icon: const Icon(Icons.refresh, color: Colors.white54),
             onPressed: () {
               setState(() {});
               Provider.of<GameRequestProvider>(context, listen: false)
@@ -1273,9 +1266,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppTheme.lGoldText,
-          unselectedLabelColor: Colors.black45,
-          indicatorColor: AppTheme.lGoldText,
+          labelColor: AppTheme.accentGold,
+          unselectedLabelColor: Colors.white38,
+          indicatorColor: AppTheme.accentGold,
           indicatorWeight: 3,
           tabs: const [
             Tab(text: "Detalles"),
@@ -1287,7 +1280,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ),
       ),
       body: Container(
-        color: AppTheme.lSurface0,
+        color: AppTheme.darkBg,
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -1315,7 +1308,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
     if (_tabController.index == 2) {
       return FloatingActionButton(
-        backgroundColor: AppTheme.lBrandMain,
+        backgroundColor: AppTheme.primaryPurple,
         onPressed: () async {
           final result = await showDialog(
             context: context,
@@ -1331,7 +1324,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       );
     } else if (_tabController.index == 3) {
       return FloatingActionButton(
-        backgroundColor: AppTheme.lGoldAction,
+        backgroundColor: AppTheme.accentGold,
         onPressed: () => _showAddStoreDialog(),
         child: const Icon(Icons.store, color: Colors.black),
       );
@@ -1344,16 +1337,16 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
     final inputDecoration = InputDecoration(
       filled: true,
-      fillColor: AppTheme.lSurface1,
+      fillColor: AppTheme.cardBg,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.1)),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.1)),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
       ),
-      labelStyle: const TextStyle(color: Colors.black54),
+      labelStyle: const TextStyle(color: Colors.white54),
     );
 
     return SingleChildScrollView(
@@ -1408,21 +1401,21 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      AppTheme.lGoldAction.withOpacity(0.1),
-                      AppTheme.lGoldAction.withOpacity(0.02)
+                      AppTheme.accentGold.withOpacity(0.1),
+                      AppTheme.accentGold.withOpacity(0.02)
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
                   border:
-                      Border.all(color: AppTheme.lGoldAction.withOpacity(0.3)),
+                      Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
                 ),
                 child: Column(
                   children: [
                     const Text('POTE ACUMULADO',
                         style: TextStyle(
-                            color: AppTheme.lGoldText,
+                            color: AppTheme.accentGold,
                             fontSize: 12,
                             letterSpacing: 2,
                             fontWeight: FontWeight.w900)),
@@ -1432,7 +1425,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                       children: [
                         Text('${_currentPot.toStringAsFixed(0)} ',
                             style: const TextStyle(
-                                color: Colors.black87,
+                                color: Colors.white,
                                 fontSize: 32,
                                 fontWeight: FontWeight.w900)),
                         const CoinImage(size: 28),
@@ -1440,7 +1433,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     ),
                     const Text('Total Acumulado en Base de Datos',
                         style: TextStyle(
-                            color: Colors.black38, fontSize: 12)),
+                            color: Colors.white38, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1512,7 +1505,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               initialValue: _title,
               readOnly: _isEventActive,
               style: TextStyle(
-                  color: _isEventActive ? Colors.black54 : Colors.black87),
+                  color: _isEventActive ? Colors.white38 : Colors.white),
               decoration: inputDecoration.copyWith(labelText: 'Título'),
               validator: (v) => v!.isEmpty ? 'Requerido' : null,
               onSaved: (v) => _title = v!,
@@ -1523,7 +1516,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               readOnly: _isEventActive,
               maxLines: 3,
               style: TextStyle(
-                  color: _isEventActive ? Colors.black54 : Colors.black87),
+                  color: _isEventActive ? Colors.white38 : Colors.white),
               decoration: inputDecoration.copyWith(labelText: 'Descripción'),
               validator: (v) => v!.isEmpty ? 'Requerido' : null,
               onSaved: (v) => _description = v!,
@@ -1536,10 +1529,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 value: _sponsorId,
                 decoration: inputDecoration.copyWith(
                   labelText: 'Patrocinador (Opcional)',
-                  prefixIcon: const Icon(Icons.star_border, color: Colors.black45),
+                  prefixIcon: const Icon(Icons.star_border, color: Colors.white38),
                 ),
-                dropdownColor: AppTheme.lSurface1,
-                style: const TextStyle(color: Colors.black87),
+                dropdownColor: AppTheme.cardBg,
+                style: const TextStyle(color: Colors.white),
                 items: [
                   const DropdownMenuItem<String>(
                     value: null,
@@ -1565,7 +1558,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     initialValue: _pin,
                     readOnly: _isEventActive,
                     style: TextStyle(
-                        color: _isEventActive ? Colors.black54 : Colors.black87),
+                        color: _isEventActive ? Colors.white38 : Colors.white),
                     decoration:
                         inputDecoration.copyWith(labelText: 'PIN (6 dígitos)'),
                     keyboardType: TextInputType.number,
@@ -1584,14 +1577,14 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     height: 56,
                     width: 56,
                     decoration: BoxDecoration(
-                      color: AppTheme.lGoldAction.withOpacity(0.1),
+                      color: AppTheme.accentGold.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: AppTheme.lGoldAction.withOpacity(0.3)),
+                          color: AppTheme.accentGold.withOpacity(0.3)),
                     ),
                     child: IconButton(
                       icon:
-                          const Icon(Icons.qr_code, color: AppTheme.lGoldText),
+                          const Icon(Icons.qr_code, color: AppTheme.accentGold),
                       tooltip: "Ver QR del Evento",
                       onPressed: () {
                         if (_pin.length == 6) {
@@ -1639,7 +1632,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     initialValue: _maxParticipants.toString(),
                     readOnly: _isEventActive,
                     style: TextStyle(
-                        color: _isEventActive ? Colors.black54 : Colors.black87),
+                        color: _isEventActive ? Colors.white38 : Colors.white),
                     decoration:
                         inputDecoration.copyWith(labelText: 'Max. Jugadores'),
                     keyboardType: TextInputType.number,
@@ -1658,12 +1651,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     initialValue: _entryFee == 0 ? '' : _entryFee.toString(),
                     readOnly: _isEventActive,
                     style: TextStyle(
-                        color: _isEventActive ? Colors.black54 : Colors.black87),
+                        color: _isEventActive ? Colors.white38 : Colors.white),
                     decoration: inputDecoration.copyWith(
                       labelText: 'Precio Entrada',
                       suffix: const CoinImage(size: 16),
                       helperText: '0 para GRATIS',
-                      helperStyle: const TextStyle(color: Colors.black38),
+                      helperStyle: const TextStyle(color: Colors.white38),
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -1677,7 +1670,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     initialValue: _betTicketPrice.toString(),
                     readOnly: _isEventActive,
                     style: TextStyle(
-                        color: _isEventActive ? Colors.black54 : Colors.black87),
+                        color: _isEventActive ? Colors.white38 : Colors.white),
                     decoration: inputDecoration.copyWith(
                       labelText: 'Precio Apuesta',
                       suffix: const CoinImage(size: 16),
@@ -1697,20 +1690,20 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
-                    color: AppTheme.lGoldText)),
+                    color: AppTheme.accentGold)),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: AppTheme.lSurface1,
+                color: AppTheme.cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black.withOpacity(0.05)),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("Cantidad de Ganadores:",
-                      style: TextStyle(color: Colors.black87)),
+                      style: TextStyle(color: Colors.white)),
                   SegmentedButton<int>(
                     segments: const [
                       ButtonSegment<int>(value: 1, label: Text("1")),
@@ -1729,7 +1722,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                         (Set<MaterialState> states) {
                           if (states.contains(MaterialState.selected)) {
-                            return AppTheme.lGoldAction;
+                            return AppTheme.accentGold;
                           }
                           return Colors.transparent;
                         },
@@ -1739,7 +1732,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                         if (states.contains(MaterialState.selected)) {
                           return Colors.black;
                         }
-                        return Colors.black54;
+                        return Colors.white54;
                       }),
                     ),
                   ),
@@ -1753,14 +1746,14 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
-                    color: AppTheme.lGoldText)),
+                    color: AppTheme.accentGold)),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.lSurface1,
+                color: AppTheme.cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black.withOpacity(0.05)),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
               ),
               child: Column(
                 children: [
@@ -1772,8 +1765,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                           icon: const Icon(Icons.shopping_bag_outlined),
                           label: const Text("Precios Jugadores"),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.black87,
-                            side: const BorderSide(color: Colors.black12),
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white24),
                           ),
                         ),
                       ),
@@ -1784,8 +1777,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                           icon: const Icon(Icons.visibility_outlined),
                           label: const Text("Precios Espectadores"),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.lGoldText,
-                            side: const BorderSide(color: AppTheme.lGoldText),
+                            foregroundColor: AppTheme.accentGold,
+                            side: const BorderSide(color: AppTheme.accentGold),
                           ),
                         ),
                       ),
@@ -1794,7 +1787,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                   const SizedBox(height: 12),
                   const Text(
                     "Estos precios sobrescriben los valores por defecto de los poderes en este evento.",
-                    style: TextStyle(color: Colors.black45, fontSize: 12),
+                    style: TextStyle(color: Colors.white38, fontSize: 12),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -1806,7 +1799,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               initialValue: _clue,
               readOnly: _isEventActive,
               style: TextStyle(
-                  color: _isEventActive ? Colors.black54 : Colors.black87),
+                  color: _isEventActive ? Colors.white38 : Colors.white),
               decoration: inputDecoration.copyWith(
                   labelText: 'Pista de Victoria / Final'),
               onSaved: (v) => _clue = v!,
@@ -1819,7 +1812,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     controller: _locationController,
                     readOnly: _isEventActive,
                     style: TextStyle(
-                        color: _isEventActive ? Colors.black54 : Colors.black87),
+                        color: _isEventActive ? Colors.white38 : Colors.white),
                     decoration: inputDecoration.copyWith(
                         labelText: 'Nombre de Ubicación'),
                     validator: (v) => v!.isEmpty ? 'Requerido' : null,
@@ -1862,11 +1855,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                         builder: (context, child) {
                           return Theme(
                             data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.light(
-                                primary: AppTheme.lBrandMain,
-                                onPrimary: Colors.white,
-                                surface: AppTheme.lSurface1,
-                                onSurface: Colors.black,
+                              colorScheme: const ColorScheme.dark(
+                                primary: AppTheme.accentGold,
+                                onPrimary: Colors.black,
+                                surface: AppTheme.cardBg,
+                                onSurface: Colors.white,
                               ),
                             ),
                             child: child!,
@@ -1884,18 +1877,18 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                             return Theme(
                               data: Theme.of(context).copyWith(
                                 timePickerTheme: TimePickerThemeData(
-                                  backgroundColor: AppTheme.lSurface1,
-                                  hourMinuteTextColor: Colors.black,
-                                  dayPeriodTextColor: Colors.black,
-                                  dialHandColor: AppTheme.lBrandMain,
-                                  dialBackgroundColor: AppTheme.lSurface0,
-                                  entryModeIconColor: AppTheme.lGoldText,
+                                  backgroundColor: AppTheme.cardBg,
+                                  hourMinuteTextColor: Colors.white,
+                                  dayPeriodTextColor: Colors.white,
+                                  dialHandColor: AppTheme.accentGold,
+                                  dialBackgroundColor: AppTheme.darkBg,
+                                  entryModeIconColor: AppTheme.accentGold,
                                 ),
-                                colorScheme: const ColorScheme.light(
-                                  primary: AppTheme.lBrandMain,
-                                  onPrimary: Colors.white,
-                                  surface: AppTheme.lSurface1,
-                                  onSurface: Colors.black,
+                                colorScheme: const ColorScheme.dark(
+                                  primary: AppTheme.accentGold,
+                                  onPrimary: Colors.black,
+                                  surface: AppTheme.cardBg,
+                                  onSurface: Colors.white,
                                 ),
                               ),
                               child: child!,
@@ -1922,7 +1915,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 child: Text(
                   "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}   ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}",
                   style: const TextStyle(
-                      color: Colors.black87, fontWeight: FontWeight.bold),
+                      color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -1957,34 +1950,16 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   Widget _buildParticipantsTab() {
     return Consumer<GameRequestProvider>(
       builder: (context, provider, _) {
-        // Obtenemos el proveedor de jugadores para verificar estados
-        final playerProvider = Provider.of<PlayerProvider>(context);
+        // Pending requests from game_requests (for approval workflow)
+        var pending = provider.requests
+            .where((r) =>
+                r.eventId.toString() == widget.event.id.toString() &&
+                r.isPending)
+            .toList();
 
-        // ✅ DEBUG: Log total requests en el provider
-        debugPrint(
-            '[PARTICIPANTS_TAB] 📊 Total requests in provider: ${provider.requests.length}');
-        debugPrint(
-            '[PARTICIPANTS_TAB] 🎯 Current event ID: "${widget.event.id}" (Type: ${widget.event.id.runtimeType})');
-
-        // ✅ ROBUST FILTER: Usar toString() para comparación segura
-        final allRequests = provider.requests.where((r) {
-          final match = r.eventId.toString() == widget.event.id.toString();
-          if (!match && provider.requests.indexOf(r) < 3) {
-            // Log primeros 3 para no saturar
-            debugPrint(
-                '[PARTICIPANTS_TAB] 🔍 Comparing: r.eventId="${r.eventId}" (${r.eventId.runtimeType}) vs widget.event.id="${widget.event.id}" => Match: $match');
-          }
-          return match;
-        }).toList();
-
-        debugPrint(
-            '[PARTICIPANTS_TAB] ✅ Filtered requests for this event: ${allRequests.length}');
-
-        var approved = allRequests.where((r) => r.isApproved).toList();
-        var pending = allRequests.where((r) => r.isPending).toList();
-
-        debugPrint(
-            '[PARTICIPANTS_TAB] 📋 Approved: ${approved.length}, Pending: ${pending.length}');
+        // Registered participants from game_players (via _leaderboardData)
+        // This is the source of truth — covers all flows (free, paid, on_site)
+        var participants = List<Map<String, dynamic>>.from(_leaderboardData);
 
         // --- SEARCH FILTER ---
         if (_searchQuery.isNotEmpty) {
@@ -1994,59 +1969,36 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                   (r.playerName.toLowerCase().contains(query)) ||
                   (r.playerEmail?.toLowerCase().contains(query) ?? false))
               .toList();
-          approved = approved
-              .where((r) =>
-                  (r.playerName.toLowerCase().contains(query)) ||
-                  (r.playerEmail?.toLowerCase().contains(query) ?? false))
+          participants = participants
+              .where((p) =>
+                  ((p['name'] as String?)?.toLowerCase().contains(query) ?? false) ||
+                  ((p['email'] as String?)?.toLowerCase().contains(query) ?? false))
               .toList();
         }
 
-        if (allRequests.isEmpty) {
-          debugPrint(
-              '[PARTICIPANTS_TAB] ⚠️ No requests for this event - showing empty state');
+        if (pending.isEmpty && participants.isEmpty) {
           return const Center(
               child: Text("No hay participantes ni solicitudes.",
                   style: TextStyle(color: Colors.white54)));
         }
 
-        // --- SORT LOGIC FIX ---
-        // 0. Identify banned/suspended players (USING LOCAL STATUS NOW)
+        // --- SORT: banned/suspended go to bottom ---
         final bannedIds = _playerStatuses.entries
             .where((e) => e.value == 'banned' || e.value == 'suspended')
             .map((e) => e.key)
             .toSet();
 
-        // 1. Build a 'virtual' leaderboard excluding banned players for ranking calculation
-        final activeLeaderboard = _leaderboardData.where((entry) {
-          final userId = entry['user_id'];
-          return !bannedIds.contains(userId);
-        }).toList();
+        final activeLeaderboard = participants
+            .where((entry) => !bannedIds.contains(entry['user_id']))
+            .toList();
 
-        // 2. Convert to List explicitly to avoid map type issues
-        final sortedApproved = approved.toList();
-
-        // 3. Sort: Non-banned first (ordered by rank), then undefined/banned at bottom
-        sortedApproved.sort((a, b) {
-          final isBannedA = bannedIds.contains(a.playerId);
-          final isBannedB = bannedIds.contains(b.playerId);
-
-          // Banned users go to bottom
+        participants.sort((a, b) {
+          final isBannedA = bannedIds.contains(a['user_id']);
+          final isBannedB = bannedIds.contains(b['user_id']);
           if (isBannedA && !isBannedB) return 1;
           if (!isBannedA && isBannedB) return -1;
-          if (isBannedA && isBannedB)
-            return 0; // Keep relative order among banned
-
-          // Both active: compare using rank in activeLeaderboard
-          final indexA =
-              activeLeaderboard.indexWhere((l) => l['user_id'] == a.playerId);
-          final indexB =
-              activeLeaderboard.indexWhere((l) => l['user_id'] == b.playerId);
-
-          // If not in leaderboard, put at bottom of active users
-          final rankA = indexA == -1 ? 9999 : indexA;
-          final rankB = indexB == -1 ? 9999 : indexB;
-
-          return rankA.compareTo(rankB);
+          // Both same ban state: keep original leaderboard order
+          return 0;
         });
 
         return ListView(
@@ -2056,11 +2008,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             Container(
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: AppTheme.lSurface1,
+                color: AppTheme.cardBg,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withOpacity(0.2),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -2068,14 +2020,14 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               ),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Buscar por nombre o email...',
-                  hintStyle: const TextStyle(color: Colors.black38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.black45),
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  prefixIcon: const Icon(Icons.search, color: Colors.white38),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.black45),
+                          icon: const Icon(Icons.clear, color: Colors.white38),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -2103,7 +2055,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                     child: Text("Solicitudes Pendientes",
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: AppTheme.lGoldText,
+                            color: AppTheme.accentGold,
                             fontSize: 18,
                             fontWeight: FontWeight.w900)),
                   ),
@@ -2125,52 +2077,51 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               ...pending.map((req) => RequestTile(
                     request: req,
                     currentStatus:
-                        _playerStatuses[req.playerId], // Pass local status
+                        _playerStatuses[req.playerId],
                     onBanToggled: () =>
-                        _fetchPlayerStatuses(), // Refresh on ban/unban
+                        _fetchPlayerStatuses(),
                   )),
               const SizedBox(height: 20),
             ],
 
             const Text("Participantes Inscritos (Ranking)",
                 style: TextStyle(
-                    color: AppTheme.lGoldText,
+                    color: AppTheme.accentGold,
                     fontSize: 18,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
-            if (sortedApproved.isEmpty)
+            if (participants.isEmpty)
               const Text(
                   "Nadie inscrito aún.",
-                  style: TextStyle(color: Colors.black38))
+                  style: TextStyle(color: Colors.white38))
             else
-              // 4. Map safely to Widgets
-              ...sortedApproved.map((req) {
-                 final isBanned = bannedIds.contains(req.playerId);
-                 final index = !isBanned
+              ...participants.map((player) {
+                final userId = player['user_id'] as String;
+                final isBanned = bannedIds.contains(userId);
+                final activeIndex = !isBanned
                     ? activeLeaderboard
-                        .indexWhere((l) => l['user_id'] == req.playerId)
+                        .indexWhere((l) => l['user_id'] == userId)
                     : -1;
-                 final rawIndex = _leaderboardData
-                    .indexWhere((l) => l['user_id'] == req.playerId);
-                 final progress = rawIndex != -1
-                    ? _leaderboardData[rawIndex]['completed_clues'] as int
-                    : 0;
-                 final playerCoins = rawIndex != -1
-                    ? (_leaderboardData[rawIndex]['coins'] as num?)?.toInt()
-                    : null;
-                 final playerLives = rawIndex != -1
-                    ? (_leaderboardData[rawIndex]['lives'] as num?)?.toInt()
-                    : null;
+
+                // Build a synthetic GameRequest for RequestTile compatibility
+                final syntheticRequest = GameRequest(
+                  id: userId, // Not used for approved (isReadOnly=true)
+                  userId: userId,
+                  eventId: widget.event.id,
+                  status: 'approved',
+                  userName: player['name'] as String?,
+                  userEmail: player['email'] as String?,
+                );
 
                 return RequestTile(
-                  request: req,
+                  request: syntheticRequest,
                   isReadOnly: true,
-                  rank: index != -1 ? index + 1 : null,
-                  progress: progress,
-                  currentStatus: _playerStatuses[req.playerId],
+                  rank: activeIndex != -1 ? activeIndex + 1 : null,
+                  progress: (player['completed_clues'] as num?)?.toInt() ?? 0,
+                  currentStatus: _playerStatuses[userId],
                   onBanToggled: () => _fetchPlayerStatuses(),
-                  coins: playerCoins,
-                  lives: playerLives,
+                  coins: (player['coins'] as num?)?.toInt(),
+                  lives: (player['lives'] as num?)?.toInt(),
                   eventId: widget.event.id,
                   onStatsUpdated: () => _fetchLeaderboard(),
                 );
@@ -2210,33 +2161,33 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           itemBuilder: (context, index) {
             final clue = clues[index];
             return Card(
-              color: AppTheme.lSurface1,
+              color: AppTheme.cardBg,
               elevation: 2,
-              shadowColor: Colors.black.withOpacity(0.05),
+              shadowColor: Colors.black.withOpacity(0.2),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.black.withOpacity(0.05)),
+                side: BorderSide(color: Colors.white.withOpacity(0.05)),
               ),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: AppTheme.lGoldAction.withOpacity(0.2),
+                  backgroundColor: AppTheme.accentGold.withOpacity(0.2),
                   child: Text("${index + 1}",
                       style: const TextStyle(
-                          color: AppTheme.lGoldText,
+                          color: AppTheme.accentGold,
                           fontWeight: FontWeight.bold)),
                 ),
                 title: Text(clue.title,
                     style: const TextStyle(
-                        color: Colors.black87, fontWeight: FontWeight.bold)),
+                        color: Colors.white, fontWeight: FontWeight.bold)),
                 subtitle: Text("${clue.typeName} - ${clue.puzzleType.label}",
-                    style: const TextStyle(color: Colors.black54)),
+                    style: const TextStyle(color: Colors.white54)),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (widget.event.type != 'online')
                       IconButton(
                         icon: const Icon(Icons.qr_code,
-                            color: AppTheme.lGoldText),
+                            color: AppTheme.accentGold),
                         tooltip: "Ver QR",
                         onPressed: () {
                           final qrData = "CLUE:${widget.event.id}:${clue.id}";
@@ -2347,7 +2298,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               if (stores.isEmpty) {
                 return const Center(
                   child: Text("No hay tiendas registradas",
-                      style: TextStyle(color: Colors.black38)),
+                      style: TextStyle(color: Colors.white38)),
                 );
               }
 
@@ -2357,20 +2308,20 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 itemBuilder: (context, index) {
                   final store = stores[index];
                   return Card(
-                    color: AppTheme.lSurface1,
+                    color: AppTheme.cardBg,
                     elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.05),
+                    shadowColor: Colors.black.withOpacity(0.2),
                     margin: const EdgeInsets.only(bottom: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.black.withOpacity(0.05)),
+                      side: BorderSide(color: Colors.white.withOpacity(0.05)),
                     ),
                     child: ListTile(
                       leading: Container(
                         width: 60,
                         height: 60,
                         decoration: BoxDecoration(
-                          color: AppTheme.lSurfaceAlt,
+                          color: AppTheme.cardBg,
                           borderRadius: BorderRadius.circular(8),
                           image: (store.imageUrl.isNotEmpty &&
                                   store.imageUrl.startsWith('http'))
@@ -2381,18 +2332,18 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                         ),
                         child: (store.imageUrl.isEmpty ||
                                 !store.imageUrl.startsWith('http'))
-                            ? const Icon(Icons.store, color: Colors.black45) // Changed from Colors.white54
+                            ? const Icon(Icons.store, color: Colors.white54)
                             : null,
                       ),
                       title: Text(store.name,
                           style: const TextStyle(
-                              color: Colors.black87, // Changed from Colors.white
+                              color: Colors.white,
                               fontWeight: FontWeight.bold)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(store.description,
-                              style: const TextStyle(color: Colors.black54), // Changed from Colors.white70
+                              style: const TextStyle(color: Colors.white70),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 8),
@@ -2437,7 +2388,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                                     )),
                           IconButton(
                             icon: const Icon(Icons.edit,
-                                color: AppTheme.lGoldText),
+                                color: AppTheme.accentGold),
                             onPressed: () => _showAddStoreDialog(store: store),
                           ),
                           if (!_isEventActive)
@@ -2590,7 +2541,7 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppTheme.lSurface1,
+      backgroundColor: AppTheme.cardBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         children: [
@@ -2599,7 +2550,7 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
           const SizedBox(width: 8),
           Expanded(
             child: Text("Reinicio Seguro",
-                style: TextStyle(color: Colors.black.withOpacity(0.8), fontSize: 18, fontWeight: FontWeight.w900)),
+                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 18, fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -2611,7 +2562,7 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
             Text(
               'Evento: "${widget.eventTitle}"',
               style: const TextStyle(
-                  color: AppTheme.lGoldText, fontWeight: FontWeight.w900),
+                  color: AppTheme.accentGold, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 16),
 
@@ -2633,15 +2584,15 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
                           fontSize: 13)),
                   const SizedBox(height: 6),
                   const Text("• Inscripciones de jugadores",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                   const Text("• Progreso de pistas de todos los usuarios",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                   const Text("• Poderes, transacciones y combates",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                   const Text("• Apuestas y distribuciones de premios",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                   const Text("• Solicitudes de ingreso",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
             ),
@@ -2665,11 +2616,11 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
                           fontSize: 13)),
                   const SizedBox(height: 6),
                   const Text("• Todas las pistas y sus ubicaciones",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                   const Text("• Configuración del evento",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                   const Text("• Tiendas del centro comercial",
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
             ),
@@ -2678,33 +2629,33 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
             // Confirmation input
             const Text(
               'Escribe REINICIAR para confirmar:',
-              style: TextStyle(color: Colors.black54, fontSize: 13),
+              style: TextStyle(color: Colors.white54, fontSize: 13),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _controller,
-              style: const TextStyle(color: Colors.black87, letterSpacing: 2, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Colors.white, letterSpacing: 2, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: _confirmWord,
-                hintStyle: TextStyle(color: Colors.black.withOpacity(0.1)),
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.1)),
                 filled: true,
-                fillColor: Colors.black.withOpacity(0.03),
+                fillColor: Colors.white.withOpacity(0.05),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : Colors.black12,
+                    color: _canConfirm ? Colors.green : Colors.white12,
                   ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : Colors.black12,
+                    color: _canConfirm ? Colors.green : Colors.white12,
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : AppTheme.lGoldText,
+                    color: _canConfirm ? Colors.green : AppTheme.accentGold,
                   ),
                 ),
               ),
@@ -2721,18 +2672,18 @@ class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancelar", style: TextStyle(color: Colors.black54)),
+          child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: _canConfirm ? Colors.red : Colors.grey[200],
+            backgroundColor: _canConfirm ? Colors.red : Colors.grey[800],
             elevation: 0,
           ),
           onPressed: _canConfirm ? () => Navigator.pop(context, true) : null,
           child: Text(
             _canConfirm ? "REINICIAR EVENTO" : "Escribe REINICIAR...",
             style: TextStyle(
-              color: _canConfirm ? Colors.white : Colors.black26,
+              color: _canConfirm ? Colors.white : Colors.white24,
               fontWeight: FontWeight.bold,
             ),
           ),
