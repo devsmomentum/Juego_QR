@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/player_provider.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/glitch_text.dart';
 import '../models/transaction_item.dart';
@@ -92,32 +93,59 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final playerProvider = Provider.of<PlayerProvider>(context);
+    // Logic for background image (dynamic)
+    final isDayNightMode = playerProvider.isDarkMode;
+    // Logic for UI components (Always Dark)
+    const bool isDarkUI = true;
+
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
-      body: AnimatedCyberBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
+      backgroundColor: const Color(0xFF151517), // Always dark
+      body: Stack(
+        children: [
+          // Theme-dependent Background Image (Remains dynamic)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.4,
+              child: Image.asset(
+                isDayNightMode 
+                    ? 'assets/images/fotogrupalnoche.png' 
+                    : 'assets/images/personajesgrupal.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: isDarkUI ? const Color(0xFF151517) : Colors.white,
+                ),
+              ),
+            ),
+          ),
+          AnimatedCyberBackground(
+            showBackgroundBase: false,
+            showParticles: false,
+            child: SafeArea(
+              child: Column(
+                children: [
               // Header
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
+                    _CyberRingButton(
+                      size: 40,
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onPressed: () => Navigator.pop(context),
+                      color: AppTheme.accentGold,
                     ),
                     const SizedBox(width: 16),
-                    const GlitchText(
-                      text: "Historial",
-                      fontSize: 22,
-                    ),
+                    const Text(
+                        'HISTORIAL',
+                        style: TextStyle(
+                          color: AppTheme.accentGold,
+                          fontFamily: 'Orbitron',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                        ),
+                      ),
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.refresh, color: AppTheme.accentGold),
@@ -127,157 +155,275 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 ),
               ),
 
-              // Filters
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+              // Filters - REFACTORED TO AVOID SCROLLING (Fixed Row with Expanded children)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 15),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.white10),
+                ),
                 child: Row(
                   children: _filters.map((filter) {
                     final isSelected = _selectedFilter == filter;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: ChoiceChip(
-                        label: Text(
-                          filter,
-                          style: TextStyle(
-                            color: isSelected ? Colors.black : Colors.white70,
-                            fontWeight: FontWeight.bold,
+                    
+                    IconData icon;
+                    Color iconColor;
+                    String shortLabel = filter;
+                    switch (filter) {
+                      case 'Exitoso': icon = Icons.check_circle_outline; iconColor = AppTheme.successGreen; break;
+                      case 'Pendiente': icon = Icons.access_time_rounded; iconColor = Colors.orangeAccent; break;
+                      case 'Fallido': icon = Icons.error_outline_rounded; iconColor = AppTheme.dangerRed; break;
+                      case 'Expirado': icon = Icons.timer_off_outlined; iconColor = Colors.grey; shortLabel = "Expira"; break;
+                      default: icon = Icons.all_inclusive_rounded; iconColor = AppTheme.accentGold;
+                    }
+
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: InkWell(
+                          onTap: () => setState(() => _selectedFilter = filter),
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected 
+                                  ? AppTheme.accentGold.withOpacity(0.2)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected 
+                                    ? AppTheme.accentGold.withOpacity(0.5) 
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(icon, size: 14, color: isSelected ? AppTheme.accentGold : iconColor.withOpacity(0.8)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  shortLabel,
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : Colors.white60,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 9,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        selected: isSelected,
-                        selectedColor: AppTheme.accentGold,
-                        backgroundColor: Colors.white10,
-                        onSelected: (bool selected) {
-                          if (selected) {
-                            setState(() => _selectedFilter = filter);
-                          }
-                        },
                       ),
                     );
                   }).toList(),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
 
               // Transaction List FutureBuilder
               Expanded(
-                child: FutureBuilder<List<TransactionItem>>(
-                  future: _transactionsFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: AppTheme.accentGold));
-                    }
-
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.error_outline, size: 48, color: AppTheme.dangerRed),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Error al cargar historial:\n${snapshot.error}',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _loadData,
-                                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-                                child: const Text("Reintentar"),
-                              )
-                            ],
-                          ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 2,
                         ),
-                      );
-                    }
-
-                    final allItems = snapshot.data ?? [];
-                    final filteredItems = _filterTransactions(allItems);
-
-                    if (filteredItems.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.history_toggle_off, size: 60, color: Colors.white24),
-                            const SizedBox(height: 16),
-                            Text(
-                              allItems.isEmpty 
-                                  ? 'No tienes movimientos aún.' 
-                                  : 'No hay transacciones ${_selectedFilter != 'Todos' ? '$_selectedFilter(s)' : ''}',
-                              style: const TextStyle(color: Colors.white54),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      itemCount: filteredItems.length,
-                      itemBuilder: (context, index) {
-                        final item = filteredItems[index];
-                        return TransactionCard(
-                          item: item,
-                          onResumePayment: item.canResumePayment
-                              ? () => _onResumePayment(item.paymentUrl!)
-                              : null,
-                          onCancelOrder: item.canCancel
-                              ? () async {
-                                  // Confirmation Dialog
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      backgroundColor: AppTheme.cardBg,
-                                      title: const Text('Cancelar Orden', style: TextStyle(color: Colors.white)),
-                                      content: const Text(
-                                        '¿Estás seguro de que quieres cancelar esta orden pendiente?',
-                                        style: TextStyle(color: Colors.white70),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text('No', style: TextStyle(color: Colors.white54)),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
-                                        ),
-                                      ],
+                      ),
+                      child: FutureBuilder<List<TransactionItem>>(
+                        future: _transactionsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator(color: AppTheme.accentGold));
+                          }
+      
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.error_outline, size: 48, color: AppTheme.dangerRed),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Error al cargar historial:\n${snapshot.error}',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: isDarkUI ? Colors.white70 : Colors.black87),
                                     ),
-                                  );
-                                  
-                                  if (confirm != true) return;
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Cancelando orden...')),
-                                  );
-                                  
-                                  try {
-                                    final success = await _repository.cancelOrder(item.id);
-                                    if (mounted) {
-                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(success ? 'Orden cancelada exitosamente' : 'Error al cancelar'),
-                                          backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
-                                        ),
-                                      );
-                                    }
-                                  } finally {
-                                    _loadData();
-                                  }
-                                }
-                              : null,
-                        );
-                      },
-                    );
-                  },
+                                    const SizedBox(height: 16),
+                                    ElevatedButton(
+                                      onPressed: _loadData,
+                                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
+                                      child: const Text("Reintentar"),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+      
+                          final allItems = snapshot.data ?? [];
+                          final filteredItems = _filterTransactions(allItems);
+      
+                          if (filteredItems.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.history_toggle_off, size: 60, color: isDarkUI ? Colors.white24 : Colors.black12),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    allItems.isEmpty 
+                                        ? 'No tienes movimientos aún.' 
+                                        : 'No hay transacciones ${_selectedFilter != 'Todos' ? '$_selectedFilter(s)' : ''}',
+                                    style: TextStyle(color: isDarkUI ? Colors.white54 : Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+      
+                          return ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            itemCount: filteredItems.length,
+                            itemBuilder: (context, index) {
+                              final item = filteredItems[index];
+                              return TransactionCard(
+                                item: item,
+                                onResumePayment: item.canResumePayment
+                                    ? () => _onResumePayment(item.paymentUrl!)
+                                    : null,
+                                onCancelOrder: item.canCancel
+                                    ? () async {
+                                        // Confirmation Dialog
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            backgroundColor: isDarkUI ? AppTheme.cardBg : Colors.white,
+                                            title: Text('Cancelar Orden', style: TextStyle(color: isDarkUI ? Colors.white : Colors.black)),
+                                            content: Text(
+                                              '¿Estás seguro de que quieres cancelar esta orden pendiente?',
+                                              style: TextStyle(color: isDarkUI ? Colors.white70 : Colors.black87),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, false),
+                                                child: Text('No', style: TextStyle(color: isDarkUI ? Colors.white54 : Colors.black54)),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, true),
+                                                child: const Text('Sí, Cancelar', style: TextStyle(color: AppTheme.dangerRed)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        
+                                        if (confirm != true) return;
+      
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Cancelando orden...')),
+                                        );
+                                        
+                                        try {
+                                          final success = await _repository.cancelOrder(item.id);
+                                          if (mounted) {
+                                             ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(success ? 'Orden cancelada exitosamente' : 'Error al cancelar'),
+                                                backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+                                              ),
+                                            );
+                                          }
+                                        } finally {
+                                          _loadData();
+                                        }
+                                      }
+                                    : null,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    ],
+  ),
+);
+  }
+}
+
+class _CyberRingButton extends StatelessWidget {
+  final double size;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color color;
+
+  const _CyberRingButton({
+    required this.size,
+    required this.icon,
+    this.onPressed,
+    this.color = const Color(0xFFFECB00),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: size,
+        height: size,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1.0,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withOpacity(0.4),
+            border: Border.all(
+              color: color.withOpacity(0.6),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.1),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: size * 0.5,
           ),
         ),
       ),

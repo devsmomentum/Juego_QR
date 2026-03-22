@@ -5,12 +5,14 @@ class GlitchText extends StatefulWidget {
   final String text;
   final double fontSize;
   final Duration duration;
+  final Color? color;
 
   const GlitchText({
     super.key,
     required this.text,
     this.fontSize = 46.0,
     this.duration = const Duration(seconds: 4),
+    this.color,
   });
 
   @override
@@ -41,7 +43,7 @@ class _GlitchTextState extends State<GlitchText> with SingleTickerProviderStateM
       animation: _glitchController,
       builder: (context, child) {
         final double value = _glitchController.value;
-        const Color primaryColor = Color(0xFFFAE500); // Cyberpunk bright yellow
+        final Color primaryColor = widget.color ?? const Color(0xFFFAE500); // Default to yellow
 
         // Much slower oscillation (10x instead of 40x)
         double offsetX = math.sin(value * 10 * math.pi) * 0.5;

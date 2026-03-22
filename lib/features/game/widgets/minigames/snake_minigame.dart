@@ -164,7 +164,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause game loop
+      if (gameProvider.isPaused) return; // Pause game loop
 
       // [FIX] Pause game loop if connectivity is bad
       final connectivityByProvider =
@@ -183,7 +183,7 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =

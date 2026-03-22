@@ -78,12 +78,14 @@ class AppTheme {
   static ThemeData get lightTheme => _buildTheme(Brightness.light);
 
   static ThemeData _buildTheme(Brightness brightness) {
-    // UI is always dark-styled — brightness only affects system overlays
-    const Color bg = dSurface0;
-    const Color surface = dSurface1;
-    const Color primary = dBrandMain;
-    const Color textColor = Colors.white;
-    final Color textSec = Colors.white70;
+    final bool isDark = brightness == Brightness.dark;
+    
+    final Color bg = isDark ? dSurface0 : lSurface0;
+    final Color surface = isDark ? dSurface1 : lSurface1;
+    final Color primary = isDark ? dBrandMain : lBrandMain;
+    final Color textColor = isDark ? Colors.white : Colors.black87;
+    final Color textSec = isDark ? Colors.white70 : Colors.black54;
+    final Color borderColor = isDark ? dBorder : lBorder;
 
     return ThemeData(
       brightness: brightness,
@@ -92,26 +94,27 @@ class AppTheme {
       colorScheme: ColorScheme(
         brightness: brightness,
         primary: primary,
-        secondary: dGoldMain,
+        secondary: isDark ? dGoldMain : lGoldAction,
         surface: surface,
         background: bg,
         error: dangerRed,
         onPrimary: Colors.white,
-        onSecondary: Colors.black,
+        onSecondary: isDark ? Colors.black : Colors.white,
         onSurface: textColor,
         onBackground: textColor,
         onError: Colors.white,
       ),
       textTheme: TextTheme(
-        displayLarge: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
-        displayMedium: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textColor),
+        displayLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
+        displayMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textColor),
         bodyLarge: TextStyle(fontSize: 16, color: textSec),
         bodyMedium: TextStyle(fontSize: 14, color: textSec),
         labelLarge: const TextStyle(fontWeight: FontWeight.bold),
       ),
       cardTheme: CardThemeData(
         color: surface,
-        elevation: 0,
+        elevation: isDark ? 0 : 2,
+        shadowColor: Colors.black12,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -126,9 +129,9 @@ class AppTheme {
         filled: true,
         fillColor: surface,
         hintStyle: TextStyle(color: textColor.withOpacity(0.4), fontSize: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: dBorder)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: primary, width: 2)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: isDark ? BorderSide.none : BorderSide(color: borderColor)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: borderColor)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: primary, width: 2)),
       ),
     );
   }

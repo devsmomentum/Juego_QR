@@ -111,13 +111,19 @@ class ClueNavigatorService {
     
     // 3. Navigate to the actual content (Puzzle/Interaction)
     if (context.mounted) {
-      if (clue is OnlineClue) {
+      // If it has a puzzle type that is NOT just a basic scan, show it
+      final isMinigame = clue.type == ClueType.minigame ||
+          (clue.puzzleType != PuzzleType.slidingPuzzle && clue.puzzleType != PuzzleType.ticTacToe) ||
+          (clue.riddleAnswer != null && clue.riddleAnswer!.isNotEmpty);
+      
+      // Actually, any clue can have a puzzle. Let's check based on type and data.
+      if (clue is OnlineClue || (clue is PhysicalClue && clue.riddleAnswer != null && clue.riddleAnswer!.isNotEmpty)) {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
         );
       } else if (clue is PhysicalClue) {
-        // For physical clues, handle based on their specific type
+        // For physical clues without explicit minigames (pure QR scan/NPC)
         _handlePhysicalClueAfterQR(context, clue);
       }
     }
@@ -134,11 +140,10 @@ class ClueNavigatorService {
         break;
       case ClueType.qrScan:
       case ClueType.geolocation:
-        // For these types, the QR scan WAS the challenge
-        // Show success and mark as complete
+        // Already handled - If it got here it is marked as complete
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('¡Pista desbloqueada correctamente!'),
+            content: Text('¡Pista completada correctamente!'),
             backgroundColor: AppTheme.successGreen,
           ),
         );

@@ -207,7 +207,7 @@ class _TetrisMinigameState extends State<TetrisMinigame> with WidgetsBindingObse
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause game loop
+      if (gameProvider.isPaused) return; // Pause game loop
 
       // [FIX] Pause game loop if connectivity is bad
       final connectivityByProvider =

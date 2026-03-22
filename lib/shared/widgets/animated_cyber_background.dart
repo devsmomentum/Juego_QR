@@ -7,6 +7,7 @@ class AnimatedCyberBackground extends StatefulWidget {
   final Widget? child;
   final Color? gridColor;
   final Color? vignetteColor;
+  final bool showParticles;
 
   const AnimatedCyberBackground({
     super.key,
@@ -14,6 +15,7 @@ class AnimatedCyberBackground extends StatefulWidget {
     this.child,
     this.gridColor,
     this.vignetteColor,
+    this.showParticles = true,
   });
 
   @override
@@ -62,9 +64,9 @@ class _AnimatedCyberBackgroundState extends State<AnimatedCyberBackground>
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = true /* always dark UI */;
-    final color = widget.gridColor ??
-        const Color(0xFF6366F1); // Always use dark mode color
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color color = widget.gridColor ??
+        (isDark ? const Color(0xFF6366F1) : AppTheme.primaryPurple);
 
     return Stack(
       children: [
@@ -99,7 +101,7 @@ class _AnimatedCyberBackgroundState extends State<AnimatedCyberBackground>
                   painter: _CyberPainter(
                     gridProgress: _gridController.value,
                     particleProgress: _particleController.value,
-                    particles: _particles,
+                    particles: widget.showParticles ? _particles : [],
                     color: color,
                   ),
                 );

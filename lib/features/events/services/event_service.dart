@@ -362,14 +362,9 @@ class EventService {
           .from('clues')
           .update({
             'title': clue.title,
-            'puzzle_type': (clue is OnlineClue)
-                ? (clue as OnlineClue).puzzleType.toString().split('.').last
-                : null,
-            'riddle_question': (clue is OnlineClue)
-                ? (clue as OnlineClue).riddleQuestion
-                : null,
-            'riddle_answer':
-                (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
+            'puzzle_type': clue.puzzleType.toString().split('.').last,
+            'riddle_question': clue.riddleQuestion,
+            'riddle_answer': clue.riddleAnswer,
             'xp_reward': clue.xpReward,
             'latitude': clue.latitude,
             'longitude': clue.longitude,
@@ -408,13 +403,9 @@ class EventService {
         'title': clue.title,
         'hint': clue.hint,
         'type': clue.type.toString().split('.').last,
-        'puzzle_type': (clue is OnlineClue)
-            ? (clue as OnlineClue).puzzleType.toString().split('.').last
-            : null,
-        'riddle_question':
-            (clue is OnlineClue) ? (clue as OnlineClue).riddleQuestion : null,
-        'riddle_answer':
-            (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
+        'puzzle_type': clue.puzzleType.toString().split('.').last,
+        'riddle_question': clue.riddleQuestion,
+        'riddle_answer': clue.riddleAnswer,
         'xp_reward': clue.xpReward,
         'sequence_index': clue.sequenceIndex > 0
             ? clue.sequenceIndex

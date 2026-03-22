@@ -93,7 +93,7 @@ class _EmojiMovieMinigameState extends State<EmojiMovieMinigame>
       if (!mounted) return;
 
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       final connectivity =
           Provider.of<ConnectivityProvider>(context, listen: false);

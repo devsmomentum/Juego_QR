@@ -234,7 +234,7 @@ class RaceTrackWidget extends StatelessWidget {
 
                 // --- RACE TRACK (RENDERING ONLY via RaceViewData) ---
                 SizedBox(
-                  height: compact ? 95 : 120,
+                  height: compact ? 110 : 150,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       return Stack(
@@ -452,14 +452,16 @@ class _RacerAvatarWidget extends StatelessWidget {
     final progress =
         totalClues > 0 ? (count / totalClues).clamp(0.0, 1.0) : 0.0;
 
-    double laneOffset = 0;
-    if (vm.lane == -1) laneOffset = -35;
-    if (vm.lane == 1) laneOffset = 35;
-
-    final double avatarSize = (vm.isMe || isSelected) ? 40 : 30;
+    final double avatarSize = (vm.isMe || isSelected) ? 36 : 28;
     final double maxScroll = trackWidth - avatarSize;
+    
+    // Dynamic offset based on lane index (-3 to 3)
+    // Using a safe multiplier to prevent overflow
+    final double verticalSpread = compact ? 18.0 : 22.0;
+    final double laneOffset = vm.lane * verticalSpread;
+    
     final double topPosition =
-        (compact ? 40 : 60) + laneOffset - (avatarSize / 2);
+        (compact ? 55 : 75) + laneOffset - (avatarSize / 2);
 
     final bool isFinished =
         totalClues > 0 && vm.data.completedCluesCount >= totalClues;
@@ -655,7 +657,7 @@ class _RacerAvatarWidget extends StatelessWidget {
                           : _getShortName(vm.data.label ?? 'J'),
                       style: TextStyle(
                         color: vm.isMe ? Colors.black : currentText,
-                        fontSize: 9,
+                        fontSize: 8,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -665,7 +667,7 @@ class _RacerAvatarWidget extends StatelessWidget {
                         '${vm.data.progress.toInt()}', // Display count
                         style: TextStyle(
                           color: vm.isMe ? Colors.black87 : currentTextSec,
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: FontWeight.w500,
                         ),
                       )

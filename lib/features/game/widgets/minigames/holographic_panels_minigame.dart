@@ -91,7 +91,7 @@ class _HolographicPanelsMinigameState extends State<HolographicPanelsMinigame>
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 

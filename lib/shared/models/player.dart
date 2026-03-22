@@ -267,6 +267,24 @@ class Player implements ITargetable {
       profession = 'Balanced';
     }
   }
+
+  /// Returns the profession name in Spanish for UI display.
+  String get localizedProfession {
+    switch (profession.toLowerCase()) {
+      case 'novice':
+        return 'Novato';
+      case 'speedrunner':
+        return 'Velocista';
+      case 'warrior':
+        return 'Guerrero';
+      case 'strategist':
+        return 'Estratega';
+      case 'balanced':
+        return 'Equilibrado / Versátil';
+      default:
+        return profession;
+    }
+  }
   
   // --- ITargetable Implementation ---
   

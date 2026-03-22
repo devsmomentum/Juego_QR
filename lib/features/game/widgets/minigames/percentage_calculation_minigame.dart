@@ -81,7 +81,7 @@ class _PercentageCalculationMinigameState
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -266,147 +266,48 @@ class _PercentageCalculationMinigameState
     super.dispose();
   }
 
+  int? _selectedIdx; // Feedback on which index was tapped
+  bool? _wasCorrect; // Feedback if the tap was correct
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Padding(
+        Container(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
+            mainAxisSize: MainAxisSize.min, // Use minimum space
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 10), // Reduced top padding
+              const SizedBox(height: 8),
 
-              const Text("CALCULA EL PORCENTAJE",
-                  style: TextStyle(
-                      color: AppTheme.accentGold,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2)),
-              const SizedBox(height: 15),
-              // 1. Top Bar (Compact)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Text("Tiempo: $_secondsRemaining",
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 16)),
-                  Text("Progreso: $_score/$_targetScore",
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 16)),
-                ],
-              ),
+              // 1. Header: Info and Progress (More compact)
+              _buildTopBar(),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              const SizedBox(height: 20),
-              Center(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                      color: Colors.indigo.shade900,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.indigo.withOpacity(0.5),
-                            blurRadius: 20)
-                      ]),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "$_percentage%",
-                          style: const TextStyle(
-                              fontSize: 50,
-                              color: Colors.amberAccent,
-                              fontWeight: FontWeight.bold),
-                        ),
-                        const Text("DE",
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 16)),
-                        Text(
-                          "$_baseNumber",
-                          style: const TextStyle(
-                              fontSize: 40,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
+              // 2. Question Card: Premium Glassmorphism (Compact)
+              _buildQuestionCard(),
+
+              const SizedBox(height: 16),
+
+              // 3. Instructions (Mini)
+              const Text(
+                "ELIGE EL RESULTADO",
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+
+              // 4. Options Grid (More compact)
+              _buildOptionsGrid(),
 
               const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20.0),
-                child: Center(
-                  child: SizedBox(
-                    height: 250, // Fixed height for options grid
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      // Exact calculation to fit GridView in available space
-                      // Height = 2 * itemHeight + 1 * mainAxisSpacing (15)
-                      double availableHeight = constraints.maxHeight;
-                      double rows = 2;
-                      double mainAxisSpacing = 15;
-                      // Calculate item height to fit exactly:
-                      double itemHeight =
-                          (availableHeight - (rows - 1) * mainAxisSpacing) /
-                              rows;
-
-                      // Width = 2 * itemWidth + 1 * crossAxisSpacing (15)
-                      double availableWidth = constraints.maxWidth;
-                      double crossAxisSpacing = 15;
-                      double itemWidth =
-                          (availableWidth - (2 - 1) * crossAxisSpacing) / 2;
-
-                      // Protect against negative or zero values
-                      if (itemHeight <= 0 || itemWidth <= 0)
-                        return const SizedBox.shrink();
-
-                      double childAspectRatio = itemWidth / itemHeight;
-
-                      return GridView.count(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 15,
-                        mainAxisSpacing: 15,
-                        childAspectRatio: childAspectRatio,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: _options.map((opt) {
-                          return GestureDetector(
-                            onTap: () => _handleSelection(opt),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: Colors.white10,
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(color: Colors.white24)),
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    "$opt",
-                                    style: const TextStyle(
-                                        fontSize: 28,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    }),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -432,4 +333,246 @@ class _PercentageCalculationMinigameState
       ],
     );
   }
+
+  Widget _buildTopBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildInfoItem(
+            icon: Icons.timer_rounded,
+            value: "$_secondsRemaining",
+            label: "TIEMPO",
+            color: _secondsRemaining < 10 ? AppTheme.dangerRed : AppTheme.accentGold,
+          ),
+          Container(height: 20, width: 1, color: Colors.white12),
+          _buildInfoItem(
+            icon: Icons.bolt_rounded,
+            value: "$_score/$_targetScore",
+            label: "PROGRESO",
+            color: AppTheme.successGreen,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoItem({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white30,
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4834D4).withOpacity(0.2),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF150826).withAlpha(240), // Deep Indigo/Navy
+                const Color(0xFF4834D4).withAlpha(220), // Dark Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white12, width: 1.2),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            children: [
+              Text(
+                "¿CUÁNTO ES EL?",
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              FittedBox(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      "$_percentage",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 54,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const Text(
+                      "%",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  "DE",
+                  style: TextStyle(
+                    color: Colors.white24,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4.0,
+                  ),
+                ),
+              ),
+              Text(
+                "$_baseNumber",
+                style: const TextStyle(
+                  color: AppTheme.accentGold,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildOptionsGrid() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.8, // Shorter buttons
+      ),
+      itemCount: _options.length,
+      itemBuilder: (context, index) {
+        final opt = _options[index];
+        final isSelected = _selectedIdx == index;
+
+        Color cardColor = Colors.white.withOpacity(0.06);
+        Color borderColor = Colors.white.withOpacity(0.12);
+        Color textColor = Colors.white;
+
+        if (isSelected && _wasCorrect != null) {
+          cardColor = _wasCorrect!
+              ? AppTheme.successGreen.withOpacity(0.15)
+              : AppTheme.dangerRed.withOpacity(0.15);
+          borderColor = _wasCorrect! ? AppTheme.successGreen : AppTheme.dangerRed;
+          textColor = _wasCorrect! ? AppTheme.successGreen : AppTheme.dangerRed;
+        }
+
+        return RepaintBoundary(
+          child: GestureDetector(
+            onTap: () async {
+              if (_isGameOver || _isProcessingSelection) return;
+              setState(() {
+                _selectedIdx = index;
+                _wasCorrect = (opt == _correctAnswer);
+              });
+              await _handleSelection(opt);
+              if (mounted) {
+                setState(() {
+                  _selectedIdx = null;
+                  _wasCorrect = null;
+                });
+              }
+            },
+            child: AnimatedScale(
+              scale: isSelected ? 0.94 : 1.0,
+              duration: const Duration(milliseconds: 100),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor, width: 1.5),
+                  boxShadow: isSelected && _wasCorrect == true
+                      ? [
+                          BoxShadow(
+                            color: AppTheme.successGreen.withOpacity(0.2),
+                            blurRadius: 10,
+                          )
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: FittedBox(
+                    child: Text(
+                      "$opt",
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
+
+

@@ -329,19 +329,20 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
           SafeArea(
             child: Column(
               children: [
-                // // Back Button (Estilo Congelado/Segmentado)
-                // Padding(
-                //   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                //   child: Row(
-                //     children: [
-                //       CyberRingButton(
-                //         size: 48,
-                //         icon: Icons.arrow_back,
-                //         onPressed: () => Navigator.of(context).pop(),
-                //       ),
-                //     ],
-                //   ),
-                // ),
+                // Botón para retroceder (Back Button)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    children: [
+                      CyberRingButton(
+                        size: 40,
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
 
                 // const SizedBox(height: 10),
 

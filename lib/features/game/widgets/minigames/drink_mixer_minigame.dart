@@ -1,4 +1,4 @@
-ï»¿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -112,9 +112,9 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -133,7 +133,7 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
 
   void _handleTimeOut() {
     _timer.cancel();
-    _loseLife("â”¬Ã­Tiempo agotado!");
+    _loseLife("-íTiempo agotado!");
   }
 
   void _addRed() {
@@ -344,7 +344,7 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
                       child: Column(
                         children: [
                           const Text(
-                            "IGUALA EL CÃ“CTEL",
+                            "IGUALA EL CÓCTEL",
                             style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
@@ -427,7 +427,7 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: const Text("SERVIR CÃ“CTEL",
+                              child: const Text("SERVIR CÓCTEL",
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w900)),
@@ -440,7 +440,7 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
                 ),
                 const SizedBox(height: 30),
 
-                // BOTÃ“N DE RENDICIÃ“N ABAJO
+                // BOTÓN DE RENDICIÓN ABAJO
                 CyberSurrenderButton(
                   onPressed: _showOverlay ? null : _handleGiveUp,
                 ),
@@ -475,7 +475,7 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
                       setState(() {
                         _canRetry = true;
                         _showShopButton = false;
-                        _overlayMessage = "Â¡Vidas recargadas!";
+                        _overlayMessage = "¡Vidas recargadas!";
                       });
                     }
                   }

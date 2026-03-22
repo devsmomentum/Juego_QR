@@ -96,7 +96,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
       if (!mounted) return;
 
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -182,7 +182,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     if (!_isGameActive || !_isPlayerTurn || _isGameOver) return;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return;
+    if (gameProvider.isPaused) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =

@@ -106,9 +106,10 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     final playerProvider = Provider.of<PlayerProvider>(context);
-
-    // FORCED TO TRUE: Always use dark mode colors in wallet, even in day mode
-    final isDarkMode = true; // Previously: playerProvider.isDarkMode;
+    // Logic for background image (dynamic) - to match TransactionHistory
+    final isDayNightMode = playerProvider.isDarkMode;
+    // FORCED TO TRUE: Always use dark mode aesthetic in the wallet section
+    const bool isDarkMode = true;
     final player = playerProvider.currentPlayer;
     final cloverBalance = player?.clovers ?? 0;
 
@@ -127,15 +128,11 @@ class _WalletScreenState extends State<WalletScreen> {
                       if (!widget.hideScaffold)
                         Positioned(
                           left: 0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              icon: Icon(Icons.arrow_back, color: isDarkMode ? Colors.white : Colors.black87),
-                              onPressed: () => Navigator.pop(context),
-                            ),
+                          child: _CyberRingButton(
+                            size: 40,
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            onPressed: () => Navigator.pop(context),
+                            color: AppTheme.accentGold,
                           ),
                         ),
                       
@@ -316,7 +313,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             ),
                           ),
                           child: Container(
-                            padding: const EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.6),
                               borderRadius: BorderRadius.circular(24),
@@ -364,9 +361,12 @@ class _WalletScreenState extends State<WalletScreen> {
                                       onPressed: () {
                                         Navigator.push(
                                           context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
+                                          PageRouteBuilder(
+                                            pageBuilder: (context, animation, secondaryAnimation) => 
                                                 const TransactionHistoryScreen(),
+                                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                              return FadeTransition(opacity: animation, child: child);
+                                            },
                                           ),
                                         ).then(
                                             (_) => _loadRecentTransactions());
@@ -417,9 +417,12 @@ class _WalletScreenState extends State<WalletScreen> {
                                                 ? () async {
                                                     Navigator.push(
                                                       context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
+                                                      PageRouteBuilder(
+                                                        pageBuilder: (context, animation, secondaryAnimation) => 
                                                             const TransactionHistoryScreen(),
+                                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                          return FadeTransition(opacity: animation, child: child);
+                                                        },
                                                       ),
                                                     ).then((_) =>
                                                         _loadRecentTransactions());
@@ -533,11 +536,29 @@ class _WalletScreenState extends State<WalletScreen> {
           ),
         );
 
-    final content = widget.hideScaffold 
-        ? mainColumn 
-        : AnimatedCyberBackground(child: mainColumn);
+    final content = Stack(
+      children: [
+        if (!widget.hideScaffold)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.4,
+              child: Image.asset(
+                isDayNightMode 
+                    ? 'assets/images/fotogrupalnoche.png' 
+                    : 'assets/images/personajesgrupal.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        AnimatedCyberBackground(
+          showBackgroundBase: false, // Match TransactionHistory
+          showParticles: false, // Unified static look
+          child: mainColumn,
+        ),
+      ],
+    );
 
-    if (widget.hideScaffold) return content;
+    if (widget.hideScaffold) return mainColumn;
 
     return Scaffold(
       backgroundColor: const Color(0xFF151517),
@@ -1951,6 +1972,60 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CyberRingButton extends StatelessWidget {
+  final double size;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color color;
+
+  const _CyberRingButton({
+    required this.size,
+    required this.icon,
+    this.onPressed,
+    this.color = const Color(0xFFFECB00),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: size,
+        height: size,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1.0,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withOpacity(0.4),
+            border: Border.all(
+              color: color.withOpacity(0.6),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.1),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: size * 0.5,
+          ),
+        ),
       ),
     );
   }
