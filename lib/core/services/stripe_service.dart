@@ -24,9 +24,11 @@ class StripeService {
       debugPrint('[StripeService] Intentando inicializar con clave: ${publishableKey.substring(0, 10)}...');
       
       if (kIsWeb) {
-        Stripe.publishableKey = publishableKey;
+        // On Web, we don't need Stripe.instance or applySettings() 
+        // because we use url_launcher with Stripe Checkout in initiateStripePurchase.
+        // Direct package initialization causes "Platform._operatingSystem" errors.
         _initialized = true;
-        debugPrint('[StripeService] ✅ Inicializado para Web.');
+        debugPrint('[StripeService] ✅ Inicializado para Web (Redirect Mode).');
         return;
       }
 

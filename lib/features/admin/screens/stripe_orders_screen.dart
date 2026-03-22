@@ -40,8 +40,8 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
 
     try {
       var query = Supabase.instance.client
-          .from('admin_stripe_orders')
-          .select()
+          .from('clover_orders')
+          .select('*, profiles:user_id(name, email)')
           .eq('gateway', 'stripe');
 
       if (_filterStatus != 'all') {
@@ -143,10 +143,13 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
 
   // ─── ORDER CARD ──────────────────────────────────────────────────────────
   Widget _buildOrderCard(Map<String, dynamic> order) {
+    final profile = order['profiles'] as Map<String, dynamic>?;
+    final extraData = order['extra_data'] as Map<String, dynamic>?;
+
     final status = order['status'] as String?;
     final statusColor = _statusColor(status);
     final amount = (order['amount'] as num?)?.toDouble() ?? 0.0;
-    final clovers = (order['clovers_amount'] as num?)?.toInt() ?? 0;
+    final clovers = (extraData?['clovers_amount'] as num?)?.toInt() ?? 0;
     final createdAt = order['created_at'] != null
         ? DateTime.parse(order['created_at']).toLocal()
         : null;
@@ -178,7 +181,7 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
           ),
         ),
         title: Text(
-          order['user_name'] ?? 'Usuario desconocido',
+          profile?['name'] ?? 'Usuario desconocido',
           style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
         ),
@@ -215,9 +218,9 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
               children: [
                 const Divider(color: Colors.white12),
                 _detailRow('Estado', _statusLabel(status), statusColor),
-                _detailRow('Email', order['user_email'] ?? '—', Colors.white70),
+                _detailRow('Email', profile?['email'] ?? '—', Colors.white70),
                 _detailRow(
-                    'Plan', order['plan_name'] ?? '—', Colors.white70),
+                    'Plan', extraData?['plan_name'] ?? '—', Colors.white70),
                 _detailRow(
                     'PaymentIntent',
                     piId != null
