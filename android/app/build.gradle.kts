@@ -46,9 +46,6 @@ android {
 
 
 
-    tasks.withType<JavaCompile> {
-        options.compilerArgs.add("-Xlint:-options")
-    }
 
     signingConfigs {
         create("release") {
@@ -75,15 +72,6 @@ android {
         }
     }
     
-    // Para quitar el aviso del jvmTarget (opcional pero recomendado)
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 flutter {
