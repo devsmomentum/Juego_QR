@@ -11,6 +11,7 @@ class StoreEditDialog extends StatefulWidget {
   final String eventId;
   final Map<String, int>? initialPrices;
   final bool isGlobalMode;
+  final bool isSpectator; // New flag to distinguish between Coins/Clovers
 
   const StoreEditDialog({
     super.key,
@@ -18,6 +19,7 @@ class StoreEditDialog extends StatefulWidget {
     required this.eventId,
     this.initialPrices,
     this.isGlobalMode = false,
+    this.isSpectator = false,
   });
 
   @override
@@ -236,12 +238,12 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
                             initialValue: _customCosts[item.id]?.toString(),
                             keyboardType: TextInputType.number,
                             style: const TextStyle(color: AppTheme.accentGold),
-                            decoration: const InputDecoration(
-                              labelText: 'Costo (Monedas)',
-                              labelStyle: TextStyle(color: Colors.white54),
+                            decoration: InputDecoration(
+                              labelText: widget.isSpectator ? 'Costo (Tréboles)' : 'Costo (Monedas)',
+                              labelStyle: const TextStyle(color: Colors.white54),
                               isDense: true,
-                              border: OutlineInputBorder(),
-                              enabledBorder: OutlineInputBorder(
+                              border: const OutlineInputBorder(),
+                              enabledBorder: const OutlineInputBorder(
                                   borderSide:
                                       BorderSide(color: Colors.white24)),
                             ),

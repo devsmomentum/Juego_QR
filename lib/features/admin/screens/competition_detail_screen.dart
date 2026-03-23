@@ -2416,6 +2416,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         eventId: widget.event.id,
         initialPrices: isSpectatorMode ? _spectatorPrices : widget.event.storePrices,
         isGlobalMode: true,
+        isSpectator: isSpectatorMode,
       ),
     );
 
