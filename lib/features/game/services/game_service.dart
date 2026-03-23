@@ -12,17 +12,31 @@ class GameService {
   /// Retorna el header Authorization con un token de usuario válido garantizado.
   /// Evita el bug del SDK donde _getAccessToken() devuelve null → se usa la anon key
   /// → Edge Function responde 401 "Invalid JWT" (firma incorrecta para auth.getUser).
+  /// Retorna el header Authorization con un token de usuario válido garantizado.
+  /// Evita el bug del SDK donde _getAccessToken() devuelve null → se usa la anon key
+  /// → Edge Function responde 401 "Invalid JWT" (firma incorrecta para auth.getUser).
   Future<Map<String, String>> _authHeaders() async {
-    var session = _supabase.auth.currentSession;
-    if (session == null || session.isExpired) {
-      debugPrint('[GameService] Session null/expired – refreshing before Edge Function call...');
-      final result = await _supabase.auth.refreshSession();
-      session = result.session;
+    Session? session = _supabase.auth.currentSession;
+    
+    // Explicitly check for expired OR invalid session
+    if (session == null || session.isExpired || session.accessToken.isEmpty) {
+      debugPrint('[GameService] Session invalid/expired – forcing refresh...');
+      try {
+        final result = await _supabase.auth.refreshSession();
+        session = result.session;
+      } catch (e) {
+        debugPrint('[GameService] Refresh error: $e');
+        session = null;
+      }
     }
-    if (session == null) {
-      throw const AuthException('No active session. Please log in again.');
+    
+    if (session == null || session.accessToken.isEmpty) {
+      throw const AuthException('Sesión expirada. Por favor, inicia sesión de nuevo.');
     }
-    return {'Authorization': 'Bearer ${session.accessToken}'};
+    
+    return {
+      'Authorization': 'Bearer ${session.accessToken}',
+    };
   }
 
   /// Obtiene las vidas de un jugador en un evento específico.
@@ -324,20 +338,67 @@ class GameService {
   /// [PERFORMANCE] Migrado de Edge Function a RPC atómico.
   Future<List<Clue>> getClues(String eventId) async {
     try {
+      // 1. Fetch clues with progress from RPC
       final response = await _supabase.rpc('get_clues_with_progress', params: {
         'p_event_id': eventId,
       });
 
-      if (response != null) {
-        final List<dynamic> data = response is List ? response : [];
-        return data
-            .map((json) => Clue.fromJson(json as Map<String, dynamic>))
-            .toList();
-      }
-      return [];
+      if (response == null) return [];
+
+      final List<dynamic> rpcData = response is List ? response : [];
+      
+      // 2. SAFETY FETCH: Ensure all riddle/puzzle data is present by fetching directly from clues table.
+      // Sometimes RPCs might not include newly added columns or use different naming.
+      final staticCluesData = await _supabase
+          .from('clues')
+          .select('id, riddle_answer, riddle_question, puzzle_type, minigame_url, qr_code, latitude, longitude')
+          .eq('event_id', eventId);
+
+      // Create a map for easy lookup
+      final Map<String, Map<String, dynamic>> staticMap = {
+        for (var item in staticCluesData) item['id'].toString(): Map<String, dynamic>.from(item)
+      };
+
+      // 3. Merge data
+      final List<Map<String, dynamic>> mergedData = rpcData.map((dynamic rpcItem) {
+        final Map<String, dynamic> item = Map<String, dynamic>.from(rpcItem as Map);
+        final String id = item['id'].toString();
+        
+        if (staticMap.containsKey(id)) {
+          final staticData = staticMap[id]!;
+          // Prioritize static data for riddle/puzzle fields to ensure accuracy
+          item['riddle_answer'] = staticData['riddle_answer'] ?? item['riddle_answer'];
+          item['riddle_question'] = staticData['riddle_question'] ?? item['riddle_question'];
+          item['puzzle_type'] = staticData['puzzle_type'] ?? item['puzzle_type'];
+          item['minigame_url'] = staticData['minigame_url'] ?? item['minigame_url'];
+          item['qr_code'] = staticData['qr_code'] ?? item['qr_code'];
+          item['latitude'] = staticData['latitude'] ?? item['latitude'];
+          item['longitude'] = staticData['longitude'] ?? item['longitude'];
+        }
+        
+        return item;
+      }).toList();
+
+      return mergedData
+          .map((json) => Clue.fromJson(json))
+          .toList();
     } catch (e) {
-      debugPrint('Error fetching clues (RPC): $e');
-      rethrow;
+      debugPrint('Error fetching clues (RPC + Static Merge): $e');
+      // If RPC fails, try a fallback with just static data
+      try {
+        final fallbackClues = await _supabase
+            .from('clues')
+            .select()
+            .eq('event_id', eventId)
+            .order('sequence_index', ascending: true);
+        
+        return (fallbackClues as List)
+            .map((json) => Clue.fromJson(json))
+            .toList();
+      } catch (e2) {
+        debugPrint('Final fallback failed: $e2');
+        rethrow;
+      }
     }
   }
 
@@ -366,6 +427,7 @@ class GameService {
       // [PERFORMANCE OPTIMIZATION] Option 1: Atomic RPC
       // Consolidates 15+ DB operations (validation, progress, ranking, rewards)
       // into a single database roundtrip for high-concurrency (50+ users).
+      debugPrint('[GameService] 📡 RPC submit_clue_answer: clueId=$clueId, answer=$answer');
       final response = await _supabase.rpc('submit_clue_answer', params: {
         'p_clue_id': int.tryParse(clueId) ?? clueId,
         'p_answer': answer,
@@ -373,7 +435,8 @@ class GameService {
 
       if (response != null && response is Map<String, dynamic>) {
         final data = response;
-
+        debugPrint('[GameService] 📥 RPC Response: $data');
+        
         if (data['success'] == false) {
           debugPrint('❌ Error completing clue (RPC): ${data['error']}');
           return null;
@@ -399,9 +462,9 @@ class GameService {
             }
           }
         }
-
         return data;
       }
+      debugPrint('[GameService] ⚠️ RPC returned null or empty response');
       return null;
     } catch (e) {
       debugPrint('Error completing clue: $e');
@@ -463,23 +526,30 @@ class GameService {
         if (data != null) {
           return data['isCompleted'] ?? false;
         }
-      } else if (response.status == 401) {
-        // Handle Invalid JWT by forcing a refresh and retrying once
-        debugPrint('[GameService] 401 Detected. Forcing session refresh...');
-        await _supabase.auth.refreshSession();
-        
-        final retryResponse = await _supabase.functions.invoke(
-          'game-play/check-race-status',
-          headers: await _authHeaders(),
-          body: {'eventId': eventId},
-          method: HttpMethod.post,
-        );
-        
-        if (retryResponse.status == 200) {
-           final data = retryResponse.data as Map<String, dynamic>?;
-           return data?['isCompleted'] ?? false;
+      }
+      return false;
+    } on FunctionException catch (fe) {
+      if (fe.status == 401) {
+        debugPrint('[GameService] 401 FunctionException. Forcing session refresh...');
+        try {
+          await _supabase.auth.refreshSession();
+          
+          final retryResponse = await _supabase.functions.invoke(
+            'game-play/check-race-status',
+            headers: await _authHeaders(),
+            body: {'eventId': eventId},
+            method: HttpMethod.post,
+          );
+          
+          if (retryResponse.status == 200) {
+            final data = retryResponse.data as Map<String, dynamic>?;
+            return data?['isCompleted'] ?? false;
+          }
+        } catch (e) {
+          debugPrint('Error during 401 retry: $e');
         }
       }
+      debugPrint('FunctionException in checkRaceStatus: ${fe.status} - $fe');
       return false;
     } catch (e) {
       debugPrint('Error checking race status: $e');

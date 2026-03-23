@@ -112,9 +112,9 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -133,7 +133,7 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
 
   void _handleTimeOut() {
     _timer.cancel();
-    _loseLife("┬íTiempo agotado!");
+    _loseLife("-íTiempo agotado!");
   }
 
   void _addRed() {
@@ -564,3 +564,4 @@ class _DrinkMixerMinigameState extends State<DrinkMixerMinigame> {
     );
   }
 }
+

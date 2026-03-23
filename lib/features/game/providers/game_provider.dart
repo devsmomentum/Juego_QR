@@ -99,6 +99,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   bool _isPowerActionLoading =
       false; // Guards against double-clicks during power execution
   bool _isFrozen = false; // Estado de congelamiento para minijuegos
+  bool _isModalActive = false; // Estado de pausa por modal (ej. rendirse)
   String? _currentUserId; // Check current user ID for leaderboard fetching
 
   /// Flag que indica que el jugador abandonó la competencia voluntariamente.
@@ -129,10 +130,23 @@ class GameProvider extends ChangeNotifier implements IResettable {
   List<Map<String, dynamic>> get minigameEmojiMovies => _minigameEmojiMovies;
   bool get isMinigameDataLoading => _isMinigameDataLoading;
 
+  /// Indica si el juego debe estar en pausa (por congelamiento o modal activo)
+  bool get isPaused => _isFrozen || _isModalActive;
+
+  bool get isModalActive => _isModalActive;
+
   /// Sets the frozen state (called by PowerEffectProvider)
   void setFrozen(bool value) {
     if (_isFrozen != value) {
       _isFrozen = value;
+      notifyListeners();
+    }
+  }
+
+  /// Indica si hay un modal activo que debe pausar el juego
+  void setModalActive(bool value) {
+    if (_isModalActive != value) {
+      _isModalActive = value;
       notifyListeners();
     }
   }
@@ -554,12 +568,32 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
       final fetchedClues = await _gameService.getClues(idToUse);
 
+      if (silent) {
+        // [FIX] Proteger el estado 'isCompleted' optimista contra respuestas del servidor stale.
+        // Si localmente ya la tenemos como completada, no desmarcarla en un fetch silencioso.
+        for (var newClue in fetchedClues) {
+          final oldClue = _clues.firstWhere((c) => c.id == newClue.id, orElse: () => newClue);
+          if (oldClue.isCompleted && !newClue.isCompleted) {
+            debugPrint('[FETCH_CLUES] 🛡️ Protecting optimistic completion for clue ${newClue.id}');
+            newClue.isCompleted = true;
+          }
+        }
+      }
       _clues = fetchedClues;
       _hintActive = false;
       _activeHintText = null;
 
-      final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
-      _currentClueIndex = (index != -1) ? index : _clues.length;
+      final serverIndex = _clues.indexWhere((c) => !c.isCompleted);
+      final newIndex = (serverIndex != -1) ? serverIndex : _clues.length;
+      
+      // OPTIMIZACIÓN: Si es un refresh silencioso, evitar volver atrás en el índice
+      // (protege contra race conditions donde el fetch silencia devuelve datos antes de que el RPC de completitud se procese).
+      if (!silent || newIndex >= _currentClueIndex) {
+        debugPrint('[FETCH_CLUES] 🧭 Updating index: $_currentClueIndex -> $newIndex (silent: $silent)');
+        _currentClueIndex = newIndex;
+      } else {
+        debugPrint('[FETCH_CLUES] ⚠️ Stale index detected: server says $newIndex but local is $_currentClueIndex. Ignoring revert.');
+      }
     } catch (e) {
       _errorMessage = 'Error fetching clues: $e';
     } finally {
@@ -701,14 +735,19 @@ class GameProvider extends ChangeNotifier implements IResettable {
     bool didOptimisticUpdate = false;
 
     if (localIndex != -1) {
+      debugPrint('[COMPLETE_CLUE] 🟢 Optimistic Update: Marking clue $localIndex (${targetId}) as completed');
       _clues[localIndex].isCompleted = true;
       didOptimisticUpdate = true;
-      // Avanzar el índice al siguiente sin previamente desbloquearlo aquí.
-      // El estado real de is_locked llega del servidor vía fetchClues(silent:true).
+      
       if (localIndex + 1 < _clues.length) {
+        debugPrint('[COMPLETE_CLUE] ➡️ Advancing currentClueIndex: $_currentClueIndex -> ${localIndex + 1}');
         _currentClueIndex = localIndex + 1;
+      } else {
+        debugPrint('[COMPLETE_CLUE] 🏁 Last clue reached or index at bounds');
       }
       notifyListeners();
+    } else {
+      debugPrint('[COMPLETE_CLUE] ⚠️ localIndex not found for id: $targetId');
     }
 
     try {
@@ -724,8 +763,8 @@ class GameProvider extends ChangeNotifier implements IResettable {
               "👤 User finished clues, but Race is NOT globally finished yet.");
         }
 
-        // Fire-and-forget: confirmar estado desde el servidor
-        unawaited(fetchClues(silent: true));
+        // Fire-and-forget: confirmar estado desde el servidor con un respiro para el commit DB
+        Future.delayed(const Duration(milliseconds: 300), () => fetchClues(silent: true));
         unawaited(fetchLeaderboard());
         return data;
       } else {

@@ -107,7 +107,7 @@ class TransactionCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.white.withOpacity(0.05), // Subtle cyber glass
+      color: Colors.white.withOpacity(0.05), // Always subtle cyber glass
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -154,26 +154,16 @@ class TransactionCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Clover Amount (Primary)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${item.isCredit ? '+' : ''}${item.amount.toInt()} ',
-                          style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            color: item.isCredit ? AppTheme.successGreen : AppTheme.dangerRed, 
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const CoinImage(size: 14),
-                      ],
+                    Text(
+                      '${item.isCredit ? "+" : "-"}${item.amount.toStringAsFixed(1)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                        fontFamily: 'Orbitron',
+                      ),
                     ),
-                    // Fiat Amount (Secondary)
-                    if (item.fiatAmount != null && 
-                        item.fiatAmount! > 0 && 
-                        ['completed', 'success', 'paid'].contains(item.status.toLowerCase()))
+                    if (item.fiatAmount != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(

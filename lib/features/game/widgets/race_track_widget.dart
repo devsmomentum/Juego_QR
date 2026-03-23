@@ -65,7 +65,8 @@ class RaceTrackWidget extends StatelessWidget {
       if (isReadOnly) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⛔ Ya terminaste la carrera. No puedes usar poderes en la sala de espera.'),
+            content: Text(
+                '⛔ Ya terminaste la carrera. No puedes usar poderes en la sala de espera.'),
             backgroundColor: Colors.grey,
             duration: Duration(seconds: 2),
           ),
@@ -262,18 +263,25 @@ class RaceTrackWidget extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: const BoxDecoration(
-                                    color: Color(0xFFFFD700),
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(color: Color(0x66FFD700), blurRadius: 10, spreadRadius: 2)
-                                    ]
-                                  ),
-                                  child: const Icon(Icons.flag, color: Colors.black, size: 24),
+                                      color: Color(0xFFFFD700),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: Color(0x66FFD700),
+                                            blurRadius: 10,
+                                            spreadRadius: 2)
+                                      ]),
+                                  child: const Icon(Icons.flag,
+                                      color: Colors.black, size: 24),
                                 ),
                                 const SizedBox(height: 4),
                                 const Text(
                                   "META",
-                                  style: TextStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1),
+                                  style: TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1),
                                 ),
                               ],
                             ),
@@ -444,7 +452,8 @@ class _RacerAvatarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = true /* always dark UI */;
-    const Color currentText = Colors.white; // Explicitly white for that premium look
+    const Color currentText =
+        Colors.white; // Explicitly white for that premium look
     const Color currentTextSec = Colors.white70; // Always white for consistency
 
     // Calculo visual puro usando ITargetable.progress (double)
@@ -452,14 +461,16 @@ class _RacerAvatarWidget extends StatelessWidget {
     final progress =
         totalClues > 0 ? (count / totalClues).clamp(0.0, 1.0) : 0.0;
 
-    double laneOffset = 0;
-    if (vm.lane == -1) laneOffset = -35;
-    if (vm.lane == 1) laneOffset = 35;
-
-    final double avatarSize = (vm.isMe || isSelected) ? 40 : 30;
+    final double avatarSize = (vm.isMe || isSelected) ? 36 : 28;
     final double maxScroll = trackWidth - avatarSize;
+
+    // Dynamic offset based on lane index (-3 to 3)
+    // Using a safe multiplier to prevent overflow
+    final double verticalSpread = compact ? 18.0 : 22.0;
+    final double laneOffset = vm.lane * verticalSpread;
+
     final double topPosition =
-        (compact ? 40 : 60) + laneOffset - (avatarSize / 2);
+        (compact ? 55 : 75) + laneOffset - (avatarSize / 2);
 
     final bool isFinished =
         totalClues > 0 && vm.data.completedCluesCount >= totalClues;
@@ -470,213 +481,212 @@ class _RacerAvatarWidget extends StatelessWidget {
       child: Opacity(
         opacity: vm.opacity,
         child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (vm.isMe || isSelected)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Icon(Icons.arrow_drop_down,
-                      color:
-                          isSelected ? Colors.redAccent : AppTheme.accentGold,
-                      size: 18),
-                ),
-              GestureDetector(
-                onTap: onTap,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Highlight ring for targetable avatars
-                    if (vm.isTargetable || vm.isMe)
-                      Container(
-                        width: avatarSize + 6,
-                        height: avatarSize + 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: vm.isMe
-                                ? AppTheme.successGreen.withOpacity(0.5)
-                                : AppTheme.dangerRed.withOpacity(0.3),
-                            width: 2,
-                            strokeAlign: BorderSide.strokeAlignOutside,
-                          ),
-                        ),
-                      ),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (vm.isMe || isSelected)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Icon(Icons.arrow_drop_down,
+                    color: isSelected ? Colors.redAccent : AppTheme.accentGold,
+                    size: 18),
+              ),
+            GestureDetector(
+              onTap: onTap,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Highlight ring for targetable avatars
+                  if (vm.isTargetable || vm.isMe)
                     Container(
-                      width: avatarSize,
-                      height: avatarSize,
+                      width: avatarSize + 6,
+                      height: avatarSize + 6,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isSelected
-                              ? Colors.redAccent
-                              : (vm.isMe
-                                  ? AppTheme.accentGold
-                                  : (vm.isLeader
-                                      ? Colors.amber
-                                      : _getAvatarColor(vm.data.label ?? ''))), // Random color for others
-                          width: (vm.isMe || isSelected) ? 2 : 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isSelected
-                                ? Colors.red.withOpacity(0.5)
-                                : (vm.isMe
-                                    ? AppTheme.accentGold.withOpacity(0.3)
-                                    : Colors.black26),
-                            blurRadius: (vm.isMe || isSelected) ? 8 : 4,
-                            spreadRadius: 1,
-                          )
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(avatarSize / 2),
-                        child: Container(
                           color: vm.isMe
-                              ? AppTheme.primaryPurple
-                              : (isDarkMode
-                                  ? Colors.grey[800]
-                                  : Colors.grey[200]),
-                          child: Builder(
-                            builder: (context) {
-                              // 1. Prioridad: Avatar Local
-                              if (vm.data.avatarId != null &&
-                                  vm.data.avatarId!.isNotEmpty) {
-                                return Image.asset(
-                                  'assets/images/avatars/${vm.data.avatarId}.png',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Text(
-                                        (vm.data.label?.isNotEmpty == true)
-                                            ? vm.data.label![0].toUpperCase()
-                                            : '?',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: avatarSize * 0.4,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    );
-                                  },
-                                );
-                              }
-
-                              // 2. Fallback: Foto de perfil (URL)
-                              if (vm.data.avatarUrl != null &&
-                                  vm.data.avatarUrl!.startsWith('http')) {
-                                return Image.network(
-                                  vm.data.avatarUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Center(
+                              ? AppTheme.successGreen.withOpacity(0.5)
+                              : AppTheme.dangerRed.withOpacity(0.3),
+                          width: 2,
+                          strokeAlign: BorderSide.strokeAlignOutside,
+                        ),
+                      ),
+                    ),
+                  Container(
+                    width: avatarSize,
+                    height: avatarSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected
+                            ? Colors.redAccent
+                            : (vm.isMe
+                                ? AppTheme.accentGold
+                                : (vm.isLeader
+                                    ? Colors.amber
+                                    : _getAvatarColor(vm.data.label ??
+                                        ''))), // Random color for others
+                        width: (vm.isMe || isSelected) ? 2 : 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isSelected
+                              ? Colors.red.withOpacity(0.5)
+                              : (vm.isMe
+                                  ? AppTheme.accentGold.withOpacity(0.3)
+                                  : Colors.black26),
+                          blurRadius: (vm.isMe || isSelected) ? 8 : 4,
+                          spreadRadius: 1,
+                        )
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(avatarSize / 2),
+                      child: Container(
+                        color: vm.isMe
+                            ? AppTheme.primaryPurple
+                            : (isDarkMode
+                                ? Colors.grey[800]
+                                : Colors.grey[200]),
+                        child: Builder(
+                          builder: (context) {
+                            // 1. Prioridad: Avatar Local
+                            if (vm.data.avatarId != null &&
+                                vm.data.avatarId!.isNotEmpty) {
+                              return Image.asset(
+                                'assets/images/avatars/${vm.data.avatarId}.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Center(
                                     child: Text(
                                       (vm.data.label?.isNotEmpty == true)
                                           ? vm.data.label![0].toUpperCase()
                                           : '?',
                                       style: TextStyle(
-                                          color: isDarkMode
-                                              ? Colors.white
-                                              : const Color(0xFF1A1A1D),
+                                          color: Colors.white,
                                           fontSize: avatarSize * 0.4,
                                           fontWeight: FontWeight.bold),
                                     ),
-                                  ),
-                                );
-                              }
+                                  );
+                                },
+                              );
+                            }
 
-                              // 3. Fallback: Iniciales
-                              return Center(
-                                child: Text(
-                                  (vm.data.label?.isNotEmpty == true)
-                                      ? vm.data.label![0].toUpperCase()
-                                      : '?',
-                                  style: TextStyle(
-                                      color: isDarkMode
-                                          ? Colors.white
-                                          : const Color(0xFF1A1A1D),
-                                      fontSize: avatarSize * 0.4,
-                                      fontWeight: FontWeight.bold),
+                            // 2. Fallback: Foto de perfil (URL)
+                            if (vm.data.avatarUrl != null &&
+                                vm.data.avatarUrl!.startsWith('http')) {
+                              return Image.network(
+                                vm.data.avatarUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Center(
+                                  child: Text(
+                                    (vm.data.label?.isNotEmpty == true)
+                                        ? vm.data.label![0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                        color: isDarkMode
+                                            ? Colors.white
+                                            : const Color(0xFF1A1A1D),
+                                        fontSize: avatarSize * 0.4,
+                                        fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               );
-                            },
-                          ),
+                            }
+
+                            // 3. Fallback: Iniciales
+                            return Center(
+                              child: Text(
+                                (vm.data.label?.isNotEmpty == true)
+                                    ? vm.data.label![0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                    color: isDarkMode
+                                        ? Colors.white
+                                        : const Color(0xFF1A1A1D),
+                                    fontSize: avatarSize * 0.4,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
+                  ),
 
-                    // Finished-race dark overlay (circle only, no rectangle)
-                    if (isFinished)
-                      Container(
-                        width: avatarSize,
-                        height: avatarSize,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.black.withOpacity(0.55),
-                        ),
+                  // Finished-race dark overlay (circle only, no rectangle)
+                  if (isFinished)
+                    Container(
+                      width: avatarSize,
+                      height: avatarSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withOpacity(0.55),
                       ),
+                    ),
 
-                    // Status Icon Overlay
-                    if (vm.statusIcon != null)
-                      Container(
-                        width: avatarSize,
-                        height: avatarSize,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(vm.statusIcon,
-                            color: vm.statusColor ?? Colors.white,
-                            size: avatarSize * 0.6),
+                  // Status Icon Overlay
+                  if (vm.statusIcon != null)
+                    Container(
+                      width: avatarSize,
+                      height: avatarSize,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
                       ),
-                  ],
-                ),
+                      child: Icon(vm.statusIcon,
+                          color: vm.statusColor ?? Colors.white,
+                          size: avatarSize * 0.6),
+                    ),
+                ],
               ),
-              const SizedBox(height: 3),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.red
-                      : (vm.isMe
-                          ? AppTheme.accentGold
-                          : Colors.black.withOpacity(0.6)), // Semi-transparent black for others
-                  border: Border.all(
-                      color: isSelected || vm.isMe
-                          ? Colors.transparent
-                          : _getAvatarColor(vm.data.label ?? '').withOpacity(0.5), // Match border with avatar ring
-                      width: 1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+            ),
+            const SizedBox(height: 3),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.red
+                    : (vm.isMe
+                        ? AppTheme.accentGold
+                        : Colors.black.withOpacity(
+                            0.6)), // Semi-transparent black for others
+                border: Border.all(
+                    color: isSelected || vm.isMe
+                        ? Colors.transparent
+                        : _getAvatarColor(vm.data.label ?? '')
+                            .withOpacity(0.5), // Match border with avatar ring
+                    width: 1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    vm.isMe ? 'TÚ' : _getShortName(vm.data.label ?? 'J'),
+                    style: TextStyle(
+                      color: vm.isMe ? Colors.black : currentText,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (vm.isMe || vm.isLeader || isSelected) ...[
+                    const SizedBox(width: 3),
                     Text(
-                      vm.isMe
-                          ? 'TÚ'
-                          : _getShortName(vm.data.label ?? 'J'),
+                      '${vm.data.progress.toInt()}', // Display count
                       style: TextStyle(
-                        color: vm.isMe ? Colors.black : currentText,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
+                        color: vm.isMe ? Colors.black87 : currentTextSec,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    if (vm.isMe || vm.isLeader || isSelected) ...[
-                      const SizedBox(width: 3),
-                      Text(
-                        '${vm.data.progress.toInt()}', // Display count
-                        style: TextStyle(
-                          color: vm.isMe ? Colors.black87 : currentTextSec,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      )
-                    ]
-                  ],
-                ),
+                    )
+                  ]
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-
+      ),
     );
   }
 
@@ -743,7 +753,9 @@ class _LiveIndicatorState extends State<_LiveIndicator>
             color: const Color(0xFFE33E5D), // Cyber Red
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
-              BoxShadow(color: const Color(0xFFE33E5D).withOpacity(0.4), blurRadius: 8)
+              BoxShadow(
+                  color: const Color(0xFFE33E5D).withOpacity(0.4),
+                  blurRadius: 8)
             ]),
         child: const Text(
           'LIVE',

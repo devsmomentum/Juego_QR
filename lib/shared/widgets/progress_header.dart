@@ -119,7 +119,7 @@ class ProgressHeader extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Nivel ${player.level} • ${player.profession}',
+                          'Nivel ${player.level} • ${player.localizedProfession}',
                           style: const TextStyle(
                             fontSize: 14,
                             color: Colors.white70,

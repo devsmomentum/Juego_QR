@@ -665,6 +665,9 @@ void showClueSelector(BuildContext context, Clue currentClue) {
 /// Ya NO cierra la PuzzleScreen — el jugador puede seguir intentando.
 /// Solo sale al mapa si se queda sin vidas.
 void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
+  final provider = Provider.of<GameProvider>(context, listen: false);
+  provider.setModalActive(true);
+
   showDialog(
     context: context,
     builder: (dialogContext) => Dialog(
@@ -731,7 +734,10 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () {
+                        provider.setModalActive(false);
+                        Navigator.pop(dialogContext);
+                      },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -762,6 +768,7 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                         }
 
                         // 2. Cerrar diálogo
+                        provider.setModalActive(false);
                         Navigator.pop(dialogContext);
 
                         // 3. Cerrar pantalla actual (PuzzleScreen)
@@ -1609,7 +1616,6 @@ Widget _buildMinigameScaffold(
                       ),
 
                       // EFECTO BLUR (Inyectado aquí)
-                      // EFECTO BLUR (Inyectado aquí)
                       if (context
                           .watch<PowerEffectReader>()
                           .isPowerActive(PowerType.blur))
@@ -1702,7 +1708,7 @@ class PercentageCalculationWrapper extends StatelessWidget {
       PercentageCalculationMinigame(
           clue: clue,
           onSuccess: () => onSuccess(clue)),
-      isScrollable: false);
+      isScrollable: true);
 }
 
 class ChronologicalOrderWrapper extends StatelessWidget {

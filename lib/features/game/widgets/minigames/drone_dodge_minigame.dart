@@ -100,7 +100,7 @@ class _DroneDodgeMinigameState extends State<DroneDodgeMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -143,7 +143,7 @@ class _DroneDodgeMinigameState extends State<DroneDodgeMinigame> {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final connectivity =
           Provider.of<ConnectivityProvider>(context, listen: false);
-      if (!connectivity.isOnline || gameProvider.isFrozen) return;
+      if (!connectivity.isOnline || gameProvider.isPaused) return;
 
       _updateGameLoop();
     });
@@ -159,7 +159,7 @@ class _DroneDodgeMinigameState extends State<DroneDodgeMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivity =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (connectivity.isOnline && !gameProvider.isFrozen) {
+        if (connectivity.isOnline && !gameProvider.isPaused) {
           _spawnObstacle();
         }
         _rescheduleSpawn();

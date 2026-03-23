@@ -81,7 +81,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 

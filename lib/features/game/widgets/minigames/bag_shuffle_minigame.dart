@@ -94,10 +94,9 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
   void _startGameTimer() {
     _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
+      // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
-
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -149,6 +148,13 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
     for (int i = 0; i < _totalShuffles; i++) {
       if (!mounted || _isGameOver) return;
 
+      // [PAUSE CHECK]
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      while (gameProvider.isPaused && !_isGameOver && mounted) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+      if (!mounted || _isGameOver) return;
+
       int idx1 = Random().nextInt(3);
       int idx2;
       do {
@@ -179,7 +185,8 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
   }
 
   void _onBagTap(BagModel bag) {
-    if (_state != GameState.guessing || _isGameOver) return;
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (_state != GameState.guessing || _isGameOver || gameProvider.isPaused) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =

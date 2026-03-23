@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,7 +30,7 @@ class MemorySequenceMinigame extends StatefulWidget {
 }
 
 class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
-  // Configuración
+  // ConfiguraciÃ³n
   int _currentDifficulty = 6;
   int _lastRandom = -1; // To avoid immediate repeats if possible
   List<int> _sequence = [];
@@ -96,7 +96,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
       if (!mounted) return;
 
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -119,7 +119,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
 
   void _handleTimeOut() {
     _stopTimer();
-    _loseLife("¡Tiempo agotado!");
+    _loseLife("Â¡Tiempo agotado!");
   }
 
   void _startGame() {
@@ -136,7 +136,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
   void _nextRound() {
     if (!mounted || _isGameOver) return;
 
-    // Generar siguiente número evitando repeticiones inmediatas para mayor variedad
+    // Generar siguiente nÃºmero evitando repeticiones inmediatas para mayor variedad
     int nextVal;
     do {
       nextVal = Random().nextInt(4);
@@ -156,7 +156,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     await Future.delayed(const Duration(milliseconds: 1000));
     if (_isGameOver) return;
 
-    // Velocidad progresiva: más rápido a medida que avanza la secuencia
+    // Velocidad progresiva: mÃ¡s rÃ¡pido a medida que avanza la secuencia
     int flashDuration = max(250, 600 - (_sequence.length * 30));
     int pauseDuration = max(100, 200 - (_sequence.length * 15));
 
@@ -182,7 +182,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     if (!_isGameActive || !_isPlayerTurn || _isGameOver) return;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return;
+    if (gameProvider.isPaused) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -215,7 +215,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     
     setState(() {
       _isPlayerTurn = false;
-      _statusMessage = '¡BIEN!';
+      _statusMessage = 'Â¡BIEN!';
     });
 
     if (_sequence.length >= _currentDifficulty) {
@@ -255,7 +255,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
             showShop: true);
       } else {
         _showOverlayState(
-            title: "¡FALLASTE!",
+            title: "Â¡FALLASTE!",
             message: "$reason",
             retry: true,
             showShop: false);
@@ -378,7 +378,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
                       setState(() {
                         _canRetry = true;
                         _showShopButton = false;
-                        _overlayMessage = "¡Vidas recargadas!";
+                        _overlayMessage = "Â¡Vidas recargadas!";
                       });
                     }
                   }
@@ -433,3 +433,4 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     );
   }
 }
+

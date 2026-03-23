@@ -91,9 +91,9 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
     _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =

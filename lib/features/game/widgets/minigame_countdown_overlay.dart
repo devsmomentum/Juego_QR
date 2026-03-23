@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:provider/provider.dart';
+import '../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class MinigameCountdownOverlay extends StatefulWidget {
@@ -57,20 +59,24 @@ class _MinigameCountdownOverlayState extends State<MinigameCountdownOverlay>
   void _startCountdown() async {
     // 3
     if (!mounted) return;
+    await _checkPause();
     await _playPulse();
 
     // 2
     if (!mounted) return;
+    await _checkPause();
     setState(() => _counter = 2);
     await _playPulse();
 
     // 1
     if (!mounted) return;
+    await _checkPause();
     setState(() => _counter = 1);
     await _playPulse();
 
     // YA!
     if (!mounted) return;
+    await _checkPause();
     setState(() => _counter = 0);
     await _playPulse();
 
@@ -78,6 +84,14 @@ class _MinigameCountdownOverlayState extends State<MinigameCountdownOverlay>
       setState(() {
         _isFinished = true;
       });
+    }
+  }
+
+  Future<void> _checkPause() async {
+    if (!mounted) return;
+    final provider = Provider.of<GameProvider>(context, listen: false);
+    while (provider.isPaused && mounted) {
+      await Future.delayed(const Duration(milliseconds: 200));
     }
   }
 

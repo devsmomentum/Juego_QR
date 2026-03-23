@@ -137,7 +137,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -405,10 +405,11 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
                       ),
                       child: Builder(
                         builder: (context) {
-                          final country = _shuffledQuestions[_currentQuestionIndex];
+                          final country =
+                              _shuffledQuestions[_currentQuestionIndex];
                           final code = country['code']!;
                           final name = country['name']!;
-                          
+
                           return Image.network(
                             "https://flagcdn.com/w640/$code.png",
                             fit: BoxFit.cover,
@@ -423,7 +424,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
                                   ),
                                 );
                               }
-                              
+
                               // FALLBACK 2: Siglas
                               return Center(
                                 child: Container(

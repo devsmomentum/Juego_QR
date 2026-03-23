@@ -36,7 +36,7 @@ class ClueCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: isLocked || clue.isCompleted ? null : onTap,
+          onTap: clue.isCompleted ? null : onTap,
           borderRadius: BorderRadius.circular(24),
           child: Container(
             padding: const EdgeInsets.all(4),
