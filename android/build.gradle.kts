@@ -1,3 +1,7 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmCompilerOptions
+
 allprojects {
     repositories {
         google()
@@ -30,6 +34,14 @@ subprojects {
         
         tasks.withType<JavaCompile> {
             options.compilerArgs.add("-Xlint:-options")
+        }
+
+        // [FIX] Ensure Kotlin also targets JVM 17 to match Java configuration
+        // Using modern compilerOptions DSL required by Kotlin 2.2.20+
+        tasks.withType<KotlinCompile>().configureEach {
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_17)
+            }
         }
     }
 }

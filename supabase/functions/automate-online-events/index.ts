@@ -45,13 +45,13 @@ serve(async (req: Request) => {
         // Fetch Global Power Defaults
         const { data: globalPowerCostsData } = await supabaseClient
             .from('app_config')
-            .select('config_value')
-            .eq('config_key', 'power_default_costs')
+            .select('value')
+            .eq('key', 'power_default_costs')
             .maybeSingle();
 
         let globalPowerCosts: Record<string, number> = {};
-        if (globalPowerCostsData && globalPowerCostsData.config_value) {
-            globalPowerCosts = globalPowerCostsData.config_value as Record<string, number>;
+        if (globalPowerCostsData && globalPowerCostsData.value) {
+            globalPowerCosts = globalPowerCostsData.value as Record<string, number>;
         }
 
         // 2. Check if automation is enabled (Bypass if manual)
@@ -230,9 +230,14 @@ serve(async (req: Request) => {
         const gameCount = Math.floor(Math.random() * (maxGames - minGames + 1)) + minGames;
         const configuredWinners = playerCount < 6 ? 1 : playerCount < 11 ? 2 : 3;
 
-        // Safe fee calculation
-        const feeRangeCount = Math.max(0, Math.floor((maxFee - minFee) / feeStep));
-        const entryFee = (Math.floor(Math.random() * (feeRangeCount + 1)) * feeStep) + minFee;
+        // Entry fee calculation: Use a fixed value if min == max, otherwise randomize
+        let entryFee = minFee;
+        if (maxFee > minFee) {
+            const feeRangeCount = Math.floor((maxFee - minFee) / feeStep);
+            entryFee = (Math.floor(Math.random() * (feeRangeCount + 1)) * feeStep) + minFee;
+        } else {
+            entryFee = maxFee; // Use the fixed price set by admin
+        }
 
         console.log(`Config: Players(${minPlayers}-${maxPlayers}), Games(${minGames}-${maxGames}), Fee(${minFee}-${maxFee} step ${feeStep})`);
         console.log(`Generated: ${playerCount} players, ${gameCount} games, ${entryFee} entry fee`);

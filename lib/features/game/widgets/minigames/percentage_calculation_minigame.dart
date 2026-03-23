@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import '../../models/clue.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/connectivity_provider.dart';
@@ -274,12 +275,12 @@ class _PercentageCalculationMinigameState
     return Stack(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          // [FIX] Removed outer horizontal padding to prevent double-padding (parent adds 16px)
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Use minimum space
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.start, // [FIX] Align to start for scrollability
             children: [
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
               // 1. Header: Info and Progress (More compact)
               _buildTopBar(),
@@ -439,19 +440,22 @@ class _PercentageCalculationMinigameState
                 ),
               ),
               const SizedBox(height: 10),
-              FittedBox(
+              // [FIX] Using AutoSizeText for better responsive fitting without clipping
+              SizedBox(
+                height: 70,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(
+                    AutoSizeText(
                       "$_percentage",
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 54,
                         fontWeight: FontWeight.w900,
                       ),
+                      maxLines: 1,
                     ),
                     const Text(
                       "%",
@@ -476,7 +480,7 @@ class _PercentageCalculationMinigameState
                   ),
                 ),
               ),
-              Text(
+              AutoSizeText(
                 "$_baseNumber",
                 style: const TextStyle(
                   color: AppTheme.accentGold,
@@ -484,6 +488,8 @@ class _PercentageCalculationMinigameState
                   fontWeight: FontWeight.w900,
                   fontFamily: 'Orbitron',
                 ),
+                maxLines: 1,
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -497,25 +503,27 @@ class _PercentageCalculationMinigameState
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 1.8, // Shorter buttons
+        // [FIX] More flexible ratio for narrow devices to prevent cramped buttons
+        childAspectRatio: MediaQuery.of(context).size.width < 360 ? 1.5 : 1.8,
       ),
       itemCount: _options.length,
       itemBuilder: (context, index) {
         final opt = _options[index];
         final isSelected = _selectedIdx == index;
 
-        Color cardColor = Colors.white.withOpacity(0.06);
-        Color borderColor = Colors.white.withOpacity(0.12);
+        // Improved visibility for better contrast against background
+        Color cardColor = Colors.black.withOpacity(0.5); // Darker, more solid background
+        Color borderColor = Colors.white.withOpacity(0.25); // More visible border
         Color textColor = Colors.white;
 
         if (isSelected && _wasCorrect != null) {
           cardColor = _wasCorrect!
-              ? AppTheme.successGreen.withOpacity(0.15)
-              : AppTheme.dangerRed.withOpacity(0.15);
+              ? AppTheme.successGreen.withOpacity(0.3)
+              : AppTheme.dangerRed.withOpacity(0.3);
           borderColor = _wasCorrect! ? AppTheme.successGreen : AppTheme.dangerRed;
           textColor = _wasCorrect! ? AppTheme.successGreen : AppTheme.dangerRed;
         }

@@ -489,6 +489,16 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
           _buildSlider('Cant. Máx. Minijuegos', 'max_games', 6, 15, 1),
           _buildSlider('Entry Fee Mín [COIN]', 'min_fee', 0, 50, 5),
           _buildSlider('Entry Fee Máx [COIN]', 'max_fee', 0, 300, 5),
+          const Padding(
+            padding: EdgeInsets.only(left: 16.0, bottom: 20.0),
+            child: Text(
+              "💡 Si Mín != Máx, el precio de entrada será aleatorio entre ambos.",
+              style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic),
+            ),
+          ),
           const Divider(color: Colors.white12, height: 32),
           const Text(
             'Inicio de Sala (Pending → Active)',

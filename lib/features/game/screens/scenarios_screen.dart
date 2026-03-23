@@ -10,13 +10,14 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:ui';
+import 'dart:async'; // Added back
 import '../models/scenario.dart';
 import '../providers/event_provider.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../social/screens/profile_screen.dart';
-import '../../wallet/providers/payment_method_provider.dart'; // NEW
-import '../../auth/providers/player_inventory_provider.dart'; // ADDED
+import '../../wallet/providers/payment_method_provider.dart';
+import '../../auth/providers/player_inventory_provider.dart';
 import '../../../shared/widgets/coin_image.dart';
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
@@ -30,24 +31,24 @@ import 'code_finder_screen.dart';
 import 'game_request_screen.dart';
 import '../../auth/screens/avatar_selection_screen.dart';
 import 'event_waiting_screen.dart';
-import '../models/event.dart'; // Import GameEvent model
+import '../models/event.dart';
+import '../widgets/safe_image.dart';
+import '../../mall/screens/mall_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../widgets/scenario_countdown.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/services/video_preload_service.dart';
 import 'winner_celebration_screen.dart';
-import 'spectator_mode_screen.dart'; // ADDED
-import '../services/game_access_service.dart'; // NEW
+import 'spectator_mode_screen.dart';
+import '../services/game_access_service.dart';
 import 'game_mode_selector_screen.dart';
 import '../../../shared/widgets/loading_overlay.dart';
-import '../mappers/scenario_mapper.dart'; // NEW
+import '../mappers/scenario_mapper.dart';
 import '../../../core/enums/user_role.dart';
-import '../../social/screens/profile_screen.dart'; // For navigation
-import '../../social/screens/wallet_screen.dart'; // For wallet navigation
-import 'package:shared_preferences/shared_preferences.dart'; // For prize persistence
+import '../../social/screens/wallet_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
-import '../../../shared/utils/global_keys.dart'; // To access routeObserver
+import '../../../shared/utils/global_keys.dart';
 
 class ScenariosScreen extends StatefulWidget {
   final bool isOnline;
@@ -2757,9 +2758,11 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                     Positioned.fill(
                                                       child: ClipRRect(
                                                         borderRadius: BorderRadius.circular(24),
-                                                        child: scenario.imageUrl.isNotEmpty
-                                                            ? Image.network(scenario.imageUrl, fit: BoxFit.cover)
-                                                            : Container(color: Colors.black54),
+                                                        child: SafeNetworkImage(
+                                                          url: scenario.imageUrl,
+                                                          height: double.infinity,
+                                                          fit: BoxFit.cover,
+                                                        ),
                                                       ),
                                                     ),
                                                     Positioned.fill(
