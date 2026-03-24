@@ -1825,9 +1825,13 @@ class _WalletScreenState extends State<WalletScreen> {
 
       final data = response.data;
       if (data?['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('¡Retiro procesado exitosamente!'),
-          backgroundColor: AppTheme.successGreen,
+        final isPending = data?['pending'] == true;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isPending
+              ? 'Retiro en proceso. Se confirmara pronto.'
+              : '¡Retiro procesado exitosamente!'),
+          backgroundColor:
+              isPending ? AppTheme.accentGold : AppTheme.successGreen,
         ));
         // Refresh balance and history
         await Provider.of<PlayerProvider>(context, listen: false)

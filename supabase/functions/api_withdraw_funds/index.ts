@@ -49,94 +49,32 @@ serve(async (req) => {
       `[api_withdraw_funds] Processing withdrawal for user ${user.id}, plan_id: ${plan_id}`,
     );
 
-    // 1. FETCH AND VALIDATE WITHDRAWAL PLAN
-    const { data: plan, error: planError } = await supabaseAdmin
-      .from("transaction_plans")
-      .select("id, name, amount, price, is_active, type")
-      .eq("id", plan_id)
-      .eq("type", "withdraw") // Security: Ensure it is a WITHDRAW plan
-      .single();
-
-    if (planError) {
-      console.error("Plan fetch error:", planError);
-      throw new Error(`Plan inválido: ${planError.message}`);
-    }
-
-    if (!plan) {
-      throw new Error("Plan de retiro no encontrado");
-    }
-
-    if (!plan.is_active) {
-      throw new Error("El plan de retiro seleccionado no está disponible");
-    }
-
-    // CRITICAL: Use values from DATABASE, not from client
-    // CRITICAL: Use values from DATABASE
-    const cloversCost = plan.amount;
-    const amountUsd = plan.price;
-
-    // 2. FETCH AND VALIDATE PAYMENT METHOD
-    let withdrawalType = "pago_movil";
-    let finalBank = bank;
-    let finalDni = dni;
-    let finalPhone = phone;
-    let finalStripeEmail: string | null = null;
-
-    if (payment_method_id) {
-      const { data: pm, error: pmError } = await supabaseAdmin
-        .from("user_payment_methods")
-        .select("*")
-        .eq("id", payment_method_id)
-        .eq("user_id", user.id)
-        .single();
-
-      if (pmError || !pm) {
-        console.error("Payment method fetch error:", pmError);
-        throw new Error("Método de pago no encontrado");
-      }
-
-      withdrawalType = pm.type || "pago_movil";
-      if (withdrawalType === "stripe") {
-        finalStripeEmail = pm.identifier;
-        if (!finalStripeEmail) throw new Error("Email de Stripe no configurado");
-      } else {
-        finalBank = pm.bank_code;
-        finalDni = pm.dni;
-        finalPhone = pm.phone_number;
-      }
-    }
-
-    console.log(
-      `[api_withdraw_funds] Plan validated: ${plan.name}, Clovers Cost: ${cloversCost}, Amount: $${amountUsd} USD, Type: ${withdrawalType}`,
+    // 1. ATOMIC REQUEST CREATION (RPC)
+    const { data: requestData, error: requestError } = await supabaseAdmin.rpc(
+      "create_withdrawal_request",
+      {
+        p_user_id: user.id,
+        p_plan_id: plan_id,
+        p_payment_method_id: payment_method_id,
+      },
     );
 
-    // 3. COMMON LOGIC: VALIDATE BALANCE
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("clovers")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      throw new Error("Profile not found");
+    if (requestError || !requestData) {
+      console.error("Withdrawal request error:", requestError);
+      throw new Error(requestError?.message || "Error creando retiro");
     }
 
-    if (profile.clovers < cloversCost) {
-      throw new Error(
-        `Saldo insuficiente: Tienes ${profile.clovers} tréboles, necesitas ${cloversCost}`,
-      );
-    }
-
-    // Deduct clovers immediately (will refund on failure)
-    const { error: deductError } = await supabaseAdmin
-      .from("profiles")
-      .update({ clovers: profile.clovers - cloversCost })
-      .eq("id", user.id);
-
-    if (deductError) throw new Error("Error al descontar tréboles");
+    const requestId = requestData.request_id as string;
+    const withdrawalType = requestData.gateway as string;
+    const amountUsd = requestData.amount_usd as number;
+    const amountVes = requestData.amount_ves as number | null;
+    const finalBank = requestData.bank_code as string | null;
+    const finalDni = requestData.dni as string | null;
+    const finalPhone = requestData.phone_number as string | null;
+    const finalStripeEmail = requestData.stripe_email as string | null;
 
     console.log(
-      `[api_withdraw_funds] Deducted ${cloversCost} clovers from user. New balance: ${profile.clovers - cloversCost}`,
+      `[api_withdraw_funds] Request created: ${requestId}, Type: ${withdrawalType}`,
     );
 
     // 4. BRANCH LOGIC BY TYPE
@@ -145,45 +83,13 @@ serve(async (req) => {
       // For now, we record it as PENDING for manual processing
       // In a real production app, you would call Stripe Payouts API here.
       
-      const transactionId = `ST-${Date.now()}`;
-      
-      // Log Success (as pending/manual for now)
-      await supabaseAdmin.from("payment_transactions").insert({
-        user_id: user.id,
-        amount: amountUsd,
-        type: "WITHDRAWAL",
-        status: "PENDING", // PENDING since it needs manual fulfillment
-        provider_data: {
+      await supabaseAdmin.rpc("mark_withdrawal_pending", {
+        p_request_id: requestId,
+        p_provider_data: {
           gateway: "stripe",
           email: finalStripeEmail,
-          plan_id: plan.id,
-          plan_name: plan.name,
-          clovers_cost: cloversCost,
-          amount_usd: amountUsd,
         },
-        order_id: transactionId,
       });
-
-      // Log in Wallet Ledger
-      const { error: ledgerError } = await supabaseAdmin
-        .from("wallet_ledger")
-        .insert({
-          user_id: user.id,
-          amount: -cloversCost,
-          description: `Retiro Stripe: ${plan.name} - $${amountUsd} USD - Ref: ${finalStripeEmail}`,
-          order_id: null,
-          metadata: {
-            type: "withdrawal",
-            gateway: "stripe",
-            email: finalStripeEmail,
-            plan_id: plan.id,
-            plan_name: plan.name,
-            clovers_cost: cloversCost,
-            amount_usd: amountUsd,
-          },
-        });
-
-      if (ledgerError) console.error("Ledger Log Error (Non-Fatal):", ledgerError);
 
       return new Response(
         JSON.stringify({
@@ -193,7 +99,7 @@ serve(async (req) => {
             type: "stripe",
             email: finalStripeEmail,
             amount_usd: amountUsd,
-            transaction_id: transactionId,
+            transaction_id: requestId,
           }
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
@@ -261,14 +167,13 @@ serve(async (req) => {
     }
 
     // 3. CALCULATE VES AMOUNT
-    const amountVes = amountUsd * bcvRate;
+    const effectiveAmountVes = amountVes ?? (amountUsd * bcvRate);
     console.log(
-      `[api_withdraw_funds] Exchange: $${amountUsd} USD × ${bcvRate} = ${amountVes.toFixed(2)} VES`,
+      `[api_withdraw_funds] Exchange: $${amountUsd} USD × ${bcvRate} = ${effectiveAmountVes.toFixed(2)} VES`,
     );
 
     // 4. CALL PAGO A PAGO WITH VES AMOUNT
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY")!;
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const withdrawUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_instant_credit_delivery`;
 
     // NOTE: Keep DNI and Phone as-is - Pago a Pago expects exact format
@@ -281,16 +186,20 @@ serve(async (req) => {
     // IMPORTANT: Only send the 4 required fields for Pago Móvil
     // Do NOT include null/undefined fields like 'cta' as they may cause errors
     const payload: Record<string, unknown> = {
-      amount: amountVes, // VES amount (converted from USD)
+      amount: effectiveAmountVes, // VES amount (converted from USD)
       bank: finalBank,
       phone: finalPhone, // Keep as-is with leading zero
       dni: finalDni,     // Keep as-is with prefix (V/E/J/P/G)
     };
 
     let apiSuccess = false;
+    let apiPending = false;
     let apiResponseData: Record<string, unknown> | null = null;
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch(withdrawUrl, {
         method: "POST",
         headers: {
@@ -298,7 +207,10 @@ serve(async (req) => {
           pago_pago_api: pagoApiKey,
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       apiResponseData = await response.json() as Record<string, unknown>;
       
@@ -315,56 +227,32 @@ serve(async (req) => {
       
       // Consider success if we have a transaction_id OR explicit success
       apiSuccess = response.ok && (hasTransactionId || explicitSuccess || hasCompletedStatus);
+
+      const explicitFailure =
+        apiResponseData?.success === false && !hasTransactionId && !hasCompletedStatus;
+      if (!apiSuccess && explicitFailure) {
+        apiPending = false;
+      } else if (!apiSuccess) {
+        apiPending = true;
+      }
       
       console.log(`[api_withdraw_funds] Success evaluation: response.ok=${response.ok}, hasTransactionId=${hasTransactionId}, hasCompletedStatus=${hasCompletedStatus}, explicitSuccess=${explicitSuccess}, FINAL=${apiSuccess}`);
       
     } catch (netError) {
       console.error("Network error calling Pago a Pago:", netError);
       apiSuccess = false;
+      apiPending = true;
     }
 
     // 6. HANDLE FAILURE -> REFUND CLOVERS
-    if (!apiSuccess) {
-      console.error("Withdrawal Failed. Refunding clovers...", apiResponseData);
+    if (!apiSuccess && !apiPending) {
+      console.error("Withdrawal Failed.", apiResponseData);
 
-      // Fetch fresh balance to be safe regarding concurrency
-      const { data: currentProfile } = await supabaseAdmin
-        .from("profiles")
-        .select("clovers")
-        .eq("id", user.id)
-        .single();
-
-      if (currentProfile) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({ clovers: currentProfile.clovers + cloversCost })
-          .eq("id", user.id);
-
-        // Log Refund in Wallet Ledger
-        const { error: refundLedgerError } = await supabaseAdmin
-          .from("wallet_ledger")
-          .insert({
-            user_id: user.id,
-            amount: cloversCost, // Positive for refund (clovers returned)
-            description: `Reembolso por fallo en retiro - Plan: ${plan.name}`,
-            order_id: null,
-            metadata: {
-              plan_id: plan.id,
-              plan_name: plan.name,
-              amount_usd: amountUsd,
-              amount_ves: amountVes,
-              bcv_rate: bcvRate,
-              api_response: apiResponseData,
-            },
-          });
-
-        if (refundLedgerError) {
-          console.error(
-            "CRITICAL: Failed to log refund in wallet_ledger:",
-            refundLedgerError,
-          );
-        }
-      }
+      await supabaseAdmin.rpc("mark_withdrawal_failed", {
+        p_request_id: requestId,
+        p_provider_data: apiResponseData,
+        p_refund: true,
+      });
 
       const failureMsg =
         apiResponseData?.message ??
@@ -373,64 +261,22 @@ serve(async (req) => {
       throw new Error(`Retiro fallido: ${failureMsg}. Tréboles reembolsados.`);
     }
 
-    // 7. LOG SUCCESSFUL TRANSACTION
-    // Safe access to nested data properties
-    const responseData = apiResponseData?.data as Record<string, unknown> | undefined;
-    const detailsData = responseData?.details as Record<string, unknown> | undefined;
-    
-    await supabaseAdmin.from("payment_transactions").insert({
-      user_id: user.id,
-      amount: amountVes,
-      type: "WITHDRAWAL",
-      status: "COMPLETED",
-      provider_data: {
-        ...apiResponseData,
-        plan_id: plan.id,
-        plan_name: plan.name,
-        clovers_cost: cloversCost,
-        amount_usd: amountUsd,
-        bcv_rate: bcvRate,
-      },
-      order_id: responseData?.transaction_id || `WD-${Date.now()}`,
-    });
-
-    // 8. LOG IN WALLET LEDGER
-    const referenceInfo =
-      detailsData?.external_reference ||
-      responseData?.reference ||
-      "N/A";
-    const transactionId = responseData?.transaction_id;
-
-    const { error: ledgerError } = await supabaseAdmin
-      .from("wallet_ledger")
-      .insert({
-        user_id: user.id,
-        amount: -cloversCost, // Negative for withdrawal (clovers spent)
-        description: `Retiro: ${plan.name} - $${amountUsd} USD (${amountVes.toFixed(2)} VES) - Ref: ${referenceInfo}`,
-        order_id: null,
-        metadata: {
-          plan_id: plan.id,
-          plan_name: plan.name,
-          clovers_cost: cloversCost,
-          amount_usd: amountUsd,
-          amount_ves: amountVes,
-          bcv_rate: bcvRate,
-          transaction_id: transactionId,
-          api_response: apiResponseData,
+      if (apiPending) {
+      await supabaseAdmin.rpc("mark_withdrawal_pending", {
+        p_request_id: requestId,
+        p_provider_data: {
+          ...apiResponseData,
+          pending_reason: "provider_latency_or_unknown",
         },
       });
 
-    if (ledgerError) {
-      console.error(
-        "CRITICAL: Failed to log withdrawal in wallet_ledger:",
-        ledgerError,
-      );
       return new Response(
         JSON.stringify({
           success: true,
+          pending: true,
+          message:
+            "Retiro en proceso. Te notificaremos cuando se confirme el pago.",
           data: apiResponseData,
-          warning:
-            "Transaction completed but ledger update failed. Contact support.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -438,6 +284,20 @@ serve(async (req) => {
         },
       );
     }
+
+    // 7. LOG SUCCESSFUL TRANSACTION
+    // Safe access to nested data properties
+    const responseData = apiResponseData?.data as Record<string, unknown> | undefined;
+    const detailsData = responseData?.details as Record<string, unknown> | undefined;
+    
+    await supabaseAdmin.rpc("mark_withdrawal_completed", {
+      p_request_id: requestId,
+      p_provider_data: {
+        ...apiResponseData,
+        transaction_id: responseData?.transaction_id,
+        reference: detailsData?.external_reference || responseData?.reference,
+      },
+    });
 
     return new Response(
       JSON.stringify({
