@@ -96,6 +96,21 @@ class BettingService {
     }
   }
 
+  /// Obtiene el resumen del resultado de apuestas para el usuario.
+  /// Retorna un mapa con payout, pool, ganadores y conteos de tickets.
+  Future<Map<String, dynamic>> getUserBetOutcome(String eventId, String userId) async {
+    try {
+      final response = await _supabase.rpc('get_user_bet_outcome', params: {
+        'p_event_id': eventId,
+        'p_user_id': userId,
+      });
+      return Map<String, dynamic>.from(response);
+    } catch (e) {
+      debugPrint('BettingService: Error getting bet outcome: $e');
+      return {'success': false, 'message': 'Error de conexión: $e'};
+    }
+  }
+
   /// Obtiene el número total de apuestas en un evento.
   /// Usa el RPC seguro para no depender de lectura directa de `bets`.
   Future<int> getTotalBetsCount(String eventId) async {

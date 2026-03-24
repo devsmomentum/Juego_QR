@@ -11,6 +11,7 @@ import 'scenarios_screen.dart';
 import 'game_mode_selector_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../services/betting_service.dart';
 
 class WinnerCelebrationScreen extends StatefulWidget {
   final String eventId;
@@ -45,6 +46,10 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
   bool _podiumSyncIncomplete =
       false; // True if the 30s timeout fired before data arrived
   Map<String, int> _prizes = {};
+  Map<String, dynamic>? _betOutcome;
+  bool _isLoadingBetOutcome = true;
+  bool _betOutcomeError = false;
+  bool _hasUserBets = false;
 
   // Podium Winners Data (from game_players.final_placement)
   List<Map<String, dynamic>> _podiumWinners = [];
@@ -84,6 +89,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       _fetchPrizes();
       // Fetch podium winners from DB (final_placement)
       _fetchPodiumWinners();
+      // Fetch bet outcome for spectators/bettors
+      _fetchBetOutcome();
 
       // Add listener to self-correct position
       gameProvider.addListener(_updatePositionFromLeaderboard);
@@ -295,6 +302,42 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
     }
   }
 
+  Future<void> _fetchBetOutcome() async {
+    try {
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final userId = playerProvider.currentPlayer?.userId ?? playerProvider.currentPlayer?.id;
+
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoadingBetOutcome = false;
+          });
+        }
+        return;
+      }
+
+      final bettingService = BettingService(Supabase.instance.client);
+      final outcome = await bettingService.getUserBetOutcome(widget.eventId, userId);
+      final success = outcome['success'] == true;
+
+      if (mounted) {
+        setState(() {
+          _betOutcome = success ? outcome : null;
+          _betOutcomeError = !success;
+          _hasUserBets = ((outcome['user_bets_count'] as num?)?.toInt() ?? 0) > 0;
+          _isLoadingBetOutcome = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _betOutcomeError = true;
+          _isLoadingBetOutcome = false;
+        });
+      }
+    }
+  }
+
   void _updatePositionFromLeaderboard() {
     if (!mounted) return;
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -456,6 +499,154 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       default:
         return AppTheme.accentGold;
     }
+  }
+
+  Widget _buildBetOutcomeCard(bool isSmallScreen) {
+    final outcome = _betOutcome;
+    if (outcome == null) {
+      return _buildBetOutcomeMessage(
+        'No se pudo cargar el resultado de apuestas.',
+        AppTheme.primaryPurple,
+      );
+    }
+
+    final isResolved = outcome['is_resolved'] == true;
+    if (!isResolved) {
+      return _buildBetOutcomeMessage(
+        'Calculando resultado de apuestas...',
+        AppTheme.accentGold,
+        showLoader: true,
+      );
+    }
+
+    final won = outcome['won'] == true;
+    final totalPool = (outcome['total_pool'] as num?)?.toInt() ?? 0;
+    final totalWinners = (outcome['total_winning_tickets'] as num?)?.toInt() ?? 0;
+    final payout = (outcome['payout_per_ticket'] as num?)?.toInt() ?? 0;
+    final userWinnings = (outcome['user_winnings'] as num?)?.toInt() ?? 0;
+    final runnerCommission = (outcome['runner_commission'] as num?)?.toInt() ?? 0;
+
+    final headerText = won ? 'Ganaste la apuesta' : 'Perdiste la apuesta';
+    final accent = won ? AppTheme.accentGold : AppTheme.primaryPurple;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D0D0F).withOpacity(0.6),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: accent.withOpacity(0.6), width: 1.5),
+          ),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: isSmallScreen ? 10 : 14,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: accent.withOpacity(0.2), width: 1.0),
+              color: accent.withOpacity(0.02),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  headerText,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildBetStatRow('Pote', totalPool),
+                _buildBetStatRow('Ganadores', totalWinners),
+                _buildBetStatRow('Pago por ticket', payout),
+                _buildBetStatRow('Comision ganador', runnerCommission),
+                if (won) _buildBetStatRow('Tu ganancia', userWinnings, highlight: true),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBetOutcomeMessage(String message, Color accent, {bool showLoader = false}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D0D0F).withOpacity(0.6),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: accent.withOpacity(0.6), width: 1.5),
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: accent.withOpacity(0.2), width: 1.0),
+              color: accent.withOpacity(0.02),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showLoader) ...[
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.accentGold,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBetStatRow(String label, int value, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          Text(
+            '$value ',
+            style: TextStyle(
+              color: highlight ? AppTheme.accentGold : Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+          const CoinImage(size: 12),
+        ],
+      ),
+    );
   }
 
   void _showLogoutDialog() {
@@ -989,6 +1180,19 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                                   ),
                                 ),
                               ),
+                            )
+                          else if (_isLoadingBetOutcome)
+                            _buildBetOutcomeMessage(
+                              'Calculando resultado de apuestas...',
+                              AppTheme.accentGold,
+                              showLoader: true,
+                            )
+                          else if (_hasUserBets)
+                            _buildBetOutcomeCard(isSmallScreen)
+                          else if (_betOutcomeError)
+                            _buildBetOutcomeMessage(
+                              'No se pudo cargar el resultado de apuestas.',
+                              AppTheme.primaryPurple,
                             )
                           else
                             ClipRRect(
