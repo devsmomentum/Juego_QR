@@ -543,7 +543,6 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         } catch (e) {
           debugPrint('PlayerProvider: ⚠️ Error clearing power effects: $e');
         }
-        // NOTE: We do NOT update the status. Banned users remain banned.
         debugPrint(
             'PlayerProvider: ${existing['status']} user can now view as spectator (status unchanged)');
       }

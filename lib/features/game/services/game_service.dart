@@ -335,70 +335,20 @@ class GameService {
   }
 
   /// Obtiene las pistas de un evento.
-  /// [PERFORMANCE] Migrado de Edge Function a RPC atómico.
+  /// Usa la RPC optimizada get_clues_with_progress para alto rendimiento.
   Future<List<Clue>> getClues(String eventId) async {
     try {
-      // 1. Fetch clues with progress from RPC
       final response = await _supabase.rpc('get_clues_with_progress', params: {
         'p_event_id': eventId,
       });
 
       if (response == null) return [];
 
-      final List<dynamic> rpcData = response is List ? response : [];
-      
-      // 2. SAFETY FETCH: Ensure all riddle/puzzle data is present by fetching directly from clues table.
-      // Sometimes RPCs might not include newly added columns or use different naming.
-      final staticCluesData = await _supabase
-          .from('clues')
-          .select('id, riddle_answer, riddle_question, puzzle_type, minigame_url, qr_code, latitude, longitude')
-          .eq('event_id', eventId);
-
-      // Create a map for easy lookup
-      final Map<String, Map<String, dynamic>> staticMap = {
-        for (var item in staticCluesData) item['id'].toString(): Map<String, dynamic>.from(item)
-      };
-
-      // 3. Merge data
-      final List<Map<String, dynamic>> mergedData = rpcData.map((dynamic rpcItem) {
-        final Map<String, dynamic> item = Map<String, dynamic>.from(rpcItem as Map);
-        final String id = item['id'].toString();
-        
-        if (staticMap.containsKey(id)) {
-          final staticData = staticMap[id]!;
-          // Prioritize static data for riddle/puzzle fields to ensure accuracy
-          item['riddle_answer'] = staticData['riddle_answer'] ?? item['riddle_answer'];
-          item['riddle_question'] = staticData['riddle_question'] ?? item['riddle_question'];
-          item['puzzle_type'] = staticData['puzzle_type'] ?? item['puzzle_type'];
-          item['minigame_url'] = staticData['minigame_url'] ?? item['minigame_url'];
-          item['qr_code'] = staticData['qr_code'] ?? item['qr_code'];
-          item['latitude'] = staticData['latitude'] ?? item['latitude'];
-          item['longitude'] = staticData['longitude'] ?? item['longitude'];
-        }
-        
-        return item;
-      }).toList();
-
-      return mergedData
-          .map((json) => Clue.fromJson(json))
-          .toList();
+      final data = response is List ? response : [];
+      return data.map((json) => Clue.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error fetching clues (RPC + Static Merge): $e');
-      // If RPC fails, try a fallback with just static data
-      try {
-        final fallbackClues = await _supabase
-            .from('clues')
-            .select()
-            .eq('event_id', eventId)
-            .order('sequence_index', ascending: true);
-        
-        return (fallbackClues as List)
-            .map((json) => Clue.fromJson(json))
-            .toList();
-      } catch (e2) {
-        debugPrint('Final fallback failed: $e2');
-        rethrow;
-      }
+      debugPrint('Error fetching clues (RPC): $e');
+      rethrow;
     }
   }
 
