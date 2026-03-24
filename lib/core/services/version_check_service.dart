@@ -50,12 +50,8 @@ class VersionCheckService {
         final iosUrl = data['ios_store_url'] as String?;
         downloadUrl = (iosUrl != null && iosUrl.isNotEmpty) ? iosUrl : null;
       } else if (defaultTargetPlatform == TargetPlatform.android) {
-        final storeUrl = data['android_store_url'] as String?;
-        final apkUrl   = data['apk_download_url']  as String?;
-        // Si ya está en Play Store usa esa URL; si no, descarga directa
-        downloadUrl = (storeUrl != null && storeUrl.isNotEmpty)
-            ? storeUrl
-            : ((apkUrl != null && apkUrl.isNotEmpty) ? apkUrl : null);
+        // Redirigir al link de descarga de la APK en Vercel como se solicitó
+        downloadUrl = 'https://sitioweb-treasure.vercel.app/';
       }
       // En web no forzamos descarga
 
