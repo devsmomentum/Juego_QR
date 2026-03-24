@@ -31,6 +31,13 @@ import '../widgets/clue_form_dialog.dart';
 import '../../mall/models/mall_store.dart';
 import '../widgets/competition_financials_widget.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../widgets/location_picker_dialog.dart';
+import '../widgets/competition_detail/details_tab.dart';
+import '../widgets/competition_detail/participants_tab.dart';
+import '../widgets/competition_detail/clues_tab.dart';
+import '../widgets/competition_detail/stores_tab.dart';
+import '../widgets/competition_detail/safe_reset_confirm_dialog.dart';
+import '../widgets/competition_detail/reset_summary_dialog.dart';
 
 class CompetitionDetailScreen extends StatefulWidget {
   final GameEvent event;
@@ -101,10 +108,6 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   int _pot = 0; // State for pot
   List<Map<String, dynamic>> _leaderboardData = [];
 
-  // Search state for participants tab
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce;
   Map<String, String> _playerStatuses =
       {}; // Cache para estados locales de baneo
   RealtimeChannel? _gamePlayersChannel; // Channel for realtime updates
@@ -322,268 +325,24 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   void dispose() {
     _tabController.dispose();
     _locationController.dispose();
-    _searchController.dispose();
-    _debounce?.cancel();
     _gamePlayersChannel?.unsubscribe(); // Unsubscribe from realtime channel
     super.dispose();
   }
 
   Future<void> _selectLocationOnMap() async {
-    // Obtener ubicación actual para centrar el mapa
-    Position? position;
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint('Servicios de ubicación deshabilitados.');
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.whileInUse ||
-          permission == LocationPermission.always) {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.best,
-          timeLimit: const Duration(seconds: 15),
-        );
-      }
-    } catch (e) {
-      debugPrint("Error obteniendo ubicación: $e");
-    }
-
-    // Si ya tenemos una ubicación guardada, usarla como inicial
-    final latlng.LatLng initial = (_latitude != 0 &&
-            _longitude != 0) // Check if valid (assuming 0 is invalid/default)
-        ? latlng.LatLng(_latitude, _longitude)
-        : (position != null
-            ? latlng.LatLng(position.latitude, position.longitude)
-            : const latlng.LatLng(10.4806, -66.9036));
-
-    latlng.LatLng? picked;
-    String? address;
-    latlng.LatLng temp = initial;
-    final MapController mapController = MapController();
-    final TextEditingController searchController = TextEditingController();
-    Timer? debounce;
-    List<dynamic> suggestions = [];
-
-    await showDialog(
+    final latlng.LatLng? picked = await showDialog<latlng.LatLng>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            Future<void> searchLocation() async {
-              final query = searchController.text;
-              if (query.isEmpty) {
-                setStateDialog(() => suggestions = []);
-                return;
-              }
-
-              final apiKey = 'pk.45e576837f12504a63c6d1893820f1cf';
-              final url = Uri.parse(
-                  'https://us1.locationiq.com/v1/search.php?key=$apiKey&q=$query&format=json&limit=5&countrycodes=ve');
-
-              try {
-                final response = await http.get(url);
-                if (response.statusCode == 200) {
-                  final data = json.decode(response.body);
-                  if (data is List) {
-                    setStateDialog(() {
-                      suggestions = data;
-                    });
-                  }
-                }
-              } catch (e) {
-                debugPrint('Error searching: $e');
-              }
-            }
-
-            void selectSuggestion(dynamic suggestion) {
-              final lat = double.parse(suggestion['lat']);
-              final lon = double.parse(suggestion['lon']);
-              final display = suggestion['display_name'];
-              final newPos = latlng.LatLng(lat, lon);
-
-              setStateDialog(() {
-                temp = newPos;
-                suggestions = [];
-                searchController.text = display;
-              });
-              mapController.move(newPos, 15);
-              FocusScope.of(context).unfocus();
-            }
-
-            return AlertDialog(
-              backgroundColor: AppTheme.cardBg,
-              contentPadding: const EdgeInsets.all(15),
-              content: SizedBox(
-                width: 350,
-                height: 450,
-                child: Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: TextField(
-                        controller: searchController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar dirección...',
-                          hintStyle: const TextStyle(color: Colors.white54),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 15, vertical: 12),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.search, color: Colors.white),
-                            onPressed: searchLocation,
-                          ),
-                        ),
-                        onChanged: (value) {
-                          if (debounce?.isActive ?? false) debounce!.cancel();
-                          debounce =
-                              Timer(const Duration(milliseconds: 400), () {
-                            searchLocation();
-                          });
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          children: [
-                            FlutterMap(
-                              mapController: mapController,
-                              options: MapOptions(
-                                initialCenter: initial,
-                                initialZoom: 14,
-                                cameraConstraint: CameraConstraint.contain(
-                                  bounds: LatLngBounds(
-                                    const latlng.LatLng(0.5, -73.5),
-                                    const latlng.LatLng(12.5, -59.5),
-                                  ),
-                                ),
-                                minZoom: 5,
-                                onTap: (tapPos, latLng) {
-                                  setStateDialog(() {
-                                    temp = latLng;
-                                    suggestions = [];
-                                  });
-                                },
-                              ),
-                              children: [
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-                                  subdomains: const ['a', 'b', 'c'],
-                                ),
-                                MarkerLayer(
-                                  markers: [
-                                    Marker(
-                                      width: 40,
-                                      height: 40,
-                                      point: temp,
-                                      child: const Icon(Icons.location_on,
-                                          color: Colors.red, size: 40),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (suggestions.isNotEmpty)
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                height: 200,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1E1E1E),
-                                    borderRadius: const BorderRadius.vertical(
-                                        bottom: Radius.circular(8)),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.5),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 5),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ListView.separated(
-                                    padding: EdgeInsets.zero,
-                                    itemCount: suggestions.length,
-                                    separatorBuilder: (_, __) => const Divider(
-                                        height: 1, color: Colors.white10),
-                                    itemBuilder: (context, index) {
-                                      final item = suggestions[index];
-                                      return ListTile(
-                                        dense: true,
-                                        title: Text(
-                                          item['display_name'] ?? '',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 13),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        onTap: () => selectSuggestion(item),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            Positioned(
-                              bottom: 10,
-                              left: 0,
-                              right: 0,
-                              child: Center(
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    if (temp.latitude < 0.5 ||
-                                        temp.latitude > 12.5 ||
-                                        temp.longitude < -73.5 ||
-                                        temp.longitude > -59.5) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              '⚠️ Por favor selecciona una ubicación dentro de Venezuela'),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    picked = temp;
-                                    Navigator.of(context).pop();
-                                  },
-                                  child:
-                                      const Text('Seleccionar esta ubicación'),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => LocationPickerDialog(
+        initialLatitude: _latitude,
+        initialLongitude: _longitude,
+      ),
     );
 
     if (picked != null) {
+      String address = 'Ubicación seleccionada';
       final apiKey = 'pk.45e576837f12504a63c6d1893820f1cf';
       final url = Uri.parse(
-          'https://us1.locationiq.com/v1/reverse.php?key=$apiKey&lat=${picked!.latitude}&lon=${picked!.longitude}&format=json');
+          'https://us1.locationiq.com/v1/reverse.php?key=$apiKey&lat=${picked.latitude}&lon=${picked.longitude}&format=json');
       try {
         final response = await http.get(url);
         if (response.statusCode == 200) {
@@ -591,21 +350,17 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           if (mounted) {
             address = data['display_name'] ?? 'Ubicación seleccionada';
           }
-        } else {
-          address = 'Ubicación seleccionada';
         }
       } catch (_) {
-        address = 'Ubicación seleccionada';
+        // Fallback
       }
 
       if (mounted) {
         setState(() {
-          _latitude = picked!.latitude;
-          _longitude = picked!.longitude;
-          if (address != null) {
-            _locationName = address!;
-            _locationController.text = _locationName;
-          }
+          _latitude = picked.latitude;
+          _longitude = picked.longitude;
+          _locationName = address;
+          _locationController.text = _locationName;
         });
       }
     }
@@ -797,7 +552,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     return await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (ctx) => _SafeResetConfirmDialog(
+          builder: (ctx) => SafeResetConfirmDialog(
             eventTitle: widget.event.title,
           ),
         ) ??
@@ -806,93 +561,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
   /// Shows a post-reset summary dialog with integrity verification
   void _showResetSummary(Map<String, dynamic> result) {
-    final summary = result['summary'] as Map<String, dynamic>? ?? {};
-    final cluesPreserved = result['clues_preserved'] ?? 0;
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Row(
-          children: [
-            Icon(Icons.verified_user, color: Colors.greenAccent, size: 28),
-            SizedBox(width: 8),
-            Text("Reinicio Seguro Completado",
-                style: TextStyle(color: Colors.white, fontSize: 16)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Integrity verification
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.greenAccent.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.shield,
-                        color: Colors.greenAccent, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      "$cluesPreserved pistas intactas e íntegras",
-                      style: const TextStyle(
-                        color: Colors.greenAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text("Datos eliminados:",
-                  style: TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              _summaryRow("Jugadores expulsados", summary['players_removed']),
-              _summaryRow("Solicitudes limpiadas", summary['requests_removed']),
-              _summaryRow("Progreso de pistas", summary['progress_cleared']),
-              _summaryRow("Poderes limpiados", summary['powers_cleared']),
-              _summaryRow("Transacciones", summary['transactions_cleared']),
-              _summaryRow("Logs de combate", summary['combat_logs_cleared']),
-              _summaryRow("Apuestas", summary['bets_cleared']),
-              _summaryRow("Premios", summary['prizes_cleared']),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryPurple),
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text("Entendido", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      builder: (ctx) => ResetSummaryDialog(result: result),
     );
   }
 
-  Widget _summaryRow(String label, dynamic count) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: const TextStyle(color: Colors.white54, fontSize: 13)),
-          Text("${count ?? 0}",
-              style: const TextStyle(color: Colors.orangeAccent, fontSize: 13)),
-        ],
-      ),
-    );
-  }
+
 
   // --- Pot Logic ---
 
@@ -1335,800 +1010,72 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   Widget _buildDetailsTab() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
-    final inputDecoration = InputDecoration(
-      filled: true,
-      fillColor: AppTheme.cardBg,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-      ),
-      labelStyle: const TextStyle(color: Colors.white54),
-    );
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image Section
-            GestureDetector(
-              onTap: _isEventActive ? null : _pickImage,
-              child: Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(16),
-                  image: _selectedImage != null
-                      ? DecorationImage(
-                          image: NetworkImage(_selectedImage!
-                              .path), // For web/network usually needs specific handling but works for XFile path on mobile often or bytes
-                          fit: BoxFit.cover,
-                        )
-                      : (widget.event.imageUrl.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(widget.event.imageUrl),
-                              fit: BoxFit.cover,
-                            )
-                          : null),
-                ),
-                child: _selectedImage == null && widget.event.imageUrl.isEmpty
-                    ? const Icon(Icons.add_a_photo,
-                        size: 50, color: Colors.white54)
-                    : null,
-              ),
-            ),
-            if (_selectedImage != null)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text("Nueva imagen seleccionada (guardar para aplicar)",
-                    style: TextStyle(color: Colors.greenAccent)),
-              ),
-            const SizedBox(height: 20),
-
-            // --- POT DISPLAY ---
-            if (_entryFee > 0)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.accentGold.withOpacity(0.1),
-                      AppTheme.accentGold.withOpacity(0.02)
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-                ),
-                child: Column(
-                  children: [
-                    const Text('POTE ACUMULADO',
-                        style: TextStyle(
-                            color: AppTheme.accentGold,
-                            fontSize: 12,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('${_currentPot.toStringAsFixed(0)} ',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900)),
-                        const CoinImage(size: 28),
-                      ],
-                    ),
-                    const Text('Total Acumulado en Base de Datos',
-                        style: TextStyle(
-                            color: Colors.white38, fontSize: 12)),
-                  ],
-                ),
-              ),
-
-            // Fields
-            // --- Header Info (Type) ---
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _eventType == 'online'
-                        ? Colors.blueAccent.withOpacity(0.2)
-                        : Colors.orangeAccent.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _eventType == 'online'
-                          ? Colors.blueAccent
-                          : Colors.orangeAccent,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _eventType == 'online' ? Icons.public : Icons.location_on,
-                        size: 16,
-                        color: _eventType == 'online'
-                            ? Colors.blueAccent
-                            : Colors.orangeAccent,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _eventType == 'online' ? 'EVENTO ONLINE' : 'EVENTO PRESENCIAL',
-                        style: TextStyle(
-                          color: _eventType == 'online'
-                              ? Colors.blueAccent
-                              : Colors.orangeAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.event.isAutomated)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentGold.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppTheme.accentGold),
-                    ),
-                    child: const Text(
-                      'AUTOMATIZADO',
-                      style: TextStyle(
-                        color: AppTheme.accentGold,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            TextFormField(
-              initialValue: _title,
-              readOnly: _isEventActive,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white38 : Colors.white),
-              decoration: inputDecoration.copyWith(labelText: 'Título'),
-              validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              onSaved: (v) => _title = v!,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              initialValue: _description,
-              readOnly: _isEventActive,
-              maxLines: 3,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white38 : Colors.white),
-              decoration: inputDecoration.copyWith(labelText: 'Descripción'),
-              validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              onSaved: (v) => _description = v!,
-            ),
-            const SizedBox(height: 16),
-
-            // --- Sponsor Selection ---
-            if (_sponsors.isNotEmpty)
-              DropdownButtonFormField<String>(
-                value: _sponsorId,
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Patrocinador (Opcional)',
-                  prefixIcon: const Icon(Icons.star_border, color: Colors.white38),
-                ),
-                dropdownColor: AppTheme.cardBg,
-                style: const TextStyle(color: Colors.white),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text("Sin Patrocinador"),
-                  ),
-                  ..._sponsors.map((sponsor) {
-                    return DropdownMenuItem<String>(
-                      value: sponsor.id,
-                      child: Text(sponsor.name),
-                    );
-                  }).toList(),
-                ],
-                onChanged: _isEventActive
-                    ? null
-                    : (value) => setState(() => _sponsorId = value),
-              ),
-            if (_sponsors.isNotEmpty) const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _pin,
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white38 : Colors.white),
-                    decoration:
-                        inputDecoration.copyWith(labelText: 'PIN (6 dígitos)'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
-                    ],
-                    validator: (v) =>
-                        v!.length != 6 ? 'Debe tener 6 dígitos' : null,
-                    onSaved: (v) => _pin = v!,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (widget.event.type != 'online')
-                  Container(
-                    height: 56,
-                    width: 56,
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentGold.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.accentGold.withOpacity(0.3)),
-                    ),
-                    child: IconButton(
-                      icon:
-                          const Icon(Icons.qr_code, color: AppTheme.accentGold),
-                      tooltip: "Ver QR del Evento",
-                      onPressed: () {
-                        if (_pin.length == 6) {
-                          final qrData = "EVENT:${widget.event.id}:$_pin";
-                          _showQRDialog(qrData, "QR de Acceso", "PIN: $_pin");
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Guarda el PIN primero')),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                if (widget.event.type != 'online') const SizedBox(width: 8),
-                if (widget.event.type != 'online')
-                  Container(
-                    height: 56,
-                    width: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.blueAccent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border:
-                          Border.all(color: Colors.blueAccent.withOpacity(0.3)),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.picture_as_pdf,
-                          color: Colors.blueAccent),
-                      tooltip: "Guardar Todos los QRs (PDF)",
-                      onPressed: () {
-                        if (_pin.length == 6) {
-                          _generateAllQRsPdf();
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Guarda el PIN primero')),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                if (widget.event.type != 'online') const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _maxParticipants.toString(),
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white38 : Colors.white),
-                    decoration:
-                        inputDecoration.copyWith(labelText: 'Max. Jugadores'),
-                    keyboardType: TextInputType.number,
-                    onSaved: (v) => _maxParticipants = int.parse(v!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Prices Row (Entry Fee + Bet Ticket)
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _entryFee == 0 ? '' : _entryFee.toString(),
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white38 : Colors.white),
-                    decoration: inputDecoration.copyWith(
-                      labelText: 'Precio Entrada',
-                      suffix: const CoinImage(size: 16),
-                      helperText: '0 para GRATIS',
-                      helperStyle: const TextStyle(color: Colors.white38),
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onSaved: (v) =>
-                        _entryFee = (v == null || v.isEmpty) ? 0 : int.parse(v),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _betTicketPrice.toString(),
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white38 : Colors.white),
-                    decoration: inputDecoration.copyWith(
-                      labelText: 'Precio Apuesta',
-                      suffix: const CoinImage(size: 16),
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onSaved: (v) =>
-                        _betTicketPrice = (v == null || v.isEmpty) ? 100 : int.parse(v),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Winners Selection
-            const Text("Configuración de Premios",
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.accentGold)),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Cantidad de Ganadores:",
-                      style: TextStyle(color: Colors.white)),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment<int>(value: 1, label: Text("1")),
-                      ButtonSegment<int>(value: 2, label: Text("2")),
-                      ButtonSegment<int>(value: 3, label: Text("3")),
-                    ],
-                    selected: {_configuredWinners},
-                    onSelectionChanged: _isEventActive
-                        ? null
-                        : (Set<int> newSelection) {
-                            setState(() {
-                              _configuredWinners = newSelection.first;
-                            });
-                          },
-                    style: ButtonStyle(
-                      backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                        (Set<MaterialState> states) {
-                          if (states.contains(MaterialState.selected)) {
-                            return AppTheme.accentGold;
-                          }
-                          return Colors.transparent;
-                        },
-                      ),
-                      foregroundColor: MaterialStateProperty.resolveWith<Color>(
-                          (Set<MaterialState> states) {
-                        if (states.contains(MaterialState.selected)) {
-                          return Colors.black;
-                        }
-                        return Colors.white54;
-                      }),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // --- Pricing Section (NEW: Match Creation) ---
-            const Text("Tienda y Precios",
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.accentGold)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showGlobalPricesDialog(isSpectatorMode: false),
-                          icon: const Icon(Icons.shopping_bag_outlined),
-                          label: const Text("Precios Jugadores"),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white24),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showGlobalPricesDialog(isSpectatorMode: true),
-                          icon: const Icon(Icons.visibility_outlined),
-                          label: const Text("Precios Espectadores"),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.accentGold,
-                            side: const BorderSide(color: AppTheme.accentGold),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Estos precios sobrescriben los valores por defecto de los poderes en este evento.",
-                    style: TextStyle(color: Colors.white38, fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            TextFormField(
-              initialValue: _clue,
-              readOnly: _isEventActive,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white38 : Colors.white),
-              decoration: inputDecoration.copyWith(
-                  labelText: 'Pista de Victoria / Final'),
-              onSaved: (v) => _clue = v!,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _locationController,
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white38 : Colors.white),
-                    decoration: inputDecoration.copyWith(
-                        labelText: 'Nombre de Ubicación'),
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                    onSaved: (v) => _locationName = v!,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (!_isEventActive)
-                  Container(
-                    height: 56,
-                    width: 56,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryPurple.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.primaryPurple.withOpacity(0.5)),
-                    ),
-                    child: IconButton(
-                      icon:
-                          const Icon(Icons.map, color: AppTheme.primaryPurple),
-                      tooltip: "Seleccionar en Mapa",
-                      onPressed: _selectLocationOnMap,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // --- DATE & TIME PICKER ---
-            InkWell(
-              onTap: _isEventActive
-                  ? null
-                  : () async {
-                      // 1. Pick Date
-                      final pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime(2030),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.dark(
-                                primary: AppTheme.accentGold,
-                                onPrimary: Colors.black,
-                                surface: AppTheme.cardBg,
-                                onSurface: Colors.white,
-                              ),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-
-                      if (pickedDate != null) {
-                        // 2. Pick Time (if date was picked)
-                        if (!context.mounted) return;
-                        final pickedTime = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(_selectedDate),
-                          builder: (context, child) {
-                            return Theme(
-                              data: Theme.of(context).copyWith(
-                                timePickerTheme: TimePickerThemeData(
-                                  backgroundColor: AppTheme.cardBg,
-                                  hourMinuteTextColor: Colors.white,
-                                  dayPeriodTextColor: Colors.white,
-                                  dialHandColor: AppTheme.accentGold,
-                                  dialBackgroundColor: AppTheme.darkBg,
-                                  entryModeIconColor: AppTheme.accentGold,
-                                ),
-                                colorScheme: const ColorScheme.dark(
-                                  primary: AppTheme.accentGold,
-                                  onPrimary: Colors.black,
-                                  surface: AppTheme.cardBg,
-                                  onSurface: Colors.white,
-                                ),
-                              ),
-                              child: child!,
-                            );
-                          },
-                        );
-
-                        if (pickedTime != null) {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              pickedDate.year,
-                              pickedDate.month,
-                              pickedDate.day,
-                              pickedTime.hour,
-                              pickedTime.minute,
-                            );
-                          });
-                        }
-                      }
-                    },
-              child: InputDecorator(
-                decoration: _buildInputDecoration('Fecha y Hora del Evento',
-                    icon: Icons.access_time),
-                child: Text(
-                  "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}   ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}",
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _isEventActive ? null : _saveChanges,
-                icon: Icon(_isEventActive ? Icons.lock : Icons.save),
-                label: Text(_isEventActive
-                    ? "Evento No Editable (${widget.event.status == 'active' ? 'En Curso' : widget.event.status == 'completed' ? 'Completado' : 'Bloqueado'})"
-                    : "Guardar Cambios"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _isEventActive ? Colors.grey : AppTheme.primaryPurple,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
+    return DetailsTab(
+      event: widget.event,
+      formKey: _formKey,
+      isEventActive: _isEventActive,
+      sponsors: _sponsors,
+      sponsorId: _sponsorId,
+      title: _title,
+      description: _description,
+      pin: _pin,
+      clue: _clue,
+      locationName: _locationName,
+      maxParticipants: _maxParticipants,
+      entryFee: _entryFee,
+      betTicketPrice: _betTicketPrice,
+      configuredWinners: _configuredWinners,
+      selectedDate: _selectedDate,
+      locationController: _locationController,
+      onSponsorChanged: (value) => setState(() => _sponsorId = value),
+      onWinnersChanged: (value) => setState(() => _configuredWinners = value),
+      onDateChanged: (value) => setState(() => _selectedDate = value),
+      onSelectLocation: _selectLocationOnMap,
+      onShowQR: () {
+        if (_pin.length == 6) {
+          final qrData = "EVENT:${widget.event.id}:$_pin";
+          _showQRDialog(qrData, "QR de Acceso", "PIN: $_pin");
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Guarda el PIN primero')),
+          );
+        }
+      },
+      onGenerateAllQRs: () {
+        if (_pin.length == 6) {
+          _generateAllQRsPdf();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Guarda el PIN primero')),
+          );
+        }
+      },
+      onShowGlobalPrices: (isSpectator) =>
+          _showGlobalPricesDialog(isSpectatorMode: isSpectator),
+      onSave: _saveChanges,
+      onTitleSaved: (v) => _title = v,
+      onDescriptionSaved: (v) => _description = v,
+      onPinSaved: (v) => _pin = v,
+      onMaxParticipantsSaved: (v) => _maxParticipants = v,
+      onEntryFeeSaved: (v) => _entryFee = v,
+      onBetTicketPriceSaved: (v) => _betTicketPrice = v,
+      onClueSaved: (v) => _clue = v,
+      onLocationNameSaved: (v) => _locationName = v,
     );
   }
 
+
+
+
+
   Widget _buildParticipantsTab() {
-    return Consumer<GameRequestProvider>(
-      builder: (context, provider, _) {
-        // Pending requests from game_requests (for approval workflow)
-        var pending = provider.requests
-            .where((r) =>
-                r.eventId.toString() == widget.event.id.toString() &&
-                r.isPending)
-            .toList();
-
-        // Registered participants from game_players (via _leaderboardData)
-        // This is the source of truth — covers all flows (free, paid, on_site)
-        var participants = List<Map<String, dynamic>>.from(_leaderboardData);
-
-        // --- SEARCH FILTER ---
-        if (_searchQuery.isNotEmpty) {
-          final query = _searchQuery.toLowerCase();
-          pending = pending
-              .where((r) =>
-                  (r.playerName.toLowerCase().contains(query)) ||
-                  (r.playerEmail?.toLowerCase().contains(query) ?? false))
-              .toList();
-          participants = participants
-              .where((p) =>
-                  ((p['name'] as String?)?.toLowerCase().contains(query) ?? false) ||
-                  ((p['email'] as String?)?.toLowerCase().contains(query) ?? false))
-              .toList();
-        }
-
-        if (pending.isEmpty && participants.isEmpty) {
-          return const Center(
-              child: Text("No hay participantes ni solicitudes.",
-                  style: TextStyle(color: Colors.white54)));
-        }
-
-        // --- SORT: banned/suspended go to bottom ---
-        final bannedIds = _playerStatuses.entries
-            .where((e) => e.value == 'banned' || e.value == 'suspended')
-            .map((e) => e.key)
-            .toSet();
-
-        final activeLeaderboard = participants
-            .where((entry) => !bannedIds.contains(entry['user_id']))
-            .toList();
-
-        participants.sort((a, b) {
-          final isBannedA = bannedIds.contains(a['user_id']);
-          final isBannedB = bannedIds.contains(b['user_id']);
-          if (isBannedA && !isBannedB) return 1;
-          if (!isBannedA && isBannedB) return -1;
-          // Both same ban state: keep original leaderboard order
-          return 0;
-        });
-
-        return ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // --- SEARCH FIELD ---
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Buscar por nombre o email...',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white38),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.white38),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                onChanged: (value) {
-                  if (_debounce?.isActive ?? false) _debounce!.cancel();
-                  _debounce = Timer(const Duration(milliseconds: 300), () {
-                    setState(() => _searchQuery = value);
-                  });
-                },
-              ),
-            ),
-
-            if (pending.isNotEmpty) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text("Solicitudes Pendientes",
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: AppTheme.accentGold,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900)),
-                  ),
-                  if (widget.event.type == 'on_site')
-                    TextButton.icon(
-                      onPressed: () => _approveAll(pending),
-                      icon:
-                          const Icon(Icons.done_all, color: Colors.green),
-                      label: const FittedBox(
-                        child: Text("ACEPTAR TODOS",
-                            style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ...pending.map((req) => RequestTile(
-                    request: req,
-                    currentStatus:
-                        _playerStatuses[req.playerId],
-                    onBanToggled: () =>
-                        _fetchPlayerStatuses(),
-                  )),
-              const SizedBox(height: 20),
-            ],
-
-            const Text("Participantes Inscritos (Ranking)",
-                style: TextStyle(
-                    color: AppTheme.accentGold,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 10),
-            if (participants.isEmpty)
-              const Text(
-                  "Nadie inscrito aún.",
-                  style: TextStyle(color: Colors.white38))
-            else
-              ...participants.map((player) {
-                final userId = player['user_id'] as String;
-                final isBanned = bannedIds.contains(userId);
-                final activeIndex = !isBanned
-                    ? activeLeaderboard
-                        .indexWhere((l) => l['user_id'] == userId)
-                    : -1;
-
-                // Build a synthetic GameRequest for RequestTile compatibility
-                final syntheticRequest = GameRequest(
-                  id: userId, // Not used for approved (isReadOnly=true)
-                  userId: userId,
-                  eventId: widget.event.id,
-                  status: 'approved',
-                  userName: player['name'] as String?,
-                  userEmail: player['email'] as String?,
-                );
-
-                return RequestTile(
-                  request: syntheticRequest,
-                  isReadOnly: true,
-                  rank: activeIndex != -1 ? activeIndex + 1 : null,
-                  progress: (player['completed_clues'] as num?)?.toInt() ?? 0,
-                  currentStatus: _playerStatuses[userId],
-                  onBanToggled: () => _fetchPlayerStatuses(),
-                  coins: (player['coins'] as num?)?.toInt(),
-                  lives: (player['lives'] as num?)?.toInt(),
-                  eventId: widget.event.id,
-                  onStatsUpdated: () => _fetchLeaderboard(),
-                );
-              }).toList(),
-          ],
-        );
-      },
+    return ParticipantsTab(
+      event: widget.event,
+      leaderboardData: _leaderboardData,
+      playerStatuses: _playerStatuses,
+      onFetchPlayerStatuses: _fetchPlayerStatuses,
+      onFetchLeaderboard: _fetchLeaderboard,
+      onApproveAll: _approveAll,
     );
   }
 
@@ -2140,85 +1087,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 
   Widget _buildCluesTab() {
-    return FutureBuilder<List<Clue>>(
-      future: _cluesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
-              child: Text("No hay pistas configuradas para este evento.",
-                  style: TextStyle(color: Colors.white54)));
-        }
-
-        final clues = snapshot.data!;
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: clues.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final clue = clues[index];
-            return Card(
-              color: AppTheme.cardBg,
-              elevation: 2,
-              shadowColor: Colors.black.withOpacity(0.2),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppTheme.accentGold.withOpacity(0.2),
-                  child: Text("${index + 1}",
-                      style: const TextStyle(
-                          color: AppTheme.accentGold,
-                          fontWeight: FontWeight.bold)),
-                ),
-                title: Text(clue.title,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text("${clue.typeName} - ${clue.puzzleType.label}",
-                    style: const TextStyle(color: Colors.white54)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.event.type != 'online')
-                      IconButton(
-                        icon: const Icon(Icons.qr_code,
-                            color: AppTheme.accentGold),
-                        tooltip: "Ver QR",
-                        onPressed: () {
-                          final qrData = "CLUE:${widget.event.id}:${clue.id}";
-                          _showQRDialog(qrData, clue.title,
-                              "Pista: ${clue.puzzleType.label}",
-                              hint: clue.hint);
-                        },
-                      ),
-                    IconButton(
-                        icon:
-                            const Icon(Icons.edit, color: AppTheme.accentGold),
-                        onPressed: () async {
-                          final result = await showDialog(
-                            context: context,
-                            builder: (_) => ClueFormDialog(
-                              clue: clue,
-                              eventId: widget.event.id,
-                              eventLatitude: widget.event.latitude,
-                              eventLongitude: widget.event.longitude,
-                            ),
-                          );
-                          if (result == true) _refreshClues();
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+    return CluesTab(
+      event: widget.event,
+      cluesFuture: _cluesFuture,
+      onRefresh: _refreshClues,
+      onShowQR: _showQRDialog,
     );
   }
 
@@ -2284,128 +1157,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 
   Widget _buildStoresTab() {
-    return Column(
-      children: [
-        Expanded(
-          child: Consumer<StoreProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final stores = provider.stores;
-
-              if (stores.isEmpty) {
-                return const Center(
-                  child: Text("No hay tiendas registradas",
-                      style: TextStyle(color: Colors.white38)),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: stores.length,
-                itemBuilder: (context, index) {
-                  final store = stores[index];
-                  return Card(
-                    color: AppTheme.cardBg,
-                    elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.2),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.white.withOpacity(0.05)),
-                    ),
-                    child: ListTile(
-                      leading: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBg,
-                          borderRadius: BorderRadius.circular(8),
-                          image: (store.imageUrl.isNotEmpty &&
-                                  store.imageUrl.startsWith('http'))
-                              ? DecorationImage(
-                                  image: NetworkImage(store.imageUrl),
-                                  fit: BoxFit.cover)
-                              : null,
-                        ),
-                        child: (store.imageUrl.isEmpty ||
-                                !store.imageUrl.startsWith('http'))
-                            ? const Icon(Icons.store, color: Colors.white54)
-                            : null,
-                      ),
-                      title: Text(store.name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(store.description,
-                              style: const TextStyle(color: Colors.white70),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: store.products
-                                .map((p) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black26,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border:
-                                            Border.all(color: Colors.white12),
-                                      ),
-                                      child: Text(
-                                        "${p.icon} ${p.name} (\$${p.cost})",
-                                        style: const TextStyle(
-                                            color: Colors.greenAccent,
-                                            fontSize: 11),
-                                      ),
-                                    ))
-                                .toList(),
-                          ),
-                        ],
-                      ),
-                      isThreeLine: true,
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.event.type != 'online')
-                            IconButton(
-                                icon: const Icon(Icons.qr_code,
-                                    color: Colors.white),
-                                tooltip: "Ver QR",
-                                onPressed: () => _showQRDialog(
-                                      store.qrCodeData,
-                                      "QR de Tienda",
-                                      store.name,
-                                      hint: "Escanear para entrar",
-                                    )),
-                          IconButton(
-                            icon: const Icon(Icons.edit,
-                                color: AppTheme.accentGold),
-                            onPressed: () => _showAddStoreDialog(store: store),
-                          ),
-                          if (!_isEventActive)
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _confirmDeleteStore(store),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+    return StoresTab(
+      event: widget.event,
+      isEventActive: _isEventActive,
+      onShowAddStoreDialog: (store) => _showAddStoreDialog(store: store),
+      onConfirmDeleteStore: _confirmDeleteStore,
+      onShowQR: _showQRDialog,
     );
   }
 
@@ -2515,181 +1272,4 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 }
 
-/// A two-step confirmation dialog that prevents accidental resets.
-/// The admin must type "REINICIAR" to unlock the confirm button.
-class _SafeResetConfirmDialog extends StatefulWidget {
-  final String eventTitle;
 
-  const _SafeResetConfirmDialog({required this.eventTitle});
-
-  @override
-  State<_SafeResetConfirmDialog> createState() =>
-      _SafeResetConfirmDialogState();
-}
-
-class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
-  final _controller = TextEditingController();
-  bool _canConfirm = false;
-
-  static const _confirmWord = 'REINICIAR';
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppTheme.cardBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: Colors.orange, size: 28),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text("Reinicio Seguro",
-                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 18, fontWeight: FontWeight.w900)),
-          ),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Evento: "${widget.eventTitle}"',
-              style: const TextStyle(
-                  color: AppTheme.accentGold, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 16),
-
-            // What WILL be deleted
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("SE ELIMINARÁ:",
-                      style: TextStyle(
-                          color: Colors.red.shade700,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13)),
-                  const SizedBox(height: 6),
-                  const Text("• Inscripciones de jugadores",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Progreso de pistas de todos los usuarios",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Poderes, transacciones y combates",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Apuestas y distribuciones de premios",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Solicitudes de ingreso",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // What will NOT be deleted
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("SE PRESERVARÁ:",
-                      style: TextStyle(
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13)),
-                  const SizedBox(height: 6),
-                  const Text("• Todas las pistas y sus ubicaciones",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Configuración del evento",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Tiendas del centro comercial",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Confirmation input
-            const Text(
-              'Escribe REINICIAR para confirmar:',
-              style: TextStyle(color: Colors.white54, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _controller,
-              style: const TextStyle(color: Colors.white, letterSpacing: 2, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                hintText: _confirmWord,
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.1)),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : Colors.white12,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : Colors.white12,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : AppTheme.accentGold,
-                  ),
-                ),
-              ),
-              textCapitalization: TextCapitalization.characters,
-              onChanged: (value) {
-                setState(() {
-                  _canConfirm = value.trim().toUpperCase() == _confirmWord;
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _canConfirm ? Colors.red : Colors.grey[800],
-            elevation: 0,
-          ),
-          onPressed: _canConfirm ? () => Navigator.pop(context, true) : null,
-          child: Text(
-            _canConfirm ? "REINICIAR EVENTO" : "Escribe REINICIAR...",
-            style: TextStyle(
-              color: _canConfirm ? Colors.white : Colors.white24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

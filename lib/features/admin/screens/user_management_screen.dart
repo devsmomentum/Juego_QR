@@ -101,34 +101,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ? 300
                           : double.infinity,
                     ),
-                    child: IntrinsicWidth(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppTheme.cardBg,
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: TextField(
-                          controller: _searchController,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'Buscar usuario...',
-                            hintStyle:
-                                TextStyle(color: Colors.white.withOpacity(0.5)),
-                            prefixIcon: const Icon(Icons.search,
-                                color: AppTheme.primaryPurple),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 15),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                          onChanged: (_) => setState(() {}),
+                        ],
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Buscar usuario...',
+                          hintStyle:
+                              TextStyle(color: Colors.white.withOpacity(0.5)),
+                          prefixIcon: const Icon(Icons.search,
+                              color: AppTheme.primaryPurple),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 15),
                         ),
+                        onChanged: (_) => setState(() {}),
                       ),
                     ),
                   ),

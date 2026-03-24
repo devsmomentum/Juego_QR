@@ -638,19 +638,29 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
                             if (provider.eventType == 'online') {
                               // If Online, show Players field AND Price fields (no location)
-                              return Column(
-                                children: [
-                                  playersField,
-                                  const SizedBox(height: 20),
-                                  Row(
-                                    children: [
-                                      Expanded(child: entryFeeField),
-                                      const SizedBox(width: 20),
-                                      Expanded(child: bettingField),
-                                    ],
-                                  ),
-                                ],
-                              );
+                              return constraints.maxWidth < 600
+                                  ? Column(
+                                      children: [
+                                        playersField,
+                                        const SizedBox(height: 20),
+                                        entryFeeField,
+                                        const SizedBox(height: 20),
+                                        bettingField,
+                                      ],
+                                    )
+                                  : Column(
+                                      children: [
+                                        playersField,
+                                        const SizedBox(height: 20),
+                                        Row(
+                                          children: [
+                                            Expanded(child: entryFeeField),
+                                            const SizedBox(width: 20),
+                                            Expanded(child: bettingField),
+                                          ],
+                                        ),
+                                      ],
+                                    );
                             }
 
                             if (constraints.maxWidth < 600) {
@@ -1023,11 +1033,14 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       icon: const Icon(Icons.arrow_back_ios,
                                           color: Colors.white),
                                     ),
-                                    Text(
-                                      "${provider.eventType == 'online' ? 'Minijuego' : 'Pista'} ${provider.currentClueIndex + 1} de ${provider.clueForms.length}",
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold),
+                                    Flexible(
+                                      child: Text(
+                                        "${provider.eventType == 'online' ? 'Minijuego' : 'Pista'} ${provider.currentClueIndex + 1} de ${provider.clueForms.length}",
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
                                     IconButton(
                                       onPressed: provider.currentClueIndex <

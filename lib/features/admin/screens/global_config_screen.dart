@@ -1185,15 +1185,16 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 3,
-            ),
+          LayoutBuilder(builder: (context, constraints) {
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: constraints.maxWidth < 600 ? 1 : 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: constraints.maxWidth < 600 ? 5 : 3,
+              ),
             itemCount: PowerItem.getShopItems().length,
             itemBuilder: (context, index) {
               final power = PowerItem.getShopItems()[index];
@@ -1259,7 +1260,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 ),
               );
             },
-          ),
+            );
+          }),
         ],
       ),
     );

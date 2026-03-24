@@ -253,8 +253,7 @@ class _CompetitionsManagementScreenState
                         : double.infinity,
                     maxWidth: double.infinity,
                   ),
-                  child: IntrinsicWidth(
-                    child: TextField(
+                  child: TextField(
                       controller: _searchController,
                       onChanged: (value) =>
                           setState(() => _searchQuery = value),
@@ -288,7 +287,6 @@ class _CompetitionsManagementScreenState
                               )
                             : null,
                       ),
-                    ),
                   ),
                 ),
               ],
