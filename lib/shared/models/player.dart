@@ -22,6 +22,7 @@ class Player implements ITargetable {
   DateTime? frozenUntil;
   DateTime? lastCompletionTime; // [FIX] Para desempate en ranking
   List<String>? eventsCompleted;
+  int wonEventsCount;
   int lives;
   int clovers; // New currency - tréboles
   final String? cedula;
@@ -49,6 +50,7 @@ class Player implements ITargetable {
     this.frozenUntil,
     this.lastCompletionTime,
     this.eventsCompleted,
+    this.wonEventsCount = 0,
     this.lives = 3,
     this.clovers = 0,
     Map<String, dynamic>? stats,
@@ -164,6 +166,7 @@ class Player implements ITargetable {
       gamePlayerId: json['player_id'] ?? json['game_player_id'],
       avatarId: avatarId,
       clovers: json['clovers'] ?? 0,
+      wonEventsCount: json['won_events_count'] ?? 0,
       documentType: docTypeVal,
       // Map 'dni' (int) from DB to 'cedula' (String) in model if 'cedula' is null
       cedula: dniVal,
@@ -322,6 +325,7 @@ class Player implements ITargetable {
     DateTime? frozenUntil,
     DateTime? lastCompletionTime,
     List<String>? eventsCompleted,
+    int? wonEventsCount,
     int? lives,
     int? clovers,
     Map<String, dynamic>? stats,
@@ -352,6 +356,7 @@ class Player implements ITargetable {
       frozenUntil: frozenUntil ?? this.frozenUntil,
       lastCompletionTime: lastCompletionTime ?? this.lastCompletionTime,
       eventsCompleted: eventsCompleted ?? this.eventsCompleted,
+      wonEventsCount: wonEventsCount ?? this.wonEventsCount,
       lives: lives ?? this.lives,
       clovers: clovers ?? this.clovers,
       stats: stats ?? this.stats,
