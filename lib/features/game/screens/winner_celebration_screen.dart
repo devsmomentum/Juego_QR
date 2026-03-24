@@ -1377,39 +1377,41 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
                           // Final Info and Button
                           Column(
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: BackdropFilter(
-                                  filter:
-                                      ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: isSmallScreen ? 6 : 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.stars,
-                                            color: Colors.white, size: 20),
-                                        const SizedBox(width: 10),
-                                        Text(
-                                          '$_completedClues Pistas completadas',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: isSmallScreen ? 14 : 16,
-                                            fontWeight: FontWeight.w500,
+                              if (_finalPosition > 0) ...[
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: BackdropFilter(
+                                    filter:
+                                        ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: isSmallScreen ? 6 : 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.stars,
+                                              color: Colors.white, size: 20),
+                                          const SizedBox(width: 10),
+                                          Text(
+                                            '$_completedClues Pistas completadas',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: isSmallScreen ? 14 : 16,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(height: isSmallScreen ? 8 : 24),
+                                SizedBox(height: isSmallScreen ? 8 : 24),
+                              ],
                               // Re-adding the button with tablet-friendly constraints
                               Center(
                                 child: Container(
