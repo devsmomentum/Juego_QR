@@ -71,7 +71,9 @@ class TransactionCard extends StatelessWidget {
     final lowerDesc = displayDescription.toLowerCase();
     
     // --- Specific descriptions from wallet_ledger (highest priority) ---
-    if (lowerDesc.contains('comisión por ataque')) {
+    if (item.ledgerType == 'runner_bet_commission') {
+      displayDescription = 'COMISION POR APUESTAS A TU VICTORIA';
+    } else if (lowerDesc.contains('comisión por ataque')) {
       displayDescription = 'COMISIÓN POR ATAQUE';
     } else if (lowerDesc.contains('premio') || lowerDesc.contains('podio') || lowerDesc.contains('prize')) {
       displayDescription = 'PREMIO OBTENIDO';
@@ -102,6 +104,12 @@ class TransactionCard extends StatelessWidget {
           
       if (displayDescription.isEmpty) displayDescription = 'TRANSACCIÓN';
     }
+
+    final showFiatAmount = item.fiatAmount != null &&
+      item.fiatAmount! > 0 &&
+      (item.type == 'deposit' ||
+        item.type == 'withdrawal' ||
+        item.type == 'purchase_order');
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -163,7 +171,7 @@ class TransactionCard extends StatelessWidget {
                         fontFamily: 'Orbitron',
                       ),
                     ),
-                    if (item.fiatAmount != null)
+                    if (showFiatAmount)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
