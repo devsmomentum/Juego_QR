@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../../../core/providers/payment_methods_config_provider.dart';
 
-class PaymentMethodSelector extends StatelessWidget {
+class PaymentMethodSelector extends StatefulWidget {
   final Function(String) onMethodSelected;
 
   const PaymentMethodSelector({
@@ -12,9 +13,59 @@ class PaymentMethodSelector extends StatelessWidget {
   });
 
   @override
+  State<PaymentMethodSelector> createState() => _PaymentMethodSelectorState();
+}
+
+class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
+  @override
+  void initState() {
+    super.initState();
+    final configProvider =
+        Provider.of<PaymentMethodsConfigProvider>(context, listen: false);
+    configProvider.load();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final playerProvider = Provider.of<PlayerProvider>(context);
     final isDarkMode = playerProvider.isDarkMode;
+    final configProvider = Provider.of<PaymentMethodsConfigProvider>(context);
+
+    final allMethods = <_PaymentMethodUiSpec>[
+      _PaymentMethodUiSpec(
+        id: 'pago_movil',
+        name: 'Pago Movil / Transferencia',
+        icon: Icons.phone_android,
+        color: AppTheme.accentGold,
+        description: 'Recarga instantanea en Bolivares',
+      ),
+      _PaymentMethodUiSpec(
+        id: 'stripe',
+        name: 'Tarjeta de Credito / Debito',
+        icon: Icons.credit_card_rounded,
+        color: AppTheme.accentGold,
+        description: 'Visa, Mastercard, Amex — pago en USD',
+      ),
+      _PaymentMethodUiSpec(
+        id: 'zelle',
+        name: 'Zelle',
+        icon: Icons.attach_money,
+        color: Colors.grey,
+        description: 'Recarga en Dolares',
+      ),
+      _PaymentMethodUiSpec(
+        id: 'cash',
+        name: 'Efectivo',
+        icon: Icons.payments_rounded,
+        color: Colors.grey,
+        description: 'Pago presencial en efectivo',
+      ),
+    ];
+
+    final enabledMethods = allMethods
+        .where((method) =>
+            configProvider.isMethodEnabled('purchase', method.id))
+        .toList();
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -52,58 +103,49 @@ class PaymentMethodSelector extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             
-            _buildMethodTile(
-              context,
-              isDarkMode: isDarkMode,
-              id: 'pago_movil',
-              name: 'Pago Móvil / Transferencia',
-              icon: Icons.phone_android,
-              color: AppTheme.accentGold,
-              description: 'Recarga instantánea en Bolívares'
-            ),
-            
-            const SizedBox(height: 12),
-  
-            _buildMethodTile(
-              context,
-              isDarkMode: isDarkMode,
-              id: 'stripe',
-              name: 'Tarjeta de Crédito / Débito',
-              icon: Icons.credit_card_rounded,
-              color: AppTheme.accentGold, 
-              description: 'Visa, Mastercard, Amex — pago en USD',
-              enabled: true,
-            ),
-            
-            const SizedBox(height: 12),
-            
-            _buildMethodTile(
-              context,
-              isDarkMode: isDarkMode,
-              id: 'crypto', // Placeholder
-              name: 'Cripto (Próximamente)',
-              icon: Icons.currency_bitcoin,
-              color: Colors.grey,
-              description: 'USDT, BTC, ETH',
-              enabled: false,
-            ),
-  
-            const SizedBox(height: 12),
-  
-            _buildMethodTile(
-              context,
-              isDarkMode: isDarkMode,
-              id: 'zelle', // Placeholder
-              name: 'Zelle (Próximamente)',
-              icon: Icons.attach_money,
-              color: Colors.grey,
-              description: 'Recarga en Dólares',
-              enabled: false,
-            ),
+            if (configProvider.isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: CircularProgressIndicator(color: AppTheme.accentGold),
+                ),
+              )
+            else if (enabledMethods.isEmpty)
+              _buildEmptyState()
+            else
+              ...enabledMethods.expand((method) sync* {
+                yield _buildMethodTile(
+                  context,
+                  isDarkMode: isDarkMode,
+                  id: method.id,
+                  name: method.name,
+                  icon: method.icon,
+                  color: method.color,
+                  description: method.description,
+                );
+                yield const SizedBox(height: 12);
+              }).toList(),
             
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        children: const [
+          Icon(Icons.info_outline, size: 48, color: Colors.white24),
+          SizedBox(height: 12),
+          Text(
+            'No hay metodos de pago disponibles por ahora',
+            style: TextStyle(color: Colors.white60),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -122,7 +164,7 @@ class PaymentMethodSelector extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: enabled ? () => onMethodSelected(id) : null,
+                  onTap: enabled ? () => widget.onMethodSelected(id) : null,
           borderRadius: BorderRadius.circular(15),
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -176,4 +218,20 @@ class PaymentMethodSelector extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PaymentMethodUiSpec {
+  final String id;
+  final String name;
+  final IconData icon;
+  final Color color;
+  final String description;
+
+  const _PaymentMethodUiSpec({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.description,
+  });
 }

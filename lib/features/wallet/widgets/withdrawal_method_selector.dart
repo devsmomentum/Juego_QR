@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/providers/payment_methods_config_provider.dart';
 import '../providers/payment_method_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import 'add_withdrawal_method_dialog.dart';
@@ -31,6 +32,9 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
   void initState() {
     super.initState();
     _loadMethods();
+    final configProvider =
+        Provider.of<PaymentMethodsConfigProvider>(context, listen: false);
+    configProvider.load();
   }
 
   Future<void> _loadMethods() async {
@@ -103,13 +107,28 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
           const SizedBox(height: 16),
           Consumer<PaymentMethodProvider>(
             builder: (context, provider, child) {
+              final configProvider =
+                  Provider.of<PaymentMethodsConfigProvider>(context);
+
               if (provider.isLoading) {
                 return const Center(
                   child: CircularProgressIndicator(color: AppTheme.accentGold),
                 );
               }
 
-              if (provider.methods.isEmpty) {
+              final enabledMethods = provider.methods.where((method) {
+                final type = method['type'] ?? 'pago_movil';
+                return configProvider.isMethodEnabled('withdrawal', type);
+              }).toList();
+
+              final stripeEnabled =
+                  configProvider.isMethodEnabled('withdrawal', 'stripe');
+              final hasStripeMethod = provider.methods.any((method) {
+                final type = method['type'] ?? 'pago_movil';
+                return type == 'stripe';
+              });
+
+              if (enabledMethods.isEmpty) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
@@ -119,7 +138,7 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                             size: 48, color: Colors.white24),
                         const SizedBox(height: 12),
                         const Text(
-                          'No tienes métodos registrados',
+                          'No hay métodos de retiro disponibles',
                           style: TextStyle(color: Colors.white60),
                         ),
                         TextButton(
@@ -144,27 +163,70 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
               return Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
-                  itemCount: provider.methods.length,
+                  itemCount: enabledMethods.length +
+                      (stripeEnabled && !hasStripeMethod ? 1 : 0),
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    final method = provider.methods[index];
+                    if (stripeEnabled && !hasStripeMethod && index == 0) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF635BFF).withOpacity(0.4),
+                          ),
+                        ),
+                        child: ListTile(
+                          onTap: () async {
+                            final result = await showDialog(
+                              context: context,
+                              builder: (_) =>
+                                  const AddWithdrawalMethodDialog.withInitialType(
+                                initialType: 'stripe',
+                              ),
+                            );
+                            if (result == true) {
+                              _loadMethods();
+                            }
+                          },
+                          leading: const Icon(Icons.credit_card_rounded,
+                              color: Color(0xFF635BFF)),
+                          title: const Text(
+                            'Agregar Stripe',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: const Text(
+                            'Configura tu email para retiros internacionales',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          trailing: const Icon(Icons.add_circle_outline,
+                              color: Color(0xFF635BFF)),
+                        ),
+                      );
+                    }
+
+                    final methodIndex =
+                        (stripeEnabled && !hasStripeMethod) ? index - 1 : index;
+                    final method = enabledMethods[methodIndex];
                     final isSelected = _selectedMethodId == method['id'];
                     final type = method['type'] ?? 'pago_movil';
                     final isStripe = type == 'stripe';
-                    
-                    final title = isStripe 
-                        ? 'Stripe' 
+
+                    final title = isStripe
+                        ? 'Stripe'
                         : 'Pago Móvil - Banco ${method['bank_code'] ?? '???'}';
-                    final subtitle = isStripe 
+                    final subtitle = isStripe
                         ? (method['identifier'] ?? 'Email no configurado')
                         : (method['phone_number'] ?? 'Teléfono no configurado');
-                    final icon = isStripe 
-                        ? Icons.credit_card_rounded 
+                    final icon = isStripe
+                        ? Icons.credit_card_rounded
                         : Icons.phone_android;
-                    final iconColor = isStripe 
-                        ? const Color(0xFF635BFF) 
+                    final iconColor = isStripe
+                        ? const Color(0xFF635BFF)
                         : AppTheme.secondaryPink;
-                    
+
                     return Container(
                       decoration: BoxDecoration(
                         color: isSelected
@@ -198,11 +260,13 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                             GestureDetector(
                               onTap: () {}, // Bubble block
                               child: IconButton(
-                                icon: const Icon(Icons.edit_outlined, color: Colors.white38),
+                                icon: const Icon(Icons.edit_outlined,
+                                    color: Colors.white38),
                                 onPressed: () async {
                                   final result = await showDialog(
                                     context: context,
-                                    builder: (_) => EditPaymentMethodDialog(method: method),
+                                    builder: (_) =>
+                                        EditPaymentMethodDialog(method: method),
                                   );
                                   if (result == true) {
                                     _loadMethods();
@@ -211,8 +275,8 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                               ),
                             ),
                             GestureDetector(
-                               onTap: () {}, // Bubble block
-                               child: IconButton(
+                              onTap: () {}, // Bubble block
+                              child: IconButton(
                                 icon: const Icon(Icons.delete_outline,
                                     color: Colors.white38),
                                 onPressed: () => _deleteMethod(method['id']),

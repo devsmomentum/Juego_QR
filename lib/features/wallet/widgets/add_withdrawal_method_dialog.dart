@@ -7,7 +7,14 @@ import '../providers/payment_method_provider.dart';
 import '../repositories/payment_method_repository.dart';
 
 class AddWithdrawalMethodDialog extends StatefulWidget {
-  const AddWithdrawalMethodDialog({super.key});
+  final String? initialType;
+
+  const AddWithdrawalMethodDialog({super.key}) : initialType = null;
+
+  const AddWithdrawalMethodDialog.withInitialType({
+    super.key,
+    required this.initialType,
+  });
 
   @override
   State<AddWithdrawalMethodDialog> createState() => _AddWithdrawalMethodDialogState();
@@ -24,6 +31,14 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
   void dispose() {
     _emailController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialType != null && widget.initialType!.isNotEmpty) {
+      _selectedType = widget.initialType!;
+    }
   }
 
   final List<Map<String, String>> _banks = [

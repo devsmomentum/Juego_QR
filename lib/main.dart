@@ -58,6 +58,7 @@ import 'features/game/strategies/power_strategy_factory.dart';
 import 'features/game/repositories/game_request_repository.dart';
 import 'features/mall/providers/shop_provider.dart';
 import 'features/game/providers/game_flow_provider.dart';
+import 'core/providers/payment_methods_config_provider.dart';
 
 import 'core/storage/secure_local_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -381,6 +382,14 @@ class _MapHunterAppState extends State<MapHunterApp>
         ),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AppModeProvider()),
+        ChangeNotifierProvider(create: (_) {
+          final configService =
+              AppConfigService(supabaseClient: Supabase.instance.client);
+          final provider =
+              PaymentMethodsConfigProvider(configService: configService);
+          provider.load();
+          return provider;
+        }),
         ChangeNotifierProvider(create: (context) {
           final provider = GameFlowProvider();
           final authService = Provider.of<AuthService>(context, listen: false);

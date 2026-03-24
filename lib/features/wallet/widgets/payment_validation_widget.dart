@@ -102,6 +102,7 @@ class _PaymentValidationWidgetState extends State<PaymentValidationWidget> {
           .from('user_payment_methods')
           .select()
           .eq('user_id', userId)
+          .eq('type', 'pago_movil')
           .order('created_at', ascending: false);
 
       if (!mounted) return;

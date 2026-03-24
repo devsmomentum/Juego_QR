@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/payment_methods_config.dart';
 
 /// Service for managing global app configuration stored in app_config table.
 ///
@@ -380,6 +381,45 @@ class AppConfigService {
       return true;
     } catch (e) {
       debugPrint('[AppConfigService] Error updating pago_movil_recipient: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PAYMENT METHODS STATUS
+  // ---------------------------------------------------------------------------
+
+  /// Reads payment method status config (purchase/withdrawal maps).
+  /// Returns all disabled on any error.
+  Future<PaymentMethodsConfig> getPaymentMethodsStatus() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'payment_methods_status')
+          .maybeSingle();
+
+      return PaymentMethodsConfig.fromJson(response?['value']);
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching payment_methods_status: $e');
+      return PaymentMethodsConfig.fallbackAllDisabled();
+    }
+  }
+
+  /// Updates payment method status config.
+  Future<bool> updatePaymentMethodsStatus(PaymentMethodsConfig config) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'payment_methods_status',
+        'value': config.toJson(),
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] payment_methods_status updated');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating payment_methods_status: $e');
       return false;
     }
   }

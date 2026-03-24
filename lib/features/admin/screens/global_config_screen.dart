@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/app_config_service.dart';
+import '../../../core/models/payment_methods_config.dart';
+import 'package:provider/provider.dart';
+import '../../../core/providers/payment_methods_config_provider.dart';
 import '../../mall/models/power_item.dart'; // NEW
 
 /// Admin screen for managing global application configuration.
@@ -42,6 +45,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   bool _isSaving = false;
   bool _rechargeEnabled = true;
   bool _isTogglingRecharge = false;
+  bool _isSavingPaymentMethods = false;
+
+  PaymentMethodsConfig _paymentMethodsConfig =
+      PaymentMethodsConfig.fallbackAllDisabled();
 
   late final AppConfigService _configService;
 
@@ -78,6 +85,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         _configService.getVersionConfig(),
         _configService.getPowerDefaultCosts(),
         _configService.getPagoMovilRecipient(),
+        _configService.getPaymentMethodsStatus(),
       ]);
       _exchangeRateController.text = (results[0] as double).toStringAsFixed(2);
       _gatewayFeeController.text = (results[1] as double).toStringAsFixed(2);
@@ -107,10 +115,61 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       _pmBancoController.text = pmRecipient['banco'] ?? '';
       _pmCedulaController.text = pmRecipient['cedula'] ?? '';
       _pmTelefonoController.text = pmRecipient['telefono'] ?? '';
+
+      _paymentMethodsConfig = results[6] as PaymentMethodsConfig;
     } catch (e) {
       debugPrint('[GlobalConfigScreen] Error loading config: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _togglePaymentMethod(
+    String flow,
+    String methodId,
+    bool value,
+  ) async {
+    if (_isSavingPaymentMethods) return;
+    setState(() => _isSavingPaymentMethods = true);
+
+    final updated = flow == 'withdrawal'
+        ? _paymentMethodsConfig.copyWith(
+            withdrawal: {
+              ..._paymentMethodsConfig.withdrawal,
+              methodId: value,
+            },
+          )
+        : _paymentMethodsConfig.copyWith(
+            purchase: {
+              ..._paymentMethodsConfig.purchase,
+              methodId: value,
+            },
+          );
+
+    final success = await _configService.updatePaymentMethodsStatus(updated);
+
+    if (mounted) {
+      setState(() {
+        if (success) {
+          _paymentMethodsConfig = updated;
+        }
+        _isSavingPaymentMethods = false;
+      });
+      if (success) {
+        final provider =
+            Provider.of<PaymentMethodsConfigProvider>(context, listen: false);
+        provider.update(updated);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Metodos de pago actualizados'
+                : 'Error al actualizar metodos de pago',
+          ),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
     }
   }
 
@@ -415,6 +474,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
             const SizedBox(height: 24),
 
+            // Payment Methods Section
+            _buildPaymentMethodsCard(),
+
+            const SizedBox(height: 24),
+
             // Pago Móvil Recipient Section
             _buildPagoMovilRecipientCard(),
 
@@ -465,6 +529,122 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethodsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGold.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.tune,
+                    color: AppTheme.accentGold, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Metodos de Pago',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Habilita o deshabilita metodos por flujo',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_isSavingPaymentMethods)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.primaryPurple,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Compra',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          ...PaymentMethodsCatalog.purchase.map((method) {
+            final enabled = _paymentMethodsConfig.isEnabled(
+              flow: 'purchase',
+              methodId: method.id,
+            );
+            return SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(method.label,
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                method.description,
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              value: enabled,
+              activeColor: AppTheme.accentGold,
+              onChanged: _isSavingPaymentMethods
+                  ? null
+                  : (value) =>
+                      _togglePaymentMethod('purchase', method.id, value),
+            );
+          }),
+          const SizedBox(height: 12),
+          const Text(
+            'Retiro',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          ...PaymentMethodsCatalog.withdrawal.map((method) {
+            final enabled = _paymentMethodsConfig.isEnabled(
+              flow: 'withdrawal',
+              methodId: method.id,
+            );
+            return SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(method.label,
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(
+                method.description,
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              value: enabled,
+              activeColor: AppTheme.accentGold,
+              onChanged: _isSavingPaymentMethods
+                  ? null
+                  : (value) =>
+                      _togglePaymentMethod('withdrawal', method.id, value),
+            );
+          }),
+        ],
       ),
     );
   }
