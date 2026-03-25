@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -126,15 +127,35 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
         gridSize * gridSize, (index) => (index + 1) % (gridSize * gridSize));
     tiles[gridSize * gridSize - 1] = 0; // El último es el vacío
 
-    // Hacer 50 movimientos aleatorios válidos
+    // Hacer 180 movimientos aleatorios válidos para asegurar complejidad
     int emptyIndex = tiles.indexOf(0);
-    for (int i = 0; i < 50; i++) {
+    int? previousIndex;
+    final random = Random();
+
+    for (int i = 0; i < 180; i++) {
       final neighbors = _getNeighbors(emptyIndex);
-      final randomNeighbor =
-          neighbors[DateTime.now().microsecond % neighbors.length];
+      
+      // Evitar mover la misma pieza que acabamos de mover (no volver atrás)
+      if (previousIndex != null && neighbors.length > 1) {
+        neighbors.remove(previousIndex);
+      }
+      
+      final randomNeighbor = neighbors[random.nextInt(neighbors.length)];
       _swap(emptyIndex, randomNeighbor);
+      
+      previousIndex = emptyIndex;
       emptyIndex = randomNeighbor;
     }
+    
+    // Verificación de seguridad: Si por casualidad quedó resuelto, re-mezclar
+    bool isResolved = true;
+    for (int i = 0; i < tiles.length - 1; i++) {
+      if (tiles[i] != i + 1) {
+        isResolved = false;
+        break;
+      }
+    }
+    if (isResolved) _shuffleSolvable();
   }
 
   List<int> _getNeighbors(int index) {
