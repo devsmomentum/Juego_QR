@@ -122,14 +122,16 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppTheme.cardBg,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(
           widget.isGlobalMode
               ? 'Precios Globales'
               : (widget.store == null ? 'Nueva Tienda' : 'Editar Tienda'),
-          style: const TextStyle(color: Colors.white)),
+          style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.bold)),
       content: SizedBox(
-        width: 400,
+        width: 450,
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -142,11 +144,12 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
                   GestureDetector(
                     onTap: _pickImage,
                     child: Container(
-                      height: 150,
+                      height: 180,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(12),
+                        color: Theme.of(context).dividerColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                         image: _imageBytes != null
                             ? DecorationImage(
                                 image: MemoryImage(_imageBytes!),
@@ -159,103 +162,152 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
                       ),
                       child: (_imageBytes == null &&
                               (widget.store?.imageUrl.isEmpty ?? true))
-                          ? const Center(
+                          ? Center(
                               child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_a_photo,
-                                    size: 40, color: Colors.white54),
-                                SizedBox(height: 5),
+                                Icon(Icons.add_a_photo_rounded,
+                                    size: 48, color: AppTheme.lGoldAction.withOpacity(0.5)),
+                                const SizedBox(height: 12),
                                 Text("Imagen de la Tienda",
                                     style: TextStyle(
-                                        color: Colors.white54, fontSize: 12))
+                                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5), 
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600))
                               ],
                             ))
                           : null,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   TextFormField(
                     initialValue: _name,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                        labelText: 'Nombre',
-                        labelStyle: TextStyle(color: Colors.white70)),
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                    style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                        labelText: 'Nombre de la Tienda',
+                        labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6)),
+                        prefixIcon: const Icon(Icons.store_rounded, color: AppTheme.lGoldAction),
+                        filled: true,
+                        fillColor: Theme.of(context).dividerColor.withOpacity(0.03),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    validator: (v) => v!.isEmpty ? 'Por favor ingresa un nombre' : null,
                     onSaved: (v) => _name = v!,
                   ),
+                  const SizedBox(height: 12),
                   TextFormField(
                     initialValue: _description,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                        labelText: 'Descripción',
-                        labelStyle: TextStyle(color: Colors.white70)),
+                    style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                        labelText: 'Descripción (Opcional)',
+                        labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6)),
+                        prefixIcon: const Icon(Icons.description_rounded, color: AppTheme.lGoldAction),
+                        filled: true,
+                        fillColor: Theme.of(context).dividerColor.withOpacity(0.03),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
                     onSaved: (v) => _description = v!,
                   ),
                 ],
-                const SizedBox(height: 20),
-                Text(
-                    widget.isGlobalMode
-                        ? "Precios por Defecto (Sobrescribir):"
-                        : "Productos Disponibles:",
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Icon(Icons.inventory_2_rounded, color: AppTheme.lGoldAction, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                        widget.isGlobalMode
+                            ? "PRECIOS POR DEFECTO"
+                            : "PRODUCTOS DISPONIBLES",
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.displayLarge?.color?.withOpacity(0.8), 
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2)),
+                  ],
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(),
+                ),
                 ..._availableItems.map((item) {
                   final isSelected = _selectedProductIds.contains(item.id);
-                  return Column(
-                    children: [
-                      CheckboxListTile(
-                        title: Text(item.name,
-                            style: const TextStyle(color: Colors.white)),
-                        subtitle: Text(
-                            "Precio Actual: ${_customCosts[item.id] ?? item.cost}  (Default: ${item.cost})",
-                            style: const TextStyle(color: Colors.white54)),
-                        secondary: Text(item.icon,
-                            style: const TextStyle(fontSize: 24)),
-                        value: isSelected,
-                        activeColor: AppTheme.primaryPurple,
-                        checkColor: Colors.white,
-                        onChanged: (val) {
-                          setState(() {
-                            if (val == true) {
-                              _selectedProductIds.add(item.id);
-                              // Initialize with current or default cost if not set
-                              if (!_customCosts.containsKey(item.id)) {
-                                _customCosts[item.id] = item.cost;
-                              }
-                            } else {
-                              _selectedProductIds.remove(item.id);
-                            }
-                          });
-                        },
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppTheme.lGoldAction.withOpacity(0.05) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? AppTheme.lGoldAction.withOpacity(0.2) : Colors.transparent,
                       ),
-                      if (isSelected)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                              left: 70, right: 20, bottom: 10),
-                          child: TextFormField(
-                            initialValue: _customCosts[item.id]?.toString(),
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(color: AppTheme.accentGold),
-                            decoration: InputDecoration(
-                              labelText: widget.isSpectator ? 'Costo (Tréboles)' : 'Costo (Monedas)',
-                              labelStyle: const TextStyle(color: Colors.white54),
-                              isDense: true,
-                              border: const OutlineInputBorder(),
-                              enabledBorder: const OutlineInputBorder(
-                                  borderSide:
-                                      BorderSide(color: Colors.white24)),
+                    ),
+                    child: Column(
+                      children: [
+                        CheckboxListTile(
+                          title: Text(item.name,
+                              style: TextStyle(
+                                color: Theme.of(context).textTheme.displayLarge?.color,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              )),
+                          subtitle: Text(
+                              "Precio actual: ${_customCosts[item.id] ?? item.cost}  (Base: ${item.cost})",
+                              style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6), fontSize: 12)),
+                          secondary: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.lGoldAction.withOpacity(0.1),
+                              shape: BoxShape.circle,
                             ),
-                            onChanged: (val) {
-                              final newCost = int.tryParse(val);
-                              if (newCost != null) {
-                                _customCosts[item.id] = newCost;
-                              }
-                            },
+                            child: Text(item.icon,
+                                style: const TextStyle(fontSize: 20)),
                           ),
-                        )
-                    ],
+                          value: isSelected,
+                          activeColor: AppTheme.lGoldAction,
+                          checkColor: Colors.white,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedProductIds.add(item.id);
+                                if (!_customCosts.containsKey(item.id)) {
+                                  _customCosts[item.id] = item.cost;
+                                }
+                              } else {
+                                _selectedProductIds.remove(item.id);
+                              }
+                            });
+                          },
+                        ),
+                        if (isSelected)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                                left: 70, right: 16, bottom: 16),
+                            child: TextFormField(
+                              initialValue: _customCosts[item.id]?.toString(),
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: AppTheme.lGoldAction, fontWeight: FontWeight.bold, fontSize: 16),
+                              decoration: InputDecoration(
+                                labelText: widget.isSpectator ? 'Costo (Tréboles)' : 'Costo (Monedas)',
+                                labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5), fontSize: 12),
+                                isDense: true,
+                                prefixIcon: const Icon(Icons.monetization_on_rounded, color: AppTheme.lGoldAction, size: 18),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2))),
+                                focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(color: AppTheme.lGoldAction, width: 2)),
+                              ),
+                              onChanged: (val) {
+                                final newCost = int.tryParse(val);
+                                if (newCost != null) {
+                                  _customCosts[item.id] = newCost;
+                                }
+                              },
+                            ),
+                          )
+                      ],
+                    ),
                   );
                 }).toList(),
               ],
@@ -266,14 +318,20 @@ class _StoreEditDialogState extends State<StoreEditDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar")),
+            child: Text("CANCELAR", style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6), fontWeight: FontWeight.bold))),
         ElevatedButton(
           onPressed: _submit,
-          style:
-              ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-          child: const Text("Guardar"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.lGoldAction,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 4,
+          ),
+          child: const Text("GUARDAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
         ),
       ],
     );
+
   }
 }

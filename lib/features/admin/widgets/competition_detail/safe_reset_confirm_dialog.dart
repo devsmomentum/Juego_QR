@@ -27,7 +27,8 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppTheme.cardBg,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         children: [
@@ -36,7 +37,7 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
           Expanded(
             child: Text("Reinicio Seguro",
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Theme.of(context).textTheme.displayLarge?.color,
                     fontSize: 18,
                     fontWeight: FontWeight.w900)),
           ),
@@ -50,7 +51,7 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
             Text(
               'Evento: "${widget.eventTitle}"',
               style: const TextStyle(
-                  color: AppTheme.accentGold, fontWeight: FontWeight.w900),
+                  color: AppTheme.lGoldAction, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 16),
 
@@ -58,9 +59,9 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                color: Colors.red.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.1)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,16 +72,11 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
                           fontWeight: FontWeight.w900,
                           fontSize: 13)),
                   const SizedBox(height: 6),
-                  const Text("• Inscripciones de jugadores",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Progreso de pistas de todos los usuarios",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Poderes, transacciones y combates",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Apuestas y distribuciones de premios",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Solicitudes de ingreso",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  _buildListItem("Inscripciones de jugadores", isRed: true),
+                  _buildListItem("Progreso de pistas de todos los usuarios", isRed: true),
+                  _buildListItem("Poderes, transacciones y combates", isRed: true),
+                  _buildListItem("Apuestas y distribuciones de premios", isRed: true),
+                  _buildListItem("Solicitudes de ingreso", isRed: true),
                 ],
               ),
             ),
@@ -90,9 +86,9 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
+                color: Colors.green.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green.withOpacity(0.1)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,50 +99,59 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
                           fontWeight: FontWeight.w900,
                           fontSize: 13)),
                   const SizedBox(height: 6),
-                  const Text("• Todas las pistas y sus ubicaciones",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Configuración del evento",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  const Text("• Tiendas del centro comercial",
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  _buildListItem("Todas las pistas y sus ubicaciones", isRed: false),
+                  _buildListItem("Configuración del evento", isRed: false),
+                  _buildListItem("Tiendas del centro comercial", isRed: false),
                 ],
               ),
             ),
             const SizedBox(height: 16),
 
             // Confirmation input
-            const Text(
+            Text(
               'Escribe REINICIAR para confirmar:',
-              style: TextStyle(color: Colors.white54, fontSize: 13),
+              style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6), fontSize: 13),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             TextField(
               controller: _controller,
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: Theme.of(context).textTheme.displayLarge?.color,
                   letterSpacing: 2,
                   fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: _confirmWord,
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.1)),
+                hintStyle: TextStyle(
+                    color: Theme.of(context)
+                        .textTheme
+                        .displayLarge
+                        ?.color
+                        ?.withOpacity(0.1)),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
+                fillColor: Theme.of(context).dividerColor.withOpacity(0.03),
+                prefixIcon: const Icon(Icons.security_rounded,
+                    color: AppTheme.lGoldAction),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : Colors.white12,
+                    color: _canConfirm
+                        ? Colors.green
+                        : Theme.of(context).dividerColor.withOpacity(0.1),
                   ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : Colors.white12,
+                    color: _canConfirm
+                        ? Colors.green
+                        : Theme.of(context).dividerColor.withOpacity(0.1),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: _canConfirm ? Colors.green : AppTheme.accentGold,
+                    color: _canConfirm ? Colors.green : AppTheme.lGoldAction,
+                    width: 2,
                   ),
                 ),
               ),
@@ -163,23 +168,58 @@ class _SafeResetConfirmDialogState extends State<SafeResetConfirmDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+          child: Text("Cancelar",
+              style: TextStyle(
+                  color: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.color
+                      ?.withOpacity(0.5))),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: _canConfirm ? Colors.red : Colors.grey[800],
-            elevation: 0,
+            backgroundColor: _canConfirm
+                ? Colors.redAccent
+                : Theme.of(context).dividerColor.withOpacity(0.1),
+            foregroundColor: _canConfirm
+                ? Colors.white
+                : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.3),
+            elevation: _canConfirm ? 4 : 0,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           ),
           onPressed: _canConfirm ? () => Navigator.pop(context, true) : null,
           child: Text(
             _canConfirm ? "REINICIAR EVENTO" : "Escribe REINICIAR...",
-            style: TextStyle(
-              color: _canConfirm ? Colors.white : Colors.white24,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildListItem(String text, {required bool isRed}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(Icons.circle,
+              size: 6,
+              color: (isRed ? Colors.red : Colors.green).withOpacity(0.5)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.7),
+                    fontSize: 12)),
+          ),
+        ],
+      ),
     );
   }
 }

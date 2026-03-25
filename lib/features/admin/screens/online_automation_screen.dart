@@ -112,6 +112,7 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             const SizedBox(height: 24),
             Expanded(
               child: ListView(
+                physics: const BouncingScrollPhysics(),
                 children: [
                   _buildToggleCard(),
                   const SizedBox(height: 20),
@@ -134,37 +135,40 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: const Text(
+              child: Text(
                 'Automatización Online',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: Theme.of(context).textTheme.displayLarge?.color,
                     fontSize: 28,
                     fontWeight: FontWeight.bold),
               ),
             ),
-            const Text(
+            Text(
               'Configura la creación automática de competencias.',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+              style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                  fontSize: 16),
             ),
           ],
         ),
         ElevatedButton.icon(
           onPressed: _triggerManual,
-          icon: const Icon(Icons.flash_on),
+          icon: const Icon(Icons.flash_on_rounded),
           label: const Text('Generar Ahora'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.secondaryPink,
+            backgroundColor: AppTheme.lGoldAction,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
           ),
         ),
       ],
@@ -179,10 +183,19 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
         return Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: AppTheme.cardBg,
+            color: Theme.of(context).cardTheme.color,
             borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
             border: Border.all(
-                color: isEnabled ? AppTheme.primaryPurple : Colors.white10),
+                color: isEnabled
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context).dividerColor.withOpacity(0.1)),
           ),
           child: isNarrow
               ? Column(
@@ -191,8 +204,12 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                       children: [
                         Icon(Icons.auto_awesome,
                             color: isEnabled
-                                ? AppTheme.primaryPurple
-                                : Colors.white24,
+                                ? AppTheme.lGoldAction
+                                : Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.2),
                             size: 28),
                         const SizedBox(width: 12),
                         Expanded(
@@ -203,8 +220,11 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                               isEnabled
                                   ? 'Automatización ACTIVA'
                                   : 'Automatización DESACTIVADA',
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold),
                             ),
@@ -216,14 +236,20 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                             setState(() => _config['enabled'] = val);
                             _saveConfig();
                           },
-                          activeColor: AppTheme.primaryPurple,
+                          activeColor: AppTheme.lGoldAction,
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'Si está activa, el sistema generará eventos según el intervalo definido.',
-                      style: TextStyle(color: Colors.white54, fontSize: 13),
+                      style: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.6),
+                          fontSize: 13),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -231,8 +257,13 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
               : Row(
                   children: [
                     Icon(Icons.auto_awesome,
-                        color:
-                            isEnabled ? AppTheme.primaryPurple : Colors.white24,
+                        color: isEnabled
+                            ? AppTheme.lGoldAction
+                            : Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withOpacity(0.2),
                         size: 32),
                     const SizedBox(width: 16),
                     Expanded(
@@ -245,16 +276,24 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                               isEnabled
                                   ? 'Automatización ACTIVA'
                                   : 'Automatización DESACTIVADA',
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold),
                             ),
                           ),
-                          const Text(
+                          Text(
                             'Si está activa, el sistema generará eventos según el intervalo definido.',
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 14),
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.6),
+                                fontSize: 14),
                           ),
                         ],
                       ),
@@ -265,7 +304,7 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                         setState(() => _config['enabled'] = val);
                         _saveConfig();
                       },
-                      activeColor: AppTheme.primaryPurple,
+                      activeColor: AppTheme.lGoldAction,
                     ),
                   ],
                 ),
@@ -283,22 +322,35 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Modo de Creación',
+          Text('Modo de Creación',
               style: TextStyle(
-                  color: Colors.white,
+                  color: Theme.of(context).textTheme.displayLarge?.color,
                   fontSize: 18,
                   fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Solo un modo puede estar activo. "Automático" usa el intervalo; "Programado" usa horarios fijos (hora Venezuela).',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.6),
+                fontSize: 13),
           ),
           const SizedBox(height: 16),
           LayoutBuilder(
@@ -362,29 +414,39 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             const SizedBox(height: 20),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Horarios programados (VEN)',
                     style: TextStyle(
-                        color: Colors.white70,
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color
+                            ?.withOpacity(0.8),
                         fontSize: 14,
                         fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.add_circle,
-                      color: AppTheme.primaryPurple),
+                      color: AppTheme.lGoldAction),
                   onPressed: () => _addScheduledHour(hours),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             if (hours.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'No hay horarios configurados. Presiona + para agregar.',
-                  style: TextStyle(color: Colors.white38, fontSize: 13),
+                  style: TextStyle(
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withOpacity(0.4),
+                      fontSize: 13),
                 ),
               ),
             ...hours.asMap().entries.map((entry) {
@@ -396,17 +458,24 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.04),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
                       const Icon(Icons.access_time,
-                          color: AppTheme.primaryPurple, size: 20),
+                          color: AppTheme.lGoldAction, size: 20),
                       const SizedBox(width: 12),
                       Text(hour,
-                          style: const TextStyle(
-                              color: Colors.white,
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .displayLarge
+                                  ?.color,
                               fontSize: 16,
                               fontFamily: 'Orbitron',
                               fontWeight: FontWeight.bold)),
@@ -443,9 +512,9 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryPurple,
-              surface: Color(0xFF1A1A1D),
+            colorScheme: ColorScheme.light(
+              primary: AppTheme.lGoldAction,
+              surface: Theme.of(context).cardTheme.color!,
             ),
           ),
           child: MediaQuery(
@@ -513,20 +582,22 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.primaryPurple.withOpacity(0.1),
+        color: AppTheme.lGoldAction.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.3)),
+        border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.event_available,
-              color: AppTheme.primaryPurple, size: 20),
+          Icon(Icons.event_available,
+              color: AppTheme.lGoldAction, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Próximo evento: ${DateFormat('HH:mm').format(local)} (hora VEN) — en ${hh}h ${mm}m',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: Theme.of(context).textTheme.displayLarge?.color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -539,25 +610,32 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text('Parámetros de Generación',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: Theme.of(context).textTheme.displayLarge?.color,
                         fontSize: 18,
                         fontWeight: FontWeight.bold)),
               ),
               IconButton(
                   onPressed: _saveConfig,
-                  icon: const Icon(Icons.save, color: AppTheme.primaryPurple)),
+                  icon: const Icon(Icons.save, color: AppTheme.lGoldAction)),
             ],
           ),
           const SizedBox(height: 24),
@@ -575,16 +653,20 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             child: Text(
               "💡 Si Mín != Máx, el precio de entrada será aleatorio entre ambos.",
               style: TextStyle(
-                  color: Colors.white54,
+                  color: AppTheme.lGoldText,
                   fontSize: 12,
                   fontStyle: FontStyle.italic),
             ),
           ),
-          const Divider(color: Colors.white12, height: 32),
-          const Text(
+          const Divider(height: 32),
+          Text(
             'Inicio de Sala (Pending → Active)',
             style: TextStyle(
-                color: Colors.white70,
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.8),
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5),
@@ -594,17 +676,17 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
               1, 120, 1),
           _buildSlider(
               'Jugadores mín. para iniciar', 'min_players_to_start', 2, 20, 1),
-          const Divider(color: Colors.white12, height: 32),
+          const Divider(height: 32),
           _buildPriceSection(
             'player_prices',
             '🎮 Precios Tienda (Jugadores)',
-            AppTheme.primaryPurple,
+            AppTheme.lGoldAction,
           ),
-          const Divider(color: Colors.white12, height: 32),
+          Divider(color: Theme.of(context).dividerColor.withOpacity(0.2), height: 32),
           _buildPriceSection(
             'spectator_prices',
             '👁 Precios Tienda (Espectadores)',
-            AppTheme.accentGold,
+            AppTheme.lGoldAction.withOpacity(0.8),
           ),
         ],
       ),
@@ -639,8 +721,13 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                     child: Text(power.name,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 13))),
+                        style: TextStyle(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withOpacity(0.8),
+                            fontSize: 13))),
                 SizedBox(
                   width: 80,
                   child: TextFormField(
@@ -652,13 +739,18 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
                         color: color, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: Colors.white.withOpacity(0.05),
+                      fillColor: Theme.of(context).cardTheme.color,
                       contentPadding: const EdgeInsets.symmetric(
                           vertical: 8, horizontal: 5),
                       isDense: true,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide.none),
+                          borderSide: BorderSide(
+                              color: color.withOpacity(0.3))),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: color.withOpacity(0.1))),
                     ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: (val) {
@@ -694,8 +786,13 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             Row(
               children: [
                 Text(label.replaceAll('[COIN]', '').trim(),
-                    style:
-                        const TextStyle(color: Colors.white70, fontSize: 14)),
+                    style: TextStyle(
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color
+                            ?.withOpacity(0.7),
+                        fontSize: 14)),
                 if (label.contains('[COIN]')) ...[
                   const SizedBox(width: 4),
                   const CoinImage(size: 14),
@@ -703,8 +800,8 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
               ],
             ),
             Text(value.toInt().toString(),
-                style: const TextStyle(
-                    color: AppTheme.primaryPurple,
+                style: TextStyle(
+                    color: AppTheme.lGoldAction,
                     fontWeight: FontWeight.bold)),
           ],
         ),
@@ -713,8 +810,8 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
           min: min,
           max: max,
           divisions: ((max - min) / (divisions)).toInt(),
-          activeColor: AppTheme.primaryPurple,
-          inactiveColor: Colors.white10,
+          activeColor: AppTheme.lGoldAction,
+          inactiveColor: Theme.of(context).dividerColor.withOpacity(0.1),
           onChanged: (val) => setState(() => _config[key] = val.toInt()),
         ),
         const SizedBox(height: 8),
@@ -745,26 +842,38 @@ class _ModeButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           color: selected
-              ? AppTheme.primaryPurple.withOpacity(0.15)
-              : Colors.white.withOpacity(0.04),
+              ? AppTheme.lGoldAction.withOpacity(0.15)
+              : Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected
-                ? AppTheme.primaryPurple
-                : Colors.white.withOpacity(0.1),
+                ? AppTheme.lGoldAction
+                : Theme.of(context).dividerColor.withOpacity(0.1),
             width: selected ? 2 : 1,
           ),
         ),
         child: Column(
           children: [
             Icon(icon,
-                color: selected ? AppTheme.primaryPurple : Colors.white38,
+                color: selected
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.3),
                 size: 28),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : Colors.white54,
+                color: selected
+                    ? Theme.of(context).textTheme.displayLarge?.color
+                    : Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.5),
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 14,
               ),

@@ -30,15 +30,21 @@ class StoresTab extends StatelessWidget {
           child: Consumer<StoreProvider>(
             builder: (context, provider, child) {
               if (provider.isLoading) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(
+                    child: CircularProgressIndicator(color: AppTheme.lGoldAction));
               }
 
               final stores = provider.stores;
 
               if (stores.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text("No hay tiendas registradas",
-                      style: TextStyle(color: Colors.white38)),
+                      style: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.5))),
                 );
               }
 
@@ -48,21 +54,23 @@ class StoresTab extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final store = stores[index];
                   return Card(
-                    color: AppTheme.cardBg,
-                    elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.2),
-                    margin: const EdgeInsets.only(bottom: 16),
+                    color: Theme.of(context).cardTheme.color,
+                    elevation: 0,
+                    margin: const EdgeInsets.only(bottom: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.white.withOpacity(0.05)),
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                          color: Theme.of(context).dividerColor.withOpacity(0.1)),
                     ),
                     child: ListTile(
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       leading: Container(
-                        width: 60,
-                        height: 60,
+                        width: 56,
+                        height: 56,
                         decoration: BoxDecoration(
-                          color: AppTheme.cardBg,
-                          borderRadius: BorderRadius.circular(8),
+                          color: Theme.of(context).dividerColor.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
                           image: (store.imageUrl.isNotEmpty &&
                                   store.imageUrl.startsWith('http'))
                               ? DecorationImage(
@@ -72,53 +80,76 @@ class StoresTab extends StatelessWidget {
                         ),
                         child: (store.imageUrl.isEmpty ||
                                 !store.imageUrl.startsWith('http'))
-                            ? const Icon(Icons.store, color: Colors.white54)
+                            ? Icon(Icons.store_rounded,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.4),
+                                size: 28)
                             : null,
                       ),
                       title: Text(store.name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold)),
+                          style: TextStyle(
+                              color: Theme.of(context).textTheme.displayLarge?.color,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const SizedBox(height: 4),
                           Text(store.description,
-                              style: const TextStyle(color: Colors.white70),
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.color
+                                      ?.withOpacity(0.7),
+                                  fontSize: 13),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
                             children: store.products
                                 .map((p) => Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
+                                          horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.black26,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border:
-                                            Border.all(color: Colors.white12),
+                                        color: AppTheme.lGoldAction.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                            color: AppTheme.lGoldAction
+                                                .withOpacity(0.2)),
                                       ),
-                                      child: Text(
-                                        "${p.icon} ${p.name} (\$${p.cost})",
-                                        style: const TextStyle(
-                                            color: Colors.greenAccent,
-                                            fontSize: 11),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(p.icon,
+                                              style: const TextStyle(fontSize: 12)),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            "${p.name} (\$${p.cost})",
+                                            style: const TextStyle(
+                                                color: AppTheme.lGoldAction,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11),
+                                          ),
+                                        ],
                                       ),
                                     ))
                                 .toList(),
                           ),
                         ],
                       ),
-                      isThreeLine: true,
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (event.type != 'online')
                             IconButton(
-                                icon: const Icon(Icons.qr_code,
-                                    color: Colors.white),
+                                icon: const Icon(Icons.qr_code_rounded,
+                                    color: AppTheme.lGoldAction),
                                 tooltip: "Ver QR",
                                 onPressed: () => onShowQR(
                                       store.qrCodeData,
@@ -127,13 +158,14 @@ class StoresTab extends StatelessWidget {
                                       hint: "Escanear para entrar",
                                     )),
                           IconButton(
-                            icon: const Icon(Icons.edit,
-                                color: AppTheme.accentGold),
+                            icon: const Icon(Icons.edit_rounded,
+                                color: AppTheme.lGoldAction),
                             onPressed: () => onShowAddStoreDialog(store),
                           ),
                           if (!isEventActive)
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
+                              icon: const Icon(Icons.delete_outline_rounded,
+                                  color: Colors.redAccent),
                               onPressed: () => onConfirmDeleteStore(store),
                             ),
                         ],

@@ -59,17 +59,23 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: AppTheme.cardBg,
+      fillColor: Theme.of(context).cardTheme.color,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        borderSide: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        borderSide: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
-      labelStyle: const TextStyle(color: Colors.white54),
-      prefixIcon: icon != null ? Icon(icon, color: AppTheme.accentGold) : null,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppTheme.lGoldAction),
+      ),
+      labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6)),
+      prefixIcon: icon != null ? Icon(icon, color: AppTheme.lGoldAction) : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
@@ -585,18 +591,18 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¿Aceptar a todos?",
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text("¿Aceptar a todos?",
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
         content: Text(
             "Se aprobarán las ${pending.length} solicitudes pendientes de manera instantánea. ¿Estás seguro?",
-            style: const TextStyle(color: Colors.white70)),
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text("Cancelar")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.lGoldAction),
             onPressed: () => Navigator.pop(ctx, true),
             child: const FittedBox(
               child: Text("ACEPTAR TODOS",
@@ -655,9 +661,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Finalizar y Premiar',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Finalizar y Premiar',
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -667,7 +673,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 Text(
                   'Pote Acumulado: $_currentPot ',
                   style: const TextStyle(
-                      color: AppTheme.accentGold,
+                      color: AppTheme.lGoldAction,
                       fontSize: 18,
                       fontWeight: FontWeight.bold),
                 ),
@@ -675,9 +681,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Se distribuirá el 70% de lo recaudado entre los 3 primeros lugares del ranking actual.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
             ),
             const SizedBox(height: 10),
             const Text(
@@ -694,10 +700,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           ),
           ElevatedButton(
             style:
-                ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold),
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.lGoldAction),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('DISTRIBUIR PREMIOS',
-                style: TextStyle(color: Colors.black)),
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -716,9 +722,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           await showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: AppTheme.cardBg,
-              title: const Text('🎉 ¡Premios Entregados!',
-                  style: TextStyle(color: Colors.white)),
+              backgroundColor: Theme.of(context).cardTheme.color,
+              title: Text('🎉 ¡Premios Entregados!',
+                  style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -728,7 +734,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                       children: [
                         Text('Pote Total: ${result['pot']} ',
                             style: const TextStyle(
-                                color: AppTheme.accentGold,
+                                color: AppTheme.lGoldAction,
                                 fontWeight: FontWeight.bold)),
                         const CoinImage(size: 16),
                       ],
@@ -745,7 +751,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                               child: Text('${r['place']}'),
                             ),
                             title: Text('${r['user']}',
-                                style: const TextStyle(color: Colors.white)),
+                                style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -793,15 +799,15 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.cardBg,
+        backgroundColor: Theme.of(context).cardTheme.color,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: Theme.of(context).textTheme.displayLarge?.color),
         title: Text(
           widget.event.title,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: Theme.of(context).textTheme.displayLarge?.color,
             fontWeight: FontWeight.w900,
           ),
           overflow: TextOverflow.ellipsis,
@@ -831,12 +837,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    backgroundColor: AppTheme.cardBg,
-                    title: const Text("¿Iniciar Evento Ahora?",
-                        style: TextStyle(color: Colors.white)),
-                    content: const Text(
+                    backgroundColor: Theme.of(context).cardTheme.color,
+                    title: Text("¿Iniciar Evento Ahora?",
+                        style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
+                    content: Text(
                       "El evento pasará a estado 'active' inmediatamente. Esta acción es exclusiva del administrador y no puede revertirse automáticamente.",
-                      style: TextStyle(color: Colors.white70),
+                      style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
                     ),
                     actions: [
                       TextButton(
@@ -845,7 +851,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green),
+                            backgroundColor: AppTheme.lGoldAction),
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text("INICIAR",
                             style: TextStyle(color: Colors.white)),
@@ -930,7 +936,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white54),
+            icon: Icon(Icons.refresh_rounded, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5)),
             onPressed: () {
               setState(() {});
               Provider.of<GameRequestProvider>(context, listen: false)
@@ -941,9 +947,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppTheme.accentGold,
-          unselectedLabelColor: Colors.white38,
-          indicatorColor: AppTheme.accentGold,
+          labelColor: AppTheme.lGoldAction,
+          unselectedLabelColor: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4),
+          indicatorColor: AppTheme.lGoldAction,
           indicatorWeight: 3,
           tabs: const [
             Tab(text: "Detalles"),
@@ -955,7 +961,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ),
       ),
       body: Container(
-        color: AppTheme.darkBg,
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -983,7 +989,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
     if (_tabController.index == 2) {
       return FloatingActionButton(
-        backgroundColor: AppTheme.primaryPurple,
+        backgroundColor: AppTheme.lGoldAction,
         onPressed: () async {
           final result = await showDialog(
             context: context,
@@ -995,13 +1001,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           );
           if (result == true) _refreshClues();
         },
-        child: const Icon(Icons.add, color: Colors.white),
+        child: const Icon(Icons.add_rounded, color: Colors.white),
       );
     } else if (_tabController.index == 3) {
       return FloatingActionButton(
-        backgroundColor: AppTheme.accentGold,
+        backgroundColor: AppTheme.lGoldAction,
         onPressed: () => _showAddStoreDialog(),
-        child: const Icon(Icons.store, color: Colors.black),
+        child: const Icon(Icons.store_rounded, color: Colors.white),
       );
     }
     return null;
@@ -1101,12 +1107,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¿Reiniciar Competencia?",
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text("¿Reiniciar Competencia?",
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
+        content: Text(
           "Esto expulsará a todos los participantes actuales, eliminará su progreso y bloqueará las pistas nuevamente. Esta acción no se puede deshacer.",
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
         ),
         actions: [
           TextButton(
@@ -1237,11 +1243,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("Confirmar Eliminación",
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        surfaceTintColor: Colors.transparent,
+        title: Text("Confirmar Eliminación",
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
         content: Text("¿Estás seguro de eliminar a ${store.name}?",
-            style: const TextStyle(color: Colors.white70)),
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),

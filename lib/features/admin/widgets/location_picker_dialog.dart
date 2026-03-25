@@ -92,31 +92,34 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppTheme.cardBg,
-      contentPadding: const EdgeInsets.all(15),
+      backgroundColor: Theme.of(context).cardTheme.color,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      contentPadding: const EdgeInsets.all(20),
       content: SizedBox(
-        width: 350,
-        height: 450,
+        width: 400,
+        height: 500,
         child: Column(
           children: [
+            // Header with search
             Container(
-              margin: const EdgeInsets.only(bottom: 10),
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white24),
+                color: Theme.of(context).dividerColor.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
               ),
               child: TextField(
                 controller: searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
                   hintText: 'Buscar dirección...',
-                  hintStyle: const TextStyle(color: Colors.white54),
+                  hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
                   border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                  prefixIcon: const Icon(Icons.location_searching_rounded, color: AppTheme.lGoldAction, size: 20),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.search, color: Colors.white),
+                    icon: const Icon(Icons.search, color: AppTheme.lGoldAction),
                     onPressed: searchLocation,
                   ),
                 ),
@@ -130,7 +133,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
             ),
             Expanded(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 child: Stack(
                   children: [
                     FlutterMap(
@@ -163,11 +166,11 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                         MarkerLayer(
                           markers: [
                             Marker(
-                              width: 40,
-                              height: 40,
+                              width: 50,
+                              height: 50,
                               point: temp,
                               child: const Icon(Icons.location_on,
-                                  color: Colors.red, size: 40),
+                                  color: Colors.redAccent, size: 50),
                             ),
                           ],
                         ),
@@ -178,33 +181,35 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                         top: 0,
                         left: 0,
                         right: 0,
-                        height: 200,
+                        height: 250,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E1E1E),
+                            color: Theme.of(context).cardTheme.color,
                             borderRadius: const BorderRadius.vertical(
-                                bottom: Radius.circular(8)),
+                                bottom: Radius.circular(16)),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.5),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 15,
+                                offset: const Offset(0, 10),
                               ),
                             ],
+                            border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                           ),
                           child: ListView.separated(
                             padding: EdgeInsets.zero,
                             itemCount: suggestions.length,
-                            separatorBuilder: (_, __) => const Divider(
-                                height: 1, color: Colors.white10),
+                            separatorBuilder: (_, __) => Divider(
+                                height: 1, color: Theme.of(context).dividerColor.withOpacity(0.05)),
                             itemBuilder: (context, index) {
                               final item = suggestions[index];
                               return ListTile(
                                 dense: true,
+                                leading: const Icon(Icons.place_outlined, color: AppTheme.lGoldAction, size: 18),
                                 title: Text(
                                   item['display_name'] ?? '',
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13),
+                                  style: TextStyle(
+                                      color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 13, fontWeight: FontWeight.normal),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -215,11 +220,11 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                         ),
                       ),
                     Positioned(
-                      bottom: 10,
-                      left: 0,
-                      right: 0,
+                      bottom: 20,
+                      left: 20,
+                      right: 20,
                       child: Center(
-                        child: ElevatedButton(
+                        child: ElevatedButton.icon(
                           onPressed: () {
                             if (temp.latitude < 0.5 ||
                                 temp.latitude > 12.5 ||
@@ -237,7 +242,17 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                             picked = temp;
                             Navigator.of(context).pop(picked);
                           },
-                          child: const Text('Seleccionar esta ubicación'),
+                          icon: const Icon(Icons.check_circle_rounded, color: Colors.white),
+                          label: const Text('SELECCIONAR ESTA UBICACIÓN', 
+                            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.lGoldAction,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 8,
+                            shadowColor: AppTheme.lGoldAction.withOpacity(0.4),
+                          ),
                         ),
                       ),
                     ),

@@ -7,10 +7,6 @@ import '../../wallet/models/withdrawal_plan.dart';
 import '../../wallet/services/withdrawal_plan_service.dart';
 import '../../../shared/widgets/coin_image.dart';
 
-/// Admin screen for managing withdrawal plans.
-///
-/// Allows editing clovers_cost, amount_usd, and is_active status.
-/// Also displays and allows updating the BCV exchange rate.
 class WithdrawalPlansManagementScreen extends StatefulWidget {
   const WithdrawalPlansManagementScreen({super.key});
 
@@ -27,11 +23,10 @@ class _WithdrawalPlansManagementScreenState
   bool _isLoading = true;
   String? _error;
 
-  // Exchange rate state
   double _exchangeRate = 0.0;
   bool _isLoadingRate = true;
   bool _isUpdatingRate = false;
-  bool _isBcvRateValid = true; // Fail-safe: assume valid until checked
+  bool _isBcvRateValid = true;
   final _rateController = TextEditingController();
 
   @override
@@ -172,20 +167,31 @@ class _WithdrawalPlansManagementScreenState
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
+          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
           return AlertDialog(
-            backgroundColor: AppTheme.cardBg,
+            backgroundColor: Theme.of(context).cardTheme.color,
+            surfaceTintColor: Colors.transparent,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppTheme.lGoldAction.withOpacity(0.1)),
             ),
             title: Row(
               children: [
-                Text(plan.icon ?? '💸', style: const TextStyle(fontSize: 24)),
-                const SizedBox(width: 12),
-                Text(
-                  'Editar ${plan.name}',
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.lGoldAction.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(plan.icon ?? '💸', style: const TextStyle(fontSize: 22)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'Editar ${plan.name}',
+                    style: TextStyle(
+                        color: textColor, fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                 ),
               ],
             ),
@@ -194,95 +200,95 @@ class _WithdrawalPlansManagementScreenState
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Clovers Cost
-                  const Text('Costo en Tréboles',
-                      style: TextStyle(color: Colors.white70)),
+                  Text('Costo en Tréboles',
+                      style: TextStyle(color: textColor?.withOpacity(0.7))),
                   const SizedBox(height: 8),
                   TextField(
                     controller: cloversController,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      suffix: const CoinImage(size: 16),
+                      suffixIcon: const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CoinImage(size: 20),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                       enabledBorder: OutlineInputBorder(
                         borderSide:
-                            BorderSide(color: Colors.white.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(8),
+                            BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderSide:
-                            const BorderSide(color: AppTheme.accentGold),
-                        borderRadius: BorderRadius.circular(8),
+                             const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Amount USD
-                  const Text('Monto a Recibir (USD)',
-                      style: TextStyle(color: Colors.white70)),
+                  Text('Monto a Recibir (USD)',
+                      style: TextStyle(color: textColor?.withOpacity(0.7))),
                   const SizedBox(height: 8),
                   TextField(
                     controller: amountController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      prefixText: '\$ ',
-                      prefixStyle: const TextStyle(color: AppTheme.accentGold),
+                      prefixIcon: const Icon(Icons.attach_money, color: AppTheme.lGoldAction),
+                      filled: true,
+                      fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                       enabledBorder: OutlineInputBorder(
                         borderSide:
-                            BorderSide(color: Colors.white.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(8),
+                            BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderSide:
-                            const BorderSide(color: AppTheme.accentGold),
-                        borderRadius: BorderRadius.circular(8),
+                             const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // VES Preview
                   if (_exchangeRate > 0)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppTheme.lGoldAction.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.1)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline,
-                              color: Colors.white54, size: 18),
-                          const SizedBox(width: 8),
+                          Icon(Icons.info_outline,
+                              color: AppTheme.lGoldAction.withOpacity(0.7), size: 18),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Al usuario se le enviará: \$${(double.tryParse(amountController.text) ?? 0) * _exchangeRate} VES',
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 12),
+                              style: TextStyle(
+                                  color: textColor?.withOpacity(0.7), fontSize: 12),
                             ),
                           ),
                         ],
                       ),
                     ),
                   const SizedBox(height: 16),
-
-                  // Active Toggle
                   SwitchListTile(
-                    title: const Text('Plan Activo',
-                        style: TextStyle(color: Colors.white)),
+                    title: Text('Plan Activo',
+                        style: TextStyle(color: textColor)),
                     subtitle: Text(
                       isActive
                           ? 'Visible para usuarios'
                           : 'Oculto para usuarios',
                       style:
-                          const TextStyle(color: Colors.white60, fontSize: 12),
+                           TextStyle(color: textColor?.withOpacity(0.6), fontSize: 12),
                     ),
                     value: isActive,
-                    activeColor: AppTheme.accentGold,
+                    activeColor: Theme.of(context).primaryColor,
                     onChanged: (value) => setState(() => isActive = value),
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -292,8 +298,8 @@ class _WithdrawalPlansManagementScreenState
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar',
-                    style: TextStyle(color: Colors.white60)),
+                child: Text('Cancelar',
+                    style: TextStyle(color: textColor?.withOpacity(0.6))),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -324,8 +330,9 @@ class _WithdrawalPlansManagementScreenState
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppTheme.lGoldAction,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text('Guardar'),
               ),
@@ -338,82 +345,88 @@ class _WithdrawalPlansManagementScreenState
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Planes de Retiro',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+           style: TextStyle(color: textColor, fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: AppTheme.lGoldAction),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh, color: AppTheme.lGoldAction),
             onPressed: _loadData,
             tooltip: 'Recargar',
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accentGold))
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+      body: Container(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: _isLoading
+            ? Center(
+                child: CircularProgressIndicator(color: primaryColor))
+            : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(_error!,
+                            style: const TextStyle(color: Colors.redAccent)),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadData,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
-                      Text(_error!,
-                          style: const TextStyle(color: Colors.redAccent)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadData,
-                        child: const Text('Reintentar'),
+                      _buildExchangeRateCard(),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Planes Disponibles',
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      ..._plans.map((plan) => _buildPlanCard(plan)),
                     ],
                   ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    // Exchange Rate Card
-                    _buildExchangeRateCard(),
-                    const SizedBox(height: 24),
-                    // Section Title
-                    const Text(
-                      'Planes Disponibles',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Plans List
-                    ..._plans.map((plan) => _buildPlanCard(plan)),
-                  ],
-                ),
+      ),
     );
   }
 
   Widget _buildExchangeRateCard() {
+    final primaryColor = Theme.of(context).primaryColor;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.accentGold.withOpacity(0.2),
-            AppTheme.accentGold.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.lGoldAction.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,24 +436,25 @@ class _WithdrawalPlansManagementScreenState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.accentGold.withOpacity(0.2),
+                  color: AppTheme.lGoldAction.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.currency_exchange,
-                    color: AppTheme.accentGold, size: 24),
+                    color: AppTheme.lGoldAction, size: 24),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
+              const SizedBox(width: 14),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Tasa de Cambio BCV',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: textColor,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
-                    Text('USD → VES para retiros',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    const SizedBox(height: 2),
+                    Text('USD → VES para retiros oficiales',
+                        style: TextStyle(color: textColor?.withOpacity(0.5), fontSize: 12)),
                   ],
                 ),
               ),
@@ -448,10 +462,9 @@ class _WithdrawalPlansManagementScreenState
           ),
           const SizedBox(height: 16),
           if (_isLoadingRate)
-            const Center(
-                child: CircularProgressIndicator(color: AppTheme.accentGold))
+            Center(
+                child: CircularProgressIndicator(color: primaryColor))
           else ...[
-            // ── FAIL-SAFE: Stale Rate Warning ──
             if (!_isBcvRateValid)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -483,13 +496,16 @@ class _WithdrawalPlansManagementScreenState
               children: [
                 Expanded(
                   child: Text(
-                    '${_exchangeRate.toStringAsFixed(2)} Bs/USD',
+                    '${_exchangeRate.toStringAsFixed(2)} Bs.',
                     style: const TextStyle(
-                        color: AppTheme.accentGold,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
+                        color: AppTheme.lGoldAction,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1),
                   ),
                 ),
+                Text('/ USD', 
+                    style: TextStyle(color: textColor?.withOpacity(0.3), fontWeight: FontWeight.bold)),
               ],
             ),
           ],
@@ -504,22 +520,22 @@ class _WithdrawalPlansManagementScreenState
                       controller: _rateController,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
                         labelText: 'Nueva Tasa',
-                        labelStyle: const TextStyle(color: Colors.white60),
-                        prefixText: 'Bs ',
-                        prefixStyle:
-                            const TextStyle(color: AppTheme.accentGold),
+                        labelStyle: TextStyle(color: textColor?.withOpacity(0.5)),
+                        prefixIcon: const Icon(Icons.edit_note, color: AppTheme.lGoldAction),
+                        filled: true,
+                        fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                         enabledBorder: OutlineInputBorder(
                           borderSide:
-                              BorderSide(color: Colors.white.withOpacity(0.3)),
-                          borderRadius: BorderRadius.circular(8),
+                              BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderSide:
-                              const BorderSide(color: AppTheme.accentGold),
-                          borderRadius: BorderRadius.circular(8),
+                               const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
@@ -527,16 +543,18 @@ class _WithdrawalPlansManagementScreenState
                     ElevatedButton(
                       onPressed: _isUpdatingRate ? null : _updateExchangeRate,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.accentGold,
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppTheme.lGoldAction,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
                       ),
                       child: _isUpdatingRate
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Actualizar Tasa'),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('ACTUALIZAR TASA', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                     ),
                   ],
                 );
@@ -548,22 +566,22 @@ class _WithdrawalPlansManagementScreenState
                       controller: _rateController,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
-                        labelText: 'Nueva Tasa',
-                        labelStyle: const TextStyle(color: Colors.white60),
-                        prefixText: 'Bs ',
-                        prefixStyle:
-                            const TextStyle(color: AppTheme.accentGold),
+                        labelText: 'Nueva Tasa BCV',
+                        labelStyle: TextStyle(color: textColor?.withOpacity(0.5)),
+                        prefixIcon: const Icon(Icons.edit_note, color: AppTheme.lGoldAction),
+                        filled: true,
+                        fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                         enabledBorder: OutlineInputBorder(
                           borderSide:
-                              BorderSide(color: Colors.white.withOpacity(0.3)),
-                          borderRadius: BorderRadius.circular(8),
+                              BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderSide:
-                              const BorderSide(color: AppTheme.accentGold),
-                          borderRadius: BorderRadius.circular(8),
+                               const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
@@ -572,15 +590,18 @@ class _WithdrawalPlansManagementScreenState
                   ElevatedButton(
                     onPressed: _isUpdatingRate ? null : _updateExchangeRate,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentGold,
-                      foregroundColor: Colors.black,
+                      backgroundColor: AppTheme.lGoldAction,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      elevation: 0,
                     ),
                     child: _isUpdatingRate
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Actualizar'),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('ACTUALIZAR', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               );
@@ -592,35 +613,42 @@ class _WithdrawalPlansManagementScreenState
   }
 
   Widget _buildPlanCard(WithdrawalPlan plan) {
-    // Calculate VES preview
     final vesAmount = plan.amountUsd * _exchangeRate;
+    final primaryColor = Theme.of(context).primaryColor;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: plan.isActive
-              ? AppTheme.accentGold.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.3),
+              ? AppTheme.lGoldAction.withOpacity(0.15)
+              : Theme.of(context).dividerColor.withOpacity(0.1),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, cardConstraints) {
           final bool isNarrow = cardConstraints.maxWidth < 350;
           return Row(
             children: [
-              // Icon
               Container(
                 width: isNarrow ? 40 : 48,
                 height: isNarrow ? 40 : 48,
                 decoration: BoxDecoration(
                   color: plan.isActive
-                      ? AppTheme.accentGold.withOpacity(0.2)
-                      : Colors.grey.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+                      ? AppTheme.lGoldAction.withOpacity(0.12)
+                      : Theme.of(context).dividerColor.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
                   child: Text(plan.icon ?? '💸',
@@ -628,8 +656,6 @@ class _WithdrawalPlansManagementScreenState
                 ),
               ),
               const SizedBox(width: 12),
-
-              // Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,7 +667,7 @@ class _WithdrawalPlansManagementScreenState
                           child: Text(
                             plan.name,
                             style: TextStyle(
-                              color: plan.isActive ? Colors.white : Colors.grey,
+                              color: plan.isActive ? textColor : Colors.grey,
                               fontSize: isNarrow ? 14 : 15,
                               fontWeight: FontWeight.bold,
                             ),
@@ -652,14 +678,14 @@ class _WithdrawalPlansManagementScreenState
                           const SizedBox(width: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 2),
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.grey.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(4),
+                              color: Theme.of(context).dividerColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text('OFF',
+                            child: Text('OFF',
                                 style:
-                                    TextStyle(color: Colors.grey, fontSize: 8)),
+                                    TextStyle(color: textColor?.withOpacity(0.4), fontSize: 8, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ],
@@ -670,7 +696,7 @@ class _WithdrawalPlansManagementScreenState
                         Text(
                           '${plan.cloversCost} ',
                           style: TextStyle(
-                            color: plan.isActive ? Colors.white70 : Colors.grey,
+                            color: plan.isActive ? textColor?.withOpacity(0.7) : Colors.grey,
                             fontSize: isNarrow ? 10 : 11,
                           ),
                         ),
@@ -680,8 +706,9 @@ class _WithdrawalPlansManagementScreenState
                     Text(
                       '${vesAmount.toStringAsFixed(2)} VES',
                       style: TextStyle(
-                        color: plan.isActive ? Colors.white54 : Colors.grey,
-                        fontSize: isNarrow ? 9 : 10,
+                        color: plan.isActive ? textColor?.withOpacity(0.4) : Colors.grey.withOpacity(0.5),
+                        fontSize: isNarrow ? 9 : 11,
+                        fontWeight: FontWeight.w500,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -689,8 +716,6 @@ class _WithdrawalPlansManagementScreenState
                 ),
               ),
               const SizedBox(width: 8),
-
-              // Amount USD
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
@@ -701,23 +726,23 @@ class _WithdrawalPlansManagementScreenState
                       plan.formattedAmountUsd,
                       style: TextStyle(
                         color:
-                            plan.isActive ? AppTheme.accentGold : Colors.grey,
-                        fontSize: isNarrow ? 14 : 16,
-                        fontWeight: FontWeight.bold,
+                            plan.isActive ? AppTheme.lGoldAction : Colors.grey,
+                        fontSize: isNarrow ? 14 : 18,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
                   Text('USD',
                       style: TextStyle(
-                          color: Colors.white54, fontSize: isNarrow ? 8 : 10)),
+                          color: plan.isActive ? AppTheme.lGoldAction.withOpacity(0.5) : Colors.grey, 
+                          fontSize: isNarrow ? 8 : 10,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(width: 4),
-
-              // Edit Button
               IconButton(
-                icon: Icon(Icons.edit,
-                    color: Colors.white54, size: isNarrow ? 16 : 18),
+                icon: Icon(Icons.edit_rounded,
+                    color: AppTheme.lGoldAction.withOpacity(0.7), size: isNarrow ? 18 : 22),
                 onPressed: () => _showEditDialog(plan),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),

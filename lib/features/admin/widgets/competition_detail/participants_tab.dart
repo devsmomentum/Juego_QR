@@ -71,9 +71,9 @@ class _ParticipantsTabState extends State<ParticipantsTab> {
         }
 
         if (pending.isEmpty && participants.isEmpty) {
-          return const Center(
+          return Center(
               child: Text("No hay participantes ni solicitudes.",
-                  style: TextStyle(color: Colors.white54)));
+                  style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5))));
         }
 
         // --- SORT: banned/suspended go to bottom ---
@@ -101,11 +101,12 @@ class _ParticipantsTabState extends State<ParticipantsTab> {
             Container(
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: AppTheme.cardBg,
+                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Theme.of(context).dividerColor.withOpacity(0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -113,14 +114,14 @@ class _ParticipantsTabState extends State<ParticipantsTab> {
               ),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
                 decoration: InputDecoration(
                   hintText: 'Buscar por nombre o email...',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white38),
+                  hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
+                  prefixIcon: Icon(Icons.search, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.white38),
+                          icon: Icon(Icons.clear, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -147,8 +148,8 @@ class _ParticipantsTabState extends State<ParticipantsTab> {
                   Expanded(
                     child: Text("Solicitudes Pendientes",
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: AppTheme.accentGold,
+                        style: const TextStyle(
+                            color: AppTheme.lGoldAction,
                             fontSize: 18,
                             fontWeight: FontWeight.w900)),
                   ),
@@ -179,14 +180,14 @@ class _ParticipantsTabState extends State<ParticipantsTab> {
 
             const Text("Participantes Inscritos (Ranking)",
                 style: TextStyle(
-                    color: AppTheme.accentGold,
+                    color: AppTheme.lGoldAction,
                     fontSize: 18,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             if (participants.isEmpty)
-              const Text(
+              Text(
                   "Nadie inscrito aún.",
-                  style: TextStyle(color: Colors.white38))
+                  style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)))
             else
               ...participants.map((player) {
                 final userId = player['user_id'] as String;

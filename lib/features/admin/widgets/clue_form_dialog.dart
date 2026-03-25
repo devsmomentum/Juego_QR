@@ -73,21 +73,13 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
     super.dispose();
   }
 
-  InputDecoration _buildInputDecoration(String label, {IconData? icon}) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: Colors.black54),
-      prefixIcon: icon != null ? Icon(icon, color: AppTheme.lGoldText) : null,
-      enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.1)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      focusedBorder: const OutlineInputBorder(
-        borderSide: BorderSide(color: AppTheme.lGoldText, width: 2),
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-      ),
-      filled: true,
-      fillColor: Colors.black.withOpacity(0.02),
+  InputDecoration _buildInputDecoration(BuildContext context, String label, {IconData? icon}) {
+    return AppTheme.inputDecoration(
+      context: context,
+      label: label,
+      icon: icon,
+    ).copyWith(
+      fillColor: Theme.of(context).dividerColor.withOpacity(0.03),
     );
   }
 
@@ -95,20 +87,26 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Eliminar Pista', style: TextStyle(color: Colors.white)),
-        content: const Text(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        surfaceTintColor: Colors.transparent,
+        title: Text('Eliminar Pista', 
+          style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.bold)),
+        content: Text(
             '¿Estás seguro de que quieres eliminar esta pista? Esta acción no se puede deshacer.',
-            style: TextStyle(color: Colors.white70)),
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+            child: const Text('ELIMINAR', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -270,28 +268,36 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
     final isEdit = widget.clue != null;
 
     return AlertDialog(
-      backgroundColor: AppTheme.lSurface1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text(isEdit ? "Editar Pista / Minijuego" : "Agregar Nueva Pista",
-          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w900)),
+      backgroundColor: Theme.of(context).cardTheme.color,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Text(isEdit ? "Editar Pista / Minijuego" : "Nueva Pista",
+          style: TextStyle(
+              color: Theme.of(context).textTheme.displayLarge?.color, 
+              fontWeight: FontWeight.w900,
+              fontSize: 20)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text("CONFIGURACIÓN",
+                style: TextStyle(
+                    color: AppTheme.lGoldAction,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 1)),
+            const SizedBox(height: 12),
             DropdownButtonFormField<PuzzleType>(
               value: _selectedType,
-              dropdownColor: AppTheme.lSurface1,
+              dropdownColor: Theme.of(context).cardTheme.color,
               isExpanded: true,
-              decoration:
-                  _buildInputDecoration('Tipo de Minijuego', icon: Icons.games),
-              style: const TextStyle(color: Colors.black87),
+              decoration: _buildInputDecoration(context, 'Tipo de Minijuego', icon: Icons.games_rounded),
+              style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.w600),
               items: PuzzleType.values.map((type) {
                 return DropdownMenuItem(
                   value: type,
-                  child: Text(
-                    type.label,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(type.label),
                 );
               }).toList(),
               onChanged: (val) {
@@ -306,86 +312,96 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _titleController,
-              style: const TextStyle(color: Colors.black87),
-              decoration: _buildInputDecoration('Título'),
+              decoration: _buildInputDecoration(context, 'Título de la Pista', icon: Icons.title_rounded),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _questionController,
               maxLines: 2,
-              style: const TextStyle(color: Colors.black87),
-              decoration: _buildInputDecoration('Pregunta / Instrucción'),
+              decoration: _buildInputDecoration(context, 'Instrucción para el Jugador', icon: Icons.help_outline_rounded),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             if (!_selectedType.isAutoValidation)
               TextFormField(
                 controller: _answerController,
-                style: const TextStyle(color: Colors.black87),
-                decoration: _buildInputDecoration('Respuesta Correcta'),
+                decoration: _buildInputDecoration(context, 'Respuesta Secreta', icon: Icons.vpn_key_rounded),
               ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _xpController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.black87),
-              decoration: _buildInputDecoration('Puntos XP'),
+              decoration: _buildInputDecoration(context, 'Recompensa XP', icon: Icons.bolt_rounded),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 24),
 
-            const Text("📍 Geolocalización (Opcional)",
-                style: TextStyle(
-                    color: AppTheme.lGoldText, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.location_on_rounded, color: AppTheme.lGoldAction, size: 18),
+                const SizedBox(width: 8),
+                Text("UBICACIÓN (OPCIONAL)",
+                    style: TextStyle(
+                        color: Theme.of(context).textTheme.displayLarge?.color,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: 1)),
+              ],
+            ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _hintController,
-              style: const TextStyle(color: Colors.black87),
-              decoration: _buildInputDecoration(
-                  'Pista de Ubicación QR (ej: Detrás del árbol)',
-                  icon: Icons.location_on),
+              decoration: _buildInputDecoration(context, 'Referencia Visual (ej: Planta)', icon: Icons.visibility_outlined),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
                     controller: _latController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.black87),
-                    decoration: _buildInputDecoration('Latitud'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: _buildInputDecoration(context, 'Latitud'),
                     onChanged: (v) => _latitude = double.tryParse(v),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
                     controller: _longController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.black87),
-                    decoration: _buildInputDecoration('Longitud'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: _buildInputDecoration(context, 'Longitud'),
                     onChanged: (v) => _longitude = double.tryParse(v),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              alignment: WrapAlignment.spaceEvenly,
-              spacing: 10,
-              runSpacing: 5,
+            const SizedBox(height: 12),
+            Row(
               children: [
-                TextButton.icon(
-                  icon: const Icon(Icons.store, size: 16),
-                  label:
-                      const Text("Usar Evento", style: TextStyle(fontSize: 12)),
-                  onPressed: _useEventLocation,
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.store_rounded, size: 16),
+                    label: const Text("EVENTO", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.lGoldAction,
+                      side: const BorderSide(color: AppTheme.lGoldAction),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _useEventLocation,
+                  ),
                 ),
-                TextButton.icon(
-                  icon: const Icon(Icons.my_location, size: 16),
-                  label: const Text("Mi Ubicación",
-                      style: TextStyle(fontSize: 12)),
-                  onPressed: _useCurrentLocation,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.my_location_rounded, size: 16),
+                    label: const Text("MI GPS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.lGoldAction,
+                      side: const BorderSide(color: AppTheme.lGoldAction),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _useCurrentLocation,
+                  ),
                 ),
               ],
             ),
@@ -396,20 +412,24 @@ class _ClueFormDialogState extends State<ClueFormDialog> {
         if (isEdit)
           TextButton(
             onPressed: _handleDelete,
-            child: const Text("Eliminar",
-                style: TextStyle(color: Colors.redAccent)),
+            child: const Text("ELIMINAR",
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
           ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text("Cancelar", style: TextStyle(color: Colors.black54)),
+          child: Text("CANCELAR", 
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5))),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.lGoldAction,
-              foregroundColor: Colors.black),
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
           onPressed: _handleSave,
-          child: Text(isEdit ? "Guardar" : "Agregar",
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          child: Text(isEdit ? "GUARDAR CAMBIOS" : "CREAR PISTA",
+              style: const TextStyle(fontWeight: FontWeight.w900)),
         ),
       ],
     );

@@ -5,13 +5,8 @@ import '../../../core/services/app_config_service.dart';
 import '../../../core/models/payment_methods_config.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/payment_methods_config_provider.dart';
-import '../../mall/models/power_item.dart'; // NEW
+import '../../mall/models/power_item.dart';
 
-/// Admin screen for managing global application configuration.
-///
-/// Handles:
-/// - BCV Exchange Rate (USD -> VES)
-/// - Gateway Fee Percentage (for visual display in app)
 class GlobalConfigScreen extends StatefulWidget {
   const GlobalConfigScreen({super.key});
 
@@ -24,15 +19,12 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   final _exchangeRateController = TextEditingController();
   final _gatewayFeeController = TextEditingController();
 
-  // Power default costs
   Map<String, int> _powerDefaultCosts = {};
 
-  // Pago Móvil recipient
   final _pmBancoController = TextEditingController();
   final _pmCedulaController = TextEditingController();
   final _pmTelefonoController = TextEditingController();
 
-  // Version config
   final _latestVersionController = TextEditingController();
   final _minVersionController = TextEditingController();
   final _apkUrlController = TextEditingController();
@@ -94,7 +86,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       final versionCfg = results[3] as Map<String, dynamic>;
 
       final dbPowerCosts = results[4] as Map<String, int>;
-      // Validate or populate default costs using PowerItem's default list
       _powerDefaultCosts = {};
       for (var item in PowerItem.getShopItems()) {
         _powerDefaultCosts[item.id] = dbPowerCosts[item.id] ?? item.cost;
@@ -174,7 +165,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   }
 
   Future<void> _saveVersionConfig() async {
-    // Validate semver format x.y.z
     final semverRegex = RegExp(r'^\d+\.\d+\.\d+$');
     if (!semverRegex.hasMatch(_latestVersionController.text.trim()) ||
         !semverRegex.hasMatch(_minVersionController.text.trim())) {
@@ -248,7 +238,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         'telefono': _pmTelefonoController.text.trim(),
       });
 
-      // Also sync it globally immediately
       PowerItem.updateGlobalCosts(_powerDefaultCosts);
 
       if (mounted) {
@@ -282,10 +271,33 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryPurple),
+      return Center(
+        child: CircularProgressIndicator(color: AppTheme.lGoldAction),
       );
     }
+
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final primaryColor = AppTheme.lGoldAction;
+
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppTheme.lGoldAction, width: 2),
+      ),
+      labelStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.7)),
+      hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.4)),
+    );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -294,11 +306,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            const Text(
+            Text(
               'Configuración Global',
               style: TextStyle(
-                color: Colors.white,
+                color: textColor,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -306,11 +317,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             const SizedBox(height: 8),
             Text(
               'Configuraciones que afectan el funcionamiento de la aplicación.',
-              style: TextStyle(color: Colors.white.withOpacity(0.6)),
+              style: TextStyle(color: secondaryTextColor?.withOpacity(0.6)),
             ),
             const SizedBox(height: 32),
 
-            // Exchange Rate Section
             _buildConfigCard(
               title: 'Tasa de Cambio BCV',
               subtitle: 'Tasa USD → VES para cálculo de retiros',
@@ -319,25 +329,15 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 controller: _exchangeRateController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: Colors.white, fontSize: 18),
-                decoration: InputDecoration(
+                style: TextStyle(color: textColor, fontSize: 18),
+                decoration: inputDecoration.copyWith(
                   hintText: 'Ej: 56.50',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                  hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.3)),
                   prefixText: 'Bs. ',
-                  prefixStyle: const TextStyle(color: AppTheme.accentGold),
+                  prefixStyle: TextStyle(color: primaryColor),
                   suffixText: 'por 1 USD',
-                  suffixStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.primaryPurple),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  suffixStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.5)),
+                  fillColor: Theme.of(context).cardTheme.color,
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Requerido';
@@ -351,7 +351,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
             const SizedBox(height: 24),
 
-            // Gateway Fee Section
             _buildConfigCard(
               title: 'Comisión de Pasarela (Visualización)',
               subtitle: 'Porcentaje de comisión de Pago a Pago',
@@ -363,24 +362,14 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 controller: _gatewayFeeController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: Colors.white, fontSize: 18),
-                decoration: InputDecoration(
+                style: TextStyle(color: textColor, fontSize: 18),
+                decoration: inputDecoration.copyWith(
                   hintText: 'Ej: 3.0',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                  hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.3)),
                   suffixText: '%',
                   suffixStyle:
-                      const TextStyle(color: AppTheme.accentGold, fontSize: 18),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.primaryPurple),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                       TextStyle(color: primaryColor, fontSize: 18),
+                  fillColor: Theme.of(context).cardTheme.color,
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Requerido';
@@ -396,15 +385,14 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
             const SizedBox(height: 24),
 
-            // Recharge Maintenance Section
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppTheme.cardBg,
+                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _rechargeEnabled
-                      ? Colors.white.withOpacity(0.1)
+                      ? AppTheme.lGoldAction.withOpacity(0.2)
                       : Colors.orange.withOpacity(0.4),
                 ),
               ),
@@ -413,13 +401,13 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: (_rechargeEnabled ? Colors.green : Colors.orange)
+                      color: (_rechargeEnabled ? AppTheme.lGoldAction : Colors.orange)
                           .withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       _rechargeEnabled ? Icons.add_card : Icons.construction,
-                      color: _rechargeEnabled ? Colors.green : Colors.orange,
+                      color: _rechargeEnabled ? AppTheme.lGoldAction : Colors.orange,
                       size: 24,
                     ),
                   ),
@@ -427,11 +415,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
+                       children: [
+                        Text(
                           'Botón de Recarga',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: textColor,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -443,8 +431,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                               : 'En mantenimiento — botón deshabilitado',
                           style: TextStyle(
                             color: _rechargeEnabled
-                                ? Colors.green.shade300
-                                : Colors.orange.shade300,
+                                ? AppTheme.lGoldText
+                                : Colors.orange.shade700,
                             fontSize: 12,
                           ),
                         ),
@@ -453,18 +441,18 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   ),
                   const SizedBox(width: 8),
                   _isTogglingRecharge
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: AppTheme.primaryPurple,
+                            color: primaryColor,
                           ),
                         )
                       : Switch(
                           value: _rechargeEnabled,
                           onChanged: _toggleRecharge,
-                          activeColor: Colors.green,
+                          activeColor: AppTheme.lGoldAction,
                           inactiveThumbColor: Colors.orange,
                           inactiveTrackColor: Colors.orange.withOpacity(0.3),
                         ),
@@ -473,40 +461,29 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             ),
 
             const SizedBox(height: 24),
-
-            // Payment Methods Section
             _buildPaymentMethodsCard(),
-
             const SizedBox(height: 24),
-
-            // Pago Móvil Recipient Section
             _buildPagoMovilRecipientCard(),
-
             const SizedBox(height: 24),
-
-            // Version Configuration Section
             _buildVersionCard(),
-
             const SizedBox(height: 24),
-
-            // Power Default Costs Section
             _buildPowerDefaultCostsCard(),
-
             const SizedBox(height: 40),
 
-            // Save Button
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _saveConfig,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryPurple,
+                  backgroundColor: AppTheme.lGoldAction,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                  disabledBackgroundColor: Theme.of(context).dividerColor.withOpacity(0.1),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
+                  elevation: 5,
+                  shadowColor: AppTheme.lGoldAction.withOpacity(0.2),
                 ),
                 child: _isSaving
                     ? const SizedBox(
@@ -534,12 +511,23 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   }
 
   Widget _buildPaymentMethodsCard() {
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final primaryColor = AppTheme.lGoldAction;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,21 +537,21 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.accentGold.withOpacity(0.2),
+                  color: primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.tune,
-                    color: AppTheme.accentGold, size: 24),
+                child: Icon(Icons.tune,
+                    color: primaryColor, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Metodos de Pago',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: textColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -572,7 +560,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                     Text(
                       'Habilita o deshabilita metodos por flujo',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: secondaryTextColor?.withOpacity(0.5),
                         fontSize: 12,
                       ),
                     ),
@@ -580,20 +568,20 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 ),
               ),
               if (_isSavingPaymentMethods)
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppTheme.primaryPurple,
+                    color: primaryColor,
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Compra',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: secondaryTextColor?.withOpacity(0.7), fontSize: 12),
           ),
           const SizedBox(height: 6),
           ...PaymentMethodsCatalog.purchase.map((method) {
@@ -604,23 +592,23 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             return SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(method.label,
-                  style: const TextStyle(color: Colors.white)),
+                  style: TextStyle(color: textColor)),
               subtitle: Text(
                 method.description,
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                style: TextStyle(color: secondaryTextColor?.withOpacity(0.4), fontSize: 11),
               ),
               value: enabled,
-              activeColor: AppTheme.accentGold,
+              activeColor: primaryColor,
               onChanged: _isSavingPaymentMethods
                   ? null
                   : (value) =>
-                      _togglePaymentMethod('purchase', method.id, value),
+                       _togglePaymentMethod('purchase', method.id, value),
             );
           }),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Retiro',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: secondaryTextColor?.withOpacity(0.7), fontSize: 12),
           ),
           const SizedBox(height: 6),
           ...PaymentMethodsCatalog.withdrawal.map((method) {
@@ -631,17 +619,17 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             return SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(method.label,
-                  style: const TextStyle(color: Colors.white)),
+                  style: TextStyle(color: textColor)),
               subtitle: Text(
                 method.description,
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                style: TextStyle(color: secondaryTextColor?.withOpacity(0.4), fontSize: 11),
               ),
               value: enabled,
-              activeColor: AppTheme.accentGold,
+              activeColor: primaryColor,
               onChanged: _isSavingPaymentMethods
                   ? null
                   : (value) =>
-                      _togglePaymentMethod('withdrawal', method.id, value),
+                       _togglePaymentMethod('withdrawal', method.id, value),
             );
           }),
         ],
@@ -650,37 +638,40 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   }
 
   Widget _buildVersionCard() {
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final primaryColor = AppTheme.lGoldAction;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryPurple.withOpacity(0.2),
+                  color: primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.system_update_alt,
-                    color: AppTheme.primaryPurple, size: 24),
+                child: Icon(Icons.system_update_alt,
+                    color: primaryColor, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Control de Versiones',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: textColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -689,7 +680,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                     Text(
                       'Fuerza actualizaciones y administra la URL de descarga del APK',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: secondaryTextColor?.withOpacity(0.5),
                         fontSize: 12,
                       ),
                     ),
@@ -701,7 +692,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
           const SizedBox(height: 8),
 
-          // Info banner
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -720,7 +710,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                     'La "Versión mínima" es la que bloquea usuarios con APK antigua. '
                     '"Versión publicada" es solo informativa. '
                     'Ambas usan formato x.y.z (ej: 1.0.1).',
-                    style: TextStyle(color: Colors.blue.shade200, fontSize: 12),
+                    style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
                   ),
                 ),
               ],
@@ -729,7 +719,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
           const SizedBox(height: 20),
 
-          // Latest version
           _buildVersionField(
             controller: _latestVersionController,
             label: 'Versión publicada',
@@ -739,18 +728,16 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
           const SizedBox(height: 16),
 
-          // Min supported version
           _buildVersionField(
             controller: _minVersionController,
             label: 'Versión mínima requerida',
             hint: '1.0.0',
             helper: 'Los APKs más antiguos quedarán bloqueados',
-            accentColor: AppTheme.accentGold,
+            accentColor: Theme.of(context).colorScheme.secondary,
           ),
 
           const SizedBox(height: 16),
 
-          // ── Descarga directa APK ──────────────────────────────────
           _buildUrlField(
             controller: _apkUrlController,
             label: 'URL descarga APK (Android sin Store)',
@@ -761,26 +748,25 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Store URLs (opcionales, solo cuando estén publicadas) ──
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.03),
+              color: Theme.of(context).dividerColor.withOpacity(0.03),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.08)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.store_rounded,
-                        color: Colors.white38, size: 16),
+                    Icon(Icons.store_rounded,
+                        color: textColor?.withOpacity(0.38), size: 16),
                     const SizedBox(width: 8),
                     Text(
                       'URLs de tiendas oficiales (opcional)',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
+                          color: textColor?.withOpacity(0.5),
                           fontSize: 12,
                           fontWeight: FontWeight.w600),
                     ),
@@ -791,7 +777,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   'Déjalas vacías hasta que la app esté publicada en cada tienda. '
                   'Cuando tengan valor, tienen prioridad sobre la URL del APK.',
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.3), fontSize: 11),
+                      color: textColor?.withOpacity(0.3), fontSize: 11),
                 ),
                 const SizedBox(height: 14),
                 _buildUrlField(
@@ -800,7 +786,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   hint:
                       'https://play.google.com/store/apps/details?id=com.map.hunter',
                   icon: Icons.shop_rounded,
-                  iconColor: Colors.green.shade400,
+                  iconColor: Colors.green.shade700,
                 ),
                 const SizedBox(height: 12),
                 _buildUrlField(
@@ -808,7 +794,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   label: 'App Store URL (iOS)',
                   hint: 'https://apps.apple.com/app/idXXXXXXXXX',
                   icon: Icons.apple_rounded,
-                  iconColor: Colors.white70,
+                  iconColor: textColor?.withOpacity(0.7) ?? Colors.grey,
                 ),
               ],
             ),
@@ -816,25 +802,24 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
           const SizedBox(height: 20),
 
-          // Maintenance mode toggle
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: _maintenanceMode
                   ? Colors.orange.withOpacity(0.08)
-                  : Colors.white.withOpacity(0.03),
+                  : Theme.of(context).dividerColor.withOpacity(0.03),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _maintenanceMode
                     ? Colors.orange.withOpacity(0.4)
-                    : Colors.white.withOpacity(0.1),
+                    : Theme.of(context).dividerColor.withOpacity(0.1),
               ),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.construction_rounded,
-                  color: _maintenanceMode ? Colors.orange : Colors.white38,
+                  color: _maintenanceMode ? Colors.orange : secondaryTextColor?.withOpacity(0.38),
                   size: 22,
                 ),
                 const SizedBox(width: 14),
@@ -842,10 +827,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Modo Mantenimiento',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: textColor,
                             fontSize: 14,
                             fontWeight: FontWeight.w600),
                       ),
@@ -855,8 +840,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                             : 'Inactivo — la app funciona normalmente',
                         style: TextStyle(
                           color: _maintenanceMode
-                              ? Colors.orange.shade300
-                              : Colors.white38,
+                              ? Colors.orange.shade700
+                              : secondaryTextColor?.withOpacity(0.38),
                           fontSize: 11,
                         ),
                       ),
@@ -866,8 +851,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                 Switch(
                   value: _maintenanceMode,
                   onChanged: (v) => setState(() => _maintenanceMode = v),
-                  activeColor: Colors.orange,
-                  inactiveThumbColor: Colors.white38,
+                  activeColor: AppTheme.lGoldAction,
+                  inactiveThumbColor: secondaryTextColor?.withOpacity(0.38),
                 ),
               ],
             ),
@@ -875,7 +860,6 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
           const SizedBox(height: 24),
 
-          // Save version button
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -891,9 +875,9 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               label: const Text('GUARDAR VERSIÓN',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryPurple,
+                backgroundColor: AppTheme.lGoldAction,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                disabledBackgroundColor: Theme.of(context).dividerColor.withOpacity(0.1),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
@@ -911,26 +895,29 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
     required IconData icon,
     Color? iconColor,
   }) {
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Colors.white, fontSize: 13),
+      style: TextStyle(color: textColor, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+        labelStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.6)),
         hintText: hint,
         hintStyle:
-            TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12),
-        prefixIcon: Icon(icon, color: iconColor ?? Colors.white38, size: 20),
+            TextStyle(color: secondaryTextColor?.withOpacity(0.2), fontSize: 12),
+        prefixIcon: Icon(icon, color: iconColor ?? secondaryTextColor?.withOpacity(0.38), size: 20),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+          borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.15)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppTheme.primaryPurple),
+          borderSide: const BorderSide(color: AppTheme.lGoldAction),
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
+        fillColor: Theme.of(context).dividerColor.withOpacity(0.04),
       ),
     );
   }
@@ -942,30 +929,33 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
     required String helper,
     Color? accentColor,
   }) {
-    final color = accentColor ?? AppTheme.primaryPurple;
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final color = accentColor ?? AppTheme.lGoldAction;
+
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
+      style: TextStyle(color: textColor, fontSize: 16),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+        labelStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.6)),
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
+        hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.25)),
         helperText: helper,
         helperStyle:
-            TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+            TextStyle(color: secondaryTextColor?.withOpacity(0.4), fontSize: 11),
         prefixIcon:
             Icon(Icons.tag_rounded, color: color.withOpacity(0.7), size: 20),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+          borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: color),
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
       ),
     );
   }
@@ -977,12 +967,23 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
     required Widget child,
     String? warning,
   }) {
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final primaryColor = AppTheme.lGoldAction;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -992,10 +993,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryPurple.withOpacity(0.2),
+                  color: primaryColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: AppTheme.primaryPurple, size: 24),
+                child: Icon(icon, color: primaryColor, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -1004,8 +1005,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: textColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1014,7 +1015,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
                         fontSize: 12,
                       ),
                     ),
@@ -1056,7 +1057,12 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       ),
     );
   }
+
   Widget _buildPagoMovilRecipientCard() {
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final primaryColor = AppTheme.lGoldAction;
+
     return _buildConfigCard(
       title: 'Pago Móvil Destinatario',
       subtitle: 'Datos que verá el usuario al hacer Pago Móvil',
@@ -1066,69 +1072,69 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
           TextFormField(
             controller: _pmBancoController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: TextStyle(color: textColor, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Código de Banco',
-              labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              labelStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.6)),
               hintText: 'Ej: 0134',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
-              prefixIcon: Icon(Icons.account_balance, color: AppTheme.accentGold.withOpacity(0.7), size: 20),
+              hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.25)),
+              prefixIcon: Icon(Icons.account_balance, color: primaryColor.withOpacity(0.7), size: 20),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.primaryPurple),
+                borderSide: const BorderSide(color: AppTheme.lGoldAction),
               ),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
+              fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
             ),
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _pmCedulaController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: TextStyle(color: textColor, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Cédula (sin la V)',
-              labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              labelStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.6)),
               hintText: 'Ej: 12345678',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
-              prefixIcon: Icon(Icons.badge_outlined, color: AppTheme.accentGold.withOpacity(0.7), size: 20),
+              hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.25)),
+              prefixIcon: Icon(Icons.badge_outlined, color: primaryColor.withOpacity(0.7), size: 20),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.primaryPurple),
+                borderSide: const BorderSide(color: AppTheme.lGoldAction),
               ),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
+              fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
             ),
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _pmTelefonoController,
             keyboardType: TextInputType.phone,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: TextStyle(color: textColor, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Teléfono',
-              labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              labelStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.6)),
               hintText: 'Ej: 04121234567',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
-              prefixIcon: Icon(Icons.phone_rounded, color: AppTheme.accentGold.withOpacity(0.7), size: 20),
+              hintStyle: TextStyle(color: secondaryTextColor?.withOpacity(0.25)),
+              prefixIcon: Icon(Icons.phone_rounded, color: primaryColor.withOpacity(0.7), size: 20),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppTheme.primaryPurple),
+                borderSide: const BorderSide(color: AppTheme.lGoldAction),
               ),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
+              fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
             ),
           ),
         ],
@@ -1137,12 +1143,16 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   }
 
   Widget _buildPowerDefaultCostsCard() {
+    final textColor = Theme.of(context).textTheme.displayLarge?.color;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final primaryColor = AppTheme.lGoldAction;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1152,21 +1162,21 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.accentGold.withOpacity(0.2),
+                  color: primaryColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.bolt,
-                    color: AppTheme.accentGold, size: 24),
+                child: Icon(Icons.bolt,
+                    color: primaryColor, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Precios Base de Poderes',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: textColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1175,7 +1185,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                     Text(
                       'Costo por defecto al crear nuevos eventos (online y presenciales)',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: secondaryTextColor?.withOpacity(0.5),
                         fontSize: 12,
                       ),
                     ),
@@ -1202,9 +1212,9 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
+                  color: Theme.of(context).dividerColor.withOpacity(0.03),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.08)),
                 ),
                 padding: const EdgeInsets.all(8),
                 child: Row(
@@ -1214,8 +1224,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                     Expanded(
                       child: Text(
                         power.name,
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: textColor,
                             fontSize: 13,
                             fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
@@ -1228,7 +1238,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                         keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                            color: AppTheme.accentGold,
+                            color: AppTheme.lGoldText,
                             fontSize: 14,
                             fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
@@ -1238,15 +1248,15 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(
-                                color: Colors.white.withOpacity(0.2)),
+                                color: Theme.of(context).dividerColor.withOpacity(0.2)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide:
-                                const BorderSide(color: AppTheme.accentGold),
+                                 const BorderSide(color: AppTheme.lGoldAction),
                           ),
                           filled: true,
-                          fillColor: Colors.black26,
+                          fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                         ),
                         onChanged: (val) {
                           final parsed = int.tryParse(val);

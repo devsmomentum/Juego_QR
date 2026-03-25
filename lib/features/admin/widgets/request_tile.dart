@@ -9,19 +9,17 @@ import '../services/admin_service.dart';
 import '../../../shared/widgets/coin_image.dart';
 import '../../mall/models/power_item.dart';
 
-/// Widget tile para mostrar solicitudes de acceso a eventos
-/// y participantes inscritos con su estado y progreso.
 class RequestTile extends StatefulWidget {
   final GameRequest request;
   final bool isReadOnly;
   final int? rank;
   final int? progress;
-  final String? currentStatus; // Override status (e.g. from game_players)
-  final VoidCallback? onBanToggled; // Callback to refresh parent UI
+  final String? currentStatus;
+  final VoidCallback? onBanToggled;
   final int? coins;
   final int? lives;
   final String? eventId;
-  final VoidCallback? onStatsUpdated; // Callback after coins/lives change
+  final VoidCallback? onStatsUpdated;
 
   const RequestTile({
     super.key,
@@ -46,7 +44,6 @@ class _RequestTileState extends State<RequestTile> {
   bool _isAdjusting = false;
   bool _isGrantingPower = false;
 
-  /// Formatea la fecha en formato legible dd/MM/yyyy HH:mm
   String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
@@ -58,47 +55,38 @@ class _RequestTileState extends State<RequestTile> {
 
   void _toggleBan(BuildContext context, PlayerProvider provider, String userId,
       String eventId, bool isBanned) {
-    debugPrint(
-        'RequestTile: _toggleBan CLICKED. User: $userId, Event: $eventId, CurrentlyBanned: $isBanned');
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
+        backgroundColor: cardColor,
         title: Text(
             isBanned ? "Desbanear de Competencia" : "Banear de Competencia",
-            style: const TextStyle(color: Colors.white)),
+            style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
         content: Text(
           isBanned
               ? "¿Permitir el acceso nuevamente a este usuario a esta competencia?"
               : "¿Estás seguro? El usuario será expulsado de esta competencia.",
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: textColor?.withOpacity(0.7)),
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              debugPrint('RequestTile: Ban dialog CANCELLED');
-              Navigator.pop(ctx);
-            },
-            child: const Text("Cancelar"),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Cancelar", style: TextStyle(color: textColor?.withOpacity(0.6))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: isBanned ? Colors.green : Colors.red),
+                backgroundColor: isBanned ? Colors.green : Colors.red,
+                foregroundColor: Colors.white),
             onPressed: () async {
-              debugPrint(
-                  'RequestTile: Ban dialog CONFIRMED. Calling toggleGameBanUser...');
               Navigator.pop(ctx);
               try {
-                // Changed to Event-Specific Ban
                 await provider.toggleGameBanUser(userId, eventId, !isBanned);
-                debugPrint('RequestTile: toggleGameBanUser SUCCESS');
-
-                // Notify parent to refresh UI
                 if (widget.onBanToggled != null) {
-                  debugPrint('RequestTile: Calling onBanToggled callback');
                   widget.onBanToggled!();
                 }
-
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -108,15 +96,13 @@ class _RequestTileState extends State<RequestTile> {
                   );
                 }
               } catch (e) {
-                debugPrint('RequestTile: toggleGameBanUser ERROR: $e');
                 if (context.mounted) {
                   ScaffoldMessenger.of(context)
                       .showSnackBar(SnackBar(content: Text("Error: $e")));
                 }
               }
             },
-            child: Text(isBanned ? "DESBANEAR" : "BANEAR",
-                style: const TextStyle(color: Colors.white)),
+            child: Text(isBanned ? "DESBANEAR" : "BANEAR"),
           ),
         ],
       ),
@@ -124,7 +110,7 @@ class _RequestTileState extends State<RequestTile> {
   }
 
   Future<void> _handleApprove(BuildContext context) async {
-    if (_isApproving) return; // Prevent double-tap
+    if (_isApproving) return;
     setState(() => _isApproving = true);
 
     try {
@@ -187,16 +173,17 @@ class _RequestTileState extends State<RequestTile> {
     }
   }
 
-  /// Muestra un diálogo para ajustar monedas o vidas del jugador.
   void _showAdjustDialog(BuildContext context, String field, int currentValue) {
     final label = field == 'coins' ? 'Monedas' : 'Vidas';
     final customIcon = field == 'coins'
         ? const Icon(Icons.monetization_on, size: 22, color: Colors.amber)
         : null;
     final icon = field == 'coins' ? null : Icons.favorite;
-    final color = field == 'coins' ? AppTheme.accentGold : Colors.redAccent;
+    final color = field == 'coins' ? const Color(0xFFD4AF37) : Colors.redAccent;
     final controller = TextEditingController(text: currentValue.toString());
     final maxValue = field == 'lives' ? 3 : 99999;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
 
     showDialog(
       context: context,
@@ -205,7 +192,7 @@ class _RequestTileState extends State<RequestTile> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: AppTheme.cardBg,
+              backgroundColor: cardColor,
               title: Row(
                 children: [
                   if (customIcon != null)
@@ -214,7 +201,7 @@ class _RequestTileState extends State<RequestTile> {
                     Icon(icon, color: color, size: 22),
                   const SizedBox(width: 8),
                   Text('Ajustar $label',
-                      style: const TextStyle(color: Colors.white)),
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
                 ],
               ),
               content: Column(
@@ -222,7 +209,7 @@ class _RequestTileState extends State<RequestTile> {
                 children: [
                   Text(
                     widget.request.playerName ?? 'Jugador',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 14),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -295,17 +282,17 @@ class _RequestTileState extends State<RequestTile> {
                       padding: const EdgeInsets.only(top: 8),
                       child: Text('Máximo: 3 vidas',
                           style:
-                              TextStyle(color: Colors.white38, fontSize: 11)),
+                              TextStyle(color: textColor?.withOpacity(0.4), fontSize: 11)),
                     ),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancelar'),
+                  child: Text('Cancelar', style: TextStyle(color: textColor?.withOpacity(0.6))),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: color),
+                  style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white),
                   onPressed: () async {
                     Navigator.pop(ctx);
                     final finalValue =
@@ -313,8 +300,7 @@ class _RequestTileState extends State<RequestTile> {
                     await _applyStatChange(
                         field, finalValue.clamp(0, maxValue));
                   },
-                  child: const Text('Guardar',
-                      style: TextStyle(color: Colors.white)),
+                  child: const Text('Guardar'),
                 ),
               ],
             );
@@ -356,12 +342,14 @@ class _RequestTileState extends State<RequestTile> {
     }
   }
 
-  /// Muestra un diálogo para seleccionar un poder y aplicarlo inmediatamente al jugador.
   void _showPowerSelectionDialog(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
+    final primaryColor = Theme.of(context).primaryColor;
+
     showDialog(
       context: context,
       builder: (ctx) {
-        // Filter: Keep only sabotage powers, excluding buffs and direct utilities
         final powers = PowerItem.getShopItems().where((p) {
           const excludedIds = {
             'life_steal',
@@ -374,12 +362,12 @@ class _RequestTileState extends State<RequestTile> {
         }).toList();
 
         return AlertDialog(
-          backgroundColor: AppTheme.cardBg,
-          title: const Row(
+          backgroundColor: cardColor,
+          title: Row(
             children: [
-              Icon(Icons.bolt, color: Colors.cyanAccent, size: 22),
-              SizedBox(width: 8),
-              Text('Afectar Jugador', style: TextStyle(color: Colors.white)),
+              Icon(Icons.bolt, color: primaryColor, size: 22),
+              const SizedBox(width: 8),
+              Text('Afectar Jugador', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
             ],
           ),
           content: SizedBox(
@@ -393,12 +381,12 @@ class _RequestTileState extends State<RequestTile> {
                   leading:
                       Text(power.icon, style: const TextStyle(fontSize: 24)),
                   title: Text(power.name,
-                      style: const TextStyle(color: Colors.white)),
+                      style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
                   subtitle: Text(power.description,
                       style:
-                          const TextStyle(color: Colors.white54, fontSize: 12)),
+                          TextStyle(color: textColor?.withOpacity(0.5), fontSize: 12)),
                   trailing:
-                      const Icon(Icons.flash_on, color: Colors.cyanAccent),
+                      Icon(Icons.flash_on, color: primaryColor, size: 18),
                   onTap: () async {
                     Navigator.pop(ctx);
                     await _applyPower(power);
@@ -410,7 +398,7 @@ class _RequestTileState extends State<RequestTile> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar', style: TextStyle(color: textColor?.withOpacity(0.6))),
             ),
           ],
         );
@@ -450,14 +438,15 @@ class _RequestTileState extends State<RequestTile> {
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Consumer<PlayerProvider>(
       builder: (context, playerProvider, _) {
-        // Priorizar el estado local pasado explícitamente (game_players)
-        // Si no existe, buscamos el global (fallback)
         final bool isBanned;
 
         if (widget.currentStatus != null) {
-          // Aceptamos 'banned' o 'suspended' como estado de baneo local
           isBanned = widget.currentStatus == 'banned' ||
               widget.currentStatus == 'suspended';
         } else {
@@ -474,8 +463,13 @@ class _RequestTileState extends State<RequestTile> {
         }
 
         return Card(
-          color: isBanned ? Colors.red.withOpacity(0.1) : AppTheme.cardBg,
+          color: isBanned ? Colors.red.withOpacity(0.05) : cardColor,
+          elevation: 0,
           margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: isBanned ? Colors.red.withOpacity(0.2) : Theme.of(context).dividerColor.withOpacity(0.08)),
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Column(
@@ -487,12 +481,12 @@ class _RequestTileState extends State<RequestTile> {
                           foregroundColor: Colors.white,
                           child: Text("#${widget.rank}",
                               style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
+                                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                         )
                       : null,
                   title: Text(widget.request.playerName ?? 'Desconocido',
                       style: TextStyle(
-                        color: isBanned ? Colors.redAccent : Colors.white,
+                        color: isBanned ? Colors.redAccent : textColor,
                         decoration:
                             isBanned ? TextDecoration.lineThrough : null,
                         fontWeight: FontWeight.bold,
@@ -501,33 +495,31 @@ class _RequestTileState extends State<RequestTile> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(widget.request.playerEmail ?? 'No email',
-                          style: const TextStyle(color: Colors.white54)),
-                      // Fecha de creación de la solicitud
+                          style: TextStyle(color: textColor?.withOpacity(0.5))),
                       if (widget.request.createdAt != null)
                         Text(
                           'Solicitud: ${_formatDate(widget.request.createdAt!)}',
-                          style: const TextStyle(
-                              color: Colors.white38, fontSize: 11),
+                          style: TextStyle(
+                              color: textColor?.withOpacity(0.35), fontSize: 11),
                         ),
                       if (widget.isReadOnly && widget.progress != null)
                         Text("Pistas completadas: ${widget.progress}",
                             style: const TextStyle(
-                                color: AppTheme.accentGold, fontSize: 12)),
+                                color: AppTheme.lGoldAction, fontSize: 12, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (widget.isReadOnly) ...[
-                        // Si está baneado, mostramos estado 'SUSPENDIDO' en lugar del check
                         if (isBanned)
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.2),
+                              color: Colors.red.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.redAccent),
+                              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
                             ),
                             child: const Text("SUSPENDIDO",
                                 style: TextStyle(
@@ -536,12 +528,12 @@ class _RequestTileState extends State<RequestTile> {
                                     fontWeight: FontWeight.bold)),
                           )
                         else
-                          const Icon(Icons.check_circle, color: Colors.green),
+                          const Icon(Icons.check_circle, color: Colors.green, size: 20),
 
                         const SizedBox(width: 8),
                         IconButton(
-                          icon: Icon(isBanned ? Icons.lock_open : Icons.block),
-                          color: isBanned ? Colors.greenAccent : Colors.red,
+                          icon: Icon(isBanned ? Icons.lock_open_rounded : Icons.block_rounded, size: 20),
+                          color: isBanned ? Colors.green : Colors.red,
                           tooltip: isBanned ? "Desbanear" : "Banear",
                           onPressed: () => _toggleBan(
                               context,
@@ -552,7 +544,7 @@ class _RequestTileState extends State<RequestTile> {
                         ),
                       ] else ...[
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red),
+                          icon: const Icon(Icons.close, color: Colors.red, size: 20),
                           onPressed: _isApproving
                               ? null
                               : () => Provider.of<GameRequestProvider>(context,
@@ -560,45 +552,42 @@ class _RequestTileState extends State<RequestTile> {
                                   .rejectRequest(widget.request.id),
                         ),
                         if (_isApproving)
-                          const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2))
+                          SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.lGoldAction))
                         else
                           IconButton(
-                            icon: const Icon(Icons.check, color: Colors.green),
+                            icon: const Icon(Icons.check_rounded, color: Colors.green, size: 20),
                             onPressed: () => _handleApprove(context),
                           ),
                       ],
                     ],
                   ),
                 ),
-                // --- Coins & Lives Row (only for approved/read-only participants) ---
                 if (widget.isReadOnly &&
                     (widget.coins != null || widget.lives != null))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Wrap(
-                      spacing: 12, // Spacing between chips
-                      runSpacing: 8, // Spacing when they wrap
+                      spacing: 8,
+                      runSpacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         if (widget.rank != null)
-                          const SizedBox(width: 32), // compact offset
-                        // Coins chip
+                          const SizedBox(width: 32),
                         if (widget.coins != null)
                           _StatChip(
                             customIcon: const Icon(Icons.monetization_on,
-                                size: 14, color: Colors.amber),
+                                size: 14, color: AppTheme.lGoldAction),
                             value: widget.coins!,
-                            color: AppTheme.accentGold,
+                            color: AppTheme.lGoldAction,
                             label: 'Monedas',
                             onTap: widget.eventId != null && !_isAdjusting
                                 ? () => _showAdjustDialog(
                                     context, 'coins', widget.coins!)
                                 : null,
                           ),
-                        // Lives chip
                         if (widget.lives != null)
                           _StatChip(
                             icon: Icons.favorite,
@@ -610,25 +599,24 @@ class _RequestTileState extends State<RequestTile> {
                                     context, 'lives', widget.lives!)
                                 : null,
                           ),
-                        // Powers chip
                         _StatChip(
-                          icon: Icons.bolt,
+                          icon: Icons.bolt_rounded,
                           value: 0,
                           showValue: false,
-                          color: Colors.cyanAccent,
+                          color: AppTheme.lGoldAction,
                           label: 'Lanzar Poder',
                           onTap: widget.eventId != null && !_isGrantingPower
                               ? () => _showPowerSelectionDialog(context)
                               : null,
                         ),
                         if (_isAdjusting || _isGrantingPower)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
                             child: SizedBox(
-                              width: 16,
-                              height: 16,
+                              width: 14,
+                              height: 14,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white54),
+                                  strokeWidth: 2, color: AppTheme.lGoldAction),
                             ),
                           ),
                       ],
@@ -643,14 +631,13 @@ class _RequestTileState extends State<RequestTile> {
   }
 
   Color _getRankColor(int rank) {
-    if (rank == 1) return const Color(0xFFFFD700); // Gold
-    if (rank == 2) return const Color(0xFFC0C0C0); // Silver
-    if (rank == 3) return const Color(0xFFCD7F32); // Bronze
-    return AppTheme.primaryPurple;
+    if (rank == 1) return const Color(0xFFFFD700);
+    if (rank == 2) return const Color(0xFFC0C0C0);
+    if (rank == 3) return const Color(0xFFCD7F32);
+    return Theme.of(context).primaryColor;
   }
 }
 
-/// Chip compacto para mostrar una estadística (monedas/vidas) con opción de editar.
 class _StatChip extends StatelessWidget {
   final IconData? icon;
   final Widget? customIcon;
@@ -676,11 +663,11 @@ class _StatChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -712,7 +699,7 @@ class _StatChip extends StatelessWidget {
             ],
             if (onTap != null) ...[
               const SizedBox(width: 4),
-              Icon(Icons.edit, size: 11, color: color.withOpacity(0.6)),
+              Icon(Icons.edit, size: 11, color: color.withOpacity(0.5)),
             ],
           ],
         ),
