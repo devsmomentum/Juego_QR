@@ -306,103 +306,111 @@ class _CloverPlansManagementScreenState
               : Colors.grey.withOpacity(0.3),
         ),
       ),
-      child: Row(
-        children: [
-          // Icon
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: plan.isActive
-                  ? AppTheme.accentGold.withOpacity(0.2)
-                  : Colors.grey.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: const CoinImage(size: 28),
-            ),
-          ),
-          const SizedBox(width: 16),
+      child: LayoutBuilder(
+        builder: (context, cardConstraints) {
+          final bool isNarrow = cardConstraints.maxWidth < 360;
+          return Row(
+            children: [
+              // Icon
+              Container(
+                width: isNarrow ? 48 : 60,
+                height: isNarrow ? 48 : 60,
+                decoration: BoxDecoration(
+                  color: plan.isActive
+                      ? AppTheme.accentGold.withOpacity(0.2)
+                      : Colors.grey.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: CoinImage(size: isNarrow ? 22 : 28),
+                ),
+              ),
+              const SizedBox(width: 12),
 
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          plan.name,
+                          style: TextStyle(
+                            color: plan.isActive ? Colors.white : Colors.grey,
+                            fontSize: isNarrow ? 15 : 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (!plan.isActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'INACTIVO',
+                              style: TextStyle(color: Colors.grey, fontSize: 10),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      plan.name,
+                      '${plan.cloversQuantity} Tréboles',
                       style: TextStyle(
-                        color: plan.isActive ? Colors.white : Colors.grey,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        color: plan.isActive ? Colors.white70 : Colors.grey,
+                        fontSize: isNarrow ? 12 : 14,
                       ),
                     ),
-                    if (!plan.isActive)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'INACTIVO',
-                          style: TextStyle(color: Colors.grey, fontSize: 10),
-                        ),
-                      ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${plan.cloversQuantity} Tréboles',
-                  style: TextStyle(
-                    color: plan.isActive ? Colors.white70 : Colors.grey,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
 
-          // Price Info
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    plan.formattedPrice,
-                    style: TextStyle(
-                      color: plan.isActive ? AppTheme.accentGold : Colors.grey,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+              // Price Info
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        plan.formattedPrice,
+                        style: TextStyle(
+                          color:
+                              plan.isActive ? AppTheme.accentGold : Colors.grey,
+                          fontSize: isNarrow ? 16 : 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
+                    Text(
+                      'USD',
+                      style: TextStyle(
+                          color: Colors.white54, fontSize: isNarrow ? 8 : 10),
+                    ),
+                  ],
                 ),
-                const Text(
-                  'USD',
-                  style: TextStyle(color: Colors.white54, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
+              ),
+              const SizedBox(width: 4),
 
-          // Edit Button
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white54),
-            onPressed: () => _showEditDialog(plan),
-            tooltip: 'Editar',
-          ),
-        ],
+              // Edit Button
+              IconButton(
+                icon: Icon(Icons.edit,
+                    color: Colors.white54, size: isNarrow ? 18 : 24),
+                onPressed: () => _showEditDialog(plan),
+                tooltip: 'Editar',
+              ),
+            ],
+          );
+        },
       ),
     );
   }

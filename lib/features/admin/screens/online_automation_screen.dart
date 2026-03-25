@@ -173,53 +173,104 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
 
   Widget _buildToggleCard() {
     final bool isEnabled = _config['enabled'] == true;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-            color: isEnabled ? AppTheme.primaryPurple : Colors.white10),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.auto_awesome,
-              color: isEnabled ? AppTheme.primaryPurple : Colors.white24,
-              size: 32),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    isEnabled
-                        ? 'Automatización ACTIVA'
-                        : 'Automatización DESACTIVADA',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const Text(
-                  'Si está activa, el sistema generará eventos según el intervalo definido.',
-                  style: TextStyle(color: Colors.white54, fontSize: 14),
-                ),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, cardConstraints) {
+        final bool isNarrow = cardConstraints.maxWidth < 450;
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppTheme.cardBg,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+                color: isEnabled ? AppTheme.primaryPurple : Colors.white10),
           ),
-          Switch(
-            value: isEnabled,
-            onChanged: (val) {
-              setState(() => _config['enabled'] = val);
-              _saveConfig();
-            },
-            activeColor: AppTheme.primaryPurple,
-          ),
-        ],
-      ),
+          child: isNarrow
+              ? Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.auto_awesome,
+                            color: isEnabled
+                                ? AppTheme.primaryPurple
+                                : Colors.white24,
+                            size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              isEnabled
+                                  ? 'Automatización ACTIVA'
+                                  : 'Automatización DESACTIVADA',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: isEnabled,
+                          onChanged: (val) {
+                            setState(() => _config['enabled'] = val);
+                            _saveConfig();
+                          },
+                          activeColor: AppTheme.primaryPurple,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Si está activa, el sistema generará eventos según el intervalo definido.',
+                      style: TextStyle(color: Colors.white54, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Icon(Icons.auto_awesome,
+                        color:
+                            isEnabled ? AppTheme.primaryPurple : Colors.white24,
+                        size: 32),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              isEnabled
+                                  ? 'Automatización ACTIVA'
+                                  : 'Automatización DESACTIVADA',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const Text(
+                            'Si está activa, el sistema generará eventos según el intervalo definido.',
+                            style:
+                                TextStyle(color: Colors.white54, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: isEnabled,
+                      onChanged: (val) {
+                        setState(() => _config['enabled'] = val);
+                        _saveConfig();
+                      },
+                      activeColor: AppTheme.primaryPurple,
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 
@@ -250,32 +301,62 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             style: TextStyle(color: Colors.white54, fontSize: 13),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _ModeButton(
-                  label: 'Automático',
-                  icon: Icons.autorenew,
-                  selected: mode == 'automatic',
-                  onTap: () {
-                    setState(() => _config['mode'] = 'automatic');
-                    _saveConfig();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ModeButton(
-                  label: 'Programado',
-                  icon: Icons.schedule,
-                  selected: mode == 'scheduled',
-                  onTap: () {
-                    setState(() => _config['mode'] = 'scheduled');
-                    _saveConfig();
-                  },
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, btnConstraints) {
+              final bool useVertical = btnConstraints.maxWidth < 400;
+              if (useVertical) {
+                return Column(
+                  children: [
+                    _ModeButton(
+                      label: 'Automático',
+                      icon: Icons.autorenew,
+                      selected: mode == 'automatic',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'automatic');
+                        _saveConfig();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _ModeButton(
+                      label: 'Programado',
+                      icon: Icons.schedule,
+                      selected: mode == 'scheduled',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'scheduled');
+                        _saveConfig();
+                      },
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: _ModeButton(
+                      label: 'Automático',
+                      icon: Icons.autorenew,
+                      selected: mode == 'automatic',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'automatic');
+                        _saveConfig();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ModeButton(
+                      label: 'Programado',
+                      icon: Icons.schedule,
+                      selected: mode == 'scheduled',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'scheduled');
+                        _saveConfig();
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           if (mode == 'scheduled') ...[
             const SizedBox(height: 20),

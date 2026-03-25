@@ -494,46 +494,97 @@ class _WithdrawalPlansManagementScreenState
             ),
           ],
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _rateController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Nueva Tasa',
-                    labelStyle: const TextStyle(color: Colors.white60),
-                    prefixText: 'Bs ',
-                    prefixStyle: const TextStyle(color: AppTheme.accentGold),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide:
-                          BorderSide(color: Colors.white.withOpacity(0.3)),
-                      borderRadius: BorderRadius.circular(8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 400) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _rateController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Nueva Tasa',
+                        labelStyle: const TextStyle(color: Colors.white60),
+                        prefixText: 'Bs ',
+                        prefixStyle:
+                            const TextStyle(color: AppTheme.accentGold),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide:
+                              BorderSide(color: Colors.white.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide:
+                              const BorderSide(color: AppTheme.accentGold),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: AppTheme.accentGold),
-                      borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _isUpdatingRate ? null : _updateExchangeRate,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentGold,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: _isUpdatingRate
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Actualizar Tasa'),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _rateController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Nueva Tasa',
+                        labelStyle: const TextStyle(color: Colors.white60),
+                        prefixText: 'Bs ',
+                        prefixStyle:
+                            const TextStyle(color: AppTheme.accentGold),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide:
+                              BorderSide(color: Colors.white.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide:
+                              const BorderSide(color: AppTheme.accentGold),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _isUpdatingRate ? null : _updateExchangeRate,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  foregroundColor: Colors.black,
-                ),
-                child: _isUpdatingRate
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Actualizar'),
-              ),
-            ],
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _isUpdatingRate ? null : _updateExchangeRate,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accentGold,
+                      foregroundColor: Colors.black,
+                    ),
+                    child: _isUpdatingRate
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Actualizar'),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -556,115 +607,125 @@ class _WithdrawalPlansManagementScreenState
               : Colors.grey.withOpacity(0.3),
         ),
       ),
-      child: Row(
-        children: [
-          // Icon
-          Container(
-            width: 48, // Reduced from 60
-            height: 48, // Reduced from 60
-            decoration: BoxDecoration(
-              color: plan.isActive
-                  ? AppTheme.accentGold.withOpacity(0.2)
-                  : Colors.grey.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child:
-                  Text(plan.icon ?? '💸', style: const TextStyle(fontSize: 20)),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        plan.name,
-                        style: TextStyle(
-                          color: plan.isActive ? Colors.white : Colors.grey,
-                          fontSize: 15, // Slightly smaller
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (!plan.isActive) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('OFF',
-                            style: TextStyle(color: Colors.grey, fontSize: 8)),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Text(
-                      '${plan.cloversCost} ',
-                      style: TextStyle(
-                        color: plan.isActive ? Colors.white70 : Colors.grey,
-                        fontSize: 11, // Slightly smaller
-                      ),
-                    ),
-                    const CoinImage(size: 11),
-                  ],
-                ),
-                Text(
-                  '${vesAmount.toStringAsFixed(2)} VES',
-                  style: TextStyle(
-                    color: plan.isActive ? Colors.white54 : Colors.grey,
-                    fontSize: 10,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4), // Reduced from 8
-
-          // Amount USD
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
+      child: LayoutBuilder(
+        builder: (context, cardConstraints) {
+          final bool isNarrow = cardConstraints.maxWidth < 350;
+          return Row(
             children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  plan.formattedAmountUsd,
-                  style: TextStyle(
-                    color: plan.isActive ? AppTheme.accentGold : Colors.grey,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+              // Icon
+              Container(
+                width: isNarrow ? 40 : 48,
+                height: isNarrow ? 40 : 48,
+                decoration: BoxDecoration(
+                  color: plan.isActive
+                      ? AppTheme.accentGold.withOpacity(0.2)
+                      : Colors.grey.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(plan.icon ?? '💸',
+                      style: TextStyle(fontSize: isNarrow ? 18 : 20)),
                 ),
               ),
-              const Text('USD',
-                  style: TextStyle(color: Colors.white54, fontSize: 10)),
-            ],
-          ),
+              const SizedBox(width: 12),
 
-          // Edit Button
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white54, size: 18),
-            onPressed: () => _showEditDialog(plan),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            tooltip: 'Editar',
-          ),
-        ],
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            plan.name,
+                            style: TextStyle(
+                              color: plan.isActive ? Colors.white : Colors.grey,
+                              fontSize: isNarrow ? 14 : 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!plan.isActive) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('OFF',
+                                style:
+                                    TextStyle(color: Colors.grey, fontSize: 8)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          '${plan.cloversCost} ',
+                          style: TextStyle(
+                            color: plan.isActive ? Colors.white70 : Colors.grey,
+                            fontSize: isNarrow ? 10 : 11,
+                          ),
+                        ),
+                        CoinImage(size: isNarrow ? 10 : 11),
+                      ],
+                    ),
+                    Text(
+                      '${vesAmount.toStringAsFixed(2)} VES',
+                      style: TextStyle(
+                        color: plan.isActive ? Colors.white54 : Colors.grey,
+                        fontSize: isNarrow ? 9 : 10,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Amount USD
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      plan.formattedAmountUsd,
+                      style: TextStyle(
+                        color:
+                            plan.isActive ? AppTheme.accentGold : Colors.grey,
+                        fontSize: isNarrow ? 14 : 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Text('USD',
+                      style: TextStyle(
+                          color: Colors.white54, fontSize: isNarrow ? 8 : 10)),
+                ],
+              ),
+              const SizedBox(width: 4),
+
+              // Edit Button
+              IconButton(
+                icon: Icon(Icons.edit,
+                    color: Colors.white54, size: isNarrow ? 16 : 18),
+                onPressed: () => _showEditDialog(plan),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Editar',
+              ),
+            ],
+          );
+        },
       ),
     );
   }

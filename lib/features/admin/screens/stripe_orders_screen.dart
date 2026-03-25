@@ -110,32 +110,57 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.accentGold.withOpacity(0.2)),
       ),
-      child: Row(
-        children: [
-          _statChip('Total', total.toString(), Colors.white54),
-          _statChip('Exitosas', success.toString(), AppTheme.successGreen),
-          _statChip('Pendientes', pending.toString(), Colors.orange),
-          _statChip('Errores', failed.toString(), AppTheme.dangerRed),
-          _statChip(
-            'Ingresos',
-            '\$${totalRevenue.toStringAsFixed(2)}',
-            AppTheme.accentGold,
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, statsConstraints) {
+          final bool isNarrow = statsConstraints.maxWidth < 450;
+          return Wrap(
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceAround,
+            children: [
+              _statChip('Total', total.toString(), Colors.white54, isNarrow),
+              _statChip('Exitosas', success.toString(), AppTheme.successGreen,
+                  isNarrow),
+              _statChip(
+                  'Pendientes', pending.toString(), Colors.orange, isNarrow),
+              _statChip(
+                  'Errores', failed.toString(), AppTheme.dangerRed, isNarrow),
+              _statChip(
+                'Ingresos',
+                '\$${totalRevenue.toStringAsFixed(2)}',
+                AppTheme.accentGold,
+                isNarrow,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _statChip(String label, String value, Color color) {
-    return Expanded(
+  Widget _statChip(String label, String value, Color color, bool isNarrow) {
+    return SizedBox(
+      width: isNarrow ? 80 : 100,
       child: Column(
         children: [
-          Text(value,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
               style: TextStyle(
-                  color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: isNarrow ? 12 : 14,
+              ),
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: const TextStyle(color: Colors.white54, fontSize: 10)),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: isNarrow ? 9 : 10,
+            ),
+          ),
         ],
       ),
     );
