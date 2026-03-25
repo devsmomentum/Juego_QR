@@ -708,7 +708,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 // Términos y condiciones
                                 Theme(
                                   data: ThemeData(
-                                    unselectedWidgetColor: Colors.white30,
+                                    checkboxTheme: CheckboxThemeData(
+                                      side: const BorderSide(color: Colors.white, width: 2),
+                                    ),
                                   ),
                                   child: CheckboxListTile(
                                     contentPadding: EdgeInsets.zero,

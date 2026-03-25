@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../utils/minigame_logic_helper.dart';
@@ -126,13 +127,23 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
         gridSize * gridSize, (index) => (index + 1) % (gridSize * gridSize));
     tiles[gridSize * gridSize - 1] = 0; // El último es el vacío
 
-    // Hacer 50 movimientos aleatorios válidos
+    // Hacer movimientos más complejos para mezclar, evitando deshacer el movimiento anterior
     int emptyIndex = tiles.indexOf(0);
-    for (int i = 0; i < 50; i++) {
+    int previousIndex = -1;
+    final random = Random();
+    
+    for (int i = 0; i < 150; i++) {
       final neighbors = _getNeighbors(emptyIndex);
-      final randomNeighbor =
-          neighbors[DateTime.now().microsecond % neighbors.length];
+      
+      // Evitar volver instantáneamente a la posición anterior para una mejor mezcla
+      if (neighbors.length > 1 && previousIndex != -1) {
+        neighbors.remove(previousIndex);
+      }
+      
+      final randomNeighbor = neighbors[random.nextInt(neighbors.length)];
       _swap(emptyIndex, randomNeighbor);
+      
+      previousIndex = emptyIndex;
       emptyIndex = randomNeighbor;
     }
   }

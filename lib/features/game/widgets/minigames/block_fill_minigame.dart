@@ -68,6 +68,8 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
     ),
   ];
 
+  List<Point<int>> _pathHistory = [];
+
   // Overlay State
   bool _showOverlay = false;
   String _overlayTitle = "";
@@ -110,8 +112,6 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       if (gameProvider.isPaused) return; // Pause timer
 
-      if (gameProvider.isPaused) return; // Pause timer
-
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
           Provider.of<ConnectivityProvider>(context, listen: false);
@@ -147,6 +147,7 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
     _playerRow = pattern.startPoint.x;
     _playerCol = pattern.startPoint.y;
     _grid[_playerRow][_playerCol] = 2; // Visitado inicial
+    _pathHistory = [Point(_playerRow, _playerCol)];
 
     if (resetTimer) {
       _secondsRemaining = 25;
@@ -170,7 +171,25 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
     // Validar límites
     if (newRow < 0 || newRow >= rows || newCol < 0 || newCol >= cols) return;
 
-    // Validar pared o ya visitado
+    // Lógica para retroceder (undo)
+    if (_pathHistory.length > 1) {
+      final prev = _pathHistory[_pathHistory.length - 2];
+      if (prev.x == newRow && prev.y == newCol) {
+        setState(() {
+          // Limpiar casilla actual
+          _grid[_playerRow][_playerCol] = 0;
+          _pathHistory.removeLast();
+          
+          // Mover jugador hacia atrás
+          _playerRow = newRow;
+          _playerCol = newCol;
+          _grid[_playerRow][_playerCol] = 2; // Cabeza del jugador
+        });
+        return;
+      }
+    }
+
+    // Validar pared o ya visitado para movimiento normal hacia adelante
     if (_grid[newRow][newCol] == -1 ||
         _grid[newRow][newCol] == 2 ||
         _grid[newRow][newCol] == 1) {
@@ -180,16 +199,13 @@ class _BlockFillMinigameState extends State<BlockFillMinigame> {
 
     setState(() {
       // Marcar anterior como visitado camino (1)
-      if (_grid[_playerRow][_playerCol] == 2) {
-        _grid[_playerRow][_playerCol] = 1;
-      } else {
-        _grid[_playerRow][_playerCol] = 1;
-      }
+      _grid[_playerRow][_playerCol] = 1;
 
       // Mover jugador
       _playerRow = newRow;
       _playerCol = newCol;
       _grid[_playerRow][_playerCol] = 2; // Cabeza del jugador
+      _pathHistory.add(Point(_playerRow, _playerCol));
 
       _checkWin();
     });

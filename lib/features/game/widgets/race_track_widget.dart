@@ -235,18 +235,21 @@ class RaceTrackWidget extends StatelessWidget {
 
                 // --- RACE TRACK (RENDERING ONLY via RaceViewData) ---
                 SizedBox(
-                  height: compact ? 80 : 100,
+                  height: compact ? 135 : 180, // Increased to prevent avocados and badges bleeding out
                   child: LayoutBuilder(
                     builder: (context, constraints) {
+                      final double trackTop = compact ? 30.0 : 40.0;
+                      
                       return Stack(
-                        alignment: Alignment.centerLeft,
                         clipBehavior: Clip.none,
                         children: [
                           // 1. Base Line (The Track)
-                          Center(
+                          Positioned(
+                            top: trackTop,
+                            left: 0,
+                            right: 0,
                             child: Container(
                               height: 6,
-                              width: double.infinity,
                               decoration: BoxDecoration(
                                 color: Colors.grey[800],
                                 borderRadius: BorderRadius.circular(3),
@@ -257,6 +260,7 @@ class RaceTrackWidget extends StatelessWidget {
                           // 2. Goal Flag (Meta)
                           Positioned(
                             right: -10,
+                            top: trackTop - 20, // Center circle on track line
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -287,16 +291,16 @@ class RaceTrackWidget extends StatelessWidget {
                             ),
                           ),
 
-                          // Markers
+                          // Markers ("START")
                           Positioned(
                               left: 0,
-                              top: compact ? 45 : 65,
+                              top: trackTop + 5,
                               child: Text("START",
                                   style: TextStyle(
                                       fontSize: 8,
                                       color: currentTextSec.withOpacity(0.5)))),
 
-                          // 2. Render View Models (Using ITargetable, decoupled from Player)
+                          // 3. Render View Models (Avatars)
                           ...raceView.racers.map((vm) => _RacerAvatarWidget(
                                 vm: vm,
                                 trackWidth: constraints.maxWidth,
@@ -305,6 +309,7 @@ class RaceTrackWidget extends StatelessWidget {
                                     gameProvider.targetPlayerId == vm.data.id,
                                 onTap: () => handleAvatarTap(vm),
                                 compact: compact,
+                                trackTop: trackTop, 
                               )),
                         ],
                       );
@@ -437,6 +442,8 @@ class _RacerAvatarWidget extends StatelessWidget {
   final int totalClues;
   final bool isSelected;
   final VoidCallback onTap;
+  final bool compact;
+  final double trackTop;
 
   const _RacerAvatarWidget({
     required this.vm,
@@ -445,9 +452,8 @@ class _RacerAvatarWidget extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     this.compact = false,
+    required this.trackTop,
   });
-
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -465,12 +471,16 @@ class _RacerAvatarWidget extends StatelessWidget {
     final double maxScroll = trackWidth - avatarSize;
 
     // Dynamic offset based on lane index (-3 to 3)
-    // Using a safe multiplier to prevent overflow
     final double verticalSpread = compact ? 18.0 : 22.0;
+    
+    // We want the avatar to hang *below* the track line usually, or be centered if lane == 0.
+    // If lane == 0, base offset should be right around trackTop.
+    // Let's position the center of the avatar relative to the trackTop + some drop.
+    final double dropOffset = compact ? 5.0 : 15.0; // drops the base down from track
     final double laneOffset = vm.lane * verticalSpread;
 
     final double topPosition =
-        (compact ? 55 : 75) + laneOffset - (avatarSize / 2);
+        trackTop + dropOffset + laneOffset - (avatarSize / 2);
 
     final bool isFinished =
         totalClues > 0 && vm.data.completedCluesCount >= totalClues;
