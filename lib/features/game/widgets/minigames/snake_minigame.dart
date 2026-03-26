@@ -100,25 +100,38 @@ class _SnakeMinigameState extends State<SnakeMinigame> {
   }
 
   Future<void> _fetchSponsorAndStart() async {
+    // [FIX] CRITICAL: El juego inicia INMEDIATAMENTE. El sponsor es solo
+    // un banner cosmético en el GameOverOverlay, no debe bloquear el inicio.
+    // Si la red es lenta o el sponsor falla, el usuario verá el juego igual.
+    _startNewGame();
+
+    // Cargar el sponsor en segundo plano (fire-and-forget)
+    _loadSponsorInBackground();
+  }
+
+  Future<void> _loadSponsorInBackground() async {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final eventId = gameProvider.currentEventId;
 
-    Sponsor? sponsor;
-
-    if (eventId != null) {
-      sponsor = await _sponsorService.getSponsorForEvent(eventId);
-    }
-
-    // Fallback if no event sponsor or no event
-    if (sponsor == null) {
-      sponsor = await _sponsorService.getActiveSponsor();
-    }
-
-    if (mounted) {
-      setState(() {
-        _activeSponsor = sponsor;
-      });
-      _startNewGame();
+    try {
+      Sponsor? sponsor;
+      if (eventId != null) {
+        sponsor = await _sponsorService
+            .getSponsorForEvent(eventId)
+            .timeout(const Duration(seconds: 5));
+      }
+      // Fallback global si no hay sponsor de evento
+      if (sponsor == null) {
+        sponsor = await _sponsorService
+            .getActiveSponsor()
+            .timeout(const Duration(seconds: 5));
+      }
+      if (mounted && sponsor != null) {
+        setState(() => _activeSponsor = sponsor);
+      }
+    } catch (e) {
+      // Sponsor es opcional → fallo silencioso, el juego continúa sin banner
+      debugPrint('[Snake] Sponsor load failed (non-critical): $e');
     }
   }
 
