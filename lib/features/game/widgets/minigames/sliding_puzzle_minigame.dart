@@ -37,7 +37,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame>
 
   // Estado del juego
   late Timer _timer;
-  int _secondsRemaining = 120; // 2 minutos
+  int _secondsRemaining = 150; // 2.5 minutos
   bool _isGameOver = false;
 
   // Overlay State
@@ -444,7 +444,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame>
                       setState(() {
                         _showOverlay = false;
                         _isGameOver = false;
-                        _secondsRemaining = 120;
+                        _secondsRemaining = 150;
                         _initializePuzzle();
                         _startTimer();
                         _playMusic();
