@@ -874,11 +874,21 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                       ),
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text("Volver a Escenarios",
-                            style: TextStyle(
-                                color: isDarkMode
-                                    ? Colors.white54
-                                    : AppTheme.lBrandMain.withOpacity(0.7))),
+                        child: const Text(
+                          "VOLVER A ESCENARIOS",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black,
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              )
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),

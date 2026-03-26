@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -119,7 +119,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
 
   void _handleTimeOut() {
     _stopTimer();
-    _loseLife("Â¡Tiempo agotado!");
+    _loseLife("¡Tiempo agotado!");
   }
 
   void _startGame() {
@@ -215,7 +215,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
     
     setState(() {
       _isPlayerTurn = false;
-      _statusMessage = 'Â¡BIEN!';
+      _statusMessage = '¡BIEN!';
     });
 
     if (_sequence.length >= _currentDifficulty) {
@@ -255,7 +255,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
             showShop: true);
       } else {
         _showOverlayState(
-            title: "Â¡FALLASTE!",
+            title: "¡FALLASTE!",
             message: "$reason",
             retry: true,
             showShop: false);
@@ -378,7 +378,7 @@ class _MemorySequenceMinigameState extends State<MemorySequenceMinigame> {
                       setState(() {
                         _canRetry = true;
                         _showShopButton = false;
-                        _overlayMessage = "Â¡Vidas recargadas!";
+                        _overlayMessage = "¡Vidas recargadas!";
                       });
                     }
                   }
