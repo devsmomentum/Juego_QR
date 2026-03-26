@@ -48,7 +48,8 @@ class GameService {
           .select('lives')
           .eq('event_id', eventId)
           .eq('user_id', userId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 10));
 
       if (response != null && response['lives'] != null) {
         return response['lives'] as int;
@@ -56,7 +57,7 @@ class GameService {
       return null;
     } catch (e) {
       debugPrint('Error fetching lives: $e');
-      rethrow;
+      return null;
     }
   }
 
@@ -71,7 +72,7 @@ class GameService {
       final response = await _supabase.rpc('lose_life', params: {
         'p_user_id': userId,
         'p_event_id': eventId,
-      }).catchError((e) {
+      }).timeout(const Duration(seconds: 10)).catchError((e) {
         debugPrint(
             '[LIVES_DEBUG] RPC Error caught: $e. Switching to Fallback.');
         return null;
@@ -92,7 +93,8 @@ class GameService {
           .select('lives')
           .eq('user_id', userId)
           .eq('event_id', eventId)
-          .single();
+          .single()
+          .timeout(const Duration(seconds: 10));
 
       final int currentLives = row['lives'] as int;
       final int newLives = currentLives > 0 ? currentLives - 1 : 0;
@@ -102,14 +104,16 @@ class GameService {
           .from('game_players')
           .update({'lives': newLives})
           .eq('user_id', userId)
-          .eq('event_id', eventId);
+          .eq('event_id', eventId)
+          .timeout(const Duration(seconds: 10));
 
       debugPrint('[LIVES_DEBUG] Direct Update Success. New Lives: $newLives');
       return newLives;
     } catch (e) {
       debugPrint(
           '[LIVES_DEBUG] CRITICAL ERROR deleting life (both RPC and Direct failed): $e');
-      rethrow;
+      // No rethrow, try to return something sensible or let provider handle it
+      return 0; 
     }
   }
 
@@ -139,7 +143,8 @@ class GameService {
             .select('target_id')
             .eq('event_id', eventId)
             .eq('power_slug', 'invisibility')
-            .gt('expires_at', DateTime.now().toUtc().toIso8601String());
+            .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+            .timeout(const Duration(seconds: 5));
 
         final Set<String> invisibleIds = invisiblePlayers
             .map((e) => e['target_id']?.toString() ?? '')
@@ -340,7 +345,7 @@ class GameService {
     try {
       final response = await _supabase.rpc('get_clues_with_progress', params: {
         'p_event_id': eventId,
-      });
+      }).timeout(const Duration(seconds: 15));
 
       if (response == null) return [];
 
@@ -348,7 +353,7 @@ class GameService {
       return data.map((json) => Clue.fromJson(json)).toList();
     } catch (e) {
       debugPrint('Error fetching clues (RPC): $e');
-      rethrow;
+      return [];
     }
   }
 
@@ -381,7 +386,7 @@ class GameService {
       final response = await _supabase.rpc('submit_clue_answer', params: {
         'p_clue_id': int.tryParse(clueId) ?? clueId,
         'p_answer': answer,
-      });
+      }).timeout(const Duration(seconds: 12));
 
       if (response != null && response is Map<String, dynamic>) {
         final data = response;
@@ -433,7 +438,7 @@ class GameService {
       final response = await _supabase.rpc('register_race_finisher', params: {
         'p_event_id': eventId,
         'p_user_id': userId,
-      });
+      }).timeout(const Duration(seconds: 10));
 
       debugPrint("🏆 RPC Response: $response");
       return response as Map<String, dynamic>;

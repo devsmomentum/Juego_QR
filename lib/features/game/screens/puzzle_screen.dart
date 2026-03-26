@@ -1038,21 +1038,25 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       return;
     }
   } else {
-    // RPC falló: el Provider ya revirtió el estado optimista.
-    // Mostramos error pero permitimos que el diálogo de celebración aparezca
-    // para que el usuario pueda volver al mapa y reintentar.
+    // [FIX] Si el RPC falló/timeout, no echamos al usuario. 
+    // Mostramos un SnackBar con opción a REINTENTAR el guardado.
+    debugPrint('❌ RPC Failure or Timeout. Offering RETRY...');
     if (navigator.mounted) {
       ScaffoldMessenger.of(navigator.context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Error al guardar el progreso. Verifica tu conexión e inténtalo de nuevo.'),
-            backgroundColor: AppTheme.dangerRed,
-            duration: Duration(seconds: 5)),
+        SnackBar(
+          content: const Text('Error de conexión al guardar progreso.'),
+          backgroundColor: AppTheme.dangerRed,
+          duration: const Duration(seconds: 10),
+          action: SnackBarAction(
+            label: 'REINTENTAR',
+            textColor: Colors.white,
+            onPressed: () {
+              // Re-invocar el flujo de éxito para intentar guardar de nuevo
+              _showSuccessDialog(rootContext, clue);
+            },
+          ),
+        ),
       );
-    }
-    // Salir directamente al mapa para que reintente con estado limpio
-    if (navigator.mounted) {
-      navigator.pop();
     }
     return;
   }

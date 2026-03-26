@@ -663,71 +663,75 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     print("DEBUG: _loadEvents start");
     setState(() => _isLoading = true);
 
-    final eventProvider = Provider.of<EventProvider>(context, listen: false);
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final requestProvider =
-        Provider.of<GameRequestProvider>(context, listen: false);
+    try {
+      final eventProvider = Provider.of<EventProvider>(context, listen: false);
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider =
+          Provider.of<GameRequestProvider>(context, listen: false);
 
-    await eventProvider.fetchEvents();
+      await eventProvider.fetchEvents();
 
-    // Load participation status and ban status for each event
-    final userId = playerProvider.currentPlayer?.userId;
-    if (userId != null) {
-      final Map<String, bool> statusMap = {};
-      final Map<String, String?> banMap = {}; // NEW
-      final Map<String, String> roleMap = {}; // NEW - Role tracking
+      // Load participation status and ban status for each event
+      final userId = playerProvider.currentPlayer?.userId;
+      if (userId != null) {
+        final Map<String, bool> statusMap = {};
+        final Map<String, String?> banMap = {}; // NEW
+        final Map<String, String> roleMap = {}; // NEW - Role tracking
 
-      // Fetch all participations in a single query to prevent N+1 bottleneck
-      try {
-        final allParticipations =
-            await requestProvider.getAllUserParticipations(userId);
+        // Fetch all participations in a single query to prevent N+1 bottleneck
+        try {
+          final allParticipations =
+              await requestProvider.getAllUserParticipations(userId);
 
-        // Pre-fill defaults
-        for (final event in eventProvider.events) {
-          statusMap[event.id] = false;
-          banMap[event.id] = null;
-          roleMap[event.id] = 'none';
-        }
+          // Pre-fill defaults
+          for (final event in eventProvider.events) {
+            statusMap[event.id] = false;
+            banMap[event.id] = null;
+            roleMap[event.id] = 'none';
+          }
 
-        // Apply actual data
-        for (final participation in allParticipations) {
-          final eventId = participation['event_id'] as String;
-          final status = participation['status'] as String?;
+          // Apply actual data
+          for (final participation in allParticipations) {
+            final eventId = participation['event_id'] as String;
+            final status = participation['status'] as String?;
 
-          statusMap[eventId] = true;
-          banMap[eventId] = status;
+            statusMap[eventId] = true;
+            banMap[eventId] = status;
 
-          if (status == 'spectator') {
-            roleMap[eventId] = 'spectator';
-          } else {
-            roleMap[eventId] = 'player';
+            if (status == 'spectator') {
+              roleMap[eventId] = 'spectator';
+            } else {
+              roleMap[eventId] = 'player';
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading all participations: $e');
+          for (final event in eventProvider.events) {
+            statusMap[event.id] = false;
+            banMap[event.id] = null;
+            roleMap[event.id] = 'none';
           }
         }
-      } catch (e) {
-        debugPrint('Error loading all participations: $e');
-        for (final event in eventProvider.events) {
-          statusMap[event.id] = false;
-          banMap[event.id] = null;
-          roleMap[event.id] = 'none';
+        if (mounted) {
+          setState(() {
+            _participantStatusMap = statusMap;
+            _banStatusMap = banMap; // NEW
+            _eventRoleMap = roleMap; // NEW
+          });
         }
       }
+    } catch (e) {
+      debugPrint('Error in _loadEvents: $e');
+    } finally {
+      print("DEBUG: _loadEvents end. Mounted: $mounted");
       if (mounted) {
         setState(() {
-          _participantStatusMap = statusMap;
-          _banStatusMap = banMap; // NEW
-          _eventRoleMap = roleMap; // NEW
+          _isLoading = false;
         });
+
+        // Show tutorial if first time viewing scenarios
+        _showScenariosTutorial();
       }
-    }
-
-    print("DEBUG: _loadEvents end. Mounted: $mounted");
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      // Show tutorial if first time viewing scenarios
-      _showScenariosTutorial();
     }
   }
 

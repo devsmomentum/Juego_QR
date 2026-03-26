@@ -167,8 +167,13 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
     });
 
     if (_checkWin('X')) {
+      debugPrint('🏆 TicTacToe: Player X wins! Board: $board');
       _stopTimer();
-      widget.onSuccess();
+      // [FIX] Pequeño delay para que el usuario vea su última jugada ('X')
+      // antes de que inicie la transición/animación de éxito.
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) widget.onSuccess();
+      });
       return;
     }
 
