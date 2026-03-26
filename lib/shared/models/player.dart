@@ -30,6 +30,7 @@ class Player implements ITargetable {
   final String? documentType; // Added for Payment Profile
   final bool isProtected; // SHIELD CONSISTENCY FIX
   final bool emailVerified; // Whether email has been verified
+  final String? stripeCustomerId; // Stripe Customer ID for saved cards
   Map<String, dynamic> stats;
   final DateTime? createdAt;
 
@@ -63,6 +64,7 @@ class Player implements ITargetable {
     this.createdAt,
     this.isProtected = false,
     this.emailVerified = true,
+    this.stripeCustomerId,
   })  : _avatarUrl = avatarUrl ?? '',
         inventory = inventory ?? [],
         stats = stats ??
@@ -174,6 +176,7 @@ class Player implements ITargetable {
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
       isProtected: json['is_protected'] ?? false,
       emailVerified: json['email_verified'] ?? true,
+      stripeCustomerId: json['stripe_customer_id'],
     );
   }
 
@@ -338,6 +341,7 @@ class Player implements ITargetable {
     DateTime? createdAt,
     bool? isProtected,
     bool? emailVerified,
+    String? stripeCustomerId,
   }) {
     return Player(
       userId: userId ?? this.userId,
@@ -369,6 +373,7 @@ class Player implements ITargetable {
       createdAt: createdAt ?? this.createdAt,
       isProtected: isProtected ?? this.isProtected,
       emailVerified: emailVerified ?? this.emailVerified,
+      stripeCustomerId: stripeCustomerId ?? this.stripeCustomerId,
     );
   }
 }

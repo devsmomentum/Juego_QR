@@ -7,6 +7,17 @@ import 'package:url_launcher/url_launcher.dart';
 
 enum StripePaymentResult { success, cancelled, failed }
 
+/// Result of a Stripe payment including any new customer data created.
+class StripePaymentResultData {
+  final StripePaymentResult result;
+  final String? stripeCustomerId;
+
+  const StripePaymentResultData({
+    required this.result,
+    this.stripeCustomerId,
+  });
+}
+
 class StripeService {
   static bool _initialized = false;
 
@@ -53,21 +64,23 @@ class StripeService {
 
   /// Returns true if Stripe is fully ready to process payments.
   static bool get isAvailable {
-    // On Web, we often don't need explicit init if using stripe-js, 
-    // but the package handles it if publishableKey is set.
     return _isSupportedPlatform && (kIsWeb || _initialized);
   }
 
   /// Initiates a Stripe purchase for the given plan ID.
   ///
-  /// Flow:
-  /// 1. Calls `stripe-create-payment-intent` Edge Function with [planId]
-  /// 2. Initializes the Stripe Payment Sheet
-  /// 3. Presents the Payment Sheet to the user
-  /// 4. Returns a [StripePaymentResult]
-  static Future<StripePaymentResult> initiateStripePurchase({
+  /// Parameters:
+  /// - [planId]: ID of the plan to purchase
+  /// - [context]: BuildContext for showing Snackbars
+  /// - [saveCard]: Whether to save card for future purchases (default false)
+  /// - [stripeCustomerId]: Existing Stripe Customer ID to preload saved card
+  ///
+  /// Returns [StripePaymentResultData] with the result and any newly created customer ID.
+  static Future<StripePaymentResultData> initiateStripePurchase({
     required String planId,
     required BuildContext context,
+    bool saveCard = false,
+    String? stripeCustomerId,
   }) async {
     if (!isAvailable) {
       debugPrint('[StripeService] Stripe not available. Init status: $_initialized, Web: $kIsWeb');
@@ -79,11 +92,11 @@ class StripeService {
           ),
         );
       }
-      return StripePaymentResult.failed;
+      return const StripePaymentResultData(result: StripePaymentResult.failed);
     }
 
     try {
-      debugPrint('[StripeService] Creating PaymentIntent for plan: $planId');
+      debugPrint('[StripeService] Creating PaymentIntent for plan: $planId, saveCard: $saveCard');
 
       // 1. Call the Edge Function to create a PaymentIntent (server-side)
       final FunctionResponse response = await Supabase.instance.client.functions.invoke(
@@ -93,6 +106,7 @@ class StripeService {
           'is_web': kIsWeb,
           'success_url': kIsWeb ? Uri.base.toString().split('?').first : null,
           'cancel_url': kIsWeb ? Uri.base.toString().split('?').first : null,
+          'save_card': saveCard,
         },
       );
 
@@ -112,7 +126,11 @@ class StripeService {
       final int amountCents = paymentData['amount_cents'] as int;
       final String planName = (paymentData['plan'] as Map<String, dynamic>)['name'] as String;
 
-      debugPrint('[StripeService] PaymentIntent/Session created: ${paymentData['payment_intent_id'] ?? 'N/A'}');
+      // Stripe Customer data returned from the Edge Function
+      final String? returnedCustomerId = paymentData['stripe_customer_id'] as String?;
+      final String? ephemeralKeySecret = paymentData['ephemeral_key_secret'] as String?;
+
+      debugPrint('[StripeService] PaymentIntent created: ${paymentData['payment_intent_id'] ?? 'N/A'}, Customer: ${returnedCustomerId ?? 'none'}');
 
       if (kIsWeb) {
         if (checkoutUrl.isEmpty) {
@@ -123,49 +141,77 @@ class StripeService {
         if (await canLaunchUrl(Uri.parse(checkoutUrl))) {
           await launchUrl(
             Uri.parse(checkoutUrl),
-            webOnlyWindowName: '_self', // Abre en la misma pestaña para mejor UX en PWA
+            webOnlyWindowName: '_self',
           );
-          return StripePaymentResult.success; // Retornamos éxito asumiendo que el webhook se encargará
+          return StripePaymentResultData(
+            result: StripePaymentResult.success,
+            stripeCustomerId: returnedCustomerId,
+          );
         } else {
           throw Exception('No se pudo abrir la URL de pago');
         }
       }
 
       // 2. Initialize the Payment Sheet
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'MapHunter',
-          style: ThemeMode.dark,
-          appearance: const PaymentSheetAppearance(
-            colors: PaymentSheetAppearanceColors(
-              primary: Color(0xFFFECB00),       // AppTheme.accentGold
-              background: Color(0xFF151517),
-              componentBackground: Color(0xFF1E1E21),
-              primaryText: Colors.white,
-              secondaryText: Color(0xFFAAAAAA),
-            ),
-            shapes: PaymentSheetShape(
-              borderWidth: 1.5,
-              borderRadius: 12.0,
-            ),
-          ),
-        ),
-      );
+      // If we have a customer ID + ephemeral key, pass them for a personalized experience
+      // (shows saved cards, allows Stripe Link, etc.)
+      final SetupPaymentSheetParameters sheetParams = (returnedCustomerId != null && ephemeralKeySecret != null)
+          ? SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'MapHunter',
+              customerId: returnedCustomerId,
+              customerEphemeralKeySecret: ephemeralKeySecret,
+              style: ThemeMode.dark,
+              appearance: const PaymentSheetAppearance(
+                colors: PaymentSheetAppearanceColors(
+                  primary: Color(0xFFFECB00),
+                  background: Color(0xFF151517),
+                  componentBackground: Color(0xFF1E1E21),
+                  primaryText: Colors.white,
+                  secondaryText: Color(0xFFAAAAAA),
+                ),
+                shapes: PaymentSheetShape(
+                  borderWidth: 1.5,
+                  borderRadius: 12.0,
+                ),
+              ),
+            )
+          : SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'MapHunter',
+              style: ThemeMode.dark,
+              appearance: const PaymentSheetAppearance(
+                colors: PaymentSheetAppearanceColors(
+                  primary: Color(0xFFFECB00),
+                  background: Color(0xFF151517),
+                  componentBackground: Color(0xFF1E1E21),
+                  primaryText: Colors.white,
+                  secondaryText: Color(0xFFAAAAAA),
+                ),
+                shapes: PaymentSheetShape(
+                  borderWidth: 1.5,
+                  borderRadius: 12.0,
+                ),
+              ),
+            );
+
+      await Stripe.instance.initPaymentSheet(paymentSheetParameters: sheetParams);
 
       // 3. Present the Payment Sheet
       await Stripe.instance.presentPaymentSheet();
 
       // If we reach here, payment was successful (no exception thrown)
-      debugPrint('[StripeService] ✅ Payment completed successfully!');
-      return StripePaymentResult.success;
+      debugPrint('[StripeService] ✅ Payment completed successfully! Customer: $returnedCustomerId');
+      return StripePaymentResultData(
+        result: StripePaymentResult.success,
+        stripeCustomerId: returnedCustomerId,
+      );
 
     } on StripeException catch (e) {
-      // Handle Stripe-specific errors
       switch (e.error.code) {
         case FailureCode.Canceled:
           debugPrint('[StripeService] Payment cancelled by user.');
-          return StripePaymentResult.cancelled;
+          return const StripePaymentResultData(result: StripePaymentResult.cancelled);
         case FailureCode.Failed:
           debugPrint('[StripeService] Payment failed: ${e.error.message}');
           if (context.mounted) {
@@ -176,10 +222,10 @@ class StripeService {
               ),
             );
           }
-          return StripePaymentResult.failed;
+          return const StripePaymentResultData(result: StripePaymentResult.failed);
         default:
           debugPrint('[StripeService] Stripe error: ${e.error.code} — ${e.error.message}');
-          return StripePaymentResult.failed;
+          return const StripePaymentResultData(result: StripePaymentResult.failed);
       }
     } catch (e) {
       debugPrint('[StripeService] Unexpected error: $e');
@@ -191,7 +237,7 @@ class StripeService {
           ),
         );
       }
-      return StripePaymentResult.failed;
+      return const StripePaymentResultData(result: StripePaymentResult.failed);
     }
   }
 }

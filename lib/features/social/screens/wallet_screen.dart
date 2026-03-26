@@ -1070,6 +1070,15 @@ class _WalletScreenState extends State<WalletScreen> {
   void _showStripePlanSelectorDialog() {
     String? selectedPlanId;
 
+    // Get the player's existing stripe_customer_id to determine if they have a saved card
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final existingCustomerId = playerProvider.currentPlayer?.stripeCustomerId;
+    final hasSavedCard = existingCustomerId != null && existingCustomerId.isNotEmpty;
+
+    // Default: save card if they don't have one yet, or if they already do (keep it)
+    // Users can toggle this off to pay without saving
+    bool saveCard = true;
+
     final combinedFuture = Future.wait([
       CloverPlanService(supabaseClient: Supabase.instance.client)
           .fetchActivePlans(),
@@ -1227,7 +1236,108 @@ class _WalletScreenState extends State<WalletScreen> {
                         },
                       ),
 
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
+
+                      // ── CARD SAVING SECTION ──────────────────────────────
+                      if (hasSavedCard)
+                        // User already has a saved card — show info banner
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF10B981).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.credit_card_rounded,
+                                  color: Color(0xFF10B981), size: 18),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'Se usará tu tarjeta guardada',
+                                  style: TextStyle(
+                                    color: Color(0xFF10B981),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  setDialogState(() => saveCard = !saveCard);
+                                },
+                                child: Text(
+                                  saveCard ? 'Usar otra' : 'Usar guardada',
+                                  style: TextStyle(
+                                    color: saveCard
+                                        ? Colors.white54
+                                        : const Color(0xFF10B981),
+                                    fontSize: 11,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        // First time — let user choose to save card
+                        InkWell(
+                          onTap: () => setDialogState(() => saveCard = !saveCard),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Transform.scale(
+                                  scale: 0.9,
+                                  child: Checkbox(
+                                    value: saveCard,
+                                    onChanged: (val) =>
+                                        setDialogState(() => saveCard = val ?? true),
+                                    activeColor: const Color(0xFF635BFF),
+                                    side: const BorderSide(color: Colors.white38),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Guardar tarjeta para futuros pagos',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Tu próxima recarga será más rápida',
+                                        style: TextStyle(
+                                          color: Colors.white38,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      // ─────────────────────────────────────────────────────
+
+                      const SizedBox(height: 20),
 
                       // Actions
                       Row(
@@ -1250,15 +1360,19 @@ class _WalletScreenState extends State<WalletScreen> {
                                       Navigator.pop(ctx); // Close dialog first
                                       setState(() => _isLoading = true);
                                       try {
-                                        final result = await StripeService
+                                        final resultData = await StripeService
                                             .initiateStripePurchase(
                                           planId: selectedPlanId!,
                                           context: context,
+                                          saveCard: saveCard,
+                                          stripeCustomerId: hasSavedCard && saveCard
+                                              ? existingCustomerId
+                                              : null,
                                         );
 
                                         if (!mounted) return;
 
-                                        if (result ==
+                                        if (resultData.result ==
                                             StripePaymentResult.success) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
@@ -1269,6 +1383,23 @@ class _WalletScreenState extends State<WalletScreen> {
                                                   Color(0xFF10B981),
                                             ),
                                           );
+
+                                          // Save new customer ID if returned and different
+                                          if (resultData.stripeCustomerId != null && 
+                                              resultData.stripeCustomerId != existingCustomerId) {
+                                            final userId = Supabase.instance.client.auth.currentUser?.id;
+                                            if (userId != null) {
+                                              await Supabase.instance.client
+                                                .from('profiles')
+                                                .update({'stripe_customer_id': resultData.stripeCustomerId})
+                                                .eq('id', userId);
+                                              
+                                              // Update local player state if possible
+                                              if (mounted) {
+                                                Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+                                              }
+                                            }
+                                          }
                                           await Future.delayed(
                                               const Duration(seconds: 3));
                                           if (mounted) {
@@ -1278,7 +1409,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                                 .refreshProfile();
                                             await _loadRecentTransactions();
                                           }
-                                        } else if (result ==
+                                        } else if (resultData.result ==
                                             StripePaymentResult.cancelled) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
@@ -1329,6 +1460,7 @@ class _WalletScreenState extends State<WalletScreen> {
       ),
     );
   }
+
 
   /// Initiates payment with selected plan ID.
   ///

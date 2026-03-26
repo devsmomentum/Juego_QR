@@ -43,7 +43,7 @@ serve(async (req) => {
     }
 
     // 2. PARSE REQUEST
-    const { plan_id, is_web, success_url, cancel_url } = await req.json();
+    const { plan_id, is_web, success_url, cancel_url, save_card } = await req.json();
 
     if (!plan_id) {
       return new Response(
@@ -52,7 +52,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[stripe-create-pi] User: ${user.id}, Plan: ${plan_id}`);
+    const shouldSaveCard = save_card === true;
+    console.log(`[stripe-create-pi] User: ${user.id}, Plan: ${plan_id}, SaveCard: ${shouldSaveCard}`);
 
     // 3. ADMIN CLIENT
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -83,7 +84,6 @@ serve(async (req) => {
 
     const amountUsd = plan.price as number;         // e.g. 4.99
     const cloversQuantity = plan.amount as number;  // e.g. 150
-    // Stripe requires amount in cents (smallest currency unit)
     const amountCents = Math.round(amountUsd * 100);
 
     console.log(`[stripe-create-pi] Plan: ${plan.name}, $${amountUsd} USD (${amountCents} cents), ${cloversQuantity} tréboles`);
@@ -98,6 +98,9 @@ serve(async (req) => {
     let paymentIntentId = "";
     let clientSecret = "";
     let checkoutUrl = "";
+    let ephemeralKeySecret = "";
+    let stripeCustomerId = "";
+    let newCustomerCreated = false;
 
     // 6. INITIALIZE STRIPE
     const stripe = new Stripe(stripeSecretKey, {
@@ -143,14 +146,55 @@ serve(async (req) => {
         },
       });
       checkoutUrl = session.url!;
-      // For Stripe Checkout, the payment_intent is often null until the payment is confirmed.
-      // We store the session.id as a reference to find the order in the webhook.
       paymentIntentId = session.payment_intent as string || session.id; 
     } else {
       // 6b. CREATE STRIPE PAYMENT INTENT (Mobile)
-      const paymentIntent = await stripe.paymentIntents.create({
+      
+      // --- STRIPE CUSTOMER LOGIC ---
+      // Get the user's existing stripe_customer_id from their profile
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_customer_id")
+        .eq("id", user.id)
+        .single();
+
+      stripeCustomerId = profile?.stripe_customer_id ?? "";
+
+      // If saving card and no customer exists yet, create one
+      if (!stripeCustomerId) {
+        // Always create a customer when saving a card, so we can retrieve their payment methods later
+        // Also create for non-save to allow future use if user changes their mind
+        const customer = await stripe.customers.create({
+          metadata: { supabase_user_id: user.id },
+          email: user.email ?? undefined,
+        });
+        stripeCustomerId = customer.id;
+        newCustomerCreated = true;
+
+        // Persist the customer ID immediately
+        await supabaseAdmin
+          .from("profiles")
+          .update({ stripe_customer_id: stripeCustomerId })
+          .eq("id", user.id);
+
+        console.log(`[stripe-create-pi] Created Stripe Customer: ${stripeCustomerId}`);
+      }
+
+      // Generate an Ephemeral Key so Flutter can authenticate with Stripe
+      const ephemeralKey = await stripe.ephemeralKeys.create(
+        { customer: stripeCustomerId },
+        { apiVersion: "2024-06-20" }
+      );
+      ephemeralKeySecret = ephemeralKey.secret!;
+
+      // Build PaymentIntent options
+      // NOTE: allow_redirects: 'never' ensures only instant-completion methods (card)
+      // are available, preventing the payment from getting stuck in 'processing' state
+      // due to bank redirects (iDEAL, SEPA, Boleto, etc.)
+      const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
         amount: amountCents,
         currency: "usd",
+        customer: stripeCustomerId,
         description: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
         metadata: {
           user_id: user.id,
@@ -159,16 +203,26 @@ serve(async (req) => {
           clovers_amount: String(cloversQuantity),
           clover_order_id: internalOrderId,
         },
-        automatic_payment_methods: { enabled: true },
-      });
+        // KEY FIX: allow_redirects: 'never' prevents redirect-based payment methods
+        // that would leave the PaymentIntent in 'requires_action' or 'processing' state.
+        // This guarantees the PI goes directly to 'succeeded' when using a card.
+        automatic_payment_methods: { 
+          enabled: true,
+          allow_redirects: "never",
+        },
+      };
+
+      // If user wants to save the card, use setup_future_usage
+      if (shouldSaveCard) {
+        paymentIntentParams.setup_future_usage = "off_session";
+        console.log(`[stripe-create-pi] Card will be saved for future use (off_session)`);
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
       paymentIntentId = paymentIntent.id;
       clientSecret = paymentIntent.client_secret!;
-    }
 
-    if (!is_web) {
-      console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntentId}`);
-    } else {
-      console.log(`[stripe-create-pi] Created Checkout Session: ${checkoutUrl}`);
+      console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntentId}, AllowRedirects: never`);
     }
 
     // 7. PERSIST ORDER IN DATABASE
@@ -191,8 +245,10 @@ serve(async (req) => {
           clovers_amount: cloversQuantity,
           price_usd: amountUsd,
           initiated_at: new Date().toISOString(),
-          function_version: "stripe-v2-web-support",
+          function_version: "stripe-v3-customer-support",
           is_web: !!is_web,
+          save_card: shouldSaveCard,
+          stripe_customer_id: stripeCustomerId || null,
         },
       });
 
@@ -214,6 +270,10 @@ serve(async (req) => {
           amount_cents: amountCents,
           amount_usd: amountUsd,
           clovers: cloversQuantity,
+          // Customer data for Flutter Payment Sheet
+          stripe_customer_id: stripeCustomerId || null,
+          ephemeral_key_secret: ephemeralKeySecret || null,
+          new_customer_created: newCustomerCreated,
           plan: {
             id: plan.id,
             name: plan.name,

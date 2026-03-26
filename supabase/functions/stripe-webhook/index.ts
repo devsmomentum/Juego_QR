@@ -77,22 +77,21 @@ serve(async (req) => {
     const cloverOrderId = checkoutMetadata?.clover_order_id;
 
     if (cloverOrderId) {
-       console.log(`[stripe-webhook] Finding order by internal ID: ${cloverOrderId}`);
-       const { data: order } = await supabaseAdmin
-         .from("clover_orders")
-         .select("id, status, extra_data, user_id")
-         .eq("id", cloverOrderId)
-         .maybeSingle();
-       existingOrder = order;
+      console.log(`[stripe-webhook] Finding order by internal ID: ${cloverOrderId}`);
+      const { data: order } = await supabaseAdmin
+        .from("clover_orders")
+        .select("id, status, extra_data, user_id")
+        .eq("id", cloverOrderId)
+        .maybeSingle();
+      existingOrder = order;
     }
 
     if (!existingOrder && (paymentIntentId || sessionId)) {
       console.log(`[stripe-webhook] Falling back to search by PI/Session ID: ${paymentIntentId || sessionId}`);
-      // Use logical OR to find by either PI or Session ID
       let query = supabaseAdmin
         .from("clover_orders")
         .select("id, status, extra_data, user_id");
-      
+
       if (paymentIntentId && sessionId) {
         query = query.or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent_id.eq.${sessionId}`);
       } else if (paymentIntentId) {
@@ -108,10 +107,10 @@ serve(async (req) => {
     if (existingOrder) {
       // If we found it by sessionId or internal ID, but now we have a real paymentIntentId, update it for future webhooks
       if (paymentIntentId && !existingOrder.extra_data?.pi_id) {
-         await supabaseAdmin
-           .from("clover_orders")
-           .update({ stripe_payment_intent_id: paymentIntentId })
-           .eq("id", existingOrder.id);
+        await supabaseAdmin
+          .from("clover_orders")
+          .update({ stripe_payment_intent_id: paymentIntentId })
+          .eq("id", existingOrder.id);
       }
     }
 
@@ -125,9 +124,9 @@ serve(async (req) => {
 
         // FALLBACK: If metadata is missing but we found the order in DB, use DB values
         if (existingOrder && (!userId || !cloversAmount)) {
-           console.log("[stripe-webhook] Metadata missing in Stripe event, using DB fallback");
-           userId = userId || (existingOrder as any).user_id;
-           cloversAmount = cloversAmount || parseInt((existingOrder as any).extra_data?.clovers_amount ?? "0", 10);
+          console.log("[stripe-webhook] Metadata missing in Stripe event, using DB fallback");
+          userId = userId || (existingOrder as any).user_id;
+          cloversAmount = cloversAmount || parseInt((existingOrder as any).extra_data?.clovers_amount ?? "0", 10);
         }
 
         console.log(`[stripe-webhook] ${event.type}: PI:${paymentIntentId}, user:${userId}, clovers:${cloversAmount}`);
@@ -147,6 +146,30 @@ serve(async (req) => {
           break;
         }
 
+        // Extract stripe_customer_id from the PaymentIntent if available
+        let stripeCustomerId: string | null = null;
+        if (event.type === "payment_intent.succeeded") {
+          const pi = event.data.object as Stripe.PaymentIntent;
+          stripeCustomerId = typeof pi.customer === "string" ? pi.customer : null;
+
+          // If we have a customer ID, ensure it's stored in the user's profile
+          if (stripeCustomerId && userId) {
+            const { data: profile } = await supabaseAdmin
+              .from("profiles")
+              .select("stripe_customer_id")
+              .eq("id", userId)
+              .single();
+
+            if (!profile?.stripe_customer_id) {
+              await supabaseAdmin
+                .from("profiles")
+                .update({ stripe_customer_id: stripeCustomerId })
+                .eq("id", userId);
+              console.log(`[stripe-webhook] Saved stripe_customer_id to profile: ${stripeCustomerId}`);
+            }
+          }
+        }
+
         // Update order status to 'success' to trigger the existing DB logic
         const { error: orderError } = await supabaseAdmin
           .from("clover_orders")
@@ -158,6 +181,7 @@ serve(async (req) => {
               stripe_event_id: event.id,
               completed_at: new Date().toISOString(),
               pi_id: paymentIntentId,
+              stripe_customer_id: stripeCustomerId,
             },
           })
           .eq("id", existingOrder.id);
@@ -168,6 +192,33 @@ serve(async (req) => {
         }
 
         console.log(`[stripe-webhook] ✅ Success: Order marked as success. Trigger will handle clover increment for user ${userId}`);
+        break;
+      }
+
+      case "payment_intent.processing": {
+        // This event fires when payment requires bank processing time (e.g., bank transfers).
+        // With allow_redirects: 'never', this should NOT occur for card payments.
+        // Log it for observability but do NOT update order status to avoid false positives.
+        console.log(`[stripe-webhook] ⏳ payment_intent.processing: PI:${paymentIntentId}. Order status remains 'pending' until 'succeeded' fires.`);
+        if (existingOrder && existingOrder.status === "pending") {
+          await supabaseAdmin
+            .from("clover_orders")
+            .update({
+              extra_data: {
+                ...(existingOrder.extra_data || {}),
+                processing_event_id: event.id,
+                processing_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", existingOrder.id);
+        }
+        break;
+      }
+
+      case "payment_intent.requires_action": {
+        // This fires when 3D Secure or other authentication is needed.
+        // Flutter's Payment Sheet handles this automatically. Just log it.
+        console.log(`[stripe-webhook] 🔐 payment_intent.requires_action: PI:${paymentIntentId}. Flutter will handle authentication.`);
         break;
       }
 
@@ -205,10 +256,12 @@ serve(async (req) => {
       case "payment_intent.canceled": {
         console.log(`[stripe-webhook] PaymentIntent canceled: ${paymentIntentId}`);
 
-        await supabaseAdmin
-          .from("clover_orders")
-          .update({ status: "cancelled" }) 
-          .eq("id", existingOrder.id);
+        if (existingOrder) {
+          await supabaseAdmin
+            .from("clover_orders")
+            .update({ status: "cancelled" })
+            .eq("id", existingOrder.id);
+        }
         break;
       }
 

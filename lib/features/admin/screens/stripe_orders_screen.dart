@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/error_handler.dart';
 
 class StripeOrdersScreen extends StatefulWidget {
   const StripeOrdersScreen({super.key});
@@ -17,7 +19,7 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
   String? _error;
   String _filterStatus = 'all';
 
-  final _statusOptions = ['all', 'success', 'pending', 'error', 'cancelled'];
+  final _statusOptions = ['all', 'success', 'pending', 'expired', 'error', 'cancelled'];
 
   @override
   void initState() {
@@ -61,12 +63,236 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
     }
   }
 
+  /// Verifies the PaymentIntent status in Stripe, then marks the order as success.
+  /// The DB trigger process_paid_clover_order automatically credits clovers when status = 'success'.
+  Future<void> _markOrderComplete(String orderId, Map<String, dynamic> extraData) async {
+    final piId = extraData['pi_id'] as String? ?? 
+                 (extraData.containsKey('stripe_pi_id') ? extraData['stripe_pi_id'] as String? : null);
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Verificar y acreditar'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Se consultará Stripe en tiempo real para verificar si el pago fue exitoso antes de acreditar los tréboles.'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Order: ${orderId.substring(0, 8)}...',
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  ),
+                  if (piId != null)
+                    Text(
+                      'PI: $piId',
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                    ),
+                  Text(
+                    'Tréboles: ${extraData['clovers_amount'] ?? '?'}',
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '⚠️ Si Stripe no confirma el pago, los tréboles NO se acreditarán.',
+              style: TextStyle(color: Colors.orange, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.successGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Verificar y acreditar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Show loading
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 12),
+              Text('Verificando con Stripe...'),
+            ],
+          ),
+          duration: Duration(seconds: 10),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    try {
+      // Call the Edge Function — it verifies PI in Stripe then credits if confirmed
+      final response = await Supabase.instance.client.functions.invoke(
+        'stripe-verify-and-credit',
+        body: {'clover_order_id': orderId},
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      final data = response.data as Map<String, dynamic>?;
+      final success = data?['success'] == true;
+      final message = data?['message'] as String? ?? data?['error'] as String? ?? 'Error desconocido';
+      final stripeStatus = data?['stripe_status'] as String?;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                success ? '✅ Éxito' : '❌ No se pudo acreditar',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(message, style: const TextStyle(fontSize: 12)),
+              if (stripeStatus != null && !success)
+                Text(
+                  'Estado en Stripe: "$stripeStatus"',
+                  style: const TextStyle(fontSize: 11, color: Colors.orange),
+                ),
+            ],
+          ),
+          backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      if (success) _loadOrders();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+        // Extract friendly message from FunctionException or fallback
+        String errorMsg;
+        if (e is FunctionException) {
+          final details = e.details;
+          if (details is Map && details['error'] is String) {
+            errorMsg = details['error'] as String;
+          } else if (details is Map && details['message'] is String) {
+            errorMsg = details['message'] as String;
+          } else {
+            errorMsg = ErrorHandler.getFriendlyErrorMessage(e);
+          }
+          // Also show stripe_status if available
+          final stripeStatus = details is Map ? details['stripe_status'] as String? : null;
+          if (stripeStatus != null) {
+            errorMsg += '\nEstado en Stripe: "$stripeStatus"';
+          }
+        } else {
+          errorMsg = ErrorHandler.getFriendlyErrorMessage(e);
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: AppTheme.dangerRed,
+            duration: const Duration(seconds: 6),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+
+  void _copyToClipboard(String text, String label) {
+    // Try Clipboard API first (works on desktop/most browsers)
+    Clipboard.setData(ClipboardData(text: text)).then((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$label copiado'),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }).catchError((_) {
+      // Fallback for mobile web — show dialog with selectable text
+      _showCopyDialog(text, label);
+    });
+  }
+
+  void _showCopyDialog(String text, String label) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(label),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Mantén presionado para copiar:',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: SelectableText(
+                text,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _statusColor(String? status) {
     switch (status) {
       case 'success':
         return AppTheme.successGreen;
       case 'pending':
         return Colors.orange;
+      case 'expired':
+        return Colors.purple;
       case 'error':
       case 'cancelled':
         return AppTheme.dangerRed;
@@ -81,6 +307,8 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
         return '✅ Exitosa';
       case 'pending':
         return '⏳ Pendiente';
+      case 'expired':
+        return '🕐 Expirada';
       case 'error':
         return '❌ Error';
       case 'cancelled':
@@ -94,6 +322,7 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
     final total = _orders.length;
     final success = _orders.where((o) => o['status'] == 'success').length;
     final pending = _orders.where((o) => o['status'] == 'pending').length;
+    final expired = _orders.where((o) => o['status'] == 'expired').length;
     final failed = _orders
         .where((o) => o['status'] == 'error' || o['status'] == 'cancelled')
         .length;
@@ -122,18 +351,16 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
       ),
       child: LayoutBuilder(
         builder: (context, statsConstraints) {
-          final bool isNarrow = statsConstraints.maxWidth < 450;
+          final bool isNarrow = statsConstraints.maxWidth < 500;
           return Wrap(
             runSpacing: 12,
             alignment: WrapAlignment.spaceAround,
             children: [
               _statChip('Total', total.toString(), textColor?.withOpacity(0.7) ?? Colors.grey, isNarrow),
-              _statChip('Exitosas', success.toString(), AppTheme.successGreen,
-                  isNarrow),
-              _statChip(
-                  'Pendientes', pending.toString(), Colors.orange, isNarrow),
-              _statChip(
-                  'Errores', failed.toString(), AppTheme.dangerRed, isNarrow),
+              _statChip('Exitosas', success.toString(), AppTheme.successGreen, isNarrow),
+              _statChip('Pendientes', pending.toString(), Colors.orange, isNarrow),
+              _statChip('Expiradas', expired.toString(), Colors.purple, isNarrow),
+              _statChip('Errores', failed.toString(), AppTheme.dangerRed, isNarrow),
               _statChip(
                 'Ingresos',
                 '\$${totalRevenue.toStringAsFixed(2)}',
@@ -189,6 +416,7 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
         ? DateTime.parse(order['created_at']).toLocal()
         : null;
     final piId = order['stripe_payment_intent_id'] as String?;
+    final orderId = order['id']?.toString() ?? '';
 
     final textColor = Theme.of(context).textTheme.bodyLarge?.color;
     final cardColor = Theme.of(context).cardTheme.color;
@@ -230,11 +458,36 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
           style: TextStyle(
               color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
         ),
-        subtitle: Text(
-          createdAt != null
-              ? '${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}'
-              : '—',
-          style: TextStyle(color: textColor?.withOpacity(0.5), fontSize: 12),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              createdAt != null
+                  ? '${createdAt.day}/${createdAt.month}/${createdAt.year} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}'
+                  : '—',
+              style: TextStyle(color: textColor?.withOpacity(0.5), fontSize: 11),
+            ),
+            // Order ID visible directly in collapsed header
+            if (orderId.isNotEmpty)
+              GestureDetector(
+                onTap: () => _copyToClipboard(orderId, 'Order ID'),
+                child: Row(
+                  children: [
+                    Text(
+                      '${orderId.substring(0, orderId.length > 8 ? 8 : orderId.length)}...',
+                      style: TextStyle(
+                        color: textColor?.withOpacity(0.35),
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.copy_rounded,
+                        size: 10, color: textColor?.withOpacity(0.3)),
+                  ],
+                ),
+              ),
+          ],
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -248,7 +501,7 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
                   fontSize: 13),
             ),
             Text(
-              '${clovers} 🍀',
+              '$clovers 🍀',
               style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 11),
             ),
           ],
@@ -263,17 +516,142 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
               children: [
                 Divider(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                 _detailRow('Estado', _statusLabel(status), statusColor),
-                _detailRow('Email', profile?['email'] ?? '—', textColor?.withOpacity(0.7) ?? Colors.grey),
+                _detailRow('Email', profile?['email'] ?? '—',
+                    textColor?.withOpacity(0.7) ?? Colors.grey),
                 _detailRow(
-                    'Plan', extraData?['plan_name'] ?? '—', textColor?.withOpacity(0.7) ?? Colors.grey),
-                _detailRow(
-                    'PaymentIntent',
-                    piId != null
-                        ? piId.substring(0, piId.length > 30 ? 30 : piId.length) + (piId.length > 30 ? '...' : '')
-                        : '—',
-                    textColor?.withOpacity(0.5) ?? Colors.grey),
-                _detailRow(
-                    'Order ID', order['id'] != null ? (order['id'].toString().substring(0, order['id'].toString().length > 8 ? 8 : order['id'].toString().length) + (order['id'].toString().length > 8 ? '...' : '')) : '—', textColor?.withOpacity(0.5) ?? Colors.grey),
+                    'Plan',
+                    extraData?['plan_name'] ?? '—',
+                    textColor?.withOpacity(0.7) ?? Colors.grey),
+                // Full Order ID — tappable to copy
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 110,
+                        child: Text('Order ID',
+                            style: TextStyle(
+                                color: textColor?.withOpacity(0.4),
+                                fontSize: 12)),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _copyToClipboard(orderId, 'Order ID'),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  orderId,
+                                  style: TextStyle(
+                                    color: textColor?.withOpacity(0.7),
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.copy_rounded,
+                                  size: 13,
+                                  color: textColor?.withOpacity(0.4)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Full PaymentIntent ID — tappable to copy
+                if (piId != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 110,
+                          child: Text('PaymentIntent',
+                              style: TextStyle(
+                                  color: textColor?.withOpacity(0.4),
+                                  fontSize: 12)),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _copyToClipboard(piId, 'PaymentIntent ID'),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    piId,
+                                    style: TextStyle(
+                                      color: textColor?.withOpacity(0.5),
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.copy_rounded,
+                                    size: 13,
+                                    color: textColor?.withOpacity(0.4)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                // Action button for pending OR expired orders
+                if (status == 'pending' || status == 'expired') ...
+                  [
+                    const SizedBox(height: 8),
+                    // Info for expired orders
+                    if (status == 'expired')
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.purple.withOpacity(0.25)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 13, color: Colors.purple),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Verifica en Stripe Dashboard si el PaymentIntent está "Succeeded" antes de completar.',
+                                style: TextStyle(color: Colors.purple, fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _markOrderComplete(
+                            orderId, extraData ?? {}),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.successGreen.withOpacity(0.15),
+                          foregroundColor: AppTheme.successGreen,
+                          side: BorderSide(
+                              color: AppTheme.successGreen.withOpacity(0.4)),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline, size: 16),
+                        label: const Text(
+                          'Acreditar tréboles manualmente',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
               ],
             ),
           ),
