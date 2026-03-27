@@ -62,6 +62,24 @@ class BettingService {
     }
   }
 
+  /// Obtiene stats agregadas del evento (pote total y cantidad de apuestas).
+  Future<Map<String, int>> getEventBettingStats(String eventId) async {
+    try {
+      final response = await _supabase.rpc(
+        'get_event_betting_stats',
+        params: {'p_event_id': eventId},
+      );
+      final data = Map<String, dynamic>.from(response);
+      return {
+        'totalPot': (data['total_pot'] as num?)?.toInt() ?? 0,
+        'totalBets': (data['total_bets'] as num?)?.toInt() ?? 0,
+      };
+    } catch (e) {
+      debugPrint('BettingService: Error fetching stats via RPC: $e');
+      return {'totalPot': 0, 'totalBets': 0};
+    }
+  }
+
   /// Realtime subscription to bets table to update pot.
   RealtimeChannel subscribeToBets(String eventId, Function() callback) {
     return _supabase

@@ -49,6 +49,7 @@ import '../../../core/enums/user_role.dart';
 import '../../social/screens/wallet_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/utils/global_keys.dart';
+import '../services/betting_service.dart';
 
 class ScenariosScreen extends StatefulWidget {
   final bool isOnline;
@@ -86,6 +87,11 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
   // Cache for ban status to show banned button
   Map<String, String?> _banStatusMap = {}; // NEW
+
+  late BettingService _bettingService;
+  final Map<String, int> _bettingPotMap = {};
+  final Map<String, int> _bettingCountMap = {};
+  final Set<String> _bettingLoadingEvents = {};
 
   // The default user role for scenario selection
   UserRole get role => UserRole.player;
@@ -560,6 +566,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     // Online mode: show pending (lobby) events by default
     if (widget.isOnline) _selectedFilter = 'pending';
 
+    _bettingService = BettingService(Supabase.instance.client);
+
     _pageController = PageController(viewportFraction: 0.85);
 
     // 1. Levitation (Hover) Animation
@@ -737,6 +745,42 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
   Future<void> _refreshData() async {
     await _loadEvents();
+  }
+
+  String _formatCompactAmount(int amount) {
+    if (amount >= 1000000) {
+      final value = amount / 1000000.0;
+      final compact = value.toStringAsFixed(1);
+      return compact.endsWith('.0')
+          ? '${compact.substring(0, compact.length - 2)}M'
+          : '${compact}M';
+    }
+    if (amount >= 1000) {
+      final value = amount / 1000.0;
+      final compact = value.toStringAsFixed(1);
+      return compact.endsWith('.0')
+          ? '${compact.substring(0, compact.length - 2)}K'
+          : '${compact}K';
+    }
+    return amount.toString();
+  }
+
+  Future<void> _ensureBettingStats(String eventId) async {
+    if (_bettingPotMap.containsKey(eventId) ||
+        _bettingLoadingEvents.contains(eventId)) {
+      return;
+    }
+    _bettingLoadingEvents.add(eventId);
+    try {
+      final stats = await _bettingService.getEventBettingStats(eventId);
+      if (!mounted) return;
+      setState(() {
+        _bettingPotMap[eventId] = stats['totalPot'] ?? 0;
+        _bettingCountMap[eventId] = stats['totalBets'] ?? 0;
+      });
+    } finally {
+      _bettingLoadingEvents.remove(eventId);
+    }
   }
 
   void _showScenariosTutorial() async {
@@ -2714,6 +2758,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                           itemCount: scenarios.length,
                                           itemBuilder: (context, index) {
                                             final scenario = scenarios[index];
+                                              _ensureBettingStats(scenario.id);
                                             return AnimatedBuilder(
                                               animation: _pageController,
                                               builder: (context, child) {
@@ -2909,9 +2954,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                           ],
                                                                         ),
                                                                       ),
-                                                                      if (!scenario.isCompleted && scenario.entryFee > 0)
+                                                                      if (scenario.pot > 0)
                                                                         const SizedBox(width: 8),
-                                                                      if (!scenario.isCompleted && scenario.entryFee > 0)
+                                                                      if (scenario.pot > 0)
                                                                         Container(
                                                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                                           decoration: BoxDecoration(
@@ -2940,9 +2985,42 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                                 mainAxisSize: MainAxisSize.min,
                                                                                 children: [
                                                                                   Text(
-                                                                                    "BOTÍN: ${(scenario.pot * 0.70).toStringAsFixed(0)} ",
+                                                                                    "BOTÍN: ${_formatCompactAmount((scenario.pot * 0.70).round())} ",
                                                                                     style: const TextStyle(
                                                                                       color: AppTheme.accentGold,
+                                                                                      fontWeight: FontWeight.bold,
+                                                                                      fontSize: 10,
+                                                                                      letterSpacing: 0.5,
+                                                                                    ),
+                                                                                  ),
+                                                                                  const CoinImage(size: 10),
+                                                                                ],
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                        ),
+                                                                      if ((_bettingCountMap[scenario.id] ?? 0) > 0)
+                                                                        const SizedBox(width: 8),
+                                                                      if ((_bettingCountMap[scenario.id] ?? 0) > 0)
+                                                                        Container(
+                                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                                          decoration: BoxDecoration(
+                                                                            color: Colors.black.withOpacity(0.6),
+                                                                            borderRadius: BorderRadius.circular(20),
+                                                                            border: Border.all(color: AppTheme.dBrandMain.withOpacity(0.5), width: 1),
+                                                                          ),
+                                                                          child: Row(
+                                                                            mainAxisSize: MainAxisSize.min,
+                                                                            children: [
+                                                                              const Icon(Icons.casino, color: AppTheme.dBrandMain, size: 14),
+                                                                              const SizedBox(width: 4),
+                                                                              Row(
+                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                children: [
+                                                                                  Text(
+                                                                                    "APUESTAS: ${_formatCompactAmount(_bettingPotMap[scenario.id] ?? 0)} ",
+                                                                                    style: const TextStyle(
+                                                                                      color: AppTheme.dBrandMain,
                                                                                       fontWeight: FontWeight.bold,
                                                                                       fontSize: 10,
                                                                                       letterSpacing: 0.5,
