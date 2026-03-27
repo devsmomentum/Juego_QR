@@ -94,12 +94,17 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   late AppConfigService _configService;
   bool _minDurationConfigLoaded = false;
   Map<String, int> _minDurationByDifficulty = _minDurationDefaults;
+  bool _minDurationEnabled = true;
 
   static const Map<String, int> _minDurationDefaults = {
     'easy': 4,
     'medium': 8,
     'hard': 12,
   };
+  static const String _minigameCooldownKey =
+      'minigame_cooldown_until_ms';
+  static const int _minCooldownSeconds = 5;
+  static const int _maxCooldownSeconds = 30;
 
   @override
   void initState() {
@@ -164,6 +169,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   int _minDurationSecondsForClue(Clue clue) {
+    if (!_minDurationEnabled) return 0;
     switch (clue.puzzleType.difficulty) {
       case MinigameDifficulty.easy:
         return _minDurationByDifficulty['easy'] ??
@@ -179,9 +185,15 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   Future<void> _loadMinigameMinDurationConfig() async {
-    final config = await _configService.getMinigameMinDurationsByDifficulty();
+    final results = await Future.wait([
+      _configService.getMinigameMinDurationEnabled(),
+      _configService.getMinigameMinDurationsByDifficulty(),
+    ]);
+    final enabled = results[0] as bool;
+    final config = results[1] as Map<String, int>;
     if (!mounted) return;
     setState(() {
+      _minDurationEnabled = enabled;
       _minDurationByDifficulty = config;
       _minDurationConfigLoaded = true;
     });
@@ -484,8 +496,6 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   void _handleSuccess(Clue clue) {
     if (_isSuccessFlowActive || !mounted) return;
     setState(() => _isSuccessFlowActive = true);
-
-    _finishLegally();
     final result = {
       'puzzle_type': clue.puzzleType.toString(),
       'client_elapsed_ms': _localElapsedMs(),
@@ -498,8 +508,27 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       clue,
       sessionId: _minigameSessionId,
       resultPayload: result,
+      onValidationSuccess: _finishLegally,
+      onValidationFailure: _resetSuccessFlow,
+      onForceExit: _handleTooFastExit,
     );
   }
+
+  void _resetSuccessFlow() {
+    if (!mounted) return;
+    setState(() => _isSuccessFlowActive = false);
+  }
+
+  void _handleTooFastExit() {
+    if (!mounted) return;
+    setState(() {
+      _isSuccessFlowActive = false;
+      _minigameSessionId = null;
+      _minigameStartLocal = null;
+      _sessionReady = false;
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -748,6 +777,17 @@ void showClueSelector(BuildContext context, Clue currentClue) {
   );
 }
 
+Future<void> _setMinigameCooldownUntilMs(int seconds) async {
+  const minSeconds = 5;
+  const maxSeconds = 30;
+  const key = 'minigame_cooldown_until_ms';
+  final prefs = await SharedPreferences.getInstance();
+  final clampedSeconds = seconds.clamp(minSeconds, maxSeconds);
+  final until =
+      DateTime.now().millisecondsSinceEpoch + (clampedSeconds * 1000);
+  await prefs.setInt(key, until);
+}
+
 /// Diálogo de rendición: quita 1 vida y reinicia el minijuego in-place.
 /// Ya NO cierra la PuzzleScreen — el jugador puede seguir intentando.
 /// Solo sale al mapa si se queda sin vidas.
@@ -982,15 +1022,21 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
 
 // --- LOGICA DE VICTORIA COMPARTIDA ---
 
-void _showSuccessDialog(BuildContext context, Clue clue,
-  {String? sessionId, Map<String, dynamic>? resultPayload}) async {
+void _showSuccessDialog(
+  BuildContext context,
+  Clue clue, {
+  String? sessionId,
+  Map<String, dynamic>? resultPayload,
+  VoidCallback? onValidationSuccess,
+  VoidCallback? onValidationFailure,
+  VoidCallback? onForceExit,
+}) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
   final gameFlowProvider = Provider.of<GameFlowProvider>(context, listen: false);
 
   // [FIX] Capturar Navigator y ruta del PuzzleScreen ANTES de cualquier operación async
   final navigator = Navigator.of(context);
-  final rootContext = context;
   final puzzleRoute = ModalRoute.of(context); // Para removeRoute confiable en onMapReturn
 
   debugPrint('🎉 SUCCESS FLOW STARTED for ${clue.id}');
@@ -1020,24 +1066,263 @@ void _showSuccessDialog(BuildContext context, Clue clue,
 
   if (!navigator.mounted) return;
 
-  // 1. Mostrar la Animación del Trébol Dorado INMEDIATAMENTE
+  // 1. Validar resultado ANTES de mostrar la animación del trébol
+  Map<String, dynamic>? result;
+  int coinsEarned = 0;
+  bool validationOpen = true;
+  unawaited(
+    showGeneralDialog(
+      context: navigator.context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.9),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (dialogContext, _, __) => const Scaffold(
+        backgroundColor: Colors.black,
+        body: LoadingIndicator(
+          message: 'Validando resultado...',
+          fontSize: 16,
+        ),
+      ),
+    ).whenComplete(() => validationOpen = false),
+  );
+
+  try {
+    result = await clueCompletionFuture.timeout(const Duration(seconds: 6));
+    coinsEarned = result?['coins_earned'] ?? 0;
+    debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
+  } catch (e) {
+    debugPrint("Error completando pista (background/timeout): $e");
+    result = null;
+  }
+
+  if (validationOpen && navigator.mounted) {
+    try {
+      Navigator.of(navigator.context, rootNavigator: true).pop();
+    } catch (_) {}
+  }
+
+  if (result == null) {
+    onValidationFailure?.call();
+    if (navigator.mounted) {
+      await showDialog<void>(
+        context: navigator.context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+          ),
+          title: const Text(
+            'Error de conexion',
+            style: TextStyle(
+              color: AppTheme.dangerRed,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'No se pudo validar el resultado. Debes reintentar el minijuego.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'ENTENDIDO',
+                style: TextStyle(
+                  color: AppTheme.dangerRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    onForceExit?.call();
+    if (navigator.mounted && puzzleRoute != null) {
+      try {
+        navigator.removeRoute(puzzleRoute);
+      } catch (_) {
+        if (navigator.mounted) navigator.maybePop();
+      }
+    } else if (navigator.mounted) {
+      navigator.maybePop();
+    }
+    return;
+  }
+
+  if (result['success'] == false) {
+    onValidationFailure?.call();
+    final errorCode = result['error']?.toString();
+    if (navigator.mounted) {
+      if (errorCode == 'TOO_FAST') {
+        final elapsed = (result['elapsed_seconds'] as num?)?.toInt() ?? 0;
+        final minSeconds = (result['min_duration_seconds'] as num?)?.toInt() ?? 0;
+        final remaining = (minSeconds - elapsed).clamp(5, 30);
+        await _setMinigameCooldownUntilMs(remaining);
+
+        if (navigator.mounted) {
+          await showDialog<void>(
+            context: navigator.context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1D),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Colors.orange, width: 1.5),
+              ),
+              title: const Text(
+                'Muy rapido',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Text(
+                'Debes esperar $remaining s antes de reintentar el minijuego.',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ENTENDIDO',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        onForceExit?.call();
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (navigator.mounted && puzzleRoute != null) {
+            try {
+              navigator.removeRoute(puzzleRoute);
+            } catch (_) {
+              if (navigator.mounted) navigator.maybePop();
+            }
+          } else if (navigator.mounted) {
+            navigator.maybePop();
+          }
+        });
+      } else if (errorCode == 'SESSION_EXPIRED') {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Sesion expirada',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Tu sesion expiro. Debes reintentar el minijuego.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      } else {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Validacion fallida',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'No se pudo validar el resultado. Debes reintentar el minijuego.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      }
+    }
+    return;
+  }
+
+  // 2. Mostrar la Animación del Trébol Dorado
+  onValidationSuccess?.call();
   bool sealCompleted = false;
   try {
     await showGeneralDialog(
       context: navigator.context,
       barrierDismissible: false,
-      barrierColor: Colors.black, // [FIX] Fully opaque barrier - prevents loading/effects from showing through
+      barrierColor: Colors.black,
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (dialogContext, _, __) => Scaffold(
-        backgroundColor: Colors.black, // [FIX] Fully opaque - no bleed-through of underlying widget rebuilds
+        backgroundColor: Colors.black,
         body: TimeStampAnimation(
           index: ((clue.sequenceIndex - 1) % 9) + 1,
           onComplete: () {
             if (!sealCompleted && dialogContext.mounted) {
               sealCompleted = true;
-              // [FIX] Usar removeRoute en vez de pop() para evitar cerrar
-              // accidentalmente la _BlockingPageRoute si un poder se activó
-              // encima de esta animación.
               final sealRoute = ModalRoute.of(dialogContext);
               if (sealRoute != null) {
                 try {
@@ -1055,22 +1340,6 @@ void _showSuccessDialog(BuildContext context, Clue clue,
     );
   } catch (e) {
     debugPrint('Error showing TimeStampAnimation: $e');
-  }
-
-  // 2. Leer el resultado del RPC (el trébol tardó ~3.3s, el RPC ya debió terminar)
-  // [FIX] Sin delays intermedios - evita que el usuario vea el "cargando" del widget
-  // subyacente entre la animación del trébol y el diálogo de celebración.
-  Map<String, dynamic>? result;
-  int coinsEarned = 0;
-  try {
-    // El RPC se lanzó ANTES de la animación (~3.3s atrás), así que debería responder inmediato.
-    // Timeout de 4s como safety net si la conexión es lenta.
-    result = await clueCompletionFuture.timeout(const Duration(seconds: 4));
-    coinsEarned = result?['coins_earned'] ?? 0;
-    debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
-  } catch (e) {
-    debugPrint("Error completando pista (background/timeout): $e");
-    result = {'success': true, 'coins_earned': 0};
   }
 
   // Esperar que el refreshProfile termine (si aún no lo hizo)
@@ -1128,28 +1397,6 @@ void _showSuccessDialog(BuildContext context, Clue clue,
       }
       return;
     }
-  } else {
-    // [FIX] Si el RPC falló/timeout, no echamos al usuario. 
-    // Mostramos un SnackBar con opción a REINTENTAR el guardado.
-    debugPrint('❌ RPC Failure or Timeout. Offering RETRY...');
-    if (navigator.mounted) {
-      ScaffoldMessenger.of(navigator.context).showSnackBar(
-        SnackBar(
-          content: const Text('Error de conexión al guardar progreso.'),
-          backgroundColor: AppTheme.dangerRed,
-          duration: const Duration(seconds: 10),
-          action: SnackBarAction(
-            label: 'REINTENTAR',
-            textColor: Colors.white,
-            onPressed: () {
-              // Re-invocar el flujo de éxito para intentar guardar de nuevo
-              _showSuccessDialog(rootContext, clue);
-            },
-          ),
-        ),
-      );
-    }
-    return;
   }
 
   if (!navigator.mounted) return;

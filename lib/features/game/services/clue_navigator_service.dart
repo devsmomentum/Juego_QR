@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/clue.dart';
 import '../screens/qr_scanner_screen.dart';
 import '../screens/puzzle_screen.dart';
@@ -15,6 +17,8 @@ import '../providers/game_provider.dart';
 /// - **ONLINE mode**: All clues go directly to PuzzleScreen (minigame).
 /// - **PRESENCIAL mode**: ALL clues require QR scan first, then navigate to puzzle.
 class ClueNavigatorService {
+  static const String _minigameCooldownKey =
+      'minigame_cooldown_until_ms';
   
   /// Navigate to the appropriate screen for a clue.
   /// 
@@ -22,6 +26,12 @@ class ClueNavigatorService {
   /// 1. The app mode (online vs presencial from AppModeProvider)
   /// 2. The clue type (OnlineClue vs PhysicalClue)
   static void navigateToClue(BuildContext context, Clue clue) async {
+    final remaining = await _getMinigameCooldownRemainingSeconds();
+    if (remaining > 0) {
+      await _showMinigameCooldownDialog(context, remaining);
+      return;
+    }
+
     // Get the app mode - this is the USER's selected mode, not the clue data
     final appMode = Provider.of<AppModeProvider>(context, listen: false);
     final isOnlineMode = appMode.isOnlineMode;
@@ -77,6 +87,83 @@ class ClueNavigatorService {
         ),
       );
     }
+  }
+
+  static Future<int> _getMinigameCooldownRemainingSeconds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final until = prefs.getInt(_minigameCooldownKey) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final remainingMs = until - now;
+    if (remainingMs <= 0) return 0;
+    return (remainingMs / 1000).ceil();
+  }
+
+  static Future<void> _showMinigameCooldownDialog(
+    BuildContext context,
+    int seconds,
+  ) async {
+    int remaining = seconds;
+    Timer? timer;
+    bool started = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          if (!started) {
+            started = true;
+            timer = Timer.periodic(const Duration(seconds: 1), (t) {
+              if (remaining <= 1) {
+                t.cancel();
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+                return;
+              }
+              if (dialogContext.mounted) {
+                setState(() {
+                  remaining -= 1;
+                });
+              }
+            });
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Colors.orange, width: 1.5),
+            ),
+            title: const Text(
+              'Cooldown activo',
+              style: TextStyle(
+                color: Colors.orange,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Text(
+              'Espera $remaining s para volver a entrar al minijuego.',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    ).whenComplete(() {
+      timer?.cancel();
+    });
   }
 
   /// Navigate with QR validation first (used in PRESENCIAL mode).

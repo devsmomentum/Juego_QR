@@ -272,10 +272,7 @@ class _CluesScreenState extends State<CluesScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
-                );
+                ClueNavigatorService.navigateToClue(context, clue);
               },
               child: const Text("REINTENTAR (DEBUG)", style: TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold)),
             ),

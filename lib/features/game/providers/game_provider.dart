@@ -783,19 +783,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
         Future.delayed(const Duration(milliseconds: 300), () => fetchClues(silent: true));
         unawaited(fetchLeaderboard());
         return data;
-      } else {
-        // RPC falló: revertir estado optimista para que el usuario pueda reintentar
-        debugPrint('⚠️ completeCurrentClue: RPC returned null, reverting optimistic state');
-        // FIX: Rollback solo de la pista específica (by ID, no by index).
-        // No se revierte is_locked de la siguiente porque nunca se modificó.
-        if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
-          _clues[localIndex].isCompleted = false;
-          _currentClueIndex = prevClueIndex;
-          notifyListeners();
-        }
-        unawaited(fetchClues(silent: true));
-        return null;
       }
+
+      // RPC falló o devolvió un error: revertir estado optimista para reintentar
+      debugPrint('⚠️ completeCurrentClue: RPC failed, reverting optimistic state');
+      if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
+        _clues[localIndex].isCompleted = false;
+        _currentClueIndex = prevClueIndex;
+        notifyListeners();
+      }
+      unawaited(fetchClues(silent: true));
+      return data;
     } catch (e) {
       debugPrint('Error completing clue: $e');
       if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {

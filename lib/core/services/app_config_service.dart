@@ -319,6 +319,53 @@ class AppConfigService {
     }
   }
 
+  /// Reads the flag that enables/disables minigame min-duration checks.
+  /// Defaults to true if missing or invalid.
+  Future<bool> getMinigameMinDurationEnabled() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'minigame_min_duration_enabled')
+          .maybeSingle();
+
+      if (response != null && response['value'] != null) {
+        final value = response['value'];
+        if (value is bool) return value;
+        if (value is String) return value.toLowerCase() == 'true';
+        if (value is num) return value != 0;
+      }
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error fetching minigame_min_duration_enabled: $e',
+      );
+      return true;
+    }
+  }
+
+  /// Updates the flag that enables/disables minigame min-duration checks.
+  Future<bool> updateMinigameMinDurationEnabled(bool enabled) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'minigame_min_duration_enabled',
+        'value': enabled,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint(
+        '[AppConfigService] minigame_min_duration_enabled updated: $enabled',
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error updating minigame_min_duration_enabled: $e',
+      );
+      return false;
+    }
+  }
+
   /// Saves the min duration (seconds) per minigame difficulty.
   Future<bool> updateMinigameMinDurationsByDifficulty(
     Map<String, int> durations,

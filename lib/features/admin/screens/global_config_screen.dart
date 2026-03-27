@@ -41,6 +41,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   bool _rechargeEnabled = true;
   bool _isTogglingRecharge = false;
   bool _isSavingPaymentMethods = false;
+  bool _minigameMinDurationEnabled = true;
 
   PaymentMethodsConfig _paymentMethodsConfig =
       PaymentMethodsConfig.fallbackAllDisabled();
@@ -82,6 +83,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         _configService.isRechargeEnabled(),
         _configService.getVersionConfig(),
         _configService.getPowerDefaultCosts(),
+        _configService.getMinigameMinDurationEnabled(),
         _configService.getMinigameMinDurationsByDifficulty(),
         _configService.getPagoMovilRecipient(),
         _configService.getPaymentMethodsStatus(),
@@ -98,7 +100,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         _powerDefaultCosts[item.id] = dbPowerCosts[item.id] ?? item.cost;
       }
 
-        final minigameDurations = results[5] as Map<String, int>;
+      _minigameMinDurationEnabled = results[5] as bool;
+      final minigameDurations = results[6] as Map<String, int>;
         _minigameEasyController.text =
           (minigameDurations['easy'] ?? 4).toString();
         _minigameMediumController.text =
@@ -117,12 +120,12 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
           versionCfg['ios_store_url'] as String? ?? '';
       _maintenanceMode = versionCfg['maintenance_mode'] as bool? ?? false;
 
-      final pmRecipient = results[6] as Map<String, String>;
+      final pmRecipient = results[7] as Map<String, String>;
       _pmBancoController.text = pmRecipient['banco'] ?? '';
       _pmCedulaController.text = pmRecipient['cedula'] ?? '';
       _pmTelefonoController.text = pmRecipient['telefono'] ?? '';
 
-      _paymentMethodsConfig = results[7] as PaymentMethodsConfig;
+      _paymentMethodsConfig = results[8] as PaymentMethodsConfig;
     } catch (e) {
       debugPrint('[GlobalConfigScreen] Error loading config: $e');
     } finally {
@@ -245,7 +248,10 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       final minigameMedium = int.tryParse(_minigameMediumController.text);
       final minigameHard = int.tryParse(_minigameHardController.text);
 
-      if (minigameEasy == null || minigameMedium == null || minigameHard == null) {
+      if (_minigameMinDurationEnabled &&
+          (minigameEasy == null ||
+              minigameMedium == null ||
+              minigameHard == null)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Minimo de tiempo de minijuegos inválido'),
@@ -261,11 +267,15 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
           await _configService.updateGatewayFeePercentage(gatewayFee);
       final powerSuccess = await _configService
           .updatePowerDefaultCosts(_powerDefaultCosts);
+      final minigameEnabledSuccess =
+          await _configService.updateMinigameMinDurationEnabled(
+        _minigameMinDurationEnabled,
+      );
       final minigameSuccess =
           await _configService.updateMinigameMinDurationsByDifficulty({
-        'easy': minigameEasy,
-        'medium': minigameMedium,
-        'hard': minigameHard,
+        'easy': minigameEasy ?? 4,
+        'medium': minigameMedium ?? 8,
+        'hard': minigameHard ?? 12,
       });
       final pmSuccess = await _configService.updatePagoMovilRecipient({
         'banco': _pmBancoController.text.trim(),
@@ -277,10 +287,11 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
 
       if (mounted) {
         if (rateSuccess &&
-          feeSuccess &&
-          powerSuccess &&
-          minigameSuccess &&
-          pmSuccess) {
+            feeSuccess &&
+            powerSuccess &&
+            minigameEnabledSuccess &&
+            minigameSuccess &&
+            pmSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Configuración guardada exitosamente'),
@@ -1193,6 +1204,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
     }) {
       return TextFormField(
         controller: controller,
+        enabled: _minigameMinDurationEnabled,
         keyboardType: TextInputType.number,
         style: TextStyle(color: textColor, fontSize: 16),
         decoration: InputDecoration(
@@ -1227,55 +1239,105 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       title: 'Minimo de tiempo de minijuegos',
       subtitle: 'Segundos minimos para validar resultados por dificultad',
       icon: Icons.timer,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 520;
-          if (isNarrow) {
-            return Column(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).dividerColor.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).dividerColor.withOpacity(0.1),
+              ),
+            ),
+            child: Row(
               children: [
-                buildDurationField(
-                  controller: _minigameEasyController,
-                  label: 'Facil',
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Habilitar tiempos minimos',
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _minigameMinDurationEnabled
+                            ? 'Validacion activa'
+                            : 'Validacion desactivada',
+                        style: TextStyle(
+                          color: secondaryTextColor?.withOpacity(0.6),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                buildDurationField(
-                  controller: _minigameMediumController,
-                  label: 'Medio',
-                ),
-                const SizedBox(height: 12),
-                buildDurationField(
-                  controller: _minigameHardController,
-                  label: 'Dificil',
+                Switch(
+                  value: _minigameMinDurationEnabled,
+                  onChanged: (value) {
+                    setState(() => _minigameMinDurationEnabled = value);
+                  },
+                  activeColor: AppTheme.lGoldAction,
                 ),
               ],
-            );
-          }
+            ),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 520;
+              if (isNarrow) {
+                return Column(
+                  children: [
+                    buildDurationField(
+                      controller: _minigameEasyController,
+                      label: 'Facil',
+                    ),
+                    const SizedBox(height: 12),
+                    buildDurationField(
+                      controller: _minigameMediumController,
+                      label: 'Medio',
+                    ),
+                    const SizedBox(height: 12),
+                    buildDurationField(
+                      controller: _minigameHardController,
+                      label: 'Dificil',
+                    ),
+                  ],
+                );
+              }
 
-          return Row(
-            children: [
-              Expanded(
-                child: buildDurationField(
-                  controller: _minigameEasyController,
-                  label: 'Facil',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: buildDurationField(
-                  controller: _minigameMediumController,
-                  label: 'Medio',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: buildDurationField(
-                  controller: _minigameHardController,
-                  label: 'Dificil',
-                ),
-              ),
-            ],
-          );
-        },
+              return Row(
+                children: [
+                  Expanded(
+                    child: buildDurationField(
+                      controller: _minigameEasyController,
+                      label: 'Facil',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: buildDurationField(
+                      controller: _minigameMediumController,
+                      label: 'Medio',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: buildDurationField(
+                      controller: _minigameHardController,
+                      label: 'Dificil',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
