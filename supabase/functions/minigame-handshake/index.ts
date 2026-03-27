@@ -13,6 +13,10 @@ function getClientIp(req: Request): string {
   if (forwardedFor && forwardedFor.length > 0) {
     return forwardedFor.split(",")[0].trim();
   }
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp && realIp.length > 0) {
+    return realIp.trim();
+  }
   return req.headers.get("cf-connecting-ip") ?? "";
 }
 
@@ -86,6 +90,26 @@ serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ session_id: data }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "status") {
+      const { data, error } = await supabaseClient.rpc(
+        "get_minigame_block_status",
+        {
+          p_ip_hash: ipHash || null,
+        },
+      );
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
