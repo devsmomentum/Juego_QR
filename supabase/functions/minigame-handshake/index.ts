@@ -28,15 +28,30 @@ async function sha256Hex(input: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const ipSalt = Deno.env.get("IP_HASH_SALT") ?? "";
+
+    if (!supabaseUrl || !serviceKey || !ipSalt) {
+      return jsonResponse({ error: "Server misconfigured" }, 500);
+    }
+
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      supabaseUrl,
+      serviceKey,
       {
         global: {
           headers: { Authorization: req.headers.get("Authorization") ?? "" },
@@ -50,30 +65,21 @@ serve(async (req) => {
     } = await supabaseClient.auth.getUser();
 
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
     const body = await req.json();
     const action = body?.action;
 
     const ip = getClientIp(req);
-    const ipHash = await sha256Hex(ip);
+    const ipHash = await sha256Hex(`${ipSalt}:${ip}`);
 
-    if (action === "start") {
-      const clueId = body?.clueId;
-      const minDurationSeconds = Number(body?.minDurationSeconds ?? 0);
+    if (action === "start-session") {
+      const clueId = body?.clue_id;
+      const minDurationSeconds = Number(body?.min_duration_seconds ?? 0);
 
       if (!clueId || Number.isNaN(minDurationSeconds)) {
-        return new Response(
-          JSON.stringify({ error: "Invalid payload" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
+        return jsonResponse({ error: "Invalid payload" }, 400);
       }
 
       const { data, error } = await supabaseClient.rpc("start_minigame", {
@@ -83,15 +89,11 @@ serve(async (req) => {
       });
 
       if (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        console.error("[start-session] RPC error:", error);
+        return jsonResponse({ error: "Forbidden" }, 403);
       }
 
-      return new Response(JSON.stringify({ session_id: data }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ session_id: data });
     }
 
     if (action === "status") {
@@ -103,30 +105,20 @@ serve(async (req) => {
       );
 
       if (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        console.error("[status] RPC error:", error);
+        return jsonResponse({ error: "Forbidden" }, 403);
       }
 
-      return new Response(JSON.stringify(data), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(data ?? {});
     }
 
-    if (action === "verify") {
-      const sessionId = body?.sessionId;
-      const answer = body?.answer ?? "";
-      const result = body?.result ?? {};
+    if (action === "verify-session") {
+      const sessionId = body?.session_id;
+      const answer = body?.p_answer ?? "";
+      const result = body?.p_result ?? {};
 
       if (!sessionId) {
-        return new Response(
-          JSON.stringify({ error: "Missing sessionId" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
+        return jsonResponse({ error: "Missing session_id" }, 400);
       }
 
       const { data, error } = await supabaseClient.rpc(
@@ -140,25 +132,30 @@ serve(async (req) => {
       );
 
       if (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        console.error("[verify-session] RPC error:", error);
+        return jsonResponse({ error: "Forbidden" }, 403);
       }
 
-      return new Response(JSON.stringify(data), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Forward security-related rejections (TOO_FAST, SESSION_EXPIRED)
+      // with the full payload so Flutter can show the correct UI.
+      // Real auth errors (Unauthorized, Forbidden, Session not found)
+      // still get 403 to block the request.
+      if (data?.success === false) {
+        const errCode = data?.error;
+        if (errCode === "TOO_FAST" || errCode === "SESSION_EXPIRED") {
+          console.warn("[verify-session] Timing rejection:", errCode);
+          return jsonResponse(data, 200);
+        }
+        console.warn("[verify-session] Security rejection:", errCode);
+        return jsonResponse({ error: "Forbidden" }, 403);
+      }
+
+      return jsonResponse(data ?? {});
     }
 
-    return new Response(JSON.stringify({ error: "Invalid action" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid action" }, 400);
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("[minigame-handshake] Unhandled error:", e);
+    return jsonResponse({ error: "Server error" }, 500);
   }
 });

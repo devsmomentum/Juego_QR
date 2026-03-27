@@ -225,10 +225,48 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     );
 
     if (!mounted) return;
+    
+    if (sessionId == null) {
+      // Bloqueo duro: el backend rechazó la sesión (probablemente porque está bloqueado)
+      setState(() => _isActive = false);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+          ),
+          title: const Text(
+            'Cuenta Bloqueada Temporalmente',
+            style: TextStyle(
+              color: AppTheme.dangerRed,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                if (mounted) Navigator.of(context).pop();
+              },
+              child: const Text('ENTENDIDO', style: TextStyle(color: AppTheme.dangerRed)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _minigameSessionId = sessionId;
       _minigameStartLocal = DateTime.now();
-      _sessionReady = sessionId != null;
+      _sessionReady = true;
     });
   }
 
@@ -1047,6 +1085,9 @@ void _showSuccessDialog(
   if (clue.id.startsWith('demo_')) {
     gameProvider.completeLocalClue(clue.id);
     clueCompletionFuture = Future.value({'success': true, 'coins_earned': 0});
+  } else if (sessionId == null) {
+    debugPrint('⚠️ _showSuccessDialog: No session ID for minigame, fallback to connection error');
+    clueCompletionFuture = Future.value({'success': false, 'error': 'BLOCKED'});
   } else {
     debugPrint('--- COMPLETING CLUE (background): ${clue.id} ---');
     clueCompletionFuture = gameProvider.completeCurrentClue(
@@ -1174,25 +1215,22 @@ void _showSuccessDialog(
                 side: const BorderSide(color: Colors.orange, width: 1.5),
               ),
               title: const Text(
-                'Muy rapido',
+                'Actividad Sospechosa',
                 style: TextStyle(
                   color: Colors.orange,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              content: Text(
-                'Debes esperar $remaining s antes de reintentar el minijuego.',
-                style: const TextStyle(color: Colors.white70),
+              content: const Text(
+                'Se ha detectado algo sospechoso, que no lo vuelva a intentar o será baneado permanentemente.',
+                style: TextStyle(color: Colors.white70),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text(
                     'ENTENDIDO',
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -1212,6 +1250,41 @@ void _showSuccessDialog(
             navigator.maybePop();
           }
         });
+      } else if (errorCode == 'BLOCKED') {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Cuenta Bloqueada Temporalmente',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
       } else if (errorCode == 'SESSION_EXPIRED') {
         await showDialog<void>(
           context: navigator.context,

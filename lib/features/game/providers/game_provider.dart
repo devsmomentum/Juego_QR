@@ -770,7 +770,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
           : await _gameService.completeClue(targetId, answer,
               eventId: _currentEventId);
 
-      if (data != null && data['success'] != false) {
+      // [FIX] Strict security: accept true (RPC Edge Function) or null + no error (legacy completeClue)
+      final isSuccess = data != null && 
+          (data['success'] == true || (data['success'] == null && !data.containsKey('error')));
+
+      if (isSuccess) {
         if (data['raceCompletedGlobal'] == true) {
           debugPrint("🏆 GLOBAL Race Completed confirmed by RPC!");
           _setRaceCompleted(true, 'Clue Completion (RPC)');

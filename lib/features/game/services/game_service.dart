@@ -388,9 +388,9 @@ class GameService {
           'X-Client-Nonce': nonce,
         },
         body: {
-          'action': 'start',
-          'clueId': int.tryParse(clueId) ?? clueId,
-          'minDurationSeconds': minDurationSeconds,
+          'action': 'start-session',
+          'clue_id': int.tryParse(clueId) ?? clueId,
+          'min_duration_seconds': minDurationSeconds,
         },
         method: HttpMethod.post,
       );
@@ -423,10 +423,10 @@ class GameService {
           'X-Client-Nonce': nonce,
         },
         body: {
-          'action': 'verify',
-          'sessionId': sessionId,
-          'answer': answer,
-          'result': result ?? {},
+          'action': 'verify-session',
+          'session_id': sessionId,
+          'p_answer': answer,
+          'p_result': result ?? {},
         },
         method: HttpMethod.post,
       );
