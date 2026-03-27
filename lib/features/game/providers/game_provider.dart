@@ -648,6 +648,16 @@ class GameProvider extends ChangeNotifier implements IResettable {
     }
   }
 
+  Future<String?> startMinigameSession({
+    required String clueId,
+    required int minDurationSeconds,
+  }) async {
+    return _gameService.startMinigameSession(
+      clueId: clueId,
+      minDurationSeconds: minDurationSeconds,
+    );
+  }
+
   void unlockClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
@@ -710,8 +720,8 @@ class GameProvider extends ChangeNotifier implements IResettable {
   ///
   /// [clueId] DEBE pasarse siempre que esté disponible para evitar race conditions
   /// con _currentClueIndex (puede cambiar por fetchClues concurrentes).
-  Future<Map<String, dynamic>?> completeCurrentClue(String answer,
-      {String? clueId}) async {
+    Future<Map<String, dynamic>?> completeCurrentClue(String answer,
+      {String? clueId, String? sessionId, Map<String, dynamic>? result}) async {
     String targetId;
 
     if (clueId != null) {
@@ -751,10 +761,16 @@ class GameProvider extends ChangeNotifier implements IResettable {
     }
 
     try {
-      final data = await _gameService.completeClue(targetId, answer,
-          eventId: _currentEventId);
+      final data = sessionId != null
+          ? await _gameService.verifyAndCompleteMinigame(
+              sessionId: sessionId,
+              answer: answer,
+              result: result,
+            )
+          : await _gameService.completeClue(targetId, answer,
+              eventId: _currentEventId);
 
-      if (data != null) {
+      if (data != null && data['success'] != false) {
         if (data['raceCompletedGlobal'] == true) {
           debugPrint("🏆 GLOBAL Race Completed confirmed by RPC!");
           _setRaceCompleted(true, 'Clue Completion (RPC)');

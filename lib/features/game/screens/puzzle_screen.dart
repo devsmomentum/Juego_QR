@@ -63,6 +63,8 @@ import 'waiting_room_screen.dart'; // NEW IMPORT
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 import '../providers/game_flow_provider.dart';
+import '../../../core/services/app_config_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -86,6 +88,18 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   late ConnectivityProvider _connectivityProvider;
   bool _isActive = true;
   bool _isSuccessFlowActive = false; // Prevents double success/navigation
+  String? _minigameSessionId;
+  DateTime? _minigameStartLocal;
+  bool _sessionReady = false;
+  late AppConfigService _configService;
+  bool _minDurationConfigLoaded = false;
+  Map<String, int> _minDurationByDifficulty = _minDurationDefaults;
+
+  static const Map<String, int> _minDurationDefaults = {
+    'easy': 4,
+    'medium': 8,
+    'hard': 12,
+  };
 
   @override
   void initState() {
@@ -94,6 +108,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     _gameProvider = Provider.of<GameProvider>(context, listen: false);
     _connectivityProvider =
         Provider.of<ConnectivityProvider>(context, listen: false);
+    _configService =
+      AppConfigService(supabaseClient: Supabase.instance.client);
 
     // Penalty logic removed
 
@@ -101,6 +117,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLives();
       _checkBanStatus(); // Check ban on entry
+
+      _startMinigameSession();
 
       // --- SYNC PLAYER PROVIDER WITH CURRENT EVENT ---
       // Fix for issue where PlayerProvider loads "latest" (potentially banned) event
@@ -142,6 +160,63 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
       // MOVED: Tutorial trigger
       _showMinigameTutorial();
+    });
+  }
+
+  int _minDurationSecondsForClue(Clue clue) {
+    switch (clue.puzzleType.difficulty) {
+      case MinigameDifficulty.easy:
+        return _minDurationByDifficulty['easy'] ??
+            _minDurationDefaults['easy']!;
+      case MinigameDifficulty.medium:
+        return _minDurationByDifficulty['medium'] ??
+            _minDurationDefaults['medium']!;
+      case MinigameDifficulty.hard:
+        return _minDurationByDifficulty['hard'] ??
+            _minDurationDefaults['hard']!;
+    }
+    return 8;
+  }
+
+  Future<void> _loadMinigameMinDurationConfig() async {
+    final config = await _configService.getMinigameMinDurationsByDifficulty();
+    if (!mounted) return;
+    setState(() {
+      _minDurationByDifficulty = config;
+      _minDurationConfigLoaded = true;
+    });
+  }
+
+  int _localElapsedMs() {
+    if (_minigameStartLocal == null) return 0;
+    return DateTime.now().difference(_minigameStartLocal!).inMilliseconds;
+  }
+
+  Future<void> _startMinigameSession() async {
+    if (!mounted) return;
+
+    final player = context.read<PlayerProvider>().currentPlayer;
+    if (player?.role == 'spectator') return;
+
+    if (widget.clue.id.startsWith('demo_')) return;
+
+    if (!_minDurationConfigLoaded) {
+      await _loadMinigameMinDurationConfig();
+    }
+
+    final gameProvider = context.read<GameProvider>();
+    final minDuration = _minDurationSecondsForClue(widget.clue);
+
+    final sessionId = await gameProvider.startMinigameSession(
+      clueId: widget.clue.id,
+      minDurationSeconds: minDuration,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _minigameSessionId = sessionId;
+      _minigameStartLocal = DateTime.now();
+      _sessionReady = sessionId != null;
     });
   }
 
@@ -411,7 +486,19 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     setState(() => _isSuccessFlowActive = true);
 
     _finishLegally();
-    _showSuccessDialog(context, clue);
+    final result = {
+      'puzzle_type': clue.puzzleType.toString(),
+      'client_elapsed_ms': _localElapsedMs(),
+      'client_started_at': _minigameStartLocal?.toUtc().toIso8601String(),
+      'client_finished_at': DateTime.now().toUtc().toIso8601String(),
+      'session_ready': _sessionReady,
+    };
+    _showSuccessDialog(
+      context,
+      clue,
+      sessionId: _minigameSessionId,
+      resultPayload: result,
+    );
   }
 
   @override
@@ -895,7 +982,8 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
 
 // --- LOGICA DE VICTORIA COMPARTIDA ---
 
-void _showSuccessDialog(BuildContext context, Clue clue) async {
+void _showSuccessDialog(BuildContext context, Clue clue,
+  {String? sessionId, Map<String, dynamic>? resultPayload}) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
   final gameFlowProvider = Provider.of<GameFlowProvider>(context, listen: false);
@@ -915,9 +1003,12 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     clueCompletionFuture = Future.value({'success': true, 'coins_earned': 0});
   } else {
     debugPrint('--- COMPLETING CLUE (background): ${clue.id} ---');
-    clueCompletionFuture =
-        gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN",
-            clueId: clue.id);
+    clueCompletionFuture = gameProvider.completeCurrentClue(
+      clue.riddleAnswer ?? "WIN",
+      clueId: clue.id,
+      sessionId: sessionId,
+      result: resultPayload,
+    );
   }
 
   // También lanzar el refresh de perfil en paralelo (no necesita el RPC aún)

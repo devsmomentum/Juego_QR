@@ -374,9 +374,78 @@ class GameService {
     }
   }
 
+  /// Inicia sesion de minijuego via Edge Function con headers seguros.
+  Future<String?> startMinigameSession({
+    required String clueId,
+    required int minDurationSeconds,
+  }) async {
+    try {
+      final nonce = DateTime.now().microsecondsSinceEpoch.toString();
+      final response = await _supabase.functions.invoke(
+        'minigame-handshake',
+        headers: {
+          ...await _authHeaders(),
+          'X-Client-Nonce': nonce,
+        },
+        body: {
+          'action': 'start',
+          'clueId': int.tryParse(clueId) ?? clueId,
+          'minDurationSeconds': minDurationSeconds,
+        },
+        method: HttpMethod.post,
+      );
+
+      if (response.status != 200 || response.data == null) {
+        debugPrint('[GameService] startMinigameSession failed: ${response.status}');
+        return null;
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      return data['session_id']?.toString();
+    } catch (e) {
+      debugPrint('[GameService] Error startMinigameSession: $e');
+      return null;
+    }
+  }
+
+  /// Verifica y completa el minijuego via Edge Function.
+  Future<Map<String, dynamic>?> verifyAndCompleteMinigame({
+    required String sessionId,
+    required String answer,
+    Map<String, dynamic>? result,
+  }) async {
+    try {
+      final nonce = DateTime.now().microsecondsSinceEpoch.toString();
+      final response = await _supabase.functions.invoke(
+        'minigame-handshake',
+        headers: {
+          ...await _authHeaders(),
+          'X-Client-Nonce': nonce,
+        },
+        body: {
+          'action': 'verify',
+          'sessionId': sessionId,
+          'answer': answer,
+          'result': result ?? {},
+        },
+        method: HttpMethod.post,
+      );
+
+      if (response.status != 200 || response.data == null) {
+        debugPrint('[GameService] verifyAndCompleteMinigame failed: ${response.status}');
+        return null;
+      }
+
+      return response.data as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[GameService] Error verifyAndCompleteMinigame: $e');
+      return null;
+    }
+  }
+
   /// Completa una pista.
   /// Retorna un mapa con el resultado, incluyendo si la carrera se completó.
-  Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
+    Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
       {String? eventId}) async {
     try {
       // [PERFORMANCE OPTIMIZATION] Option 1: Atomic RPC

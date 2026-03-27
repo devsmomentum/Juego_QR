@@ -291,6 +291,59 @@ class AppConfigService {
   }
 
   // ---------------------------------------------------------------------------
+  // MINIGAME MIN DURATIONS
+  // ---------------------------------------------------------------------------
+
+  /// Reads the min duration (seconds) per minigame difficulty.
+  /// Falls back to defaults if missing or invalid.
+  Future<Map<String, int>> getMinigameMinDurationsByDifficulty() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'minigame_min_duration_by_difficulty')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        return _coerceMinigameDurationMap(
+          Map<String, dynamic>.from(response['value'] as Map),
+        );
+      }
+
+      return _defaultMinigameMinDurations();
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error fetching minigame_min_duration_by_difficulty: $e',
+      );
+      return _defaultMinigameMinDurations();
+    }
+  }
+
+  /// Saves the min duration (seconds) per minigame difficulty.
+  Future<bool> updateMinigameMinDurationsByDifficulty(
+    Map<String, int> durations,
+  ) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'minigame_min_duration_by_difficulty',
+        'value': durations,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint(
+        '[AppConfigService] minigame_min_duration_by_difficulty updated: $durations',
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error updating minigame_min_duration_by_difficulty: $e',
+      );
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // VERSION CONFIGURATION
   // ---------------------------------------------------------------------------
 
@@ -341,6 +394,27 @@ class AppConfigService {
         'android_store_url': '',
         'ios_store_url': '',
       };
+
+  Map<String, int> _defaultMinigameMinDurations() => {
+        'easy': 4,
+        'medium': 8,
+        'hard': 12,
+      };
+
+  Map<String, int> _coerceMinigameDurationMap(Map<String, dynamic> map) {
+    int parseInt(dynamic value, int fallback) {
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? fallback;
+      return fallback;
+    }
+
+    final defaults = _defaultMinigameMinDurations();
+    return {
+      'easy': parseInt(map['easy'], defaults['easy'] ?? 4),
+      'medium': parseInt(map['medium'], defaults['medium'] ?? 8),
+      'hard': parseInt(map['hard'], defaults['hard'] ?? 12),
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // PAGO MÓVIL RECIPIENT
