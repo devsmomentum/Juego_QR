@@ -1,161 +1,87 @@
-// @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
+import { encodeHex } from "https://deno.land/std@0.207.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-client-nonce",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-client-nonce",
 };
 
-function getClientIp(req: Request): string {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  if (forwardedFor && forwardedFor.length > 0) {
-    return forwardedFor.split(",")[0].trim();
-  }
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.length > 0) {
-    return realIp.trim();
-  }
-  return req.headers.get("cf-connecting-ip") ?? "";
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-async function sha256Hex(input: string): Promise<string> {
-  if (!input) return "";
-  const data = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+// Honeypot de tiempo: Retraso asíncrono para despistar hackers de timing
+const sleepRandomHoneypot = () => {
+  const ms = Math.floor(Math.random() * (3000 - 1000 + 1) + 1000); // Aleatorio entre 1 y 3 segundos
+  return new Promise(resolve => setTimeout(resolve, ms));
+};
 
-function jsonResponse(body: Record<string, unknown>, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+const hashIp = async (ip: string, salt: string) => {
+  const message = new TextEncoder().encode(ip + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", message);
+  return encodeHex(hashBuffer);
+};
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const ipSalt = Deno.env.get("IP_HASH_SALT") ?? "";
+    const ipSalt = Deno.env.get("IP_HASH_SALT") ?? "default_secure_salt_replace_me";
 
-    if (!supabaseUrl || !serviceKey || !ipSalt) {
-      return jsonResponse({ error: "Server misconfigured" }, 500);
-    }
+    // 1. Extracción y Hasheo de IP Real Inevadible
+    const forwardedFor = req.headers.get("x-forwarded-for");
+    const realIp = forwardedFor ? forwardedFor.split(',')[0].trim() : "unknown_ip";
+    const hashedIp = await hashIp(realIp, ipSalt);
 
-    const supabaseClient = createClient(
-      supabaseUrl,
-      serviceKey,
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization") ?? "" },
-        },
-      },
-    );
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser();
-
-    if (userError || !user) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+      global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, // Auth contextual transferida
+    });
 
     const body = await req.json();
-    const action = body?.action;
-
-    const ip = getClientIp(req);
-    const ipHash = await sha256Hex(`${ipSalt}:${ip}`);
+    const action = body.action;
 
     if (action === "start-session") {
-      const clueId = body?.clue_id;
-      const minDurationSeconds = Number(body?.min_duration_seconds ?? 0);
-
-      if (!clueId || Number.isNaN(minDurationSeconds)) {
-        return jsonResponse({ error: "Invalid payload" }, 400);
-      }
-
-      const { data, error } = await supabaseClient.rpc("start_minigame", {
-        p_clue_id: clueId,
-        p_min_duration_seconds: minDurationSeconds,
-        p_ip_hash: ipHash || null,
+      const { data, error } = await supabaseAdmin.rpc("start_minigame", {
+        p_clue_id: body.clue_id,
+        p_min_duration_seconds: body.min_duration_seconds || 0,
+        p_ip_hash: hashedIp,
       });
 
       if (error) {
-        console.error("[start-session] RPC error:", error);
-        return jsonResponse({ error: "Forbidden" }, 403);
+        await sleepRandomHoneypot(); 
+        const isBlocked = error.message && error.message.includes("Blocked:");
+        // CAMBIO CRÍTICO: Devolver HTTP 200 en lugar de 403 para que el SDK de Flutter no lo convierta en FunctionException
+        return jsonResponse({ success: false, error: isBlocked ? "BLOCKED" : "VALIDATION_FAILED", reference_code: "0xERR-START" }, 200);
       }
-
-      return jsonResponse({ session_id: data });
-    }
-
-    if (action === "status") {
-      const { data, error } = await supabaseClient.rpc(
-        "get_minigame_block_status",
-        {
-          p_ip_hash: ipHash || null,
-        },
-      );
-
-      if (error) {
-        console.error("[status] RPC error:", error);
-        return jsonResponse({ error: "Forbidden" }, 403);
-      }
-
-      return jsonResponse(data ?? {});
+      return jsonResponse({ success: true, session_id: data });
     }
 
     if (action === "verify-session") {
-      const sessionId = body?.session_id;
-      const answer = body?.p_answer ?? "";
-      const result = body?.p_result ?? {};
+      const { data, error } = await supabaseAdmin.rpc("verify_and_complete_minigame", {
+        p_session_id: body.session_id,
+        p_answer: body.p_answer ?? body.answer ?? "",
+        p_result: body.p_result ?? body.result ?? {},
+        p_ip_hash: hashedIp,
+      });
 
-      if (!sessionId) {
-        return jsonResponse({ error: "Missing session_id" }, 400);
-      }
-
-      const { data, error } = await supabaseClient.rpc(
-        "verify_and_complete_minigame",
-        {
-          p_session_id: sessionId,
-          p_answer: answer,
-          p_result: result,
-          p_ip_hash: ipHash || null,
-        },
-      );
-
-      if (error) {
-        console.error("[verify-session] RPC error:", error);
-        return jsonResponse({ error: "Forbidden" }, 403);
-      }
-
-      // Forward security-related rejections (TOO_FAST, SESSION_EXPIRED)
-      // with the full payload so Flutter can show the correct UI.
-      // Real auth errors (Unauthorized, Forbidden, Session not found)
-      // still get 403 to block the request.
-      if (data?.success === false) {
-        const errCode = data?.error;
-        if (errCode === "TOO_FAST" || errCode === "SESSION_EXPIRED") {
-          console.warn("[verify-session] Timing rejection:", errCode);
-          return jsonResponse(data, 200);
-        }
-        console.warn("[verify-session] Security rejection:", errCode);
-        return jsonResponse({ error: "Forbidden" }, 403);
+      if (error || data?.success === false) {
+        await sleepRandomHoneypot(); 
+        return jsonResponse({
+          success: false, 
+          error: data?.error ?? "VALIDATION_FAILED", 
+          reference_code: data?.reference_code ?? "0xERR-992A-4B" 
+        }, 200);
       }
 
       return jsonResponse(data ?? {});
     }
 
-    return jsonResponse({ error: "Invalid action" }, 400);
-  } catch (e) {
-    console.error("[minigame-handshake] Unhandled error:", e);
-    return jsonResponse({ error: "Server error" }, 500);
+    return jsonResponse({ success: false, error: "Invalid action", reference_code: "0xERR-ACTION" }, 200);
+  } catch (err) {
+    return jsonResponse({ success: false, error: "Internal Server Error", reference_code: "0xERR-500" }, 200);
   }
 });

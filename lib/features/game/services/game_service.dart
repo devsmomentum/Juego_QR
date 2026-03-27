@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clue.dart';
 import '../models/power_effect.dart';
 import '../../../shared/models/player.dart';
+import '../../../core/security/security_guard.dart';
 
 class GameService {
   final SupabaseClient _supabase;
@@ -375,36 +376,25 @@ class GameService {
   }
 
   /// Inicia sesion de minijuego via Edge Function con headers seguros.
-  Future<String?> startMinigameSession({
+  Future<Map<String, dynamic>?> startMinigameSession({
     required String clueId,
     required int minDurationSeconds,
   }) async {
     try {
-      final nonce = DateTime.now().microsecondsSinceEpoch.toString();
-      final response = await _supabase.functions.invoke(
-        'minigame-handshake',
-        headers: {
-          ...await _authHeaders(),
-          'X-Client-Nonce': nonce,
-        },
-        body: {
-          'action': 'start-session',
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'start-session',
+        payload: {
           'clue_id': int.tryParse(clueId) ?? clueId,
           'min_duration_seconds': minDurationSeconds,
         },
-        method: HttpMethod.post,
       );
-
-      if (response.status != 200 || response.data == null) {
-        debugPrint('[GameService] startMinigameSession failed: ${response.status}');
-        return null;
-      }
-
-      final data = response.data as Map<String, dynamic>;
-      return data['session_id']?.toString();
+      return response;
+    } on CustomSecurityException catch (e) {
+      debugPrint('[GameService] Security Exception (startSession): $e');
+      return {'success': false, 'error': e.referenceCode == '0xERR-NET-PKT' ? e.message : e.referenceCode};
     } catch (e) {
       debugPrint('[GameService] Error startMinigameSession: $e');
-      return null;
+      return {'success': false, 'error': '0xERR-UNKNOWN-CATCH'};
     }
   }
 
@@ -415,28 +405,18 @@ class GameService {
     Map<String, dynamic>? result,
   }) async {
     try {
-      final nonce = DateTime.now().microsecondsSinceEpoch.toString();
-      final response = await _supabase.functions.invoke(
-        'minigame-handshake',
-        headers: {
-          ...await _authHeaders(),
-          'X-Client-Nonce': nonce,
-        },
-        body: {
-          'action': 'verify-session',
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'verify-session',
+        payload: {
           'session_id': sessionId,
           'p_answer': answer,
           'p_result': result ?? {},
         },
-        method: HttpMethod.post,
       );
-
-      if (response.status != 200 || response.data == null) {
-        debugPrint('[GameService] verifyAndCompleteMinigame failed: ${response.status}');
-        return null;
-      }
-
-      return response.data as Map<String, dynamic>;
+      return response;
+    } on CustomSecurityException catch (e) {
+      debugPrint('[GameService] Security Exception (verifySession): $e');
+      return {'success': false, 'error': e.referenceCode == '0xERR-NET-PKT' ? e.message : e.referenceCode};
     } catch (e) {
       debugPrint('[GameService] Error verifyAndCompleteMinigame: $e');
       return null;

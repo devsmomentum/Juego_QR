@@ -648,7 +648,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
     }
   }
 
-  Future<String?> startMinigameSession({
+  Future<Map<String, dynamic>?> startMinigameSession({
     required String clueId,
     required int minDurationSeconds,
   }) async {

@@ -219,47 +219,85 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     final gameProvider = context.read<GameProvider>();
     final minDuration = _minDurationSecondsForClue(widget.clue);
 
-    final sessionId = await gameProvider.startMinigameSession(
+    final payload = await gameProvider.startMinigameSession(
       clueId: widget.clue.id,
       minDurationSeconds: minDuration,
     );
 
     if (!mounted) return;
     
+    final sessionId = payload?['session_id'] as String?;
+    final isBlocked = payload?['error'] == 'BLOCKED';
+    final serverError = payload?['error'];
+
     if (sessionId == null) {
-      // Bloqueo duro: el backend rechazó la sesión (probablemente porque está bloqueado)
       setState(() => _isActive = false);
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1D),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
-          ),
-          title: const Text(
-            'Cuenta Bloqueada Temporalmente',
-            style: TextStyle(
-              color: AppTheme.dangerRed,
-              fontWeight: FontWeight.bold,
+      
+      if (isBlocked) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
             ),
-          ),
-          content: const Text(
-            'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
-            style: TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                if (mounted) Navigator.of(context).pop();
-              },
-              child: const Text('ENTENDIDO', style: TextStyle(color: AppTheme.dangerRed)),
+            title: const Text(
+              'Cuenta Bloqueada',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ],
-        ),
-      );
+            content: const Text(
+              'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              if (player?.role == 'admin')
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await Supabase.instance.client.rpc('test_remove_my_ban');
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      if (mounted) Navigator.of(context).pop();
+                    } catch (e) {
+                      debugPrint('Error removiendo ban: $e');
+                    }
+                  },
+                  child: const Text('REMOVER BAN (ADMIN)', style: TextStyle(color: Colors.white)),
+                ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: const Text('ENTENDIDO', style: TextStyle(color: AppTheme.dangerRed)),
+              ),
+            ],
+          ),
+        );
+      } else {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            title: const Text('Error del Servidor', style: TextStyle(color: AppTheme.dangerRed)),
+            content: Text('No pudimos iniciar el minijuego. Código: $serverError', style: const TextStyle(color: Colors.white70)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: const Text('ENTENDIDO', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      }
       return;
     }
 
