@@ -33,20 +33,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    // Enforce light mode for the premium "White & Gold" admin experience
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-        if (playerProvider.isDarkMode) {
-          playerProvider.toggleDarkMode(false);
-        }
-      }
-    });
-  }
-
   final List<String> _titles = [
     "Dashboard",
     "Crear Evento",
@@ -124,6 +110,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final playerProvider = context.watch<PlayerProvider>();
+    final bool isDarkMode = playerProvider.isDarkMode;
+    final Color goldActionColor =
+        isDarkMode ? AppTheme.dGoldMain : AppTheme.lGoldAction;
+    final Color goldTextColor =
+        isDarkMode ? AppTheme.dGoldLight : AppTheme.lGoldText;
+
     final List<Widget> views = [
       _WelcomeDashboardView(
         onNavigate: (index) {
@@ -151,9 +144,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const GlobalConfigScreen(),
     ];
 
-    return Theme(
-      data: AppTheme.lightTheme,
-      child: LayoutBuilder(
+    return LayoutBuilder(
       builder: (context, constraints) {
         final bool isDark = Theme.of(context).brightness == Brightness.dark;
         
@@ -170,7 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Theme.of(context).cardTheme.color,
                     border: Border(
                       bottom: BorderSide(
-                        color: AppTheme.lGoldAction.withOpacity(0.12),
+                        color: goldActionColor.withOpacity(isDark ? 0.2 : 0.12),
                         width: 1,
                       ),
                     ),
@@ -183,11 +174,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppTheme.lGoldAction.withOpacity(0.12),
+                              color: goldActionColor.withOpacity(isDark ? 0.22 : 0.12),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Icon(Icons.admin_panel_settings,
-                                color: AppTheme.lGoldAction, size: 22),
+                            child: Icon(Icons.admin_panel_settings,
+                                color: goldActionColor, size: 22),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -219,6 +210,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isDarkMode
+                                        ? Icons.dark_mode
+                                        : Icons.light_mode,
+                                    color: goldActionColor,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Switch.adaptive(
+                                    value: isDarkMode,
+                                    onChanged: (value) {
+                                      playerProvider.toggleDarkMode(value);
+                                    },
+                                    activeColor: goldActionColor,
+                                    activeTrackColor:
+                                        goldActionColor.withOpacity(0.35),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 12),
                               if (headerConstraints.maxWidth > 650) ...[
                                 Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -242,19 +256,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(width: 12),
                               ],
-                               CircleAvatar(
-                                backgroundColor: AppTheme.lGoldAction,
+                                CircleAvatar(
+                                backgroundColor: goldActionColor,
                                 radius: 16,
                                 child: const Text("A",
                                     style: TextStyle(
                                         fontSize: 14,
-                                        color: Colors.white,
+                                    color: Colors.white,
                                         fontWeight: FontWeight.bold)),
                               ),
                               SizedBox(width: isNarrow ? 4 : 8),
                               IconButton(
                                 icon: Icon(Icons.sports_esports,
-                                    color: isDark ? AppTheme.dGoldMain : AppTheme.lGoldAction, size: 20),
+                                  color: goldActionColor, size: 20),
                                 tooltip: "Modo Jugador",
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
@@ -293,7 +307,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Theme.of(context).cardTheme.color,
                     border: Border(
                       bottom: BorderSide(
-                        color: AppTheme.lGoldAction.withOpacity(0.15),
+                        color: goldActionColor.withOpacity(isDark ? 0.22 : 0.15),
                         width: 1,
                       ),
                     ),
@@ -311,8 +325,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     itemCount: _titles.length,
                     itemBuilder: (context, index) {
                       final isSelected = _selectedIndex == index;
-                      final goldActionColor = AppTheme.lGoldAction;
-                      final goldTextColor = AppTheme.lGoldText;
 
                       return GestureDetector(
                         onTap: () {
@@ -385,8 +397,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       },
-    ),
-    );
+      );
   }
 }
 
@@ -435,6 +446,9 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color accentGold = isDark ? AppTheme.dGoldMain : AppTheme.lGoldAction;
+
     return Center(
       child: SingleChildScrollView(
         child: Padding(
@@ -442,8 +456,8 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-               const Icon(Icons.analytics_rounded, size: 80, 
-                  color: AppTheme.lGoldAction),
+              Icon(Icons.analytics_rounded,
+                  size: 80, color: accentGold),
               const SizedBox(height: 20),
               Text(
                 "Bienvenido al Panel de Administración",
@@ -469,7 +483,7 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
                    _SummaryCard(
                        title: "Usuarios Activos",
                        value: _activeUsers,
-                       color: AppTheme.lGoldAction),
+                       color: accentGold),
                    _SummaryCard(
                        title: "Eventos Creados",
                        value: _createdEvents,
@@ -495,6 +509,7 @@ class _MinigamesListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final List<Map<String, dynamic>> minigames = [
       {
         'title': 'Secuencia de Memoria',
@@ -557,8 +572,9 @@ class _MinigamesListView extends StatelessWidget {
                             fontSize: 18)),
                     subtitle: Text(mg['subtitle'],
                         style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
-                    trailing: const Icon(Icons.arrow_forward_ios,
-                        color: Colors.white24, size: 16),
+                    trailing: Icon(Icons.arrow_forward_ios,
+                      color: isDark ? Colors.white38 : Colors.black26,
+                      size: 16),
                     onTap: () {
                       Navigator.push(context,
                           MaterialPageRoute(builder: (_) => mg['screen']));
@@ -588,6 +604,7 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -598,10 +615,10 @@ class _SummaryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border(left: BorderSide(color: color, width: 4)),
             boxShadow: [
-             BoxShadow(
-                   color: AppTheme.lGoldAction.withOpacity(0.08),
-                   blurRadius: 15,
-                   offset: const Offset(0, 5))
+              BoxShadow(
+                  color: color.withOpacity(isDark ? 0.2 : 0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5))
             ]),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
