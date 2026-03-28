@@ -261,18 +261,24 @@ class _WithdrawalPlansManagementScreenState
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.1)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.info_outline,
-                              color: AppTheme.lGoldAction.withOpacity(0.7), size: 18),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Al usuario se le enviará: \$${(double.tryParse(amountController.text) ?? 0) * _exchangeRate} VES',
-                              style: TextStyle(
-                                  color: textColor?.withOpacity(0.7), fontSize: 12),
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.info_outline, color: AppTheme.lGoldAction, size: 16),
+                              const SizedBox(width: 8),
+                              Text('Simulación de Recepción:',
+                                  style: TextStyle(
+                                      color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
                           ),
+                          const SizedBox(height: 8),
+                          _buildSourceRow(Icons.credit_card, 'Stripe (USD):', 
+                              '\$${(double.tryParse(amountController.text) ?? 0).toStringAsFixed(2)}', textColor),
+                          const SizedBox(height: 4),
+                          _buildSourceRow(Icons.phone_android, 'Pago Móvil (VES):', 
+                              '${((double.tryParse(amountController.text) ?? 0) * _exchangeRate).toStringAsFixed(2)} Bs.', textColor),
                         ],
                       ),
                     ),
@@ -703,14 +709,28 @@ class _WithdrawalPlansManagementScreenState
                         CoinImage(size: isNarrow ? 10 : 11),
                       ],
                     ),
-                    Text(
-                      '${vesAmount.toStringAsFixed(2)} VES',
-                      style: TextStyle(
-                        color: plan.isActive ? textColor?.withOpacity(0.4) : Colors.grey.withOpacity(0.5),
-                        fontSize: isNarrow ? 9 : 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        const Icon(Icons.credit_card, color: Colors.blueAccent, size: 10),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${plan.amountUsd.toStringAsFixed(2)} USD',
+                          style: TextStyle(
+                            color: plan.isActive ? textColor?.withOpacity(0.5) : Colors.grey.withOpacity(0.5),
+                            fontSize: isNarrow ? 9 : 11,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.phone_android, color: AppTheme.secondaryPink, size: 10),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${vesAmount.toStringAsFixed(2)} VES',
+                          style: TextStyle(
+                            color: plan.isActive ? textColor?.withOpacity(0.4) : Colors.grey.withOpacity(0.5),
+                            fontSize: isNarrow ? 9 : 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -752,6 +772,18 @@ class _WithdrawalPlansManagementScreenState
           );
         },
       ),
+    );
+  }
+
+  Widget _buildSourceRow(IconData icon, String label, String value, Color? textColor) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: textColor?.withOpacity(0.5)),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(color: textColor?.withOpacity(0.6), fontSize: 12)),
+        const Spacer(),
+        Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 12)),
+      ],
     );
   }
 }

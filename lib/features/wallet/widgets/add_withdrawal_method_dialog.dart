@@ -78,11 +78,23 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
       return;
     }
 
-    if (_selectedType == 'stripe' && _emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa tu email de Stripe')),
-      );
-      return;
+    if (_selectedType == 'stripe') {
+      final email = _emailController.text.trim();
+      if (email.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ingresa tu email de Stripe')),
+        );
+        return;
+      }
+      final bool emailValid = 
+          RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
+              .hasMatch(email);
+      if (!emailValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ingresa un email válido')),
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -93,8 +105,9 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
       final player = playerProvider.currentPlayer;
 
       if (player == null) throw Exception('Usuario no identificado');
-      if (player.cedula == null || player.phone == null) {
-         throw Exception('Perfil incompleto (Faltan datos de identidad)');
+      if (_selectedType == 'pago_movil' && 
+          (player.cedula == null || player.phone == null)) {
+         throw Exception('Perfil incompleto (DNI y Teléfono requeridos para Pago Móvil)');
       }
 
       final data = PaymentMethodCreate(
