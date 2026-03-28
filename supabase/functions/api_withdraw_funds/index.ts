@@ -55,7 +55,7 @@ serve(async (req) => {
       {
         p_user_id: user.id,
         p_plan_id: plan_id,
-        p_payment_method_id: payment_method_id,
+        p_payment_method_id: payment_method_id ?? null,
       },
     );
 
@@ -100,7 +100,8 @@ serve(async (req) => {
             email: finalStripeEmail,
             amount_usd: amountUsd,
             transaction_id: requestId,
-          }
+          },
+          pending: true,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );

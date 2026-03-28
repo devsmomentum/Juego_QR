@@ -62,8 +62,10 @@ class TransactionItem {
   bool get canResumePayment => isPending && paymentUrl != null && paymentUrl!.isNotEmpty;
 
   bool get canValidateMpay => isPending && gateway == 'pago_movil' && pagoOrderId != null;
+  
+  bool get canCancelWithdrawal => isPending && (type == 'withdrawal' || description.toLowerCase().contains('retiro'));
 
-  bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order');
+  bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order' || canCancelWithdrawal);
 
   Color get statusColor {
     switch (status.toLowerCase()) {

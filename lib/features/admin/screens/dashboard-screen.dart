@@ -11,6 +11,8 @@ import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 import 'clover_plans_management_screen.dart';
 import 'withdrawal_plans_management_screen.dart';
+import 'withdrawal_requests_management_screen.dart';
+import 'global_game_requests_screen.dart';
 import 'global_config_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -40,7 +42,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Modo Online",
     "Usuarios",
     "Compras",
-    "Retiros",
+    "Planes Retiro",
+    "Solicitudes",
+    "Historial Retiros",
     "Stripe",
     "Métricas",
     "Minijuegos",
@@ -57,6 +61,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.people,
     Icons.local_offer,
     Icons.money_off,
+    Icons.pending_actions,
+    Icons.receipt_long,
     Icons.credit_card,
     Icons.analytics,
     Icons.games,
@@ -136,6 +142,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const UserManagementScreen(),
       const CloverPlansManagementScreen(),
       const WithdrawalPlansManagementScreen(),
+      const GlobalGameRequestsScreen(),
+      const WithdrawalRequestsManagementScreen(),
       const StripeOrdersScreen(),
       const EventMetricsScreen(),
       const _MinigamesListView(),

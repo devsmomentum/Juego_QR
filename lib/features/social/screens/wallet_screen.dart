@@ -453,20 +453,40 @@ class _WalletScreenState extends State<WalletScreen> {
                                             
                                             if (confirm != true) return;
 
-                                            LoadingOverlay.show(context, message: 'Cancelando orden...');
                                             try {
-                                              final success = await _transactionRepository.cancelOrder(_recentTransactions[index].id);
+                                              bool success;
+                                              final currentItem = _recentTransactions[index];
+                                              if (currentItem.canCancelWithdrawal) {
+                                                LoadingOverlay.show(context, message: 'Cancelando retiro y devolviendo saldo...');
+                                                success = await _transactionRepository.cancelWithdrawal(currentItem.id);
+                                              } else {
+                                                LoadingOverlay.show(context, message: 'Cancelando orden...');
+                                                success = await _transactionRepository.cancelOrder(currentItem.id);
+                                              }
+                                              
                                               if (mounted) LoadingOverlay.hide(context);
                                               if (mounted) {
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   SnackBar(
-                                                    content: Text(success ? 'Orden cancelada' : 'Error al cancelar'),
+                                                    content: Text(success 
+                                                      ? (currentItem.canCancelWithdrawal ? 'Retiro cancelado y tréboles devueltos' : 'Orden cancelada') 
+                                                      : 'Error al cancelar'),
                                                     backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
                                                   ),
                                                 );
+                                                // Refresh balance if withdrawal was cancelled
+                                                if (success && currentItem.canCancelWithdrawal) {
+                                                  Provider.of<PlayerProvider>(context, listen: false).refreshProfile();
+                                                }
                                               }
-                                            } catch (_) {
+                                            } catch (e) {
+                                              debugPrint('Error in cancellation: $e');
                                               if (mounted) LoadingOverlay.hide(context);
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.dangerRed),
+                                                );
+                                              }
                                             } finally {
                                               if (mounted) _loadRecentTransactions();
                                             }

@@ -407,29 +407,34 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
 
                                       if (confirm != true) return;
 
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content:
-                                                Text('Cancelando orden...')),
-                                      );
-
                                       try {
-                                        final success = await _repository
-                                            .cancelOrder(item.id);
+                                        bool success;
+                                        if (item.canCancelWithdrawal) {
+                                          LoadingOverlay.show(context, message: 'Cancelando retiro y devolviendo saldo...');
+                                          success = await _repository.cancelWithdrawal(item.id);
+                                        } else {
+                                          LoadingOverlay.show(context, message: 'Cancelando orden...');
+                                          success = await _repository.cancelOrder(item.id);
+                                        }
+
+                                        if (mounted) LoadingOverlay.hide(context);
                                         if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
+                                          ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
-                                              content: Text(success
-                                                  ? 'Orden cancelada exitosamente'
-                                                  : 'Error al cancelar'),
-                                              backgroundColor: success
-                                                  ? AppTheme.successGreen
-                                                  : AppTheme.dangerRed,
+                                              content: Text(success 
+                                                ? (item.canCancelWithdrawal ? 'Retiro cancelado y tréboles devueltos' : 'Orden cancelada exitosamente')
+                                                : 'Error al cancelar'),
+                                              backgroundColor: success ? AppTheme.successGreen : AppTheme.dangerRed,
                                             ),
                                           );
+                                          // Refresh balance in background if withdrawal cancelled
+                                          if (success && item.canCancelWithdrawal) {
+                                            Provider.of<WalletProvider>(context, listen: false).refreshBalance();
+                                          }
                                         }
+                                      } catch (e) {
+                                        if (mounted) LoadingOverlay.hide(context);
+                                        debugPrint('Error in cancellation: $e');
                                       } finally {
                                         _loadData();
                                       }
