@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
@@ -52,7 +53,9 @@ class SecurityGuard {
     try {
       await assertDeviceIntegrity();
 
-      final nonce = DateTime.now().microsecondsSinceEpoch.toString();
+      final secureRandom = Random.secure();
+      final nonceBytes = List<int>.generate(16, (_) => secureRandom.nextInt(256));
+      final nonce = nonceBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       final session = _supabase.auth.currentSession;
       
       final response = await _supabase.functions.invoke(

@@ -89,6 +89,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   bool _isActive = true;
   bool _isSuccessFlowActive = false; // Prevents double success/navigation
   String? _minigameSessionId;
+  String? _challengeToken;
   DateTime? _minigameStartLocal;
   bool _sessionReady = false;
   late AppConfigService _configService;
@@ -227,6 +228,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     if (!mounted) return;
     
     final sessionId = payload?['session_id'] as String?;
+    final challengeToken = payload?['challenge_token'] as String?;
     final isBlocked = payload?['error'] == 'BLOCKED';
     final serverError = payload?['error'];
 
@@ -303,6 +305,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
     setState(() {
       _minigameSessionId = sessionId;
+      _challengeToken = challengeToken;
       _minigameStartLocal = DateTime.now();
       _sessionReady = true;
     });
@@ -583,6 +586,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       context,
       clue,
       sessionId: _minigameSessionId,
+      challengeToken: _challengeToken,
       resultPayload: result,
       onValidationSuccess: _finishLegally,
       onValidationFailure: _resetSuccessFlow,
@@ -600,6 +604,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     setState(() {
       _isSuccessFlowActive = false;
       _minigameSessionId = null;
+      _challengeToken = null;
       _minigameStartLocal = null;
       _sessionReady = false;
     });
@@ -1102,6 +1107,7 @@ void _showSuccessDialog(
   BuildContext context,
   Clue clue, {
   String? sessionId,
+  String? challengeToken,
   Map<String, dynamic>? resultPayload,
   VoidCallback? onValidationSuccess,
   VoidCallback? onValidationFailure,
@@ -1132,6 +1138,7 @@ void _showSuccessDialog(
       clue.riddleAnswer ?? "WIN",
       clueId: clue.id,
       sessionId: sessionId,
+      challengeToken: challengeToken,
       result: resultPayload,
     );
   }

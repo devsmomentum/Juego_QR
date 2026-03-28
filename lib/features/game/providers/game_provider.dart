@@ -721,7 +721,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   /// [clueId] DEBE pasarse siempre que esté disponible para evitar race conditions
   /// con _currentClueIndex (puede cambiar por fetchClues concurrentes).
     Future<Map<String, dynamic>?> completeCurrentClue(String answer,
-      {String? clueId, String? sessionId, Map<String, dynamic>? result}) async {
+      {String? clueId, String? sessionId, String? challengeToken, Map<String, dynamic>? result}) async {
     String targetId;
 
     if (clueId != null) {
@@ -765,6 +765,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
           ? await _gameService.verifyAndCompleteMinigame(
               sessionId: sessionId,
               answer: answer,
+              challengeToken: challengeToken,
               result: result,
             )
           : await _gameService.completeClue(targetId, answer,

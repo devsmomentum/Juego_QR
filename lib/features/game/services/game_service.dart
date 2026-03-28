@@ -402,6 +402,7 @@ class GameService {
   Future<Map<String, dynamic>?> verifyAndCompleteMinigame({
     required String sessionId,
     required String answer,
+    String? challengeToken,
     Map<String, dynamic>? result,
   }) async {
     try {
@@ -411,6 +412,7 @@ class GameService {
           'session_id': sessionId,
           'p_answer': answer,
           'p_result': result ?? {},
+          if (challengeToken != null) 'challenge_token': challengeToken,
         },
       );
       return response;
@@ -423,16 +425,13 @@ class GameService {
     }
   }
 
-  /// Completa una pista.
-  /// Retorna un mapa con el resultado, incluyendo si la carrera se completó.
+  /// Completa una pista via admin RPC (direct access revoked for regular users).
+  /// Only admins can call this path; regular users must use verifyAndCompleteMinigame.
     Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
       {String? eventId}) async {
     try {
-      // [PERFORMANCE OPTIMIZATION] Option 1: Atomic RPC
-      // Consolidates 15+ DB operations (validation, progress, ranking, rewards)
-      // into a single database roundtrip for high-concurrency (50+ users).
-      debugPrint('[GameService] 📡 RPC submit_clue_answer: clueId=$clueId, answer=$answer');
-      final response = await _supabase.rpc('submit_clue_answer', params: {
+      debugPrint('[GameService] 📡 RPC admin_complete_clue: clueId=$clueId');
+      final response = await _supabase.rpc('admin_complete_clue', params: {
         'p_clue_id': int.tryParse(clueId) ?? clueId,
         'p_answer': answer,
       }).timeout(const Duration(seconds: 12));
@@ -497,20 +496,21 @@ class GameService {
     }
   }
 
-  /// Salta una pista.
-  /// [PERFORMANCE] Migrado de Edge Function a RPC atómico.
+  /// Salta una pista via Edge Function (admin-only server-side).
   Future<bool> skipClue(String clueId) async {
     try {
-      final response = await _supabase.rpc('skip_clue_rpc', params: {
-        'p_clue_id': int.tryParse(clueId) ?? clueId,
-      });
-
-      if (response != null && response is Map<String, dynamic>) {
-        return response['success'] == true;
-      }
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'skip-clue',
+        payload: {
+          'clue_id': int.tryParse(clueId) ?? clueId,
+        },
+      );
+      return response?['success'] == true;
+    } on CustomSecurityException catch (e) {
+      debugPrint('Error skipping clue (Security): $e');
       return false;
     } catch (e) {
-      debugPrint('Error skipping clue (RPC): $e');
+      debugPrint('Error skipping clue: $e');
       return false;
     }
   }
