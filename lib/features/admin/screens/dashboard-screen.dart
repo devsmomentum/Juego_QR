@@ -24,6 +24,8 @@ import 'online_automation_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
 import 'event_metrics_screen.dart';
 import 'stripe_orders_screen.dart';
+import 'merchandise_management_screen.dart';
+import 'merchandise_redemptions_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -46,11 +48,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Solicitudes",
     "Historial Retiros",
     "Stripe",
+    "Tienda Admin",
+    "Canjes Merch",
     "Métricas",
     "Minijuegos",
     "Patrocinadores",
     "Auditoría",
-    "Configuración"
+    "Configuración",
   ];
 
   final List<IconData> _icons = [
@@ -64,6 +68,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.pending_actions,
     Icons.receipt_long,
     Icons.credit_card,
+    Icons.storefront,
+    Icons.redeem,
     Icons.analytics,
     Icons.games,
     Icons.business_center,
@@ -145,6 +151,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const GlobalGameRequestsScreen(),
       const WithdrawalRequestsManagementScreen(),
       const StripeOrdersScreen(),
+      const MerchandiseManagementScreen(),
+      const MerchandiseRedemptionsScreen(),
       const EventMetricsScreen(),
       const _MinigamesListView(),
       const SponsorsManagementScreen(),

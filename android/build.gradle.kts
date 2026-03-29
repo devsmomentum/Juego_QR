@@ -26,6 +26,30 @@ subprojects {
     afterEvaluate {
         if (project.hasProperty("android")) {
             val android = project.extensions.getByName("android") as com.android.build.gradle.BaseExtension
+            
+            // [FIX] Inject namespace if missing (required by AGP 8.0+)
+            if (android.namespace == null) {
+                val manifestFile = project.file("src/main/AndroidManifest.xml")
+                if (manifestFile.exists()) {
+                    val manifestXml = manifestFile.readText()
+                    val packageRegex = Regex("""package="([^"]+)"""")
+                    val matchResult = packageRegex.find(manifestXml)
+                    if (matchResult != null) {
+                        android.namespace = matchResult.groupValues[1]
+                        println("DEBUG: Injected namespace ${android.namespace} for project ${project.name}")
+                    }
+                }
+                
+                // Fallback if no package found in manifest
+                if (android.namespace == null) {
+                    val projectName = project.name
+                    android.namespace = when (projectName) {
+                        "flutter_jailbreak_detection" -> "appmire.be.flutterjailbreakdetection"
+                        else -> "com.example.${projectName.replace("-", "_")}"
+                    }
+                }
+            }
+
             android.compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_17
                 targetCompatibility = JavaVersion.VERSION_17

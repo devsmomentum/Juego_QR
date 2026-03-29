@@ -60,12 +60,12 @@ serve(async (req) => {
         }
 
         if (order.status !== 'pending') {
-             throw new Error(`No se puede cancelar una orden con estado: ${order.status}`)
+            throw new Error(`No se puede cancelar una orden con estado: ${order.status}`)
         }
 
         const externalId = order.pago_pago_order_id
         if (!externalId) {
-             throw new Error("ID de orden externa no encontrado")
+            throw new Error("ID de orden externa no encontrado")
         }
 
         // 2. Get API Key & Config
@@ -78,10 +78,10 @@ serve(async (req) => {
         const existingExtra = order.extra_data ?? {}
         const { error: updateError } = await supabaseAdmin
             .from('clover_orders')
-            .update({ 
+            .update({
                 status: 'cancelled',
                 updated_at: new Date().toISOString(),
-                extra_data: { 
+                extra_data: {
                     ...existingExtra,
                     cancelled_at: new Date().toISOString(),
                 }
@@ -109,39 +109,39 @@ serve(async (req) => {
             body: JSON.stringify({ order_id: externalId }),
             signal: AbortSignal.timeout(10_000),
         })
-        .then(async (response) => {
-            const data = await response.json()
-            if (!response.ok) {
-                const errMsg = data?.message || data?.error || ''
-                if (!errMsg.toLowerCase().includes('already cancelled')) {
-                    console.warn("[api_cancel_order] Provider cancel failed:", data)
+            .then(async (response) => {
+                const data = await response.json()
+                if (!response.ok) {
+                    const errMsg = data?.message || data?.error || ''
+                    if (!errMsg.toLowerCase().includes('already cancelled')) {
+                        console.warn("[api_cancel_order] Provider cancel failed:", data)
+                    }
                 }
-            }
-            await supabaseAdmin
-                .from('clover_orders')
-                .update({
-                    extra_data: {
-                        ...existingExtra,
-                        cancelled_at: new Date().toISOString(),
-                        cancellation_response: data,
-                    }
-                })
-                .eq('id', order_id)
-            console.log(`[api_cancel_order] Provider cancel synced for ${order_id}`)
-        })
-        .catch((providerError) => {
-            console.warn(`[api_cancel_order] Provider cancel failed/timed out for ${order_id}:`, providerError)
-            supabaseAdmin
-                .from('clover_orders')
-                .update({
-                    extra_data: {
-                        ...existingExtra,
-                        cancelled_at: new Date().toISOString(),
-                        provider_cancel_error: String(providerError),
-                    }
-                })
-                .eq('id', order_id)
-        })
+                await supabaseAdmin
+                    .from('clover_orders')
+                    .update({
+                        extra_data: {
+                            ...existingExtra,
+                            cancelled_at: new Date().toISOString(),
+                            cancellation_response: data,
+                        }
+                    })
+                    .eq('id', order_id)
+                console.log(`[api_cancel_order] Provider cancel synced for ${order_id}`)
+            })
+            .catch((providerError) => {
+                console.warn(`[api_cancel_order] Provider cancel failed/timed out for ${order_id}:`, providerError)
+                supabaseAdmin
+                    .from('clover_orders')
+                    .update({
+                        extra_data: {
+                            ...existingExtra,
+                            cancelled_at: new Date().toISOString(),
+                            provider_cancel_error: String(providerError),
+                        }
+                    })
+                    .eq('id', order_id)
+            })
 
         // Return immediately — DB is already updated
         return new Response(JSON.stringify({ success: true, message: "Orden cancelada exitosamente" }), {

@@ -34,6 +34,7 @@ import 'event_waiting_screen.dart';
 import '../models/event.dart';
 import '../widgets/safe_image.dart';
 import '../../mall/screens/mall_screen.dart';
+import '../../mall/screens/merchandise_store_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../widgets/scenario_countdown.dart';
@@ -1832,7 +1833,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                   _buildNavItem(1, Icons.explore_outlined, 'Escenarios'),
                   _buildNavItem(
                       2, Icons.account_balance_wallet_outlined, 'Wallet'),
-                  _buildNavItem(3, Icons.person_outline, 'Perfil'),
+                  _buildNavItem(3, Icons.storefront_outlined, 'Tienda'),
+                  _buildNavItem(4, Icons.person_outline, 'Perfil'),
                 ],
               ),
             ),
@@ -2119,7 +2121,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               ),
               body: (playerProvider.currentPlayer != null &&
                       !playerProvider.currentPlayer!.emailVerified &&
-                      _navIndex != 3)
+                      _navIndex != 4)
                   ? _buildVerificationBlock()
                   : IndexedStack(
                       index: _navIndex,
@@ -2129,6 +2131,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                         // WalletScreen and ProfileScreen are separate widgets,
                         // their RefreshIndicators should be implemented within their own files.
                         WalletScreen(hideScaffold: true),
+                        const MerchandiseStoreScreen(),
                         const ProfileScreen(hideScaffold: true),
                       ],
                     ),
