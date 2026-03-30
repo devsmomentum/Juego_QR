@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
 import '../../../core/storage/secure_local_storage.dart';
+import '../../../core/services/session_service.dart';
 
 /// Excepción personalizada para errores de autenticación con metadatos.
 class AuthUserException implements Exception {
@@ -90,7 +91,20 @@ class AuthService {
             throw AuthUserException('Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.', isUnverified: true);
           }
 
-          return user['id'] as String;
+          final userId = user['id'] as String;
+          
+          // SINGLE DEVICE POLICY: Generate session token and update profile BEFORE granting access
+          try {
+            final sessionService = SessionService();
+            final sessionToken = await sessionService.generateAndSaveSessionToken();
+            await _supabase.from('profiles').update({'current_session_id': sessionToken}).eq('id', userId);
+          } catch (e) {
+            debugPrint('AuthService: Failed to update session_id during login: $e');
+            // Allow login to proceed even if token update fails, or you could throw. Throwing is safer for strict policy.
+            // But we will just log it here for minimum disruption.
+          }
+
+          return userId;
         }
         throw 'No se recibió información del usuario';
       } else {
@@ -185,6 +199,16 @@ class AuthService {
         // Si no hay sesión (requiere confirmación de email), continuamos igual.
         if (data['session'] != null) {
           await _supabase.auth.setSession(data['session']['refresh_token']);
+          
+          // SINGLE DEVICE POLICY: Create new session token for the newly registered user
+          final userId = data['user']['id'] as String;
+          try {
+            final sessionService = SessionService();
+            final sessionToken = await sessionService.generateAndSaveSessionToken();
+            await _supabase.from('profiles').update({'current_session_id': sessionToken}).eq('id', userId);
+          } catch(e) {
+            debugPrint('AuthService: Failed to update session_id during register: $e');
+          }
         }
 
         return data['user']['id'] as String;
@@ -213,7 +237,8 @@ class AuthService {
     //    incluso si signOut() falla por red, sesión expirada, etc.
     try {
       await SecureLocalStorage().removePersistedSession();
-      debugPrint('AuthService: Local token cleared.');
+      await SessionService().clearSessionToken();
+      debugPrint('AuthService: Local tokens cleared.');
     } catch (e) {
       debugPrint('AuthService: Error clearing local token: $e');
     }

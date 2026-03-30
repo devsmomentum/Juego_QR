@@ -96,6 +96,26 @@ serve(async (req) => {
         }
       }
 
+      // Enforce single session: remove all OTHER sessions
+      const userSupabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        {
+          global: {
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          },
+        }
+      );
+      
+      // We don't await/throw here to not break the login flow if something minor fails,
+      // but typically we can just await it since it's an internal call.
+      try {
+        await userSupabase.auth.signOut({ scope: "others" });
+        console.log(`Revoked other sessions for user ${data.user.id}`);
+      } catch (signOutError) {
+        console.error("Failed to revoke other sessions:", signOutError);
+      }
+
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

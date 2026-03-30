@@ -2033,18 +2033,79 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
   }
 }
 
-  IconData _getStampIcon(int index) {
-    return Icons.workspace_premium; // More premium looking icon
+class _ScanlinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.05)
+      ..strokeWidth = 1.0;
+
+    for (double y = 0; y < size.height; y += 4) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
   }
 
-  List<Color> _getStampGradient(int index) {
-    // Variety of cyberpunk gradients
-    final gradients = [
-      [const Color(0xFF00F2FF), const Color(0xFF0066FF)], // Cyan/Blue
-      [const Color(0xFFFF00D4), const Color(0xFF7000FF)], // Pink/Purple
-      [const Color(0xFFADFF2F), const Color(0xFF32CD32)], // Neon Lime
-      [const Color(0xFFFFD700), const Color(0xFFFFA500)], // Gold/Orange
-      [const Color(0xFFFF4500), const Color(0xFFFF0000)], // Red/Bright Orange
-    ];
-    return gradients[index % gradients.length];
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CornerPainter extends CustomPainter {
+  final Color color;
+  _CornerPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    final path = Path()
+      ..moveTo(0, 15)
+      ..lineTo(0, 0)
+      ..lineTo(15, 0);
+
+    canvas.drawPath(path, paint);
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _OptionPulseAnimation extends StatefulWidget {
+  final Widget child;
+  const _OptionPulseAnimation({required this.child});
+
+  @override
+  State<_OptionPulseAnimation> createState() => _OptionPulseAnimationState();
+}
+
+class _OptionPulseAnimationState extends State<_OptionPulseAnimation>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.9, end: 1.1).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _animation,
+      child: widget.child,
+    );
+  }
+}

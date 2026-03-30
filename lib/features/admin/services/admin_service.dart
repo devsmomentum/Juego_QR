@@ -78,6 +78,14 @@ class AdminService {
           'new_status': ban ? 'banned' : 'active',
         },
       );
+
+      // Si se está baneando, revocar todas sus sesiones activas para expulsarlo inmediatamente
+      if (ban) {
+        await _supabase.functions.invoke(
+          'admin-actions/revoke-sessions',
+          body: {'userId': userId},
+        );
+      }
     } catch (e) {
       debugPrint('AdminService: Error toggling ban: $e');
       rethrow;
