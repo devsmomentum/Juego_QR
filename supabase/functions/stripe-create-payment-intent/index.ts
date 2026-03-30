@@ -210,6 +210,7 @@ serve(async (req) => {
           enabled: true,
           allow_redirects: "never",
         },
+        receipt_email: user.email,
       };
 
       // If user wants to save the card, use setup_future_usage

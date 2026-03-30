@@ -14,6 +14,7 @@ class TransactionItem {
   final double? fiatAmountVes;
   final String? pagoOrderId;
   final String? gateway;
+  final String? invoiceUrl;
 
   const TransactionItem({
     required this.id,
@@ -28,6 +29,7 @@ class TransactionItem {
     this.fiatAmountVes,
     this.pagoOrderId,
     this.gateway,
+    this.invoiceUrl,
   });
 
   static DateTime _toVenezuelaTime(DateTime dateTime) {
@@ -51,6 +53,7 @@ class TransactionItem {
       fiatAmountVes: map['fiat_amount_ves'] != null ? (map['fiat_amount_ves'] as num).toDouble() : null,
       pagoOrderId: map['pago_pago_order_id']?.toString(),
       gateway: map['gateway']?.toString(),
+      invoiceUrl: map['invoice_url']?.toString(),
     );
   }
 
@@ -66,6 +69,8 @@ class TransactionItem {
   bool get canCancelWithdrawal => isPending && (type == 'withdrawal' || description.toLowerCase().contains('retiro'));
 
   bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order' || canCancelWithdrawal);
+
+  bool get hasInvoice => invoiceUrl != null && invoiceUrl!.isNotEmpty;
 
   Color get statusColor {
     switch (status.toLowerCase()) {

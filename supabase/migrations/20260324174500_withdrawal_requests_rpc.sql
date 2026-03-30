@@ -41,10 +41,13 @@ GRANT SELECT ON public.withdrawal_requests TO authenticated;
 -- ------------------------------------------------------------
 -- RPC: Create withdrawal request (atomic)
 -- ------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_withdrawal_request(uuid, uuid, uuid);
+DROP FUNCTION IF EXISTS public.create_withdrawal_request(uuid, uuid, text);
+
 CREATE OR REPLACE FUNCTION public.create_withdrawal_request(
   p_user_id uuid,
   p_plan_id uuid,
-  p_payment_method_id uuid
+  p_payment_method_id text -- Changed from uuid to text for flexibility
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -82,17 +85,34 @@ BEGIN
     RAISE EXCEPTION 'El plan de retiro seleccionado no esta disponible';
   END IF;
 
-  SELECT *
-  INTO v_pm
-  FROM user_payment_methods
-  WHERE id = p_payment_method_id AND user_id = p_user_id
-  LIMIT 1;
+  -- Handle virtual 'stripe_connected_account' method or standard UUIDs
+  IF p_payment_method_id = 'stripe_connected_account' THEN
+    -- Virtual Stripe Connect automated method
+    SELECT stripe_connect_id, stripe_onboarding_completed 
+    INTO v_profile
+    FROM profiles 
+    WHERE id = p_user_id;
 
-  IF v_pm.id IS NULL THEN
-    RAISE EXCEPTION 'Metodo de pago no encontrado';
+    IF v_profile.stripe_connect_id IS NULL OR v_profile.stripe_onboarding_completed IS NOT TRUE THEN
+      RAISE EXCEPTION 'Cuenta de Stripe no vinculada o verificada';
+    END IF;
+
+    v_gateway := 'stripe';
+    v_pm := NULL; -- Ensure v_pm is clear for automated flow
+  ELSE
+    -- Standard stored payment method
+    SELECT *
+    INTO v_pm
+    FROM user_payment_methods
+    WHERE id = p_payment_method_id::uuid AND user_id = p_user_id
+    LIMIT 1;
+
+    IF v_pm.id IS NULL THEN
+      RAISE EXCEPTION 'Metodo de pago no encontrado';
+    END IF;
+
+    v_gateway := COALESCE(v_pm.type, 'pago_movil');
   END IF;
-
-  v_gateway := COALESCE(v_pm.type, 'pago_movil');
 
   IF NOT public.is_payment_method_enabled('withdrawal', v_gateway) THEN
     RAISE EXCEPTION 'Metodo de retiro deshabilitado: %', v_gateway;
@@ -121,6 +141,7 @@ BEGIN
     v_amount_ves := NULL;
   END IF;
 
+  -- Verify balance again with row lock
   SELECT clovers
   INTO v_profile
   FROM profiles
@@ -155,19 +176,24 @@ BEGIN
   ) VALUES (
     p_user_id,
     v_plan.id,
-    v_pm.id,
+    CASE WHEN v_gateway = 'stripe' AND p_payment_method_id = 'stripe_connected_account' THEN NULL ELSE v_pm.id END,
     v_gateway,
     v_plan.amount,
     v_plan.price,
     v_amount_ves,
     v_bcv_rate,
     'pending',
-    jsonb_build_object(
-      'bank_code', v_pm.bank_code,
-      'dni', v_pm.dni,
-      'phone_number', v_pm.phone_number,
-      'stripe_email', v_pm.identifier
-    ),
+    CASE 
+      WHEN v_gateway = 'stripe' AND p_payment_method_id = 'stripe_connected_account' THEN 
+           jsonb_build_object('automated', true, 'stripe_connect_id', (SELECT stripe_connect_id FROM profiles WHERE id = p_user_id))
+      ELSE 
+           jsonb_build_object(
+             'bank_code', v_pm.bank_code,
+             'dni', v_pm.dni,
+             'phone_number', v_pm.phone_number,
+             'stripe_email', v_pm.identifier
+           )
+    END,
     now(),
     now()
   )
@@ -198,10 +224,10 @@ BEGIN
     'amount_usd', v_plan.price,
     'amount_ves', v_amount_ves,
     'clovers_cost', v_plan.amount,
-    'bank_code', v_pm.bank_code,
-    'dni', v_pm.dni,
-    'phone_number', v_pm.phone_number,
-    'stripe_email', v_pm.identifier
+    'bank_code', CASE WHEN v_pm IS NOT NULL THEN v_pm.bank_code ELSE NULL END,
+    'dni', CASE WHEN v_pm IS NOT NULL THEN v_pm.dni ELSE NULL END,
+    'phone_number', CASE WHEN v_pm IS NOT NULL THEN v_pm.phone_number ELSE NULL END,
+    'stripe_email', CASE WHEN v_pm IS NOT NULL THEN v_pm.identifier ELSE NULL END
   );
 END;
 $$;

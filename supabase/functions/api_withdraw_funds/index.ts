@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,33 +80,116 @@ serve(async (req) => {
 
     // 4. BRANCH LOGIC BY TYPE
     if (withdrawalType === "stripe") {
-      // --- STRIPE WITHDRAWAL FLOW ---
-      // For now, we record it as PENDING for manual processing
-      // In a real production app, you would call Stripe Payouts API here.
+      // --- STRIPE WITHDRAWAL FLOW (AUTOMATED) ---
       
-      await supabaseAdmin.rpc("mark_withdrawal_pending", {
-        p_request_id: requestId,
-        p_provider_data: {
-          gateway: "stripe",
-          email: finalStripeEmail,
-        },
+      const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+      if (!stripeSecretKey) {
+        throw new Error("Server Misconfiguration: Missing STRIPE_SECRET_KEY");
+      }
+
+      const stripe = new Stripe(stripeSecretKey, {
+        apiVersion: "2024-06-20",
+        httpClient: Stripe.createFetchHttpClient(),
       });
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Retiro solicitado exitosamente. Se procesará pronto.",
-          data: {
-            type: "stripe",
-            email: finalStripeEmail,
-            amount_usd: amountUsd,
-            transaction_id: requestId,
-          },
-          pending: true,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
+      // Fetch user's stripe connect status
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_connect_id, stripe_onboarding_completed")
+        .eq("id", user.id)
+        .single();
 
+      const stripeAccountId = profile?.stripe_connect_id;
+      const isOnboarded = profile?.stripe_onboarding_completed;
+
+      let transferSuccess = false;
+      let transferData = null;
+      let errorMessage = "";
+
+      if (stripeAccountId && isOnboarded) {
+        try {
+          console.log(`[api_withdraw_funds] Attempting automated transfer to ${stripeAccountId} for $${amountUsd}`);
+          
+          const amountCents = Math.round(amountUsd * 100);
+          
+          const transfer = await stripe.transfers.create({
+            amount: amountCents,
+            currency: "usd",
+            destination: stripeAccountId,
+            description: `Retiro MapHunter: ${requestId}`,
+            metadata: {
+              withdrawal_request_id: requestId,
+              supabase_user_id: user.id
+            }
+          });
+
+          transferSuccess = true;
+          transferData = transfer;
+          console.log(`[api_withdraw_funds] Transfer successful: ${transfer.id}`);
+
+        } catch (stripeError) {
+          console.error(`[api_withdraw_funds] Stripe Transfer Error:`, stripeError);
+          errorMessage = stripeError.message;
+        }
+      } else {
+        console.log(`[api_withdraw_funds] User ${user.id} not fully onboarded on Stripe Connect. Falling back to manual.`);
+        errorMessage = "Usuario no ha completado el registro de Stripe Connect. Retiro queda pendiente para proceso manual.";
+      }
+
+      if (transferSuccess) {
+        // Log SUCCESS
+        await supabaseAdmin.rpc("mark_withdrawal_completed", {
+          p_request_id: requestId,
+          p_provider_data: {
+            gateway: "stripe",
+            transfer_id: transferData.id,
+            destination: stripeAccountId,
+            automated: true,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro procesado y enviado automáticamente vía Stripe.",
+            data: {
+              type: "stripe",
+              transfer_id: transferData.id,
+              amount_usd: amountUsd,
+              transaction_id: requestId,
+            },
+            pending: false,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      } else {
+        // Fallback to PENDING (Manual)
+        await supabaseAdmin.rpc("mark_withdrawal_pending", {
+          p_request_id: requestId,
+          p_provider_data: {
+            gateway: "stripe",
+            email: finalStripeEmail,
+            automated_attempt_failed: !!stripeAccountId,
+            error: errorMessage,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro solicitado. Debido a que el registro de Stripe no está completo o hubo un error, se procesará manualmente.",
+            data: {
+              type: "stripe",
+              email: finalStripeEmail,
+              amount_usd: amountUsd,
+              transaction_id: requestId,
+              reason: errorMessage,
+            },
+            pending: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
     } else {
       // --- PAGO MOVIL FLOW (EXISTING) ---
       // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG

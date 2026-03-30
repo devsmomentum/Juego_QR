@@ -123,12 +123,30 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
 
               final stripeEnabled =
                   configProvider.isMethodEnabled('withdrawal', 'stripe');
+              
+              // Check if user has an automated Stripe Connect account
+              final player = Provider.of<PlayerProvider>(context).currentPlayer;
+              final hasLinkedConnnect = player?.stripeConnectId != null && 
+                                      player?.stripeOnboardingCompleted == true;
+
               final hasStripeMethod = provider.methods.any((method) {
                 final type = method['type'] ?? 'pago_movil';
                 return type == 'stripe';
               });
 
-              if (enabledMethods.isEmpty) {
+              final displayMethods = [...enabledMethods];
+              
+              // Add virtual method for linked connect account if it exists and isn't already in the list
+              if (hasLinkedConnnect && stripeEnabled) {
+                 displayMethods.insert(0, {
+                   'id': 'stripe_connected_account',
+                   'type': 'stripe',
+                   'identifier': 'Cuenta vinculada de Stripe',
+                   'is_automated': true,
+                 });
+              }
+
+              if (displayMethods.isEmpty) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
@@ -163,11 +181,11 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
               return Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
-                  itemCount: enabledMethods.length +
-                      (stripeEnabled && !hasStripeMethod ? 1 : 0),
+                  itemCount: displayMethods.length +
+                      (stripeEnabled && !hasStripeMethod && !hasLinkedConnnect ? 1 : 0),
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    if (stripeEnabled && !hasStripeMethod && index == 0) {
+                    if (stripeEnabled && !hasStripeMethod && !hasLinkedConnnect && index == 0) {
                       return Container(
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.04),
@@ -208,20 +226,25 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                     }
 
                     final methodIndex =
-                        (stripeEnabled && !hasStripeMethod) ? index - 1 : index;
-                    final method = enabledMethods[methodIndex];
+                        (stripeEnabled && !hasStripeMethod && !hasLinkedConnnect) ? index - 1 : index;
+                    final method = displayMethods[methodIndex];
                     final isSelected = _selectedMethodId == method['id'];
                     final type = method['type'] ?? 'pago_movil';
                     final isStripe = type == 'stripe';
+                    final isAutomated = method['is_automated'] == true;
 
-                    final title = isStripe
-                        ? 'Stripe'
-                        : 'Pago Móvil - Banco ${method['bank_code'] ?? '???'}';
-                    final subtitle = isStripe
-                        ? (method['identifier'] ?? 'Email no configurado')
-                        : (method['phone_number'] ?? 'Teléfono no configurado');
+                    final title = isAutomated
+                        ? 'Cuenta Stripe vinculada'
+                        : (isStripe
+                            ? 'Stripe'
+                            : 'Pago Móvil - Banco ${method['bank_code'] ?? '???'}');
+                    final subtitle = isAutomated
+                        ? 'Transferencia automática directa'
+                        : (isStripe
+                            ? (method['identifier'] ?? 'Email no configurado')
+                            : (method['phone_number'] ?? 'Teléfono no configurado'));
                     final icon = isStripe
-                        ? Icons.credit_card_rounded
+                        ? Icons.account_balance_wallet_rounded
                         : Icons.phone_android;
                     final iconColor = isStripe
                         ? const Color(0xFF635BFF)
@@ -254,36 +277,38 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                           subtitle,
                           style: const TextStyle(color: Colors.white70),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: () {}, // Bubble block
-                              child: IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: Colors.white38),
-                                onPressed: () async {
-                                  final result = await showDialog(
-                                    context: context,
-                                    builder: (_) =>
-                                        EditPaymentMethodDialog(method: method),
-                                  );
-                                  if (result == true) {
-                                    _loadMethods();
-                                  }
-                                },
+                        trailing: isAutomated 
+                          ? const Icon(Icons.verified_user_rounded, color: AppTheme.successGreen, size: 20)
+                          : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GestureDetector(
+                                onTap: () {}, // Bubble block
+                                child: IconButton(
+                                  icon: const Icon(Icons.edit_outlined,
+                                      color: Colors.white38),
+                                  onPressed: () async {
+                                    final result = await showDialog(
+                                      context: context,
+                                      builder: (_) =>
+                                          EditPaymentMethodDialog(method: method),
+                                    );
+                                    if (result == true) {
+                                      _loadMethods();
+                                    }
+                                  },
+                                ),
                               ),
-                            ),
-                            GestureDetector(
-                              onTap: () {}, // Bubble block
-                              child: IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    color: Colors.white38),
-                                onPressed: () => _deleteMethod(method['id']),
+                              GestureDetector(
+                                onTap: () {}, // Bubble block
+                                child: IconButton(
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: Colors.white38),
+                                  onPressed: () => _deleteMethod(method['id']),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
                       ),
                     );
                   },

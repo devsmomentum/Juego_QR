@@ -146,11 +146,24 @@ serve(async (req) => {
           break;
         }
 
-        // Extract stripe_customer_id from the PaymentIntent if available
+        // Extract stripe_customer_id and receipt_url from the PaymentIntent if available
         let stripeCustomerId: string | null = null;
+        let receiptUrl: string | null = null;
+
         if (event.type === "payment_intent.succeeded") {
           const pi = event.data.object as Stripe.PaymentIntent;
           stripeCustomerId = typeof pi.customer === "string" ? pi.customer : null;
+          
+          // Grab the receipt URL from the charge object
+          const chargeId = pi.latest_charge as string | null;
+          if (chargeId) {
+            try {
+              const charge = await stripe.charges.retrieve(chargeId);
+              receiptUrl = charge.receipt_url;
+            } catch (err) {
+              console.error(`[stripe-webhook] Error fetching charge ${chargeId}:`, err);
+            }
+          }
 
           // If we have a customer ID, ensure it's stored in the user's profile
           if (stripeCustomerId && userId) {
@@ -170,20 +183,26 @@ serve(async (req) => {
           }
         }
 
+        const updatePayload: any = {
+          status: "success",
+          extra_data: {
+            ...(existingOrder.extra_data || {}),
+            clovers_amount: cloversAmount, // Essential for the trigger 'tr_on_clover_order_paid'
+            stripe_event_id: event.id,
+            completed_at: new Date().toISOString(),
+            pi_id: paymentIntentId,
+            stripe_customer_id: stripeCustomerId,
+          },
+        };
+
+        if (receiptUrl) {
+          updatePayload.invoice_url = receiptUrl;
+        }
+
         // Update order status to 'success' to trigger the existing DB logic
         const { error: orderError } = await supabaseAdmin
           .from("clover_orders")
-          .update({
-            status: "success",
-            extra_data: {
-              ...(existingOrder.extra_data || {}),
-              clovers_amount: cloversAmount, // Essential for the trigger 'tr_on_clover_order_paid'
-              stripe_event_id: event.id,
-              completed_at: new Date().toISOString(),
-              pi_id: paymentIntentId,
-              stripe_customer_id: stripeCustomerId,
-            },
-          })
+          .update(updatePayload)
           .eq("id", existingOrder.id);
 
         if (orderError) {
@@ -261,6 +280,50 @@ serve(async (req) => {
             .from("clover_orders")
             .update({ status: "cancelled" })
             .eq("id", existingOrder.id);
+        }
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const piId = invoice.payment_intent as string;
+        const invoiceUrl = invoice.hosted_invoice_url;
+
+        console.log(`[stripe-webhook] Invoice paid: ${invoice.id}, for PI: ${piId}, URL: ${invoiceUrl}`);
+
+        if (piId) {
+          const { error: updateError } = await supabaseAdmin
+            .from("clover_orders")
+            .update({ invoice_url: invoiceUrl })
+            .eq("stripe_payment_intent_id", piId);
+
+          if (updateError) {
+            console.error(`[stripe-webhook] Error updating invoice_url for PI ${piId}:`, updateError);
+          } else {
+            console.log(`[stripe-webhook] ✅ Success: Invoice URL updated for order with PI ${piId}`);
+          }
+        }
+        break;
+      }
+
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        const connectId = account.id;
+        
+        // A user is considered "onboarded" if they submitted details and payouts are enabled
+        const onboardingCompleted = account.details_submitted && account.payouts_enabled;
+
+        console.log(`[stripe-webhook] Account updated: ${connectId}, payouts_enabled: ${account.payouts_enabled}, details_submitted: ${account.details_submitted}`);
+
+        const { error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .update({ stripe_onboarding_completed: onboardingCompleted })
+          .eq("stripe_connect_id", connectId);
+
+        if (profileError) {
+          console.error(`[stripe-webhook] Error updating profile for Connect ID ${connectId}:`, profileError);
+        } else {
+          console.log(`[stripe-webhook] ✅ Success: Profile status for ${connectId} set to ${onboardingCompleted}`);
         }
         break;
       }

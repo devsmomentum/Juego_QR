@@ -31,6 +31,7 @@ import '../../wallet/providers/payment_method_provider.dart';
 import '../../wallet/widgets/edit_payment_method_dialog.dart';
 import '../../../core/services/stripe_service.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../../wallet/services/stripe_connect_service.dart';
 
 class WalletScreen extends StatefulWidget {
   final bool hideScaffold;
@@ -43,6 +44,11 @@ class WalletScreen extends StatefulWidget {
 class _WalletScreenState extends State<WalletScreen> {
   final TextEditingController _amountController = TextEditingController();
   bool _isLoading = false;
+  
+  // Stripe Connect State
+  final StripeConnectService _stripeConnectService = StripeConnectService();
+  String _stripeStatus = 'loading'; // loading, not_started, pending, completed
+  bool _isStripeLoading = false;
 
   // Recharge availability (null = still loading)
   bool? _rechargeEnabled;
@@ -63,6 +69,7 @@ class _WalletScreenState extends State<WalletScreen> {
     _loadRechargeFlag();
     _loadRecentTransactions();
     _loadPaymentMethods();
+    _loadStripeStatus();
   }
 
   Future<void> _loadRechargeFlag() async {
@@ -102,6 +109,59 @@ class _WalletScreenState extends State<WalletScreen> {
   void dispose() {
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadStripeStatus() async {
+    if (!mounted) return;
+    setState(() => _isStripeLoading = true);
+    try {
+      final data = await _stripeConnectService.getAccountStatus();
+      if (mounted) {
+        setState(() {
+          _stripeStatus = data?['status'] ?? 'not_started';
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading stripe status: $e");
+      if (mounted) {
+        setState(() {
+          _stripeStatus = 'not_started';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isStripeLoading = false);
+    }
+  }
+
+  Future<void> _handleStripeSetup() async {
+    setState(() => _isStripeLoading = true);
+    try {
+      // 1. Create account if not exists
+      if (_stripeStatus == 'not_started') {
+        final accId = await _stripeConnectService.createAccount();
+        if (accId == null) throw "No se pudo crear la cuenta de Stripe";
+      }
+
+      // 2. Generate Link
+      final url = await _stripeConnectService.createOnboardingLink();
+      if (url == null) throw "No se pudo generar el enlace de registro";
+
+      // 3. Launch
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw "No se pudo abrir el navegador";
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.dangerRed),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStripeLoading = false);
+    }
   }
 
   @override
@@ -162,6 +222,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 await _loadRecentTransactions();
                 await _loadRechargeFlag();
                 await _loadPaymentMethods();
+                await _loadStripeStatus();
               },
               color: AppTheme.accentGold,
               backgroundColor: const Color(0xFF151517),
@@ -295,7 +356,12 @@ class _WalletScreenState extends State<WalletScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 30),
+
+                    // Stripe Connect Onboarding Section
+                    // _buildStripeConnectSection(isDarkMode),
+
+                    // const SizedBox(height: 40),
 
                     // Recent Transactions Section - PREVIOUS STYLE (DOUBLE BORDER)
                     Container(
@@ -1620,6 +1686,7 @@ class _WalletScreenState extends State<WalletScreen> {
     String? selectedPlanId;
     final type = method['type'] ?? 'pago_movil';
     final isStripe = type == 'stripe';
+    final isAutomatedStripe = method['is_automated'] == true;
     final bankCode = method['bank_code'] ?? '???';
     final phone = method['phone_number'] ?? '???';
     final email = method['identifier'] ?? '???';
@@ -1672,9 +1739,11 @@ class _WalletScreenState extends State<WalletScreen> {
                             fontFamily: 'Orbitron'),
                       ),
                       Text(
-                        isStripe
-                            ? 'A: Stripe ($email)'
-                            : 'A: $bankCode - $phone',
+                        isAutomatedStripe
+                            ? 'A: Tu cuenta Stripe vinculada'
+                            : (isStripe
+                                ? 'A: Stripe ($email)'
+                                : 'A: $bankCode - $phone'),
                         style: const TextStyle(
                             color: Colors.white60, fontSize: 11),
                       ),
@@ -1730,6 +1799,35 @@ class _WalletScreenState extends State<WalletScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── INFO: Automated Stripe Banner ──
+                      if (isAutomatedStripe) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF635BFF).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: const Color(0xFF635BFF).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.verified_user_rounded,
+                                  color: Color(0xFF635BFF), size: 22),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Tu cuenta está vinculada. El dinero se enviará automáticamente a tu balance de Stripe.',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       // ── FAIL-SAFE: Maintenance Banner ──
                       if (!isRateValid) ...[
                         Container(
@@ -1978,10 +2076,12 @@ class _WalletScreenState extends State<WalletScreen> {
       final data = response.data;
       if (data?['success'] == true) {
         final isPending = data?['pending'] == true;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isPending
+        final message = data?['message'] ?? (isPending
               ? 'Retiro en proceso. Se confirmara pronto.'
-              : '¡Retiro procesado exitosamente!'),
+              : '¡Retiro procesado exitosamente!');
+              
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(message),
           backgroundColor:
               isPending ? AppTheme.accentGold : AppTheme.successGreen,
         ));
@@ -2139,6 +2239,141 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStripeConnectSection(bool isDarkMode) {
+    if (_stripeStatus == 'completed') {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 20),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Cuenta de Stripe Verificada',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              _CyberRingButton(
+                size: 32,
+                icon: Icons.open_in_new_rounded,
+                onPressed: _handleStripeSetup,
+                color: const Color(0xFFFECB00),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_stripeStatus == 'loading') {
+      return const Center(child: LoadingIndicator(fontSize: 12));
+    }
+
+    final String title = _stripeStatus == 'pending' 
+        ? 'COMPLETAR REGISTRO STRIPE' 
+        : 'RECIBIR PAGOS POR STRIPE';
+    
+    final String subtitle = _stripeStatus == 'pending'
+        ? 'Faltan datos para habilitar tus cobros automáticamente.'
+        : 'Vincula tu cuenta para retirar tus premios de forma instantánea.';
+
+    final Color statusColor = _stripeStatus == 'pending' ? Colors.orange : const Color(0xFFFECB00);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: statusColor.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: statusColor.withOpacity(0.3), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                   Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _stripeStatus == 'pending' ? Icons.warning_amber_rounded : Icons.account_balance_rounded, 
+                      color: statusColor, 
+                      size: 20
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Orbitron',
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 12,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: _isStripeLoading 
+                  ? const Center(child: LoadingIndicator(fontSize: 12))
+                  : ElevatedButton(
+                      onPressed: _handleStripeSetup,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: statusColor,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        _stripeStatus == 'pending' ? 'CONTINUAR' : 'VINCULAR AHORA',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                    ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

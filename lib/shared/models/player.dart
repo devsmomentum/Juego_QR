@@ -31,6 +31,8 @@ class Player implements ITargetable {
   final bool isProtected; // SHIELD CONSISTENCY FIX
   final bool emailVerified; // Whether email has been verified
   final String? stripeCustomerId; // Stripe Customer ID for saved cards
+  final String? stripeConnectId; // Stripe Connect Account ID
+  final bool stripeOnboardingCompleted; // Whether onboarding is finished
   Map<String, dynamic> stats;
   final DateTime? createdAt;
 
@@ -65,6 +67,8 @@ class Player implements ITargetable {
     this.isProtected = false,
     this.emailVerified = true,
     this.stripeCustomerId,
+    this.stripeConnectId,
+    this.stripeOnboardingCompleted = false,
   })  : _avatarUrl = avatarUrl ?? '',
         inventory = inventory ?? [],
         stats = stats ??
@@ -177,6 +181,8 @@ class Player implements ITargetable {
       isProtected: json['is_protected'] ?? false,
       emailVerified: json['email_verified'] ?? true,
       stripeCustomerId: json['stripe_customer_id'],
+      stripeConnectId: json['stripe_connect_id'],
+      stripeOnboardingCompleted: json['stripe_onboarding_completed'] ?? false,
     );
   }
 
@@ -342,6 +348,8 @@ class Player implements ITargetable {
     bool? isProtected,
     bool? emailVerified,
     String? stripeCustomerId,
+    String? stripeConnectId,
+    bool? stripeOnboardingCompleted,
   }) {
     return Player(
       userId: userId ?? this.userId,
@@ -374,6 +382,8 @@ class Player implements ITargetable {
       isProtected: isProtected ?? this.isProtected,
       emailVerified: emailVerified ?? this.emailVerified,
       stripeCustomerId: stripeCustomerId ?? this.stripeCustomerId,
+      stripeConnectId: stripeConnectId ?? this.stripeConnectId,
+      stripeOnboardingCompleted: stripeOnboardingCompleted ?? this.stripeOnboardingCompleted,
     );
   }
 }

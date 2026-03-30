@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class StripeOrdersScreen extends StatefulWidget {
   const StripeOrdersScreen({super.key});
@@ -648,6 +649,34 @@ class _StripeOrdersScreenState extends State<StripeOrdersScreen>
                           'Acreditar tréboles manualmente',
                           style: TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                
+                // Invoice button for ANY status that has an invoice_url (usually success)
+                if (order['invoice_url'] != null && order['invoice_url'].toString().isNotEmpty) ...
+                  [
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final url = Uri.parse(order['invoice_url'].toString());
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blueAccent,
+                          side: BorderSide(color: Colors.blueAccent.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                        label: const Text(
+                          'Ver Factura Stripe',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                       ),
                     ),

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/transaction_item.dart';
 import '../../../shared/widgets/coin_image.dart';
 
@@ -208,7 +209,7 @@ class TransactionCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (item.canResumePayment || item.canValidateMpay || item.canCancel) ...[
+            if (item.canResumePayment || item.canValidateMpay || item.canCancel || item.hasInvoice) ...[
               const Divider(height: 24, color: Colors.white10),
               Row(
                 children: [
@@ -244,11 +245,9 @@ class TransactionCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    
-                    if ((item.canResumePayment || item.canValidateMpay) && item.canCancel)
-                      const SizedBox(width: 8),
-
-                    if (item.canCancel)
+                    if (item.canCancel) ...[
+                      if (item.canResumePayment || item.canValidateMpay)
+                        const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: onCancelOrder,
@@ -264,6 +263,33 @@ class TransactionCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                    ],
+                    
+                    if (item.hasInvoice) ...[
+                      if (item.canResumePayment || item.canValidateMpay || item.canCancel)
+                        const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final url = Uri.parse(item.invoiceUrl!);
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                          label: const Text('Ver Factura'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent.withOpacity(0.2),
+                            foregroundColor: Colors.blueAccent,
+                            side: BorderSide(color: Colors.blueAccent.withOpacity(0.5)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
                 ],
               ),
             ],
