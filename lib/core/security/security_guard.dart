@@ -80,7 +80,11 @@ class SecurityGuard {
       final responseMap = Map<String, dynamic>.from(response.data);
       
       if (responseMap.containsKey('success') && responseMap['success'] == false) {
-        if (responseMap['error'] == 'BLOCKED') {
+        final errorField = responseMap['error']?.toString();
+        if (errorField?.startsWith('TOO_FAST') == true) {
+          return responseMap;
+        }
+        if (errorField == 'BLOCKED') {
           throw CustomSecurityException('Cuenta bloqueada.', 'BLOCKED');
         }
         final refCode = responseMap['reference_code'] ?? '0xERR-GENERIC';

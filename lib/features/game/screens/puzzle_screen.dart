@@ -1243,7 +1243,7 @@ void _showSuccessDialog(
     onValidationFailure?.call();
     final errorCode = result['error']?.toString();
     if (navigator.mounted) {
-      if (errorCode == 'TOO_FAST') {
+      if (errorCode == 'TOO_FAST_WARNING' || errorCode == 'TOO_FAST') {
         final elapsed = (result['elapsed_seconds'] as num?)?.toInt() ?? 0;
         final minSeconds = (result['min_duration_seconds'] as num?)?.toInt() ?? 0;
         final remaining = (minSeconds - elapsed).clamp(5, 30);
@@ -1271,6 +1271,18 @@ void _showSuccessDialog(
                 style: TextStyle(color: Colors.white70),
               ),
               actions: [
+                if (playerProvider.currentPlayer?.role == 'admin')
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await Supabase.instance.client.rpc('test_remove_my_ban');
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      } catch (e) {
+                        debugPrint('Error removiendo ban: $e');
+                      }
+                    },
+                    child: const Text('REMOVER BANS / FLAGS (ADMIN)', style: TextStyle(color: Colors.white)),
+                  ),
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text(
@@ -1295,6 +1307,82 @@ void _showSuccessDialog(
             navigator.maybePop();
           }
         });
+      } else if (errorCode == 'TOO_FAST_BANNED') {
+        if (navigator.mounted) {
+          await showDialog<void>(
+            context: navigator.context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1D),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+              ),
+              title: const Text(
+                'Baneado Permanentemente',
+                style: TextStyle(
+                  color: AppTheme.dangerRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: const Text(
+                'Has sido baneado permanentemente del sistema por actividad sospechosa reiterada. Esta es una medida definitiva.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                if (playerProvider.currentPlayer?.role == 'admin')
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await Supabase.instance.client.rpc('test_remove_my_ban');
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      } catch (e) {
+                        debugPrint('Error removiendo ban: $e');
+                      }
+                    },
+                    child: const Text('REMOVER BANS / FLAGS (ADMIN)', style: TextStyle(color: Colors.white)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ENTENDIDO',
+                    style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Sign out and kick to scenarios if NOT admin (admin removes ban via button and stays)
+        if (playerProvider.currentPlayer?.role != 'admin') {
+          try {
+            await Supabase.instance.client.auth.signOut();
+          } catch (e) {
+            debugPrint('[BAN] signOut error: $e');
+          }
+          if (navigator.mounted) {
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => ScenariosScreen()),
+              (route) => false,
+            );
+          }
+        } else {
+          // Admin stays — just pop the puzzle screen
+          onForceExit?.call();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            if (navigator.mounted && puzzleRoute != null) {
+              try {
+                navigator.removeRoute(puzzleRoute);
+              } catch (_) {
+                if (navigator.mounted) navigator.maybePop();
+              }
+            } else if (navigator.mounted) {
+              navigator.maybePop();
+            }
+          });
+        }
+
       } else if (errorCode == 'BLOCKED') {
         await showDialog<void>(
           context: navigator.context,
