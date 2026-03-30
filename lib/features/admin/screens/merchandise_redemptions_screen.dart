@@ -29,9 +29,7 @@ class _MerchandiseRedemptionsScreenState extends State<MerchandiseRedemptionsScr
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final Color goldColor = isDark ? AppTheme.dGoldMain : AppTheme.lGoldAction;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
@@ -85,8 +83,7 @@ class _MerchandiseRedemptionsScreenState extends State<MerchandiseRedemptionsScr
                     : _buildRedemptionsList(context, provider),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildRedemptionsList(BuildContext context, MerchandiseProvider provider) {

@@ -114,63 +114,58 @@ class _WithdrawalRequestsManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    final textColor = Theme.of(context).textTheme.displayLarge?.color;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          // Header & Filters
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                _buildFilterChip('Pendientes', 'pending'),
-                const SizedBox(width: 8),
-                _buildFilterChip('Completados', 'completed'),
-                const SizedBox(width: 8),
-                _buildFilterChip('Fallidos', 'failed'),
-                const SizedBox(width: 8),
-                _buildFilterChip('Todos', 'all'),
-              ],
-            ),
+    return Column(
+      children: [
+        // Header & Filters
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              _buildFilterChip('Pendientes', 'pending'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Completados', 'completed'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Fallidos', 'failed'),
+              const SizedBox(width: 8),
+              _buildFilterChip('Todos', 'all'),
+            ],
           ),
+        ),
 
-          // List
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadRequests,
-              color: AppTheme.lGoldAction,
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.lGoldAction))
-                  : _error != null
-                      ? Center(child: Text('Error: $_error', style: const TextStyle(color: Colors.red)))
-                      : _requests.isEmpty
-                          ? ListView(
-                              children: [
-                                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-                                const Center(
-                                  child: Column(
-                                    children: [
-                                      Icon(Icons.history, size: 64, color: Colors.white24),
-                                      SizedBox(height: 16),
-                                      Text('No hay solicitudes', style: TextStyle(color: Colors.white54)),
-                                    ],
-                                  ),
+        // List
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadRequests,
+            color: AppTheme.lGoldAction,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppTheme.lGoldAction))
+                : _error != null
+                    ? Center(child: Text('Error: $_error', style: const TextStyle(color: Colors.red)))
+                    : _requests.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                              const Center(
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.history, size: 64, color: Colors.white24),
+                                    SizedBox(height: 16),
+                                    Text('No hay solicitudes', style: TextStyle(color: Colors.white54)),
+                                  ],
                                 ),
-                              ],
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              itemCount: _requests.length,
-                              itemBuilder: (context, index) {
-                                return _buildRequestCard(_requests[index]);
-                              },
-                            ),
-            ),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _requests.length,
+                            itemBuilder: (context, index) {
+                              return _buildRequestCard(_requests[index]);
+                            },
+                          ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -245,11 +240,11 @@ class _WithdrawalRequestsManagementScreenState
                   children: [
                     Text(
                       request.userName ?? 'Usuario desconocido',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color, fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     Text(
                       request.userEmail ?? request.userId,
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 12),
                     ),
                   ],
                 ),
@@ -264,7 +259,7 @@ class _WithdrawalRequestsManagementScreenState
                   ),
                   Text(
                     '${request.cloversCost} Tréboles',
-                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6), fontSize: 11),
                   ),
                 ],
               ),
@@ -277,22 +272,22 @@ class _WithdrawalRequestsManagementScreenState
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('MÉTODO', style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 1)),
+                  const Text('MÉTODO', style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1)),
                   const SizedBox(height: 4),
                   Text(
                     request.isStripe ? 'Stripe (${request.stripeEmail})' : 'Pago Móvil',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 13),
                   ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text('FECHA', style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 1)),
+                  const Text('FECHA', style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1)),
                   const SizedBox(height: 4),
                   Text(
                     dateFormat.format(request.createdAt),
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 13),
                   ),
                 ],
               ),

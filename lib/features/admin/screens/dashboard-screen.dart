@@ -11,7 +11,6 @@ import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 import 'clover_plans_management_screen.dart';
 import 'withdrawal_plans_management_screen.dart';
-import 'withdrawal_requests_management_screen.dart';
 import 'global_game_requests_screen.dart';
 import 'global_config_screen.dart';
 import '../../auth/screens/login_screen.dart';
@@ -25,7 +24,7 @@ import '../../game/screens/game_mode_selector_screen.dart';
 import 'event_metrics_screen.dart';
 import 'stripe_orders_screen.dart';
 import 'merchandise_management_screen.dart';
-import 'merchandise_redemptions_screen.dart';
+import 'outflow_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -46,10 +45,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Compras",
     "Planes Retiro",
     "Solicitudes",
-    "Historial Retiros",
+    "Retiros y Canjes",
     "Stripe",
     "Tienda Admin",
-    "Canjes Merch",
     "Métricas",
     "Minijuegos",
     "Patrocinadores",
@@ -69,7 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.receipt_long,
     Icons.credit_card,
     Icons.storefront,
-    Icons.redeem,
     Icons.analytics,
     Icons.games,
     Icons.business_center,
@@ -149,10 +146,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       const CloverPlansManagementScreen(),
       const WithdrawalPlansManagementScreen(),
       const GlobalGameRequestsScreen(),
-      const WithdrawalRequestsManagementScreen(),
+      const OutflowManagementScreen(),
       const StripeOrdersScreen(),
       const MerchandiseManagementScreen(),
-      const MerchandiseRedemptionsScreen(),
       const EventMetricsScreen(),
       const _MinigamesListView(),
       const SponsorsManagementScreen(),
