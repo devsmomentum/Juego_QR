@@ -18,18 +18,13 @@ class WithdrawalRequestRepository {
   /// Fetches withdrawal requests with optional status filter.
   Future<List<AdminWithdrawalRequest>> fetchRequests({String? status}) async {
     try {
-      var query = _supabase
-          .from('withdrawal_requests')
-          .select('*, profiles:user_id(name, email)');
-
-      if (status != null && status != 'all') {
-        query = query.eq('status', status);
-      }
-
-      final response = await query.order('created_at', ascending: false);
+      final response = await _supabase.rpc(
+        'get_withdrawal_requests_with_profiles',
+        params: {'p_status': status ?? 'all'},
+      );
       
       return (response as List)
-          .map((json) => AdminWithdrawalRequest.fromJson(json))
+          .map((data) => AdminWithdrawalRequest.fromJson(data as Map<String, dynamic>))
           .toList();
     } catch (e) {
       debugPrint('WithdrawalRequestRepository: Error fetching requests: $e');

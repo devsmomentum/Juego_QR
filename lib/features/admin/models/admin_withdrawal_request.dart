@@ -48,8 +48,8 @@ class AdminWithdrawalRequest {
       status: json['status'] as String,
       providerData: json['provider_data'] as Map<String, dynamic>? ?? {},
       createdAt: DateTime.parse(json['created_at'] as String),
-      userName: profile?['name'] as String?,
-      userEmail: profile?['email'] as String?,
+      userName: (profile?['name'] ?? json['name']) as String?,
+      userEmail: (profile?['email'] ?? json['email']) as String?,
     );
   }
 
