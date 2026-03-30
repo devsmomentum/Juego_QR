@@ -226,7 +226,7 @@ class _MerchandiseStoreScreenState extends State<MerchandiseStoreScreen> {
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: isMobile ? 1 : (MediaQuery.of(context).size.width > 1200 ? 3 : 2),
-        childAspectRatio: isMobile ? 1.2 : 0.75,
+        childAspectRatio: isMobile ? 1.2 : 0.68,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
       ),
@@ -270,7 +270,7 @@ class _StoreItemCard extends StatelessWidget {
             children: [
               // Image Area
               Expanded(
-                flex: 5,
+                flex: 4,
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
@@ -298,7 +298,7 @@ class _StoreItemCard extends StatelessWidget {
               
               // Info Area
               Expanded(
-                flex: 6,
+                flex: 7,
                 child: Container(
                   padding: const EdgeInsets.all(16.0),
                   decoration: BoxDecoration(
