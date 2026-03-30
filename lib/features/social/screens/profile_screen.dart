@@ -638,23 +638,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _buildStatWidget(
-                              const _StatPulseAnimation(
-                                child: Icon(Icons.stars,
-                                    color: AppTheme.secondaryPink, size: 28),
-                              ),
+                              const Icon(Icons.stars,
+                                  color: AppTheme.secondaryPink, size: 28),
                               "${player.totalXP}",
                               "XP Total"),
                           _buildStatWidget(
-                              const _StatPulseAnimation(
-                                child: CoinImage(size: 24),
-                              ),
+                              const CoinImage(size: 24),
                               "${player.clovers}",
                               "Tréboles"),
                           _buildStatWidget(
-                              const _StatPulseAnimation(
-                                child: Icon(Icons.emoji_events,
-                                    color: AppTheme.accentGold, size: 28),
-                              ),
+                              const Icon(Icons.bolt,
+                                  color: AppTheme.accentGold, size: 28),
                               "${player.wonEventsCount}",
                               "Ganados"),
                         ],
@@ -680,10 +674,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: "Tema Automático",
             subtitle: "Cambia según la hora del día",
             icon: Icons.auto_mode_rounded,
-            iconWidget: const _OptionPulseAnimation(
-                type: _OptionAnimType.rotate,
-                child: Icon(Icons.auto_mode_rounded,
-                    color: AppTheme.primaryPurple, size: 20)),
+            iconWidget: const Icon(Icons.auto_mode_rounded,
+                color: AppTheme.primaryPurple, size: 20),
             trailing: Switch(
               value: provider.isAutoTheme,
               activeColor: AppTheme.accentGold,
@@ -707,15 +699,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: provider.isDarkMode
 ? Icons.dark_mode_rounded
 : Icons.light_mode_rounded,
-              iconWidget: _OptionPulseAnimation(
-                type: _OptionAnimType.tilt,
-                child: Icon(
-                    provider.isDarkMode
-                        ? Icons.dark_mode_rounded
-                        : Icons.light_mode_rounded,
-                    color: AppTheme.primaryPurple,
-                    size: 20),
-              ),
+              iconWidget: Icon(
+                  provider.isDarkMode
+                      ? Icons.dark_mode_rounded
+                      : Icons.light_mode_rounded,
+                  color: AppTheme.primaryPurple,
+                  size: 20),
               trailing: Switch(
                 value: provider.isDarkMode,
                 activeColor: AppTheme.accentGold,
@@ -740,11 +729,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             children: [
               _buildActionTile(
-                iconWidget: const _OptionPulseAnimation(
-                  type: _OptionAnimType.scale,
-                  child: Icon(Icons.face_retouching_natural,
-                      color: AppTheme.accentGold, size: 22),
-                ),
+                iconWidget: const Icon(Icons.face_retouching_natural,
+                    color: AppTheme.accentGold, size: 22),
                  icon: Icons.face_retouching_natural,
                 label: "Cambiar Personaje / Avatar",
                 color: AppTheme.accentGold,
@@ -760,11 +746,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const Divider(color: Colors.white10, height: 1),
               _buildActionTile(
-                iconWidget: const _OptionPulseAnimation(
-                  type: _OptionAnimType.scale,
-                  child: Icon(Icons.edit_outlined,
-                      color: AppTheme.primaryPurple, size: 22),
-                ),
+                iconWidget: const Icon(Icons.edit_outlined,
+                    color: AppTheme.primaryPurple, size: 22),
                  icon: Icons.edit_outlined,
                 label: "Editar Información",
                 color: AppTheme.primaryPurple,
@@ -803,11 +786,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const Divider(color: Colors.white10, height: 1),
               _buildActionTile(
-                iconWidget: const _OptionPulseAnimation(
-                  type: _OptionAnimType.shake,
-                  child: Icon(Icons.logout_rounded,
-                      color: Colors.orangeAccent, size: 22),
-                ),
+                iconWidget: const Icon(Icons.logout_rounded,
+                    color: Colors.orangeAccent, size: 22),
                  icon: Icons.logout_rounded,
                 label: "Cerrar Sesión",
                 color: Colors.orangeAccent,
@@ -815,11 +795,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const Divider(color: Colors.white10, height: 1),
               _buildActionTile(
-                iconWidget: const _OptionPulseAnimation(
-                  type: _OptionAnimType.shake,
-                  child: Icon(Icons.delete_forever_rounded,
+                iconWidget: const Icon(Icons.delete_forever_rounded,
                       color: AppTheme.dangerRed, size: 22),
-                ),
                  icon: Icons.delete_forever_rounded,
                 label: "Eliminar Cuenta",
                 color: AppTheme.dangerRed,
@@ -1008,7 +985,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _OptionPulseAnimation(child: Icon(icon, color: color, size: 16)),
+            Icon(icon, color: color, size: 16),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
@@ -1359,6 +1336,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildGoldenCloversSection(
       GameProvider gameProvider, bool isDarkMode) {
+    final clues = gameProvider.clues;
+    final int completedCount = gameProvider.completedClues;
+    final int totalCount = clues.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1371,13 +1352,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     letterSpacing: 2,
                     fontSize: 16,
                     fontWeight: FontWeight.w900)),
-            const Text("0/0", // Placeholder matching reference
-                style: TextStyle(color: Colors.white38, fontSize: 12)),
+            Text("$completedCount/$totalCount",
+                style: const TextStyle(color: Colors.white38, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 16),
         Container(
           width: double.infinity,
+          height: 140,
           padding: const EdgeInsets.all(4), // Efecto de doble borde
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
@@ -1385,18 +1367,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
             border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
           ),
           child: Container(
-              width: double.infinity,
-              height: 150,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                    width: 2), // Borde sólido interno
-              ),
-              child: const Center(
-                  child: Text("Inicia una visión recolectar sellos",
-                      style: TextStyle(color: Colors.white24, fontSize: 14)))),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+            ),
+            child: clues.isEmpty
+                ? const Center(
+                    child: Text("Inicia una visión recolectar sellos",
+                        style: TextStyle(color: Colors.white24, fontSize: 13)),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: clues.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final clue = entry.value;
+                        final bool isCollected =
+                            index < gameProvider.completedClues;
+                        return _buildStampItem(clue, isCollected, index);
+                      }).toList(),
+                    ),
+                  ),
+          ),
         ),
       ],
     );
@@ -1409,46 +1407,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
       width: 75,
       margin: const EdgeInsets.only(right: 15),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          TweenAnimationBuilder<double>(
-            duration: Duration(milliseconds: 1000 + (index * 100)),
-            tween: Tween(begin: 0.0, end: 1.0),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.scale(
-                  scale: 0.8 + (0.2 * value),
-                  child: Container(
-                    width: 55,
-                    height: 55,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isCollected ? null : Colors.black45,
-                      gradient:
-                          isCollected ? LinearGradient(colors: gradient) : null,
-                      border: Border.all(
-                          color: isCollected ? Colors.white : Colors.white10,
-                          width: isCollected ? 2 : 1),
-                      boxShadow: isCollected
-                          ? [
-                              BoxShadow(
-                                  color: gradient[0].withOpacity(0.5),
-                                  blurRadius: 10,
-                                  spreadRadius: 1)
-                            ]
-                          : null,
-                    ),
-                    child: Icon(
-                      _getStampIcon(index),
-                      size: 24,
-                      color: isCollected ? Colors.white : Colors.white10,
-                    ),
-                  ),
-                ),
-              );
-            },
+          Container(
+            width: 55,
+            height: 55,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isCollected ? null : Colors.black45,
+              gradient: isCollected ? LinearGradient(colors: gradient) : null,
+              border: Border.all(
+                  color: isCollected ? Colors.white : Colors.white10,
+                  width: isCollected ? 2 : 1),
+              boxShadow: isCollected
+                  ? [
+                      BoxShadow(
+                          color: gradient[0].withOpacity(0.5),
+                          blurRadius: 10,
+                          spreadRadius: 1)
+                    ]
+                  : null,
+            ),
+            child: Icon(
+              _getStampIcon(index),
+              size: 24,
+              color: isCollected ? Colors.white : Colors.white10,
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text("T${index + 1}",
               style: TextStyle(
                   fontSize: 10,
@@ -2051,11 +2037,11 @@ class _ScanlinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = Colors.white.withOpacity(0.05)
       ..strokeWidth = 1.0;
 
-    for (double i = 0; i < size.height; i += 4) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
+    for (double y = 0; y < size.height; y += 4) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }
 
@@ -2071,14 +2057,13 @@ class _CornerPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
-      ..strokeWidth = 3
+      ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
-    final path = Path();
-    // Top-right corner
-    path.moveTo(size.width - 20, 0);
-    path.lineTo(size.width, 0);
-    path.lineTo(size.width, 20);
+    final path = Path()
+      ..moveTo(0, 15)
+      ..lineTo(0, 0)
+      ..lineTo(15, 0);
 
     canvas.drawPath(path, paint);
   }
@@ -2087,89 +2072,9 @@ class _CornerPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _StatPulseAnimation extends StatefulWidget {
-  final Widget child;
-  const _StatPulseAnimation({required this.child});
-
-  @override
-  State<_StatPulseAnimation> createState() => _StatPulseAnimationState();
-}
-
-class _StatPulseAnimationState extends State<_StatPulseAnimation>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-  late Animation<double> _glowAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    )..repeat(reverse: true);
-    
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
-    
-    _opacityAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    _glowAnimation = Tween<double>(begin: 0.0, end: 15.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return FadeTransition(
-          opacity: _opacityAnimation,
-          child: Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryPurple.withOpacity(0.3),
-                    blurRadius: _glowAnimation.value,
-                    spreadRadius: _glowAnimation.value / 4,
-                  ),
-                ],
-              ),
-              child: widget.child,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-
-
-enum _OptionAnimType { scale, rotate, shake, tilt }
-
 class _OptionPulseAnimation extends StatefulWidget {
   final Widget child;
-  final _OptionAnimType type;
-  const _OptionPulseAnimation({
-    super.key,
-    required this.child,
-    this.type = _OptionAnimType.scale,
-  });
+  const _OptionPulseAnimation({required this.child});
 
   @override
   State<_OptionPulseAnimation> createState() => _OptionPulseAnimationState();
@@ -2178,38 +2083,16 @@ class _OptionPulseAnimation extends StatefulWidget {
 class _OptionPulseAnimationState extends State<_OptionPulseAnimation>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _anim;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-
-    switch (widget.type) {
-      case _OptionAnimType.scale:
-        _anim = Tween<double>(begin: 1.0, end: 1.3).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-        );
-        break;
-      case _OptionAnimType.rotate:
-        _anim = Tween<double>(begin: -0.4, end: 0.4).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-        );
-        break;
-      case _OptionAnimType.shake:
-        _anim = Tween<double>(begin: -8.0, end: 8.0).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.elasticIn),
-        );
-        break;
-      case _OptionAnimType.tilt:
-        _anim = Tween<double>(begin: -0.5, end: 0.5).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-        );
-        break;
-    }
+        vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.9, end: 1.1).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -2220,27 +2103,9 @@ class _OptionPulseAnimationState extends State<_OptionPulseAnimation>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        switch (widget.type) {
-          case _OptionAnimType.scale:
-            return Transform.scale(scale: _anim.value, child: widget.child);
-          case _OptionAnimType.rotate:
-            return Transform.rotate(angle: _anim.value, child: widget.child);
-          case _OptionAnimType.shake:
-            return Transform.translate(
-                offset: Offset(_anim.value, 0), child: widget.child);
-          case _OptionAnimType.tilt:
-            return Transform(
-              transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.001)
-                ..rotateY(_anim.value),
-              alignment: Alignment.center,
-              child: widget.child,
-            );
-        }
-      },
+    return ScaleTransition(
+      scale: _animation,
+      child: widget.child,
     );
   }
 }

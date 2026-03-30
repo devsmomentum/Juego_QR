@@ -182,6 +182,29 @@ serve(async (req) => {
       );
     }
 
+    // --- REVOKE SESSIONS (Global Logout for Ban) ---
+    if (path === "revoke-sessions") {
+      const { userId } = await req.json();
+      if (!userId) throw new Error("userId is required");
+
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+
+      // Invalidar todas las sesiones globalmente usando la clave de servicio
+      const { error } = await supabaseAdmin.auth.admin.signOut(userId, 'global');
+      if (error) {
+        throw new Error("Error revoking sessions: " + error.message);
+      }
+      
+      console.log(`Successfully revoked all sessions globally for user ${userId}`);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // --- RESET EVENT (NUEVO) ---
     if (path === "reset-event") {
       const { eventId } = await req.json();

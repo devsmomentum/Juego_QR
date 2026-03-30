@@ -175,12 +175,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     ),
                     child: Row(
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.refresh, color: Colors.white, size: 24),
-                          onPressed: () => gameProvider.fetchLeaderboard(),
-                          tooltip: 'Refrescar ranking',
-                        ),
-                        const SizedBox(width: 8),
                         const Icon(
                           Icons.emoji_events,
                           color: Colors.white,

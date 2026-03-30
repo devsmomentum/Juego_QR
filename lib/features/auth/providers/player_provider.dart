@@ -13,6 +13,7 @@ import '../services/inventory_service.dart';
 import '../services/power_service.dart';
 import '../../admin/services/admin_service.dart';
 import '../../game/strategies/power_response.dart';
+import '../../../core/services/session_service.dart';
 
 enum PowerUseResult {
   success,
@@ -1256,9 +1257,23 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', userId)
-        .listen((data) {
+        .listen((data) async {
           if (data.isNotEmpty) {
-            debugPrint("Stream Profile Update: ${data.first['status']}");
+            final profile = data.first;
+            debugPrint("Stream Profile Update: ${profile['status']}");
+            
+            // SINGLE DEVICE POLICY VALIDATION
+            final String? remoteSessionId = profile['current_session_id'];
+            final sessionService = SessionService();
+            final isValid = await sessionService.isSessionValid(remoteSessionId);
+            
+            if (!isValid) {
+              debugPrint('PlayerProvider: 🚨 Session conflict detected! An active session exists on another device. Logging out...');
+              _banMessage = 'Tu sesión se inició en otro dispositivo.';
+              await logout(clearBanMessage: false);
+              return;
+            }
+
             _fetchProfile(userId);
           }
         }, onError: (e) {
