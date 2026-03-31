@@ -148,21 +148,57 @@ serve(async (req) => {
       );
     }
 
+    // 4.5. FETCH RECEIPT URL AND CUSTOMER ID
+    let receiptUrl: string | null = null;
+    const stripeCustomerId: string | null = typeof paymentIntent.customer === "string" ? paymentIntent.customer : null;
+
+    if (paymentIntent.latest_charge) {
+      try {
+        const charge = await stripe.charges.retrieve(paymentIntent.latest_charge as string);
+        receiptUrl = charge.receipt_url;
+      } catch (err) {
+        console.error("[stripe-verify-and-credit] Error fetching receipt:", err);
+      }
+    }
+
+    // If we have a customer ID, ensure it's stored in the user's profile
+    if (stripeCustomerId && order.user_id) {
+      const { data: profileCheck } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_customer_id")
+        .eq("id", order.user_id)
+        .single();
+
+      if (!profileCheck?.stripe_customer_id) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ stripe_customer_id: stripeCustomerId })
+          .eq("id", order.user_id);
+      }
+    }
+
     // 5. MARK ORDER AS SUCCESS (triggers DB trigger that credits clovers)
+    const updatePayload: any = {
+      status: "success",
+      extra_data: {
+        ...(order.extra_data || {}),
+        completed_at: new Date().toISOString(),
+        manual_fix: true,
+        fixed_by_admin: user.id,
+        stripe_verified: true,
+        stripe_pi_status: "succeeded",
+        stripe_amount: paymentIntent.amount,
+        stripe_customer_id: stripeCustomerId,
+      },
+    };
+
+    if (receiptUrl) {
+      updatePayload.invoice_url = receiptUrl;
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from("clover_orders")
-      .update({
-        status: "success",
-        extra_data: {
-          ...(order.extra_data || {}),
-          completed_at: new Date().toISOString(),
-          manual_fix: true,
-          fixed_by_admin: user.id,
-          stripe_verified: true,
-          stripe_pi_status: "succeeded",
-          stripe_amount: paymentIntent.amount,
-        },
-      })
+      .update(updatePayload)
       .eq("id", clover_order_id);
 
     if (updateError) {

@@ -154,30 +154,50 @@ serve(async (req) => {
       // Get the user's existing stripe_customer_id from their profile
       const { data: profile } = await supabaseAdmin
         .from("profiles")
-        .select("stripe_customer_id")
+        .select("stripe_customer_id, name")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       stripeCustomerId = profile?.stripe_customer_id ?? "";
+      
+      // FALLBACK: If name is missing in profile, try to get it from Auth metadata
+      const customerName = profile?.name || 
+                           user.user_metadata?.full_name || 
+                           user.user_metadata?.name || 
+                           "Usuario de MapHunter";
+      const customerEmail = user.email || undefined;
 
       // If saving card and no customer exists yet, create one
       if (!stripeCustomerId) {
-        // Always create a customer when saving a card, so we can retrieve their payment methods later
-        // Also create for non-save to allow future use if user changes their mind
         const customer = await stripe.customers.create({
           metadata: { supabase_user_id: user.id },
-          email: user.email ?? undefined,
+          email: customerEmail,
+          name: customerName,
         });
         stripeCustomerId = customer.id;
         newCustomerCreated = true;
 
-        // Persist the customer ID immediately
         await supabaseAdmin
           .from("profiles")
-          .update({ stripe_customer_id: stripeCustomerId })
-          .eq("id", user.id);
+          .upsert({ 
+            id: user.id,
+            stripe_customer_id: stripeCustomerId,
+            email: customerEmail,
+            name: customerName
+          }, { onConflict: 'id' });
 
         console.log(`[stripe-create-pi] Created Stripe Customer: ${stripeCustomerId}`);
+      } else {
+        // OPTIONAL: Update existing customer to ensure name/email are present
+        try {
+          await stripe.customers.update(stripeCustomerId, {
+            name: customerName,
+            email: customerEmail,
+          });
+          console.log(`[stripe-create-pi] Updated existing Stripe Customer: ${stripeCustomerId}`);
+        } catch (updateErr) {
+          console.warn(`[stripe-create-pi] Could not update customer ${stripeCustomerId}:`, (updateErr as any).message);
+        }
       }
 
       // Generate an Ephemeral Key so Flutter can authenticate with Stripe
@@ -188,9 +208,6 @@ serve(async (req) => {
       ephemeralKeySecret = ephemeralKey.secret!;
 
       // Build PaymentIntent options
-      // NOTE: allow_redirects: 'never' ensures only instant-completion methods (card)
-      // are available, preventing the payment from getting stuck in 'processing' state
-      // due to bank redirects (iDEAL, SEPA, Boleto, etc.)
       const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
         amount: amountCents,
         currency: "usd",
@@ -203,14 +220,11 @@ serve(async (req) => {
           clovers_amount: String(cloversQuantity),
           clover_order_id: internalOrderId,
         },
-        // KEY FIX: allow_redirects: 'never' prevents redirect-based payment methods
-        // that would leave the PaymentIntent in 'requires_action' or 'processing' state.
-        // This guarantees the PI goes directly to 'succeeded' when using a card.
         automatic_payment_methods: { 
           enabled: true,
           allow_redirects: "never",
         },
-        receipt_email: user.email,
+        receipt_email: customerEmail,
       };
 
       // If user wants to save the card, use setup_future_usage
