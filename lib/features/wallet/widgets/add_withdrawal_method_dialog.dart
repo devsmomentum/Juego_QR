@@ -22,7 +22,7 @@ class AddWithdrawalMethodDialog extends StatefulWidget {
 
 class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
   final _formKey = GlobalKey<FormState>();
-  String _selectedType = 'pago_movil'; // 'pago_movil' or 'stripe'
+  String _selectedType = 'stripe'; // 'pago_movil' or 'stripe'
   String? _selectedBankCode;
   final _emailController = TextEditingController();
   bool _isLoading = false;
@@ -186,15 +186,7 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: _buildTypeSelector(
-                        'PAGO MÓVIL', 
-                        AppTheme.accentGold, 
-                        _selectedType == 'pago_movil',
-                        () => setState(() => _selectedType = 'pago_movil'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                    
                     Expanded(
                       child: _buildTypeSelector(
                         'STRIPE', 

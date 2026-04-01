@@ -8,14 +8,10 @@ class PaymentMethodsConfig {
   });
 
   static const List<String> defaultPurchaseMethods = [
-    'pago_movil',
     'stripe',
-    'zelle',
-    'cash',
   ];
 
   static const List<String> defaultWithdrawalMethods = [
-    'pago_movil',
     'stripe',
   ];
 
@@ -102,33 +98,13 @@ class PaymentMethodUiSpec {
 class PaymentMethodsCatalog {
   static const List<PaymentMethodUiSpec> purchase = [
     PaymentMethodUiSpec(
-      id: 'pago_movil',
-      label: 'Pago Movil / Transferencia',
-      description: 'Recarga instantanea en Bolivares',
-    ),
-    PaymentMethodUiSpec(
       id: 'stripe',
       label: 'Tarjeta de Credito / Debito',
       description: 'Visa, Mastercard, Amex — pago en USD',
     ),
-    PaymentMethodUiSpec(
-      id: 'zelle',
-      label: 'Zelle',
-      description: 'Recarga en Dolares',
-    ),
-    PaymentMethodUiSpec(
-      id: 'cash',
-      label: 'Efectivo',
-      description: 'Pago presencial en efectivo',
-    ),
   ];
 
   static const List<PaymentMethodUiSpec> withdrawal = [
-    PaymentMethodUiSpec(
-      id: 'pago_movil',
-      label: 'Pago Movil',
-      description: 'Transferencia bancaria nacional',
-    ),
     PaymentMethodUiSpec(
       id: 'stripe',
       label: 'Stripe',

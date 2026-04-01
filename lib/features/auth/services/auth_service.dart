@@ -97,9 +97,11 @@ class AuthService {
           try {
             final sessionService = SessionService();
             final sessionToken = await sessionService.generateAndSaveSessionToken();
-            await _supabase.from('profiles').update({'current_session_id': sessionToken}).eq('id', userId);
+            await _supabase.rpc('set_current_session_id', params: {
+              'p_session_id': sessionToken,
+            });
           } catch (e) {
-            debugPrint('AuthService: Failed to update session_id during login: $e');
+            debugPrint('AuthService: Failed to set current_session_id during login: $e');
             // Allow login to proceed even if token update fails, or you could throw. Throwing is safer for strict policy.
             // But we will just log it here for minimum disruption.
           }
@@ -205,9 +207,11 @@ class AuthService {
           try {
             final sessionService = SessionService();
             final sessionToken = await sessionService.generateAndSaveSessionToken();
-            await _supabase.from('profiles').update({'current_session_id': sessionToken}).eq('id', userId);
+            await _supabase.rpc('set_current_session_id', params: {
+              'p_session_id': sessionToken,
+            });
           } catch(e) {
-            debugPrint('AuthService: Failed to update session_id during register: $e');
+            debugPrint('AuthService: Failed to set current_session_id during register: $e');
           }
         }
 

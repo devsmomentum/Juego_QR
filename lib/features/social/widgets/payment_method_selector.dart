@@ -33,32 +33,11 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
 
     final allMethods = <_PaymentMethodUiSpec>[
       _PaymentMethodUiSpec(
-        id: 'pago_movil',
-        name: 'Pago Movil / Transferencia',
-        icon: Icons.phone_android,
-        color: AppTheme.accentGold,
-        description: 'Recarga instantanea en Bolivares',
-      ),
-      _PaymentMethodUiSpec(
         id: 'stripe',
         name: 'Tarjeta de Credito / Debito',
         icon: Icons.credit_card_rounded,
         color: AppTheme.accentGold,
         description: 'Visa, Mastercard, Amex — pago en USD',
-      ),
-      _PaymentMethodUiSpec(
-        id: 'zelle',
-        name: 'Zelle',
-        icon: Icons.attach_money,
-        color: Colors.grey,
-        description: 'Recarga en Dolares',
-      ),
-      _PaymentMethodUiSpec(
-        id: 'cash',
-        name: 'Efectivo',
-        icon: Icons.payments_rounded,
-        color: Colors.grey,
-        description: 'Pago presencial en efectivo',
       ),
     ];
 

@@ -907,40 +907,40 @@ class _WalletScreenState extends State<WalletScreen> {
             PaymentMethodSelector(onMethodSelected: (methodId) async {
               Navigator.pop(ctx);
 
-              if (methodId == 'pago_movil') {
-                LoadingOverlay.show(context);
-                try {
-                  // Check if user has a payment method
-                  final methods = await Supabase.instance.client
-                      .from('user_payment_methods')
-                      .select('id')
-                      .eq('user_id', player.userId)
-                      .limit(1);
+              // if (methodId == 'pago_movil') {
+              //   LoadingOverlay.show(context);
+              //   try {
+              //     // Check if user has a payment method
+              //     final methods = await Supabase.instance.client
+              //         .from('user_payment_methods')
+              //         .select('id')
+              //         .eq('user_id', player.userId)
+              //         .limit(1);
 
-                  if (!mounted) return;
-                  LoadingOverlay.hide(context);
+              //     if (!mounted) return;
+              //     LoadingOverlay.hide(context);
 
-                  if (methods.isEmpty) {
-                    // Show Add Dialog
-                    final bool? success = await showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (_) => const AddPaymentMethodDialog());
+              //     if (methods.isEmpty) {
+              //       // Show Add Dialog
+              //       final bool? success = await showDialog(
+              //           context: context,
+              //           barrierDismissible: false,
+              //           builder: (_) => const AddPaymentMethodDialog());
 
-                    if (success == true) {
-                      _showPlanSelectorDialog();
-                    }
-                  } else {
-                    _showPlanSelectorDialog();
-                  }
-                } catch (e) {
-                  if (mounted) setState(() => _isLoading = false);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error validando métodos: $e')),
-                  );
-                }
-              } else if (methodId == 'stripe') {
-                // Stripe: show plan selector with card payment
+              //       if (success == true) {
+              //         _showPlanSelectorDialog();
+              //       }
+              //     } else {
+              //       _showPlanSelectorDialog();
+              //     }
+              //   } catch (e) {
+              //     if (mounted) setState(() => _isLoading = false);
+              //     ScaffoldMessenger.of(context).showSnackBar(
+              //       SnackBar(content: Text('Error validando métodos: $e')),
+              //     );
+              //   }
+              // } else if (methodId == 'stripe') {
+               if (methodId == 'stripe') { // Stripe: show plan selector with card payment
                 _showStripePlanSelectorDialog();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1684,7 +1684,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
   void _showWithdrawPlanDialog(Map<String, dynamic> method) {
     String? selectedPlanId;
-    final type = method['type'] ?? 'pago_movil';
+    final type = method['type'];
     final isStripe = type == 'stripe';
     final isAutomatedStripe = method['is_automated'] == true;
     final bankCode = method['bank_code'] ?? '???';
