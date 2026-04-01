@@ -779,6 +779,22 @@ class GameProvider extends ChangeNotifier implements IResettable {
         if (data['raceCompletedGlobal'] == true) {
           debugPrint("🏆 GLOBAL Race Completed confirmed by RPC!");
           _setRaceCompleted(true, 'Clue Completion (RPC)');
+        } else if (data['raceCompleted'] == true && data['raceCompletedGlobal'] != true) {
+          // Defense-in-depth: Edge Function should have called register_race_finisher
+          // server-side, but if it didn't propagate raceCompletedGlobal, try client-side.
+          debugPrint("🏁 raceCompleted=true but raceCompletedGlobal missing. Client-side fallback...");
+          final fallbackEventId = data['eventId']?.toString() ?? _currentEventId;
+          if (fallbackEventId != null) {
+            final rpcRes = await _gameService.registerFinisher(fallbackEventId);
+            if (rpcRes != null && rpcRes['success'] == true) {
+              data['raceCompletedGlobal'] = rpcRes['race_completed'];
+              data['prizeAmount'] = rpcRes['prize'];
+              data['position'] = rpcRes['position'];
+              if (rpcRes['race_completed'] == true) {
+                _setRaceCompleted(true, 'Clue Completion (Client Fallback)');
+              }
+            }
+          }
         } else {
           debugPrint(
               "👤 User finished clues, but Race is NOT globally finished yet.");

@@ -96,41 +96,8 @@ class EventProvider with ChangeNotifier {
 
       final index = _events.indexWhere((e) => e.id == eventId);
       if (index != -1) {
-        // Create a copy with updated status
-        // Since GameEvent fields are final, we need to create a new instance
-        // copying all fields but status.
-        // Ideally GameEvent should have a copyWith method.
-        // Assuming we rely on fetchEvents refresh or just optimistic update for now.
-        // Let's implement a manual copy for now if copyWith is missing,
-        // or just fetch updated event. Fetching is safer.
-        // But for UI responsiveness, let's update local list if possible.
-        // I'll check GameEvent for copyWith. If not there, I will just refetch or do a manual copy.
-        // Given I verified GameEvent and it didn't have copyWith in the view_file output (Step 167),
-        // I will implement a manual copy here for the specific field, or cleaner: refetch.
-        // Actually, looking at the code, GameEvent is a simple PODO.
-
-        // Let's try to do a manual update on the list by creating a new object.
         final old = _events[index];
-        _events[index] = GameEvent(
-          id: old.id,
-          title: old.title,
-          description: old.description,
-          locationName: old.locationName,
-          latitude: old.latitude,
-          longitude: old.longitude,
-          date: old.date,
-          createdByAdminId: old.createdByAdminId,
-          clue: old.clue,
-          imageUrl: old.imageUrl,
-          maxParticipants: old.maxParticipants,
-          pin: old.pin,
-          status: status, // UPDATED
-          completedAt: old.completedAt,
-          winnerId: old.winnerId,
-          type: old.type,
-          entryFee: old.entryFee,
-          currentParticipants: old.currentParticipants,
-        );
+        _events[index] = old.copyWith(status: status);
         notifyListeners();
       }
     } catch (e) {
@@ -148,27 +115,7 @@ class EventProvider with ChangeNotifier {
       // Optimistic local update
       final index = _events.indexWhere((e) => e.id == eventId);
       if (index != -1) {
-        final old = _events[index];
-        _events[index] = GameEvent(
-          id: old.id,
-          title: old.title,
-          description: old.description,
-          locationName: old.locationName,
-          latitude: old.latitude,
-          longitude: old.longitude,
-          date: old.date,
-          createdByAdminId: old.createdByAdminId,
-          clue: old.clue,
-          imageUrl: old.imageUrl,
-          maxParticipants: old.maxParticipants,
-          pin: old.pin,
-          status: 'active', // RPC guarantees this
-          completedAt: old.completedAt,
-          winnerId: old.winnerId,
-          type: old.type,
-          entryFee: old.entryFee,
-          currentParticipants: old.currentParticipants,
-        );
+        _events[index] = _events[index].copyWith(status: 'active');
         notifyListeners();
       }
     } catch (e) {
@@ -313,10 +260,13 @@ class EventProvider with ChangeNotifier {
               final Map<String, dynamic>? newSpectatorConfig =
                   record['spectator_config'];
               final int? newPot = record['pot'];
+              final int? newConfiguredWinners =
+                  (record['configured_winners'] as num?)?.toInt();
 
               _events[index] = old.copyWith(
                 status: newStatus,
                 pot: newPot,
+                configuredWinners: newConfiguredWinners,
                 spectatorConfig: newSpectatorConfig,
                 storePrices: newStorePricesRaw
                     ?.map((k, v) => MapEntry(k, (v as num).toInt())),

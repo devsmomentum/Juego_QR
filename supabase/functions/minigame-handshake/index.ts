@@ -186,7 +186,42 @@ serve(async (req) => {
         }, 200);
       }
 
-      return jsonResponse(data ?? {});
+      // ─── SERVER-SIDE RACE COMPLETION ───────────────────────────────────
+      // If submit_clue_answer detected this was the last clue, register the
+      // finisher atomically from the server (service_role) to avoid relying
+      // on the client to make a separate RPC call.
+      const responseData: Record<string, unknown> = { ...(data ?? {}) };
+
+      if (data?.raceCompleted === true && data?.eventId) {
+        // Extract user_id from the session row (already fetched above)
+        const { data: sessionUser } = await supabaseAdmin
+          .from("minigame_sessions")
+          .select("user_id")
+          .eq("id", sessionId)
+          .single();
+
+        if (sessionUser?.user_id) {
+          console.log(`[minigame-handshake] 🏆 Race completed! Registering finisher server-side for user ${sessionUser.user_id}`);
+
+          // Use a pure service_role client (no user auth header) for register_race_finisher
+          const svcClient = createClient(supabaseUrl, serviceKey);
+          const { data: finisherResult, error: finisherError } = await svcClient.rpc("register_race_finisher", {
+            p_event_id: data.eventId,
+            p_user_id: sessionUser.user_id,
+          });
+
+          if (finisherError) {
+            console.error("[minigame-handshake] register_race_finisher error:", finisherError);
+          } else if (finisherResult) {
+            console.log("[minigame-handshake] register_race_finisher result:", finisherResult);
+            responseData.raceCompletedGlobal = finisherResult.race_completed ?? false;
+            responseData.prize = finisherResult.prize ?? 0;
+            responseData.position = finisherResult.position ?? 0;
+          }
+        }
+      }
+
+      return jsonResponse(responseData);
     }
 
     // ─── ACTION: SKIP-CLUE (Admin-only via Edge Function) ───────────────

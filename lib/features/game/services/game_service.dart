@@ -453,7 +453,7 @@ class GameService {
           final eventIdToUse = eventId ?? data['eventId'];
 
           if (eventIdToUse != null) {
-            final rpcRes = await _registerFinisher(eventIdToUse);
+            final rpcRes = await registerFinisher(eventIdToUse);
             if (rpcRes != null && rpcRes['success'] == true) {
               // Inject prize/position into response so UI knows
               final newData = Map<String, dynamic>.from(data);
@@ -476,7 +476,7 @@ class GameService {
   }
 
   /// Registra al finalista en el backend de forma atómica.
-  Future<Map<String, dynamic>?> _registerFinisher(String eventId) async {
+  Future<Map<String, dynamic>?> registerFinisher(String eventId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;

@@ -26,6 +26,11 @@ subprojects {
     afterEvaluate {
         if (project.hasProperty("android")) {
             val android = project.extensions.getByName("android") as com.android.build.gradle.BaseExtension
+
+            // --- ADD THESE LINES HERE ---
+            android.compileSdkVersion(36) 
+            // This forces plugins like jailbreak_detection to use SDK 36
+            // ----------------------------
             
             // [FIX] Inject namespace if missing (required by AGP 8.0+)
             if (android.namespace == null) {
