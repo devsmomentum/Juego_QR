@@ -544,4 +544,45 @@ class AppConfigService {
       return false;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // MERCHANDISE STORE TOGGLE
+  // ---------------------------------------------------------------------------
+
+  /// Returns true if the merchandise store (Tienda) tab is enabled.
+  /// Defaults to false (hidden) on any error — store stays hidden until
+  /// an admin explicitly enables it.
+  Future<bool> isMerchandiseStoreEnabled() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'merchandise_store_enabled')
+          .maybeSingle();
+
+      if (response == null || response['value'] == null) return false;
+      final value = response['value'];
+      if (value is bool) return value;
+      if (value is String) return value.toLowerCase() == 'true';
+      return false;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching merchandise_store_enabled: $e');
+      return false;
+    }
+  }
+
+  /// Toggles the merchandise store visibility via a secure RPC.
+  /// The RPC validates that the caller is an admin before applying changes.
+  Future<bool> setMerchandiseStoreEnabled(bool enabled) async {
+    try {
+      await _supabase.rpc('toggle_merchandise_store', params: {
+        'p_enabled': enabled,
+      });
+      debugPrint('[AppConfigService] merchandise_store_enabled set to $enabled');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error toggling merchandise store: $e');
+      return false;
+    }
+  }
 }

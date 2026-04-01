@@ -58,6 +58,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   bool _isAutoTheme = true; // Auto theme based on Venezuela time
   bool _isNewlyRegistered = false; // Flag to track if the user just registered
   Timer? _themeTimer; // Timer to periodically check time
+  DateTime? _lastLoginTime; // Guard: suppress stale session validation right after login
 
   List<PowerItem> _shopItems = PowerItem.getShopItems();
 
@@ -278,9 +279,11 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Future<void> login(String email, String password) async {
     try {
       _isNewlyRegistered = false; // Regular login is not a registration
+      _lastLoginTime = DateTime.now(); // Guard: mark login start
       final userId = await _authService.login(email, password);
       await restoreSession(userId);
     } catch (e) {
+      _lastLoginTime = null;
       debugPrint('Error logging in: $e');
       rethrow;
     }
@@ -290,6 +293,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
       {String? cedula, String? phone}) async {
     try {
       _isNewlyRegistered = true; // MARK AS NEWLY REGISTERED
+      _lastLoginTime = DateTime.now(); // Guard: same as login
       final userId = await _authService.register(name, email, password,
           cedula: cedula, phone: phone);
 
@@ -298,6 +302,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         await restoreSession(userId);
       }
     } catch (e) {
+      _lastLoginTime = null;
       debugPrint('Error registering: $e');
       rethrow;
     }
@@ -392,6 +397,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Future<void> logout({bool clearBanMessage = true}) async {
     if (_isLoggingOut) return;
     _isLoggingOut = true;
+    _lastLoginTime = null; // Clear login guard on logout
 
     try {
       // Use centralized AuthService logout which triggers callbacks
@@ -985,6 +991,8 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   /// Restores session by fetching profile AND auto-joining the user's latest event if applicable.
   /// This should ONLY be called on explicit Login or App Start.
   Future<void> restoreSession(String userId) async {
+    // Guard: protect session validation during restore (covers SplashScreen auto-login)
+    _lastLoginTime ??= DateTime.now();
     await _fetchProfile(userId, restoreSessionContext: true);
     await _checkTutorialStatus();
   }
@@ -1268,7 +1276,36 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
             final isValid = await sessionService.isSessionValid(remoteSessionId);
             
             if (!isValid) {
-              debugPrint('PlayerProvider: 🚨 Session conflict detected! An active session exists on another device. Logging out...');
+              // Grace period: skip validation for 8s after login to avoid
+              // stale Realtime events from causing a false logout.
+              if (_lastLoginTime != null &&
+                  DateTime.now().difference(_lastLoginTime!).inSeconds < 8) {
+                debugPrint('PlayerProvider: ⚠️ Session mismatch during login grace period. Skipping logout.');
+                _fetchProfile(userId);
+                return;
+              }
+
+              // Double-check: Realtime might have delivered stale data.
+              // A direct SELECT gives the authoritative DB value.
+              try {
+                final freshProfile = await _supabase
+                    .from('profiles')
+                    .select('current_session_id')
+                    .eq('id', userId)
+                    .maybeSingle();
+                final freshRemote = freshProfile?['current_session_id'] as String?;
+                final stillInvalid = !(await sessionService.isSessionValid(freshRemote));
+
+                if (!stillInvalid) {
+                  debugPrint('PlayerProvider: ✅ Realtime mismatch was stale. DB confirms session is valid.');
+                  _fetchProfile(userId);
+                  return;
+                }
+              } catch (e) {
+                debugPrint('PlayerProvider: Error double-checking session: $e');
+              }
+
+              debugPrint('PlayerProvider: 🚨 Session conflict confirmed! Logging out...');
               _banMessage = 'Tu sesión se inició en otro dispositivo.';
               await logout(clearBanMessage: false);
               return;

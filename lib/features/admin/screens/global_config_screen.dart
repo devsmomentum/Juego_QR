@@ -62,6 +62,8 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
   bool _isTogglingRecharge = false;
   bool _isSavingPaymentMethods = false;
   bool _minigameMinDurationEnabled = true;
+  bool _merchandiseStoreEnabled = false;
+  bool _isTogglingMerchandiseStore = false;
 
   PaymentMethodsConfig _paymentMethodsConfig =
       PaymentMethodsConfig.fallbackAllDisabled();
@@ -79,6 +81,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       _ConfigSection(id: 'exchange', title: 'Tasa de Cambio BCV', icon: Icons.currency_exchange),
       _ConfigSection(id: 'fee', title: 'Comisión de Pasarela', icon: Icons.percent),
       _ConfigSection(id: 'recharge', title: 'Botón de Recarga', icon: Icons.add_card),
+      _ConfigSection(id: 'merchandise_store', title: 'Tienda de Mercancía', icon: Icons.storefront),
       _ConfigSection(id: 'payment_methods', title: 'Métodos de Pago', icon: Icons.tune),
       _ConfigSection(id: 'pago_movil', title: 'Pago Móvil Destinatario', icon: Icons.phone_android),
       _ConfigSection(id: 'version', title: 'Control de Versiones', icon: Icons.system_update_alt),
@@ -123,6 +126,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
         _configService.getMinigameMinDurationsByDifficulty(),
         _configService.getPagoMovilRecipient(),
         _configService.getPaymentMethodsStatus(),
+        _configService.isMerchandiseStoreEnabled(),
       ]);
       _exchangeRateController.text = (results[0] as double).toStringAsFixed(2);
       _gatewayFeeController.text = (results[1] as double).toStringAsFixed(2);
@@ -162,6 +166,7 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
       _pmTelefonoController.text = pmRecipient['telefono'] ?? '';
 
       _paymentMethodsConfig = results[8] as PaymentMethodsConfig;
+      _merchandiseStoreEnabled = results[9] as bool;
     } catch (e) {
       debugPrint('[GlobalConfigScreen] Error loading config: $e');
     } finally {
@@ -291,6 +296,25 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
           content: Text(success
               ? (value ? 'Recarga habilitada' : 'Recarga en mantenimiento')
               : 'Error al cambiar estado de recarga'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleMerchandiseStore(bool value) async {
+    setState(() => _isTogglingMerchandiseStore = true);
+    final success = await _configService.setMerchandiseStoreEnabled(value);
+    if (mounted) {
+      setState(() {
+        if (success) _merchandiseStoreEnabled = value;
+        _isTogglingMerchandiseStore = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success
+              ? (value ? 'Tienda habilitada' : 'Tienda deshabilitada')
+              : 'Error al cambiar estado de la tienda'),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );
@@ -541,15 +565,17 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
                   if (_sectionMatchesSearch(_sections[2]))
                     _buildCollapsibleSection(_sections[2], _buildRechargeContent()),
                   if (_sectionMatchesSearch(_sections[3]))
-                    _buildCollapsibleSection(_sections[3], _buildPaymentMethodsContent()),
+                    _buildCollapsibleSection(_sections[3], _buildMerchandiseStoreContent()),
                   if (_sectionMatchesSearch(_sections[4]))
-                    _buildCollapsibleSection(_sections[4], _buildPagoMovilContent()),
+                    _buildCollapsibleSection(_sections[4], _buildPaymentMethodsContent()),
                   if (_sectionMatchesSearch(_sections[5]))
-                    _buildCollapsibleSection(_sections[5], _buildVersionContent()),
+                    _buildCollapsibleSection(_sections[5], _buildPagoMovilContent()),
                   if (_sectionMatchesSearch(_sections[6]))
-                    _buildCollapsibleSection(_sections[6], _buildPowerCostsContent()),
+                    _buildCollapsibleSection(_sections[6], _buildVersionContent()),
                   if (_sectionMatchesSearch(_sections[7]))
-                    _buildCollapsibleSection(_sections[7], _buildMinigameTimingContent()),
+                    _buildCollapsibleSection(_sections[7], _buildPowerCostsContent()),
+                  if (_sectionMatchesSearch(_sections[8]))
+                    _buildCollapsibleSection(_sections[8], _buildMinigameTimingContent()),
 
                   const SizedBox(height: 24),
 
@@ -842,6 +868,56 @@ class _GlobalConfigScreenState extends State<GlobalConfigScreen> {
             : Switch(
                 value: _rechargeEnabled,
                 onChanged: _toggleRecharge,
+                activeColor: AppTheme.lGoldAction,
+                inactiveThumbColor: Colors.orange,
+                inactiveTrackColor: Colors.orange.withOpacity(0.3),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildMerchandiseStoreContent() {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _merchandiseStoreEnabled
+                    ? 'Visible — los usuarios ven la Tienda'
+                    : 'Oculta — la Tienda no aparece en el menú',
+                style: TextStyle(
+                  color: _merchandiseStoreEnabled
+                      ? AppTheme.lGoldText
+                      : Colors.orange.shade700,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Controla la visibilidad del tab "Tienda" en la pantalla principal.',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        _isTogglingMerchandiseStore
+            ? SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.lGoldAction,
+                ),
+              )
+            : Switch(
+                value: _merchandiseStoreEnabled,
+                onChanged: _toggleMerchandiseStore,
                 activeColor: AppTheme.lGoldAction,
                 inactiveThumbColor: Colors.orange,
                 inactiveTrackColor: Colors.orange.withOpacity(0.3),

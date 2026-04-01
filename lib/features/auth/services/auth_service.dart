@@ -247,11 +247,12 @@ class AuthService {
       debugPrint('AuthService: Error clearing local token: $e');
     }
 
-    // 3. Cerrar sesión en Supabase (invalida el token en el servidor)
+    // 3. Cerrar sesión local (no revoca tokens del servidor para evitar
+    //    invalidar sesiones de otros dispositivos que acaban de loguearse).
     try {
-      await _supabase.auth.signOut();
+      await _supabase.auth.signOut(scope: SignOutScope.local);
     } catch (e) {
-      debugPrint('AuthService: Error closing server session (token already cleared locally): $e');
+      debugPrint('AuthService: Error closing local session: $e');
       // No re-lanzamos — el token local ya fue borrado, la App puede continuar
     }
   }

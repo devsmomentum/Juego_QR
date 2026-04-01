@@ -51,6 +51,7 @@ import '../../social/screens/wallet_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/utils/global_keys.dart';
 import '../services/betting_service.dart';
+import '../../../core/services/app_config_service.dart';
 
 class ScenariosScreen extends StatefulWidget {
   final bool isOnline;
@@ -93,6 +94,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   final Map<String, int> _bettingPotMap = {};
   final Map<String, int> _bettingCountMap = {};
   final Set<String> _bettingLoadingEvents = {};
+
+  // Merchandise store (Tienda) visibility flag
+  bool _isMerchandiseStoreEnabled = false;
 
   // The default user role for scenario selection
   UserRole get role => UserRole.player;
@@ -614,6 +618,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       _cleanupGameState();
 
       _refreshData();
+      // Check merchandise store visibility
+      _loadMerchandiseStoreFlag();
       // Empezar a precargar el video del primer avatar para que sea instantáneo
       VideoPreloadService()
           .preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
@@ -746,6 +752,14 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
   Future<void> _refreshData() async {
     await _loadEvents();
+  }
+
+  Future<void> _loadMerchandiseStoreFlag() async {
+    final configService = AppConfigService(supabaseClient: Supabase.instance.client);
+    final enabled = await configService.isMerchandiseStoreEnabled();
+    if (mounted) {
+      setState(() => _isMerchandiseStoreEnabled = enabled);
+    }
   }
 
   String _formatCompactAmount(int amount) {
@@ -1833,7 +1847,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                   _buildNavItem(1, Icons.explore_outlined, 'Escenarios'),
                   _buildNavItem(
                       2, Icons.account_balance_wallet_outlined, 'Wallet'),
-                  _buildNavItem(3, Icons.storefront_outlined, 'Tienda'),
+                  if (_isMerchandiseStoreEnabled)
+                    _buildNavItem(3, Icons.storefront_outlined, 'Tienda'),
                   _buildNavItem(4, Icons.person_outline, 'Perfil'),
                 ],
               ),
@@ -2131,7 +2146,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                         // WalletScreen and ProfileScreen are separate widgets,
                         // their RefreshIndicators should be implemented within their own files.
                         WalletScreen(hideScaffold: true),
-                        const MerchandiseStoreScreen(),
+                        if (_isMerchandiseStoreEnabled)
+                          const MerchandiseStoreScreen()
+                        else
+                          const SizedBox.shrink(),
                         const ProfileScreen(hideScaffold: true),
                       ],
                     ),
