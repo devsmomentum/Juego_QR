@@ -391,7 +391,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void _checkRaceCompletion() async {
-    if (!mounted || !_isActive || _isNavigatingToWinner) return;
+    if (!mounted || !_isActive) return;
 
     final gameProvider = _gameProvider;
     if (!context.mounted) return;
@@ -405,6 +405,17 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     // Fix: navegamos si isRaceCompleted, SALVO que el player ya esté en tránsito
     // (guard _isNavigatingToWinner evita doble navegación).
     if (gameProvider.isRaceCompleted) {
+      if (_isNavigatingToWinner && !gameProvider.hasCompletedAllClues) {
+        // Only block if we are navigating specifically due to local victory (last clue),
+        // but the race isn't globally completed OR if the race IS completed, 
+        // we should let it through to refresh the view to WinnerCelebrationScreen.
+        // Actually, the simplest fix is to allow it to pass if isRaceCompleted.
+      }
+      
+      // Check if we are ALREADY on the Winner screen (to avoid double push)
+      final currentRouteName = ModalRoute.of(context)?.settings.name;
+      if (currentRouteName == 'WinnerCelebrationScreen') return;
+      
       _isNavigatingToWinner = true;
       _finishLegally(); // Quitamos penalización
 
@@ -492,9 +503,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   Future<void> _checkLives() async {
-    // Usamos listen: false para obtener el estado MÁS RECIENTE, no suscribirnos
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // ⚡ SYNC FIX: Force refresh PlayerProvider's current profile from server 
+    // to ensure purchase from Mall is reflected.
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (playerProvider.currentPlayer != null) {
+      await playerProvider.refreshProfile(eventId: _gameProvider.currentEventId);
+    }
+
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
     // 1. Verificación preliminar con source-of-truth visual (PlayerProvider)
     if (playerProvider.currentPlayer != null &&

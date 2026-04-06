@@ -95,6 +95,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         // CRITICAL FIX: Sincronizar inventario inmediatamente
         final effectProvider =
             Provider.of<PowerEffectManager>(context, listen: false);
+        
+        // Force synchronous inventory refresh to ensure getPowerCount is accurate
+        await playerProvider.fetchInventory(
+            playerProvider.currentPlayer!.userId, eventId);
         await playerProvider.syncRealInventory(effectProvider: effectProvider);
 
         // Actualizar vidas si es necesario

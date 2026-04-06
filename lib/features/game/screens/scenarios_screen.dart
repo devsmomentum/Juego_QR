@@ -630,7 +630,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Subscribe to route observer to detect when returning to this screen
-    routeObserver.subscribe(this, ModalRoute.of(context) as ModalRoute<void>);
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route as ModalRoute<void>);
+    }
 
     // Precargar imágenes de fondo para transiciones suaves (con límites de memoria)
     precacheImage(
@@ -751,6 +754,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   }
 
   Future<void> _refreshData() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    // ⚡ CRÍTICO: Recargar perfil para ver compras recientes (vidas/monedas)
+    await playerProvider.reloadProfile();
     await _loadEvents();
   }
 
@@ -841,7 +847,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   void didPopNext() {
     // This is called when the top route has been popped off, and this route shows up.
     debugPrint("🔄 ScenariosScreen: didPopNext - Refreshing data...");
-    _loadEvents();
+    _refreshData();
   }
 
   Future<void> _onScenarioSelected(Scenario scenario) async {

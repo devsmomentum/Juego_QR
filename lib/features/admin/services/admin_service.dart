@@ -174,14 +174,43 @@ class AdminService {
       debugPrint('AdminService: RPC Response: $response');
 
       final data = response as Map<String, dynamic>;
+      final bool success = data['success'] ?? false;
 
-      // Mapear respuesta del RPC al formato esperado por la UI si es necesario
+      List<Map<String, dynamic>> mappedResults = [];
+
+      // Si fue exitoso, mapeamos los campos y buscamos nombres reales de usuarios
+      if (success && data['results'] != null) {
+        final List rawResults = data['results'] as List;
+        final List<String> userIds =
+            rawResults.map((r) => r['user_id'] as String).toList();
+
+        // 1. Buscar nombres de los perfiles para mostrar algo legible en el Admin
+        final profiles = await _supabase
+            .from('profiles')
+            .select('id, name')
+            .inFilter('id', userIds);
+
+        final Map<String, String> namesMap = {
+          for (var p in profiles) p['id'] as String: p['name'] as String
+        };
+
+        // 2. Mapear de [rank, user_id] a [place, user] que espera la UI
+        for (var res in rawResults) {
+          final uid = res['user_id'] as String;
+          mappedResults.add({
+            'place': res['rank'] ?? 0,
+            'user': namesMap[uid] ?? 'Usuario Desconocido',
+            'amount': res['amount'] ?? 0,
+          });
+        }
+      }
+
       return {
-        'success': data['success'] ?? false,
+        'success': success,
         'message': data['message'] ??
-            (data['success'] ? 'Distribución completada' : 'Error desconocido'),
+            (success ? 'Distribución completada' : 'Error desconocido'),
         'pot': data['distributable_pot'] ?? 0.0,
-        'results': data['results'] ?? [],
+        'results': mappedResults,
         'winners_count': data['winners_count'] ?? 0,
       };
     } catch (e) {
@@ -189,10 +218,12 @@ class AdminService {
       return {
         'success': false,
         'message': 'Error de conexión o RPC: $e',
-        'pot': 0.0
+        'pot': 0.0,
+        'results': [],
       };
     }
   }
+
 
   // Helper para obtener ranking (reutiliza lógica similar a GameService pero simplificada)
   Future<List<dynamic>> _gameLeaderboard(String eventId) async {

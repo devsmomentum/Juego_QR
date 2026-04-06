@@ -643,7 +643,16 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
           // Jugadores activos pagan con monedas de sesión (game_players.coins)
           _currentPlayer!.coins -= cost;
         }
+        
+        // SYNC FIX: Fetch inventory immediately and notify
         await fetchInventory(_currentPlayer!.userId, eventId);
+        
+        // Optimistic local update for the item list (backward compatibility with _currentPlayer.inventory)
+        if (!isPower && itemId != 'extra_life') {
+           // If it's a generic item, reload profile to be sure
+           await reloadProfile();
+        }
+        
         notifyListeners();
       }
       return result.success;

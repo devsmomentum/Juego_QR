@@ -266,11 +266,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
       final lives = await _gameService.fetchLives(_currentEventId!, userId);
 
       if (lives != null) {
-        _lives = lives;
+        if (_lives != lives) {
+          _lives = lives;
+          notifyListeners();
+        }
       } else {
-        _lives = 3;
+        // Fallback for null (standard lives)
+        if (_lives != 3) {
+          _lives = 3;
+          notifyListeners();
+        }
       }
-      notifyListeners();
     } catch (e) {
       debugPrint('Error fetching lives: $e');
     }
@@ -279,6 +285,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   // Sync lives manually (e.g. from PlayerProvider purchase)
   void syncLives(int newLives) {
     if (_lives != newLives) {
+      debugPrint('[LIVES_SYNC] 🔩 Manual sync requested: $_lives -> $newLives');
       _lives = newLives;
       notifyListeners();
     }
@@ -572,9 +579,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
         // [FIX] Proteger el estado 'isCompleted' optimista contra respuestas del servidor stale.
         // Si localmente ya la tenemos como completada, no desmarcarla en un fetch silencioso.
         for (var newClue in fetchedClues) {
-          final oldClue = _clues.firstWhere((c) => c.id == newClue.id, orElse: () => newClue);
+          final oldClue = _clues.firstWhere((c) => c.id == newClue.id,
+              orElse: () => newClue);
           if (oldClue.isCompleted && !newClue.isCompleted) {
-            debugPrint('[FETCH_CLUES] 🛡️ Protecting optimistic completion for clue ${newClue.id}');
+            debugPrint(
+                '[FETCH_CLUES] 🛡️ Protecting optimistic completion for clue ${newClue.id}');
             newClue.isCompleted = true;
           }
         }
@@ -583,20 +592,23 @@ class GameProvider extends ChangeNotifier implements IResettable {
       _hintActive = false;
       _activeHintText = null;
 
+      // [FIX] Sincronización Estricta de Índice
+      // El servidor determina el índice basándose en qué pistas tienen is_completed = true
       final serverIndex = _clues.indexWhere((c) => !c.isCompleted);
       final newIndex = (serverIndex != -1) ? serverIndex : _clues.length;
-      
-      // OPTIMIZACIÓN: Si es un refresh silencioso, evitar volver atrás en el índice
-      // (protege contra race conditions donde el fetch silencia devuelve datos antes de que el RPC de completitud se procese).
+
+      // [ROBUSTNESS]: Solo actualizamos el índice si avanzamos. 
+      // Si el servidor envía datos 'viejos' (stale) que dicen que no hemos terminado una pista 
+      // que YA marcamos como completada localmente (y confirmada), ignoramos el rollback.
       if (!silent || newIndex >= _currentClueIndex) {
-        debugPrint('[FETCH_CLUES] 🧭 Updating index: $_currentClueIndex -> $newIndex (silent: $silent)');
+        debugPrint(
+            '[FETCH_CLUES] 🧭 Updating index strictly: $_currentClueIndex -> $newIndex (silent: $silent)');
         _currentClueIndex = newIndex;
       } else {
-        debugPrint('[FETCH_CLUES] ⚠️ Stale index detected: server says $newIndex but local is $_currentClueIndex. Ignoring revert.');
+        debugPrint(
+            '[FETCH_CLUES] ⚠️ Stale state prevention: Server says index $newIndex but local is $_currentClueIndex. Keeping current progress.');
       }
-    } catch (e) {
-      _errorMessage = 'Error fetching clues: $e';
-    } finally {
+
       // ⚡ CRÍTICO: Suscribirse o actualizar suscripción una vez que totalClues es real
       subscribeToRaceStatus();
 
@@ -622,7 +634,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
           debugPrint('⚠️ Error fetching sponsor in GameProvider: $e');
         }
       }
-
+    } catch (e) {
+      _errorMessage = 'Error fetching clues: $e';
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -801,7 +815,16 @@ class GameProvider extends ChangeNotifier implements IResettable {
         }
 
         // Fire-and-forget: confirmar estado desde el servidor con un respiro para el commit DB
-        Future.delayed(const Duration(milliseconds: 300), () => fetchClues(silent: true));
+        // Aumentado a 800ms para asegurar que el trigger de unlock en DB haya terminado
+        Future.delayed(const Duration(milliseconds: 800), () async {
+          await fetchClues(silent: true);
+          // Retry if next clue is still locked but we know we advanced
+          if (_currentClueIndex < _clues.length && _clues[_currentClueIndex].isLocked) {
+             debugPrint("🔄 Next clue still locked, retrying fetch...");
+             await Future.delayed(const Duration(milliseconds: 1000));
+             await fetchClues(silent: true);
+          }
+        });
         unawaited(fetchLeaderboard());
         return data;
       }

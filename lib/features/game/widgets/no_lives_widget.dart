@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../mall/screens/mall_screen.dart';
+import '../providers/game_provider.dart';
 import 'buy_coins_with_clovers_modal.dart';
 
 class NoLivesWidget extends StatefulWidget {
@@ -302,11 +303,25 @@ class _NoLivesWidgetState extends State<NoLivesWidget>
                                               onTap: () async {
                                                 final bool? success = await BuyCoinsWithCloversModal.show(context);
                                                 if (success == true) {
-                                                  if (!context.mounted) return;
+                                                  if (!btnContext.mounted) return;
+                                                  // Usamos el context del builder que tiene acceso directo a PlayerProvider
+                                                  final pp = Provider.of<PlayerProvider>(btnContext, listen: false);
+                                                  final gp = Provider.of<GameProvider>(btnContext, listen: false);
+                                                  
                                                   await Navigator.push(
-                                                    context,
+                                                    btnContext,
                                                     MaterialPageRoute(builder: (_) => const MallScreen()),
                                                   );
+                                                  
+                                                  // Al regresar del Mall, refrescamos el perfil para detectar si compró vidas
+                                                  if (btnContext.mounted) {
+                                                    debugPrint("[NO_LIVES] Returning from Mall: Refreshing profile and GameProvider lives...");
+                                                    await pp.refreshProfile(eventId: gp.currentEventId);
+                                                    // CRITICAL: Sync lives to GameProvider so NoLivesWidget can be dismissed by PuzzleScreen
+                                                    if (pp.currentPlayer != null) {
+                                                      await gp.fetchLives(pp.currentPlayer!.userId);
+                                                    }
+                                                  }
                                                 }
                                               },
                                               child: const Padding(
@@ -359,13 +374,21 @@ class _NoLivesWidgetState extends State<NoLivesWidget>
                                           color: Colors.transparent,
                                           child: InkWell(
                                             borderRadius: BorderRadius.circular(15),
-                                            onTap: () async {
-                                              await Navigator.push(
-                                                context,
-                                                MaterialPageRoute(builder: (_) => const MallScreen()),
-                                              );
-                                              if (!context.mounted) return;
-                                            },
+                                              onTap: () async {
+                                                final pp = Provider.of<PlayerProvider>(btnContext, listen: false);
+                                                final gp = Provider.of<GameProvider>(btnContext, listen: false);
+
+                                                await Navigator.push(
+                                                  btnContext,
+                                                  MaterialPageRoute(builder: (_) => const MallScreen()),
+                                                );
+                                                
+                                                // Al regresar del Mall, refrescamos el perfil para detectar si compró vidas
+                                                if (btnContext.mounted) {
+                                                  debugPrint("[NO_LIVES] Returning from Mall: Refreshing profile...");
+                                                  await pp.refreshProfile(eventId: gp.currentEventId);
+                                                }
+                                              },
                                             child: const Padding(
                                               padding: EdgeInsets.symmetric(vertical: 16),
                                               child: Row(

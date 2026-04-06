@@ -85,11 +85,9 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       debugPrint(
           "💰 Wallet refreshed on podium. Balance: ${playerProvider.currentPlayer?.clovers}");
 
-      // Fetch prizes for everyone
+      // Sync data
       _fetchPrizes();
-      // Fetch podium winners from DB (final_placement)
       _fetchPodiumWinners();
-      // Fetch bet outcome for spectators/bettors
       _fetchBetOutcome();
 
       // Add listener to self-correct position
@@ -99,23 +97,20 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       if (gameProvider.currentEventId != widget.eventId) {
         debugPrint(
             "🏆 WinnerScreen: EventID Mismatch (Provider: ${gameProvider.currentEventId} vs Widget: ${widget.eventId}). Fixing...");
-        // Re-initialize provider context for this event without heavy loading UI
         await gameProvider.fetchClues(eventId: widget.eventId, silent: true);
       }
 
       // Force a fresh fetch
       await gameProvider.fetchLeaderboard();
-
-      // Try immediate check
       _updatePositionFromLeaderboard();
 
-      // Safety timeout: If after 10 seconds we still loading, force show content
-      Future.delayed(const Duration(seconds: 10), () {
+      // Safety timeout: If after 20 seconds we still loading, force show content (Increased for mobile)
+      Future.delayed(const Duration(seconds: 20), () {
         if (mounted && _isLoading) {
           debugPrint("⚠️ Podium timeout: Forcing display with available data.");
           setState(() {
             _isLoading = false;
-            _podiumSyncIncomplete = true; // Mark that data may be incomplete
+            _podiumSyncIncomplete = true; 
           });
         }
       });
@@ -154,7 +149,7 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
       final supabase = Supabase.instance.client;
 
       int retries = 0;
-      const int maxRetries = 15;
+      const int maxRetries = 20; // Increased retries for mobile sync
       List<dynamic> topPlayers = [];
 
       while (retries < maxRetries) {
@@ -265,7 +260,8 @@ class _WinnerCelebrationScreenState extends State<WinnerCelebrationScreen> {
             if (mounted) {
               setState(() {
                 if (dbPosition > 0) _finalPosition = dbPosition;
-                if (clues > 0) _completedClues = clues;
+                // FIX: Use DB clues if widget was passed zero by a race condition
+                if (clues > 0 || _completedClues == 0) _completedClues = clues;
                 _isLoading = false;
               });
               if (dbPosition >= 1 && dbPosition <= 3) {

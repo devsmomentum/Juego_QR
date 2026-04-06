@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -20,8 +21,11 @@ class SecurityGuard {
   /// Detecta si el dispositivo del cliente ha sido vulnerado.
   static Future<void> assertDeviceIntegrity() async {
     try {
+      // FIX: kIsWeb must be checked before Platform to avoid "Unsupported operation" in browsers.
+      if (kIsWeb) return;
+
       if (!Platform.isAndroid && !Platform.isIOS) {
-        return; // Omitir chequeos nativos en Windows/Mac/Web locales
+        return; // Omitir chequeos nativos en Windows/Mac locales
       }
 
       final isJailbroken = await FlutterJailbreakDetection.jailbroken;
