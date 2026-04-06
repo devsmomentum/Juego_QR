@@ -82,12 +82,12 @@ serve(async (req) => {
       throw new Error("Esta orden ha expirado. Por favor crea una nueva compra.");
     }
 
-    const stripePI = order.stripe_payment_intent_id;
-    if (!stripePI) {
-      throw new Error("Orden sin PaymentIntent asociado");
+    const stripeRef = order.stripe_payment_intent_id;
+    if (!stripeRef) {
+      throw new Error("Orden sin referencia de pago asociada");
     }
 
-    // 4. RETRIEVE PAYMENT INTENT FROM STRIPE
+    // 4. RETRIEVE FROM STRIPE
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) {
       throw new Error("Server Misconfiguration: Missing STRIPE_SECRET_KEY");
@@ -98,30 +98,69 @@ serve(async (req) => {
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(stripePI);
+    const isCheckoutSession = stripeRef.startsWith("cs_");
+    let paymentIntentId = "";
+    let clientSecret = "";
+    let checkoutUrl = "";
 
-    // Verify the PI hasn't been paid or cancelled already
-    if (paymentIntent.status === "succeeded") {
-      // Payment was actually completed — mark order as success (webhook may have missed it)
-      await supabaseAdmin
-        .from("clover_orders")
-        .update({ status: "success", updated_at: new Date().toISOString() })
-        .eq("id", order_id);
-      throw new Error("Este pago ya fue completado. Tus tréboles serán acreditados.");
-    }
+    if (isCheckoutSession) {
+      // --- CHECKOUT SESSION (Web orders) ---
+      const session = await stripe.checkout.sessions.retrieve(stripeRef);
 
-    if (paymentIntent.status === "canceled") {
-      await supabaseAdmin
-        .from("clover_orders")
-        .update({ status: "cancelled", updated_at: new Date().toISOString() })
-        .eq("id", order_id);
-      throw new Error("Este pago fue cancelado. Por favor crea una nueva compra.");
-    }
+      if (session.status === "complete") {
+        await supabaseAdmin
+          .from("clover_orders")
+          .update({ status: "success", updated_at: new Date().toISOString() })
+          .eq("id", order_id);
+        throw new Error("Este pago ya fue completado. Tus tréboles serán acreditados.");
+      }
 
-    // Only allow resume for statuses that can still be completed
-    const resumableStatuses = ["requires_payment_method", "requires_confirmation", "requires_action"];
-    if (!resumableStatuses.includes(paymentIntent.status)) {
-      throw new Error(`Estado del pago no permite reintentar: ${paymentIntent.status}`);
+      if (session.status === "expired") {
+        await supabaseAdmin
+          .from("clover_orders")
+          .update({ status: "expired", updated_at: new Date().toISOString() })
+          .eq("id", order_id);
+        throw new Error("Esta sesión de pago expiró. Por favor crea una nueva compra.");
+      }
+
+      // Session is still open — return the checkout URL so the user can complete it
+      if (session.url) {
+        checkoutUrl = session.url;
+      } else {
+        throw new Error("No se pudo recuperar la URL de pago. Por favor crea una nueva compra.");
+      }
+
+      // If session has a payment_intent, also provide it
+      if (session.payment_intent) {
+        paymentIntentId = session.payment_intent as string;
+      }
+    } else {
+      // --- PAYMENT INTENT (Mobile orders) ---
+      const paymentIntent = await stripe.paymentIntents.retrieve(stripeRef);
+      paymentIntentId = stripeRef;
+
+      if (paymentIntent.status === "succeeded") {
+        await supabaseAdmin
+          .from("clover_orders")
+          .update({ status: "success", updated_at: new Date().toISOString() })
+          .eq("id", order_id);
+        throw new Error("Este pago ya fue completado. Tus tréboles serán acreditados.");
+      }
+
+      if (paymentIntent.status === "canceled") {
+        await supabaseAdmin
+          .from("clover_orders")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("id", order_id);
+        throw new Error("Este pago fue cancelado. Por favor crea una nueva compra.");
+      }
+
+      const resumableStatuses = ["requires_payment_method", "requires_confirmation", "requires_action"];
+      if (!resumableStatuses.includes(paymentIntent.status)) {
+        throw new Error(`Estado del pago no permite reintentar: ${paymentIntent.status}`);
+      }
+
+      clientSecret = paymentIntent.client_secret!;
     }
 
     // 5. GET CUSTOMER DATA FOR PAYMENT SHEET
@@ -150,18 +189,19 @@ serve(async (req) => {
 
     const extraData = order.extra_data ?? {};
 
-    console.log(`[stripe-resume] PI ${stripePI} status: ${paymentIntent.status}, resumable.`);
+    console.log(`[stripe-resume] Ref ${stripeRef}, isCheckout: ${isCheckoutSession}, resumable.`);
 
-    // 6. RETURN CLIENT SECRET
+    // 6. RETURN CLIENT SECRET OR CHECKOUT URL
     return new Response(
       JSON.stringify({
         success: true,
         data: {
-          client_secret: paymentIntent.client_secret,
-          payment_intent_id: stripePI,
+          client_secret: clientSecret || null,
+          payment_intent_id: paymentIntentId || null,
+          checkout_url: checkoutUrl || null,
+          is_checkout_session: isCheckoutSession,
           stripe_customer_id: stripeCustomerId || null,
           ephemeral_key_secret: ephemeralKeySecret || null,
-          amount_cents: paymentIntent.amount,
           clovers: extraData.clovers_amount ?? 0,
           plan_name: extraData.plan_name ?? "",
         },

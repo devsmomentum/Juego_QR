@@ -15,6 +15,7 @@ import '../widgets/payment_validation_widget.dart';
 import '../widgets/transaction_card.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -116,12 +117,33 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       }
 
       final paymentData = data['data'] as Map<String, dynamic>;
-      final clientSecret = paymentData['client_secret'] as String;
+      final clientSecret = paymentData['client_secret'] as String?;
+      final checkoutUrl = paymentData['checkout_url'] as String?;
+      final isCheckoutSession = paymentData['is_checkout_session'] == true;
       final stripeCustomerId = paymentData['stripe_customer_id'] as String?;
       final ephemeralKeySecret = paymentData['ephemeral_key_secret'] as String?;
 
+      // If it's a Checkout Session (web order), open the checkout URL
+      if (isCheckoutSession && checkoutUrl != null && checkoutUrl.isNotEmpty) {
+        final uri = Uri.parse(checkoutUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          // Refresh after user returns
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) _loadData();
+          });
+          return;
+        } else {
+          throw Exception('No se pudo abrir la URL de pago');
+        }
+      }
+
+      // For mobile PaymentIntent orders, we need a client_secret
+      if (clientSecret == null || clientSecret.isEmpty) {
+        throw Exception('No se pudo recuperar los datos de pago. Intenta crear una nueva compra.');
+      }
+
       if (kIsWeb) {
-        // On web, we can't re-present the payment sheet — user should create a new order
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

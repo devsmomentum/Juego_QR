@@ -90,8 +90,8 @@ serve(async (req) => {
 
         if (orderGateway === 'stripe') {
             // --- STRIPE CANCELLATION ---
-            const stripePI = order.stripe_payment_intent_id
-            if (stripePI) {
+            const stripeRef = order.stripe_payment_intent_id
+            if (stripeRef) {
                 const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')
                 if (stripeSecretKey) {
                     try {
@@ -99,21 +99,33 @@ serve(async (req) => {
                             apiVersion: "2024-06-20",
                             httpClient: Stripe.createFetchHttpClient(),
                         })
-                        const pi = await stripe.paymentIntents.cancel(stripePI)
-                        console.log(`[api_cancel_order] Stripe PI ${stripePI} cancelled. Status: ${pi.status}`)
+
+                        let cancelStatus = ''
+                        if (stripeRef.startsWith('cs_')) {
+                            // Checkout Session — expire it instead of cancelling a PI
+                            const session = await stripe.checkout.sessions.expire(stripeRef)
+                            cancelStatus = session.status ?? 'expired'
+                            console.log(`[api_cancel_order] Stripe Checkout Session ${stripeRef} expired. Status: ${cancelStatus}`)
+                        } else {
+                            // PaymentIntent — cancel directly
+                            const pi = await stripe.paymentIntents.cancel(stripeRef)
+                            cancelStatus = pi.status
+                            console.log(`[api_cancel_order] Stripe PI ${stripeRef} cancelled. Status: ${cancelStatus}`)
+                        }
+                        
                         await supabaseAdmin
                             .from('clover_orders')
                             .update({
                                 extra_data: {
                                     ...existingExtra,
                                     cancelled_at: new Date().toISOString(),
-                                    stripe_cancel_status: pi.status,
+                                    stripe_cancel_status: cancelStatus,
                                 }
                             })
                             .eq('id', order_id)
                     } catch (stripeErr: any) {
                         // PaymentIntent may already be cancelled/succeeded — that's OK
-                        console.warn(`[api_cancel_order] Stripe cancel for ${stripePI} failed:`, stripeErr.message)
+                        console.warn(`[api_cancel_order] Stripe cancel for ${stripeRef} failed:`, stripeErr.message)
                         await supabaseAdmin
                             .from('clover_orders')
                             .update({
