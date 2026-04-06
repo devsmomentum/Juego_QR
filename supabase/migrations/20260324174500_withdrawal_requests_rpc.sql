@@ -3,6 +3,8 @@
 -- Purpose: Ensure balance deduction + ledger logging are atomic
 -- ============================================================
 
+DROP FUNCTION IF EXISTS public.mark_withdrawal_completed(uuid, jsonb);
+
 CREATE TABLE IF NOT EXISTS public.withdrawal_requests (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid NOT NULL,
@@ -232,6 +234,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.mark_withdrawal_pending(uuid, jsonb);
 -- ------------------------------------------------------------
 -- RPC: Mark withdrawal pending (provider latency)
 -- ------------------------------------------------------------
@@ -270,6 +273,8 @@ $$;
 -- ------------------------------------------------------------
 -- RPC: Mark withdrawal completed
 -- ------------------------------------------------------------
+
+
 CREATE OR REPLACE FUNCTION public.mark_withdrawal_completed(
   p_request_id uuid,
   p_provider_data jsonb
@@ -314,6 +319,9 @@ $$;
 -- ------------------------------------------------------------
 -- RPC: Mark withdrawal failed and optionally refund
 -- ------------------------------------------------------------
+
+DROP FUNCTION IF EXISTS public.mark_withdrawal_failed(uuid, jsonb, boolean);
+
 CREATE OR REPLACE FUNCTION public.mark_withdrawal_failed(
   p_request_id uuid,
   p_provider_data jsonb,

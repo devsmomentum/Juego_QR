@@ -1,6 +1,8 @@
 -- Migration: Improved error handling for withdrawal processing
 -- Updates mark_withdrawal_completed and mark_withdrawal_failed with explicit RAISE EXCEPTION calls.
 
+DROP FUNCTION IF EXISTS public.mark_withdrawal_completed(uuid, jsonb);
+
 CREATE OR REPLACE FUNCTION public.mark_withdrawal_completed(
   p_request_id uuid,
   p_provider_data jsonb
@@ -66,7 +68,7 @@ BEGIN
   );
 END;
 $$;
-
+DROP FUNCTION IF EXISTS public.mark_withdrawal_failed(uuid, jsonb, boolean);
 
 CREATE OR REPLACE FUNCTION public.mark_withdrawal_failed(
   p_request_id uuid,
