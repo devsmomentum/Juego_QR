@@ -44,6 +44,7 @@ import '../widgets/minigames/chronological_order_minigame.dart';
 import '../widgets/minigames/capital_cities_minigame.dart';
 import '../widgets/minigames/true_false_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
+import '../widgets/quick_power_shop.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
 
@@ -1993,6 +1994,9 @@ Widget _buildMinigameScaffold(
   final instruction = _getMinigameInstruction(clue);
   final isDarkMode = Provider.of<PlayerProvider>(context).isDarkMode;
 
+  // StatefulBuilder to manage quick shop toggle within top-level function
+  bool showQuickShop = false;
+
   return SabotageOverlay(
     child: Scaffold(
       backgroundColor: Colors.transparent,
@@ -2021,6 +2025,8 @@ Widget _buildMinigameScaffold(
               right: clue.puzzleType != PuzzleType.droneDodge,
               child: Consumer<GameProvider>(
                 builder: (context, game, _) {
+                  return StatefulBuilder(
+                    builder: (context, setScaffoldState) {
                   return Stack(
                     children: [
                       Column(
@@ -2074,7 +2080,29 @@ Widget _buildMinigameScaffold(
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 4),
+                                  // BOTÓN TIENDA RÁPIDA
+                                  GestureDetector(
+                                    onTap: () => setScaffoldState(() => showQuickShop = !showQuickShop),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: showQuickShop
+                                            ? AppTheme.accentGold.withOpacity(0.3)
+                                            : AppTheme.accentGold.withOpacity(0.15),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppTheme.accentGold.withOpacity(showQuickShop ? 0.8 : 0.4),
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.storefront_rounded,
+                                        color: showQuickShop ? AppTheme.accentGold : Colors.white70,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
                                   IconButton(
                                     icon: const Icon(Icons.flag,
                                         color: AppTheme.dangerRed, size: 28),
@@ -2179,6 +2207,17 @@ Widget _buildMinigameScaffold(
                         ],
                       ),
 
+                      // QUICK POWER SHOP OVERLAY (above race tracker)
+                      if (showQuickShop && player?.role != 'spectator')
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: QuickPowerShop(
+                            onClose: () => setScaffoldState(() => showQuickShop = false),
+                          ),
+                        ),
+
                       // EFECTO BLUR (Inyectado aquí)
                       if (context
                           .watch<PowerEffectReader>()
@@ -2198,6 +2237,8 @@ Widget _buildMinigameScaffold(
                       // Efecto Visual de Daño (Flash Rojo) al perder vida
                       LossFlashOverlay(lives: game.lives),
                     ],
+                  );
+                    },
                   );
                 },
               ),
