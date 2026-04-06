@@ -213,38 +213,40 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
             }
 
             return AlertDialog(
-              backgroundColor: AppTheme.cardBg,
-              contentPadding: const EdgeInsets.all(15),
+              backgroundColor: Theme.of(context).cardTheme.color,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              contentPadding: const EdgeInsets.all(20),
               content: SizedBox(
-                width: 350,
-                height: 450,
+                width: 400,
+                height: 500,
                 child: Column(
                   children: [
+                    // Header with search
                     Container(
-                      margin: const EdgeInsets.only(bottom: 10),
+                      margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white24),
+                        color: Theme.of(context).dividerColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                       ),
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
                           hintText: 'Buscar dirección...',
-                          hintStyle: const TextStyle(color: Colors.white54),
+                          hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 15, vertical: 12),
+                          prefixIcon: const Icon(Icons.location_searching_rounded, color: AppTheme.lGoldAction, size: 20),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
                           suffixIcon: IconButton(
-                            icon: const Icon(Icons.search, color: Colors.white),
+                            icon: const Icon(Icons.search, color: AppTheme.lGoldAction),
                             onPressed: searchLocation,
                           ),
                         ),
                         onChanged: (value) {
                           if (_debounce?.isActive ?? false) _debounce!.cancel();
-                          _debounce =
-                              Timer(const Duration(milliseconds: 400), () {
+                          _debounce = Timer(const Duration(milliseconds: 400), () {
                             searchLocation();
                           });
                         },
@@ -252,20 +254,18 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                     ),
                     Expanded(
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         child: Stack(
                           children: [
                             FlutterMap(
                               mapController: _mapController,
                               options: MapOptions(
-                                initialCenter: temp, // Use temp which tracks marker
+                                initialCenter: temp,
                                 initialZoom: 14,
                                 cameraConstraint: CameraConstraint.contain(
                                   bounds: LatLngBounds(
-                                    const latlng.LatLng(
-                                        0.5, -73.5), // Suroeste de Venezuela
-                                    const latlng.LatLng(
-                                        12.5, -59.5), // Noreste de Venezuela
+                                    const latlng.LatLng(0.5, -73.5),
+                                    const latlng.LatLng(12.5, -59.5),
                                   ),
                                 ),
                                 minZoom: 5,
@@ -278,17 +278,18 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                               ),
                               children: [
                                 TileLayer(
-                                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-                                    subdomains: const ['a', 'b', 'c'],
-                                  ),
+                                  urlTemplate:
+                                      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                                  subdomains: const ['a', 'b', 'c'],
+                                ),
                                 MarkerLayer(
                                   markers: [
                                     Marker(
-                                      width: 40,
-                                      height: 40,
+                                      width: 50,
+                                      height: 50,
                                       point: temp,
                                       child: const Icon(Icons.location_on,
-                                          color: Colors.red, size: 40),
+                                          color: Colors.redAccent, size: 50),
                                     ),
                                   ],
                                 ),
@@ -299,34 +300,35 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                                 top: 0,
                                 left: 0,
                                 right: 0,
-                                height: 200,
+                                height: 250,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E1E1E),
+                                    color: Theme.of(context).cardTheme.color,
                                     borderRadius: const BorderRadius.vertical(
-                                        bottom: Radius.circular(8)),
+                                        bottom: Radius.circular(16)),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.5),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 5),
+                                        color: Colors.black.withOpacity(0.08),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 10),
                                       ),
                                     ],
+                                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                                   ),
                                   child: ListView.separated(
                                     padding: EdgeInsets.zero,
                                     itemCount: _suggestions.length,
-                                    separatorBuilder: (_, __) => const Divider(
-                                        height: 1, color: Colors.white10),
+                                    separatorBuilder: (_, __) => Divider(
+                                        height: 1, color: Theme.of(context).dividerColor.withOpacity(0.05)),
                                     itemBuilder: (context, index) {
                                       final item = _suggestions[index];
                                       return ListTile(
                                         dense: true,
+                                        leading: const Icon(Icons.place_outlined, color: AppTheme.lGoldAction, size: 18),
                                         title: Text(
                                           item['display_name'] ?? '',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 13),
+                                          style: TextStyle(
+                                              color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 13, fontWeight: FontWeight.normal),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -337,19 +339,17 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                                 ),
                               ),
                             Positioned(
-                              bottom: 10,
-                              left: 0,
-                              right: 0,
+                              bottom: 20,
+                              left: 20,
+                              right: 20,
                               child: Center(
-                                child: ElevatedButton(
+                                child: ElevatedButton.icon(
                                   onPressed: () {
-                                    // Validación geográfica estricta para Venezuela
                                     if (temp.latitude < 0.5 ||
                                         temp.latitude > 12.5 ||
                                         temp.longitude < -73.5 ||
                                         temp.longitude > -59.5) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
+                                      ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
                                           content: Text(
                                               '⚠️ Por favor selecciona una ubicación dentro de Venezuela'),
@@ -361,8 +361,17 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
                                     picked = temp;
                                     Navigator.of(context).pop();
                                   },
-                                  child:
-                                      const Text('Seleccionar esta ubicación'),
+                                  icon: const Icon(Icons.check_circle_rounded, color: Colors.white),
+                                  label: const Text('SELECCIONAR ESTA UBICACIÓN', 
+                                    style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.lGoldAction,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 8,
+                                    shadowColor: AppTheme.lGoldAction.withOpacity(0.4),
+                                  ),
                                 ),
                               ),
                             ),
@@ -393,32 +402,38 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
 
   @override
   Widget build(BuildContext context) {
-    if (_pickedAddress == null && widget.initialPosition != null && _pickedLocation != null) {
-         // Try to recover address if we have location but no address yet (e.g. init)
-         // This is handled in initState but might be async delay.
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.primaryPurple,
+            backgroundColor: AppTheme.lGoldAction,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 2,
           ),
           onPressed: _selectLocationOnMap,
-          icon: const Icon(Icons.map),
-          label: const Text('Seleccionar ubicación'),
+          icon: const Icon(Icons.map_rounded),
+          label: const Text('SELECCIONAR UBICACIÓN', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         ),
         if (_pickedLocation != null && _pickedAddress != null)
           Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(
-              'Ubicación: $_pickedAddress',
-              style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13),
+            padding: const EdgeInsets.only(top: 12.0, left: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on_rounded, color: AppTheme.lGoldAction, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Ubicación: $_pickedAddress',
+                    style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ),
           ),
       ],

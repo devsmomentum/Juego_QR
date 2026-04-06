@@ -80,20 +80,42 @@ serve(async (req) => {
         .update({ status: "approved" })
         .eq("id", requestId);
 
-      // 3. CREAR JUGADOR REAL (Aquí está la magia)
-      // Al insertar aquí, se genera un UUID nuevo que servirá para inventarios y poderes
-      const { error: insertError } = await supabaseAdmin
+      // 3. CREAR/ACTUALIZAR JUGADOR REAL (Soporta espectador existente)
+      const { data: existingPlayer } = await supabaseAdmin
         .from("game_players")
-        .insert({
-          user_id: request.user_id,
-          event_id: request.event_id,
-          lives: 3, // Vidas iniciales
-          coins: 400, // CORRECCIÓN: 400 monedas iniciales para todos los jugadores
-        });
+        .select("id, status")
+        .eq("user_id", request.user_id)
+        .eq("event_id", request.event_id)
+        .maybeSingle();
 
-      if (insertError) {
-        // Si falla (ej: usuario ya existe), lanzamos error
-        throw insertError;
+      if (existingPlayer?.id) {
+        // Si ya existe (ej: espectador), lo activamos
+        const { error: updateError } = await supabaseAdmin
+          .from("game_players")
+          .update({
+            status: "active",
+            lives: 3,
+            coins: 400,
+            joined_at: new Date().toISOString(),
+          })
+          .eq("id", existingPlayer.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Al insertar aquí, se genera un UUID nuevo que servirá para inventarios y poderes
+        const { error: insertError } = await supabaseAdmin
+          .from("game_players")
+          .insert({
+            user_id: request.user_id,
+            event_id: request.event_id,
+            lives: 3, // Vidas iniciales
+            coins: 400, // CORRECCIÓN: 400 monedas iniciales para todos los jugadores
+          });
+
+        if (insertError) {
+          // Si falla (ej: usuario ya existe), lanzamos error
+          throw insertError;
+        }
       }
 
       return new Response(JSON.stringify({ success: true }), {
@@ -158,6 +180,29 @@ serve(async (req) => {
         JSON.stringify({ success: true, message: "Clues created" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // --- REVOKE SESSIONS (Global Logout for Ban) ---
+    if (path === "revoke-sessions") {
+      const { userId } = await req.json();
+      if (!userId) throw new Error("userId is required");
+
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+
+      // Invalidar todas las sesiones globalmente usando la clave de servicio
+      const { error } = await supabaseAdmin.auth.admin.signOut(userId, 'global');
+      if (error) {
+        throw new Error("Error revoking sessions: " + error.message);
+      }
+      
+      console.log(`Successfully revoked all sessions globally for user ${userId}`);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // --- RESET EVENT (NUEVO) ---

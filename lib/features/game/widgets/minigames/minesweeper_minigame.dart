@@ -83,7 +83,7 @@ class _MinesweeperMinigameState extends State<MinesweeperMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =

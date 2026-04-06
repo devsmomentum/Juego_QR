@@ -8,8 +8,14 @@ class TransactionItem {
   final String description;
   final String status; // 'completed', 'pending', 'expired', 'failed', 'error'
   final String type; // 'deposit', 'withdrawal', 'purchase_order'
+  final String? ledgerType; // wallet_ledger metadata.type (e.g. runner_bet_commission)
   final String? paymentUrl;
   final double? fiatAmount;
+  final double? fiatAmountVes;
+  final String? pagoOrderId;
+  final String? gateway;
+  final String? invoiceUrl;
+  final String? stripePaymentIntentId;
 
   const TransactionItem({
     required this.id,
@@ -18,8 +24,14 @@ class TransactionItem {
     required this.description,
     required this.status,
     required this.type,
+    this.ledgerType,
     this.paymentUrl,
     this.fiatAmount,
+    this.fiatAmountVes,
+    this.pagoOrderId,
+    this.gateway,
+    this.invoiceUrl,
+    this.stripePaymentIntentId,
   });
 
   static DateTime _toVenezuelaTime(DateTime dateTime) {
@@ -37,8 +49,14 @@ class TransactionItem {
       description: map['description'] ?? 'Transacción',
       status: map['status'] ?? 'unknown',
       type: map['type'] ?? 'unknown',
+      ledgerType: map['ledger_type']?.toString(),
       paymentUrl: map['payment_url'],
       fiatAmount: map['fiat_amount'] != null ? (map['fiat_amount'] as num).toDouble() : null,
+      fiatAmountVes: map['fiat_amount_ves'] != null ? (map['fiat_amount_ves'] as num).toDouble() : null,
+      pagoOrderId: map['pago_pago_order_id']?.toString(),
+      gateway: map['gateway']?.toString(),
+      invoiceUrl: map['invoice_url']?.toString(),
+      stripePaymentIntentId: map['stripe_payment_intent_id']?.toString(),
     );
   }
 
@@ -47,9 +65,18 @@ class TransactionItem {
   
   bool get isPending => status == 'pending';
   
-  bool get canResumePayment => isPending && paymentUrl != null && paymentUrl!.isNotEmpty;
+  bool get canResumePayment => isPending && (
+    (paymentUrl != null && paymentUrl!.isNotEmpty) ||
+    (gateway == 'stripe' && stripePaymentIntentId != null && stripePaymentIntentId!.isNotEmpty)
+  );
 
-  bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order');
+  bool get canValidateMpay => isPending && gateway == 'pago_movil' && pagoOrderId != null;
+  
+  bool get canCancelWithdrawal => isPending && (type == 'withdrawal' || description.toLowerCase().contains('retiro'));
+
+  bool get canCancel => isPending && (type == 'deposit' || type == 'purchase_order' || canCancelWithdrawal);
+
+  bool get hasInvoice => invoiceUrl != null && invoiceUrl!.isNotEmpty;
 
   Color get statusColor {
     switch (status.toLowerCase()) {

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clue.dart';
 import '../models/power_effect.dart';
 import '../../../shared/models/player.dart';
+import '../../../core/security/security_guard.dart';
 
 class GameService {
   final SupabaseClient _supabase;
@@ -12,17 +13,31 @@ class GameService {
   /// Retorna el header Authorization con un token de usuario válido garantizado.
   /// Evita el bug del SDK donde _getAccessToken() devuelve null → se usa la anon key
   /// → Edge Function responde 401 "Invalid JWT" (firma incorrecta para auth.getUser).
+  /// Retorna el header Authorization con un token de usuario válido garantizado.
+  /// Evita el bug del SDK donde _getAccessToken() devuelve null → se usa la anon key
+  /// → Edge Function responde 401 "Invalid JWT" (firma incorrecta para auth.getUser).
   Future<Map<String, String>> _authHeaders() async {
-    var session = _supabase.auth.currentSession;
-    if (session == null || session.isExpired) {
-      debugPrint('[GameService] Session null/expired – refreshing before Edge Function call...');
-      final result = await _supabase.auth.refreshSession();
-      session = result.session;
+    Session? session = _supabase.auth.currentSession;
+    
+    // Explicitly check for expired OR invalid session
+    if (session == null || session.isExpired || session.accessToken.isEmpty) {
+      debugPrint('[GameService] Session invalid/expired – forcing refresh...');
+      try {
+        final result = await _supabase.auth.refreshSession();
+        session = result.session;
+      } catch (e) {
+        debugPrint('[GameService] Refresh error: $e');
+        session = null;
+      }
     }
-    if (session == null) {
-      throw const AuthException('No active session. Please log in again.');
+    
+    if (session == null || session.accessToken.isEmpty) {
+      throw const AuthException('Sesión expirada. Por favor, inicia sesión de nuevo.');
     }
-    return {'Authorization': 'Bearer ${session.accessToken}'};
+    
+    return {
+      'Authorization': 'Bearer ${session.accessToken}',
+    };
   }
 
   /// Obtiene las vidas de un jugador en un evento específico.
@@ -34,7 +49,8 @@ class GameService {
           .select('lives')
           .eq('event_id', eventId)
           .eq('user_id', userId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 10));
 
       if (response != null && response['lives'] != null) {
         return response['lives'] as int;
@@ -42,7 +58,7 @@ class GameService {
       return null;
     } catch (e) {
       debugPrint('Error fetching lives: $e');
-      rethrow;
+      return null;
     }
   }
 
@@ -57,7 +73,7 @@ class GameService {
       final response = await _supabase.rpc('lose_life', params: {
         'p_user_id': userId,
         'p_event_id': eventId,
-      }).catchError((e) {
+      }).timeout(const Duration(seconds: 10)).catchError((e) {
         debugPrint(
             '[LIVES_DEBUG] RPC Error caught: $e. Switching to Fallback.');
         return null;
@@ -78,7 +94,8 @@ class GameService {
           .select('lives')
           .eq('user_id', userId)
           .eq('event_id', eventId)
-          .single();
+          .single()
+          .timeout(const Duration(seconds: 10));
 
       final int currentLives = row['lives'] as int;
       final int newLives = currentLives > 0 ? currentLives - 1 : 0;
@@ -88,14 +105,16 @@ class GameService {
           .from('game_players')
           .update({'lives': newLives})
           .eq('user_id', userId)
-          .eq('event_id', eventId);
+          .eq('event_id', eventId)
+          .timeout(const Duration(seconds: 10));
 
       debugPrint('[LIVES_DEBUG] Direct Update Success. New Lives: $newLives');
       return newLives;
     } catch (e) {
       debugPrint(
           '[LIVES_DEBUG] CRITICAL ERROR deleting life (both RPC and Direct failed): $e');
-      rethrow;
+      // No rethrow, try to return something sensible or let provider handle it
+      return 0; 
     }
   }
 
@@ -125,7 +144,8 @@ class GameService {
             .select('target_id')
             .eq('event_id', eventId)
             .eq('power_slug', 'invisibility')
-            .gt('expires_at', DateTime.now().toUtc().toIso8601String());
+            .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+            .timeout(const Duration(seconds: 5));
 
         final Set<String> invisibleIds = invisiblePlayers
             .map((e) => e['target_id']?.toString() ?? '')
@@ -321,23 +341,20 @@ class GameService {
   }
 
   /// Obtiene las pistas de un evento.
-  /// [PERFORMANCE] Migrado de Edge Function a RPC atómico.
+  /// Usa la RPC optimizada get_clues_with_progress para alto rendimiento.
   Future<List<Clue>> getClues(String eventId) async {
     try {
       final response = await _supabase.rpc('get_clues_with_progress', params: {
         'p_event_id': eventId,
-      });
+      }).timeout(const Duration(seconds: 15));
 
-      if (response != null) {
-        final List<dynamic> data = response is List ? response : [];
-        return data
-            .map((json) => Clue.fromJson(json as Map<String, dynamic>))
-            .toList();
-      }
-      return [];
+      if (response == null) return [];
+
+      final data = response is List ? response : [];
+      return data.map((json) => Clue.fromJson(json)).toList();
     } catch (e) {
       debugPrint('Error fetching clues (RPC): $e');
-      rethrow;
+      return [];
     }
   }
 
@@ -358,22 +375,71 @@ class GameService {
     }
   }
 
-  /// Completa una pista.
-  /// Retorna un mapa con el resultado, incluyendo si la carrera se completó.
-  Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
+  /// Inicia sesion de minijuego via Edge Function con headers seguros.
+  Future<Map<String, dynamic>?> startMinigameSession({
+    required String clueId,
+    required int minDurationSeconds,
+  }) async {
+    try {
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'start-session',
+        payload: {
+          'clue_id': int.tryParse(clueId) ?? clueId,
+          'min_duration_seconds': minDurationSeconds,
+        },
+      );
+      return response;
+    } on CustomSecurityException catch (e) {
+      debugPrint('[GameService] Security Exception (startSession): $e');
+      return {'success': false, 'error': e.referenceCode == '0xERR-NET-PKT' ? e.message : e.referenceCode};
+    } catch (e) {
+      debugPrint('[GameService] Error startMinigameSession: $e');
+      return {'success': false, 'error': '0xERR-UNKNOWN-CATCH'};
+    }
+  }
+
+  /// Verifica y completa el minijuego via Edge Function.
+  Future<Map<String, dynamic>?> verifyAndCompleteMinigame({
+    required String sessionId,
+    required String answer,
+    String? challengeToken,
+    Map<String, dynamic>? result,
+  }) async {
+    try {
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'verify-session',
+        payload: {
+          'session_id': sessionId,
+          'p_answer': answer,
+          'p_result': result ?? {},
+          if (challengeToken != null) 'challenge_token': challengeToken,
+        },
+      );
+      return response;
+    } on CustomSecurityException catch (e) {
+      debugPrint('[GameService] Security Exception (verifySession): $e');
+      return {'success': false, 'error': e.referenceCode == '0xERR-NET-PKT' ? e.message : e.referenceCode};
+    } catch (e) {
+      debugPrint('[GameService] Error verifyAndCompleteMinigame: $e');
+      return null;
+    }
+  }
+
+  /// Completa una pista via admin RPC (direct access revoked for regular users).
+  /// Only admins can call this path; regular users must use verifyAndCompleteMinigame.
+    Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
       {String? eventId}) async {
     try {
-      // [PERFORMANCE OPTIMIZATION] Option 1: Atomic RPC
-      // Consolidates 15+ DB operations (validation, progress, ranking, rewards)
-      // into a single database roundtrip for high-concurrency (50+ users).
-      final response = await _supabase.rpc('submit_clue_answer', params: {
+      debugPrint('[GameService] 📡 RPC admin_complete_clue: clueId=$clueId');
+      final response = await _supabase.rpc('admin_complete_clue', params: {
         'p_clue_id': int.tryParse(clueId) ?? clueId,
         'p_answer': answer,
-      });
+      }).timeout(const Duration(seconds: 12));
 
       if (response != null && response is Map<String, dynamic>) {
         final data = response;
-
+        debugPrint('[GameService] 📥 RPC Response: $data');
+        
         if (data['success'] == false) {
           debugPrint('❌ Error completing clue (RPC): ${data['error']}');
           return null;
@@ -387,7 +453,7 @@ class GameService {
           final eventIdToUse = eventId ?? data['eventId'];
 
           if (eventIdToUse != null) {
-            final rpcRes = await _registerFinisher(eventIdToUse);
+            final rpcRes = await registerFinisher(eventIdToUse);
             if (rpcRes != null && rpcRes['success'] == true) {
               // Inject prize/position into response so UI knows
               final newData = Map<String, dynamic>.from(data);
@@ -399,9 +465,9 @@ class GameService {
             }
           }
         }
-
         return data;
       }
+      debugPrint('[GameService] ⚠️ RPC returned null or empty response');
       return null;
     } catch (e) {
       debugPrint('Error completing clue: $e');
@@ -410,7 +476,7 @@ class GameService {
   }
 
   /// Registra al finalista en el backend de forma atómica.
-  Future<Map<String, dynamic>?> _registerFinisher(String eventId) async {
+  Future<Map<String, dynamic>?> registerFinisher(String eventId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
@@ -420,7 +486,7 @@ class GameService {
       final response = await _supabase.rpc('register_race_finisher', params: {
         'p_event_id': eventId,
         'p_user_id': userId,
-      });
+      }).timeout(const Duration(seconds: 10));
 
       debugPrint("🏆 RPC Response: $response");
       return response as Map<String, dynamic>;
@@ -430,20 +496,21 @@ class GameService {
     }
   }
 
-  /// Salta una pista.
-  /// [PERFORMANCE] Migrado de Edge Function a RPC atómico.
+  /// Salta una pista via Edge Function (admin-only server-side).
   Future<bool> skipClue(String clueId) async {
     try {
-      final response = await _supabase.rpc('skip_clue_rpc', params: {
-        'p_clue_id': int.tryParse(clueId) ?? clueId,
-      });
-
-      if (response != null && response is Map<String, dynamic>) {
-        return response['success'] == true;
-      }
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'skip-clue',
+        payload: {
+          'clue_id': int.tryParse(clueId) ?? clueId,
+        },
+      );
+      return response?['success'] == true;
+    } on CustomSecurityException catch (e) {
+      debugPrint('Error skipping clue (Security): $e');
       return false;
     } catch (e) {
-      debugPrint('Error skipping clue (RPC): $e');
+      debugPrint('Error skipping clue: $e');
       return false;
     }
   }
@@ -463,23 +530,30 @@ class GameService {
         if (data != null) {
           return data['isCompleted'] ?? false;
         }
-      } else if (response.status == 401) {
-        // Handle Invalid JWT by forcing a refresh and retrying once
-        debugPrint('[GameService] 401 Detected. Forcing session refresh...');
-        await _supabase.auth.refreshSession();
-        
-        final retryResponse = await _supabase.functions.invoke(
-          'game-play/check-race-status',
-          headers: await _authHeaders(),
-          body: {'eventId': eventId},
-          method: HttpMethod.post,
-        );
-        
-        if (retryResponse.status == 200) {
-           final data = retryResponse.data as Map<String, dynamic>?;
-           return data?['isCompleted'] ?? false;
+      }
+      return false;
+    } on FunctionException catch (fe) {
+      if (fe.status == 401) {
+        debugPrint('[GameService] 401 FunctionException. Forcing session refresh...');
+        try {
+          await _supabase.auth.refreshSession();
+          
+          final retryResponse = await _supabase.functions.invoke(
+            'game-play/check-race-status',
+            headers: await _authHeaders(),
+            body: {'eventId': eventId},
+            method: HttpMethod.post,
+          );
+          
+          if (retryResponse.status == 200) {
+            final data = retryResponse.data as Map<String, dynamic>?;
+            return data?['isCompleted'] ?? false;
+          }
+        } catch (e) {
+          debugPrint('Error during 401 retry: $e');
         }
       }
+      debugPrint('FunctionException in checkRaceStatus: ${fe.status} - $fe');
       return false;
     } catch (e) {
       debugPrint('Error checking race status: $e');

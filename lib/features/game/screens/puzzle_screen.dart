@@ -63,6 +63,8 @@ import 'waiting_room_screen.dart'; // NEW IMPORT
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 import '../providers/game_flow_provider.dart';
+import '../../../core/services/app_config_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
@@ -86,6 +88,24 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   late ConnectivityProvider _connectivityProvider;
   bool _isActive = true;
   bool _isSuccessFlowActive = false; // Prevents double success/navigation
+  String? _minigameSessionId;
+  String? _challengeToken;
+  DateTime? _minigameStartLocal;
+  bool _sessionReady = false;
+  late AppConfigService _configService;
+  bool _minDurationConfigLoaded = false;
+  Map<String, int> _minDurationByDifficulty = _minDurationDefaults;
+  bool _minDurationEnabled = true;
+
+  static const Map<String, int> _minDurationDefaults = {
+    'easy': 4,
+    'medium': 8,
+    'hard': 12,
+  };
+  static const String _minigameCooldownKey =
+      'minigame_cooldown_until_ms';
+  static const int _minCooldownSeconds = 5;
+  static const int _maxCooldownSeconds = 30;
 
   @override
   void initState() {
@@ -94,6 +114,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     _gameProvider = Provider.of<GameProvider>(context, listen: false);
     _connectivityProvider =
         Provider.of<ConnectivityProvider>(context, listen: false);
+    _configService =
+      AppConfigService(supabaseClient: Supabase.instance.client);
 
     // Penalty logic removed
 
@@ -101,6 +123,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLives();
       _checkBanStatus(); // Check ban on entry
+
+      _startMinigameSession();
 
       // --- SYNC PLAYER PROVIDER WITH CURRENT EVENT ---
       // Fix for issue where PlayerProvider loads "latest" (potentially banned) event
@@ -142,6 +166,148 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
       // MOVED: Tutorial trigger
       _showMinigameTutorial();
+    });
+  }
+
+  int _minDurationSecondsForClue(Clue clue) {
+    if (!_minDurationEnabled) return 0;
+    switch (clue.puzzleType.difficulty) {
+      case MinigameDifficulty.easy:
+        return _minDurationByDifficulty['easy'] ??
+            _minDurationDefaults['easy']!;
+      case MinigameDifficulty.medium:
+        return _minDurationByDifficulty['medium'] ??
+            _minDurationDefaults['medium']!;
+      case MinigameDifficulty.hard:
+        return _minDurationByDifficulty['hard'] ??
+            _minDurationDefaults['hard']!;
+    }
+    return 8;
+  }
+
+  Future<void> _loadMinigameMinDurationConfig() async {
+    final results = await Future.wait([
+      _configService.getMinigameMinDurationEnabled(),
+      _configService.getMinigameMinDurationsByDifficulty(),
+    ]);
+    final enabled = results[0] as bool;
+    final config = results[1] as Map<String, int>;
+    if (!mounted) return;
+    setState(() {
+      _minDurationEnabled = enabled;
+      _minDurationByDifficulty = config;
+      _minDurationConfigLoaded = true;
+    });
+  }
+
+  int _localElapsedMs() {
+    if (_minigameStartLocal == null) return 0;
+    return DateTime.now().difference(_minigameStartLocal!).inMilliseconds;
+  }
+
+  Future<void> _startMinigameSession() async {
+    if (!mounted) return;
+
+    final player = context.read<PlayerProvider>().currentPlayer;
+    if (player?.role == 'spectator') return;
+
+    if (widget.clue.id.startsWith('demo_')) return;
+
+    if (!_minDurationConfigLoaded) {
+      await _loadMinigameMinDurationConfig();
+    }
+
+    final gameProvider = context.read<GameProvider>();
+    final minDuration = _minDurationSecondsForClue(widget.clue);
+
+    final payload = await gameProvider.startMinigameSession(
+      clueId: widget.clue.id,
+      minDurationSeconds: minDuration,
+    );
+
+    if (!mounted) return;
+    
+    final sessionId = payload?['session_id'] as String?;
+    final challengeToken = payload?['challenge_token'] as String?;
+    final isBlocked = payload?['error'] == 'BLOCKED';
+    final serverError = payload?['error'];
+
+    if (sessionId == null) {
+      setState(() => _isActive = false);
+      
+      if (isBlocked) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Cuenta Bloqueada',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              if (player?.role == 'admin')
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await Supabase.instance.client.rpc('test_remove_my_ban');
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      if (mounted) Navigator.of(context).pop();
+                    } catch (e) {
+                      debugPrint('Error removiendo ban: $e');
+                    }
+                  },
+                  child: const Text('REMOVER BAN (ADMIN)', style: TextStyle(color: Colors.white)),
+                ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: const Text('ENTENDIDO', style: TextStyle(color: AppTheme.dangerRed)),
+              ),
+            ],
+          ),
+        );
+      } else {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            title: const Text('Error del Servidor', style: TextStyle(color: AppTheme.dangerRed)),
+            content: Text('No pudimos iniciar el minijuego. Código: $serverError', style: const TextStyle(color: Colors.white70)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: const Text('ENTENDIDO', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _minigameSessionId = sessionId;
+      _challengeToken = challengeToken;
+      _minigameStartLocal = DateTime.now();
+      _sessionReady = true;
     });
   }
 
@@ -225,7 +391,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void _checkRaceCompletion() async {
-    if (!mounted || !_isActive || _isNavigatingToWinner) return;
+    if (!mounted || !_isActive) return;
 
     final gameProvider = _gameProvider;
     if (!context.mounted) return;
@@ -239,6 +405,17 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     // Fix: navegamos si isRaceCompleted, SALVO que el player ya esté en tránsito
     // (guard _isNavigatingToWinner evita doble navegación).
     if (gameProvider.isRaceCompleted) {
+      if (_isNavigatingToWinner && !gameProvider.hasCompletedAllClues) {
+        // Only block if we are navigating specifically due to local victory (last clue),
+        // but the race isn't globally completed OR if the race IS completed, 
+        // we should let it through to refresh the view to WinnerCelebrationScreen.
+        // Actually, the simplest fix is to allow it to pass if isRaceCompleted.
+      }
+      
+      // Check if we are ALREADY on the Winner screen (to avoid double push)
+      final currentRouteName = ModalRoute.of(context)?.settings.name;
+      if (currentRouteName == 'WinnerCelebrationScreen') return;
+      
       _isNavigatingToWinner = true;
       _finishLegally(); // Quitamos penalización
 
@@ -326,9 +503,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   Future<void> _checkLives() async {
-    // Usamos listen: false para obtener el estado MÁS RECIENTE, no suscribirnos
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // ⚡ SYNC FIX: Force refresh PlayerProvider's current profile from server 
+    // to ensure purchase from Mall is reflected.
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (playerProvider.currentPlayer != null) {
+      await playerProvider.refreshProfile(eventId: _gameProvider.currentEventId);
+    }
+
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
     // 1. Verificación preliminar con source-of-truth visual (PlayerProvider)
     if (playerProvider.currentPlayer != null &&
@@ -409,10 +591,41 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   void _handleSuccess(Clue clue) {
     if (_isSuccessFlowActive || !mounted) return;
     setState(() => _isSuccessFlowActive = true);
-
-    _finishLegally();
-    _showSuccessDialog(context, clue);
+    final result = {
+      'puzzle_type': clue.puzzleType.toString(),
+      'client_elapsed_ms': _localElapsedMs(),
+      'client_started_at': _minigameStartLocal?.toUtc().toIso8601String(),
+      'client_finished_at': DateTime.now().toUtc().toIso8601String(),
+      'session_ready': _sessionReady,
+    };
+    _showSuccessDialog(
+      context,
+      clue,
+      sessionId: _minigameSessionId,
+      challengeToken: _challengeToken,
+      resultPayload: result,
+      onValidationSuccess: _finishLegally,
+      onValidationFailure: _resetSuccessFlow,
+      onForceExit: _handleTooFastExit,
+    );
   }
+
+  void _resetSuccessFlow() {
+    if (!mounted) return;
+    setState(() => _isSuccessFlowActive = false);
+  }
+
+  void _handleTooFastExit() {
+    if (!mounted) return;
+    setState(() {
+      _isSuccessFlowActive = false;
+      _minigameSessionId = null;
+      _challengeToken = null;
+      _minigameStartLocal = null;
+      _sessionReady = false;
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -661,10 +874,24 @@ void showClueSelector(BuildContext context, Clue currentClue) {
   );
 }
 
+Future<void> _setMinigameCooldownUntilMs(int seconds) async {
+  const minSeconds = 5;
+  const maxSeconds = 30;
+  const key = 'minigame_cooldown_until_ms';
+  final prefs = await SharedPreferences.getInstance();
+  final clampedSeconds = seconds.clamp(minSeconds, maxSeconds);
+  final until =
+      DateTime.now().millisecondsSinceEpoch + (clampedSeconds * 1000);
+  await prefs.setInt(key, until);
+}
+
 /// Diálogo de rendición: quita 1 vida y reinicia el minijuego in-place.
 /// Ya NO cierra la PuzzleScreen — el jugador puede seguir intentando.
 /// Solo sale al mapa si se queda sin vidas.
 void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
+  final provider = Provider.of<GameProvider>(context, listen: false);
+  provider.setModalActive(true);
+
   showDialog(
     context: context,
     builder: (dialogContext) => Dialog(
@@ -731,7 +958,10 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () {
+                        provider.setModalActive(false);
+                        Navigator.pop(dialogContext);
+                      },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -762,6 +992,7 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                         }
 
                         // 2. Cerrar diálogo
+                        provider.setModalActive(false);
                         Navigator.pop(dialogContext);
 
                         // 3. Cerrar pantalla actual (PuzzleScreen)
@@ -888,14 +1119,22 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
 
 // --- LOGICA DE VICTORIA COMPARTIDA ---
 
-void _showSuccessDialog(BuildContext context, Clue clue) async {
+void _showSuccessDialog(
+  BuildContext context,
+  Clue clue, {
+  String? sessionId,
+  String? challengeToken,
+  Map<String, dynamic>? resultPayload,
+  VoidCallback? onValidationSuccess,
+  VoidCallback? onValidationFailure,
+  VoidCallback? onForceExit,
+}) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
   final gameFlowProvider = Provider.of<GameFlowProvider>(context, listen: false);
 
   // [FIX] Capturar Navigator y ruta del PuzzleScreen ANTES de cualquier operación async
   final navigator = Navigator.of(context);
-  final rootContext = context;
   final puzzleRoute = ModalRoute.of(context); // Para removeRoute confiable en onMapReturn
 
   debugPrint('🎉 SUCCESS FLOW STARTED for ${clue.id}');
@@ -906,11 +1145,18 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
   if (clue.id.startsWith('demo_')) {
     gameProvider.completeLocalClue(clue.id);
     clueCompletionFuture = Future.value({'success': true, 'coins_earned': 0});
+  } else if (sessionId == null) {
+    debugPrint('⚠️ _showSuccessDialog: No session ID for minigame, fallback to connection error');
+    clueCompletionFuture = Future.value({'success': false, 'error': 'BLOCKED'});
   } else {
     debugPrint('--- COMPLETING CLUE (background): ${clue.id} ---');
-    clueCompletionFuture =
-        gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN",
-            clueId: clue.id);
+    clueCompletionFuture = gameProvider.completeCurrentClue(
+      clue.riddleAnswer ?? "WIN",
+      clueId: clue.id,
+      sessionId: sessionId,
+      challengeToken: challengeToken,
+      result: resultPayload,
+    );
   }
 
   // También lanzar el refresh de perfil en paralelo (no necesita el RPC aún)
@@ -922,24 +1168,383 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
   if (!navigator.mounted) return;
 
-  // 1. Mostrar la Animación del Trébol Dorado INMEDIATAMENTE
+  // 1. Validar resultado ANTES de mostrar la animación del trébol
+  Map<String, dynamic>? result;
+  int coinsEarned = 0;
+  bool validationOpen = true;
+  unawaited(
+    showGeneralDialog(
+      context: navigator.context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.9),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (dialogContext, _, __) => const Scaffold(
+        backgroundColor: Colors.black,
+        body: LoadingIndicator(
+          message: 'Validando resultado...',
+          fontSize: 16,
+        ),
+      ),
+    ).whenComplete(() => validationOpen = false),
+  );
+
+  try {
+    result = await clueCompletionFuture.timeout(const Duration(seconds: 6));
+    coinsEarned = result?['coins_earned'] ?? 0;
+    debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
+  } catch (e) {
+    debugPrint("Error completando pista (background/timeout): $e");
+    result = null;
+  }
+
+  if (validationOpen && navigator.mounted) {
+    try {
+      Navigator.of(navigator.context, rootNavigator: true).pop();
+    } catch (_) {}
+  }
+
+  if (result == null) {
+    onValidationFailure?.call();
+    if (navigator.mounted) {
+      await showDialog<void>(
+        context: navigator.context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+          ),
+          title: const Text(
+            'Error de conexion',
+            style: TextStyle(
+              color: AppTheme.dangerRed,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'No se pudo validar el resultado. Debes reintentar el minijuego.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'ENTENDIDO',
+                style: TextStyle(
+                  color: AppTheme.dangerRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    onForceExit?.call();
+    if (navigator.mounted && puzzleRoute != null) {
+      try {
+        navigator.removeRoute(puzzleRoute);
+      } catch (_) {
+        if (navigator.mounted) navigator.maybePop();
+      }
+    } else if (navigator.mounted) {
+      navigator.maybePop();
+    }
+    return;
+  }
+
+  if (result['success'] == false) {
+    onValidationFailure?.call();
+    final errorCode = result['error']?.toString();
+    if (navigator.mounted) {
+      if (errorCode == 'TOO_FAST_WARNING' || errorCode == 'TOO_FAST') {
+        final elapsed = (result['elapsed_seconds'] as num?)?.toInt() ?? 0;
+        final minSeconds = (result['min_duration_seconds'] as num?)?.toInt() ?? 0;
+        final remaining = (minSeconds - elapsed).clamp(5, 30);
+        await _setMinigameCooldownUntilMs(remaining);
+
+        if (navigator.mounted) {
+          await showDialog<void>(
+            context: navigator.context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1D),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Colors.orange, width: 1.5),
+              ),
+              title: const Text(
+                'Actividad Sospechosa',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: const Text(
+                'Se ha detectado algo sospechoso, que no lo vuelva a intentar o será baneado permanentemente.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                if (playerProvider.currentPlayer?.role == 'admin')
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await Supabase.instance.client.rpc('test_remove_my_ban');
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      } catch (e) {
+                        debugPrint('Error removiendo ban: $e');
+                      }
+                    },
+                    child: const Text('REMOVER BANS / FLAGS (ADMIN)', style: TextStyle(color: Colors.white)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ENTENDIDO',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        onForceExit?.call();
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (navigator.mounted && puzzleRoute != null) {
+            try {
+              navigator.removeRoute(puzzleRoute);
+            } catch (_) {
+              if (navigator.mounted) navigator.maybePop();
+            }
+          } else if (navigator.mounted) {
+            navigator.maybePop();
+          }
+        });
+      } else if (errorCode == 'TOO_FAST_BANNED') {
+        if (navigator.mounted) {
+          await showDialog<void>(
+            context: navigator.context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1D),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+              ),
+              title: const Text(
+                'Baneado Permanentemente',
+                style: TextStyle(
+                  color: AppTheme.dangerRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: const Text(
+                'Has sido baneado permanentemente del sistema por actividad sospechosa reiterada. Esta es una medida definitiva.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                if (playerProvider.currentPlayer?.role == 'admin')
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await Supabase.instance.client.rpc('test_remove_my_ban');
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      } catch (e) {
+                        debugPrint('Error removiendo ban: $e');
+                      }
+                    },
+                    child: const Text('REMOVER BANS / FLAGS (ADMIN)', style: TextStyle(color: Colors.white)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ENTENDIDO',
+                    style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Sign out and kick to scenarios if NOT admin (admin removes ban via button and stays)
+        if (playerProvider.currentPlayer?.role != 'admin') {
+          try {
+            await Supabase.instance.client.auth.signOut();
+          } catch (e) {
+            debugPrint('[BAN] signOut error: $e');
+          }
+          if (navigator.mounted) {
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => ScenariosScreen()),
+              (route) => false,
+            );
+          }
+        } else {
+          // Admin stays — just pop the puzzle screen
+          onForceExit?.call();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            if (navigator.mounted && puzzleRoute != null) {
+              try {
+                navigator.removeRoute(puzzleRoute);
+              } catch (_) {
+                if (navigator.mounted) navigator.maybePop();
+              }
+            } else if (navigator.mounted) {
+              navigator.maybePop();
+            }
+          });
+        }
+
+      } else if (errorCode == 'BLOCKED') {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Cuenta Bloqueada Temporalmente',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else if (errorCode == 'SESSION_EXPIRED') {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Sesion expirada',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Tu sesion expiro. Debes reintentar el minijuego.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      } else {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Validacion fallida',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'No se pudo validar el resultado. Debes reintentar el minijuego.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      }
+    }
+    return;
+  }
+
+  // 2. Mostrar la Animación del Trébol Dorado
+  onValidationSuccess?.call();
   bool sealCompleted = false;
   try {
     await showGeneralDialog(
       context: navigator.context,
       barrierDismissible: false,
-      barrierColor: Colors.black, // [FIX] Fully opaque barrier - prevents loading/effects from showing through
+      barrierColor: Colors.black,
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (dialogContext, _, __) => Scaffold(
-        backgroundColor: Colors.black, // [FIX] Fully opaque - no bleed-through of underlying widget rebuilds
+        backgroundColor: Colors.black,
         body: TimeStampAnimation(
           index: ((clue.sequenceIndex - 1) % 9) + 1,
           onComplete: () {
             if (!sealCompleted && dialogContext.mounted) {
               sealCompleted = true;
-              // [FIX] Usar removeRoute en vez de pop() para evitar cerrar
-              // accidentalmente la _BlockingPageRoute si un poder se activó
-              // encima de esta animación.
               final sealRoute = ModalRoute.of(dialogContext);
               if (sealRoute != null) {
                 try {
@@ -957,22 +1562,6 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     );
   } catch (e) {
     debugPrint('Error showing TimeStampAnimation: $e');
-  }
-
-  // 2. Leer el resultado del RPC (el trébol tardó ~3.3s, el RPC ya debió terminar)
-  // [FIX] Sin delays intermedios - evita que el usuario vea el "cargando" del widget
-  // subyacente entre la animación del trébol y el diálogo de celebración.
-  Map<String, dynamic>? result;
-  int coinsEarned = 0;
-  try {
-    // El RPC se lanzó ANTES de la animación (~3.3s atrás), así que debería responder inmediato.
-    // Timeout de 4s como safety net si la conexión es lenta.
-    result = await clueCompletionFuture.timeout(const Duration(seconds: 4));
-    coinsEarned = result?['coins_earned'] ?? 0;
-    debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
-  } catch (e) {
-    debugPrint("Error completando pista (background/timeout): $e");
-    result = {'success': true, 'coins_earned': 0};
   }
 
   // Esperar que el refreshProfile termine (si aún no lo hizo)
@@ -1030,24 +1619,6 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       }
       return;
     }
-  } else {
-    // RPC falló: el Provider ya revirtió el estado optimista.
-    // Mostramos error pero permitimos que el diálogo de celebración aparezca
-    // para que el usuario pueda volver al mapa y reintentar.
-    if (navigator.mounted) {
-      ScaffoldMessenger.of(navigator.context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Error al guardar el progreso. Verifica tu conexión e inténtalo de nuevo.'),
-            backgroundColor: AppTheme.dangerRed,
-            duration: Duration(seconds: 5)),
-      );
-    }
-    // Salir directamente al mapa para que reintente con estado limpio
-    if (navigator.mounted) {
-      navigator.pop();
-    }
-    return;
   }
 
   if (!navigator.mounted) return;
@@ -1609,7 +2180,6 @@ Widget _buildMinigameScaffold(
                       ),
 
                       // EFECTO BLUR (Inyectado aquí)
-                      // EFECTO BLUR (Inyectado aquí)
                       if (context
                           .watch<PowerEffectReader>()
                           .isPowerActive(PowerType.blur))
@@ -1702,7 +2272,7 @@ class PercentageCalculationWrapper extends StatelessWidget {
       PercentageCalculationMinigame(
           clue: clue,
           onSuccess: () => onSuccess(clue)),
-      isScrollable: false);
+      isScrollable: true);
 }
 
 class ChronologicalOrderWrapper extends StatelessWidget {

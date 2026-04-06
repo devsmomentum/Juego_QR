@@ -119,9 +119,9 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -147,7 +147,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
     if (_isGameOver) return;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return; // Ignore input if frozen
+    if (gameProvider.isPaused) return; // Ignore input if frozen
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -256,95 +256,58 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
       onPopInvoked: (didPop) {},
       child: Stack(
         children: [
-          // GAME CONTENT
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             child: Column(
               children: [
-                // Header Minimalista
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("ANOMALÍA DETECTADA",
-                              style: TextStyle(
-                                  color: Colors.white38,
-                                  fontSize: 10,
-                                  letterSpacing: 2,
-                                  fontWeight: FontWeight.bold)),
-                          Text(
-                            "Encuentra el icono que sobra y toca ese cuadro",
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 11),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: Text(
-                        "00:$_secondsRemaining",
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'monospace'),
-                      ),
-                    ),
-                  ],
+                // 1. Header: Glass Top Bar
+                _buildTopBar(),
+
+                const SizedBox(height: 8),
+
+                // 2. Instructions
+                const Text(
+                  "ENCUENTRA EL ICONO DIFERENTE",
+                  style: TextStyle(
+                    color: Colors.white38,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2.0,
+                  ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 8),
 
-                // Paneles compactos
+                // 3. Game Panels
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
+                      final panelHeight = constraints.maxHeight * 0.38;
                       return Column(
                         children: [
-                          _buildCompactPanel(
-                              isTop: true,
-                              maxHeight: constraints.maxHeight * 0.45),
-                          const SizedBox(height: 16),
-                          _buildCompactPanel(
-                              isTop: false,
-                              maxHeight: constraints.maxHeight * 0.45),
+                          _buildPanelLabel("SENSOR_A"),
+                          const SizedBox(height: 4),
+                          _buildModernPanel(
+                            isTop: true,
+                            maxHeight: panelHeight,
+                          ),
+                          const Spacer(),
+                          _buildPanelLabel("SENSOR_B"),
+                          const SizedBox(height: 4),
+                          _buildModernPanel(
+                            isTop: false,
+                            maxHeight: panelHeight,
+                          ),
                         ],
                       );
                     },
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
 
-                // Intentos sutiles
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                      3,
-                      (index) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: index < _localAttempts
-                                  ? AppTheme.accentGold
-                                  : Colors.white10,
-                            ),
-                          )),
-                ),
+                // 4. Lives Indicator
+                _buildLivesIndicator(),
               ],
             ),
           ),
@@ -361,7 +324,7 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                         _secondsRemaining = 40;
                         _localAttempts = 3;
                         _isGameOver = false;
-                        _foundPosition = null; // Reset found state
+                        _foundPosition = null;
                         _generateGame();
                         _startTimer();
                       });
@@ -373,11 +336,8 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                         context,
                         MaterialPageRoute(builder: (_) => const MallScreen()),
                       );
-                      // Check lives upon return
                       if (!context.mounted) return;
-                      final player =
-                          Provider.of<PlayerProvider>(context, listen: false)
-                              .currentPlayer;
+                      final player = Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
                       if ((player?.lives ?? 0) > 0) {
                         setState(() {
                           _canRetry = true;
@@ -388,112 +348,248 @@ class _FindDifferenceMinigameState extends State<FindDifferenceMinigame> {
                       }
                     }
                   : null,
-              onExit: () {
-                Navigator.pop(context);
-              },
+              onExit: () => Navigator.pop(context),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildCompactPanel({required bool isTop, required double maxHeight}) {
-    bool hasTarget = isTop == _targetInTopImage;
-    bool showHighlight = _foundPosition != null && _foundInTop == isTop;
-
-    return Expanded(
-      child: GestureDetector(
-        onTapDown: (details) => _handleTap(
-            isTop, details, MediaQuery.of(context).size.width, maxHeight),
-        // Pass generic width, logic handles the -80 inside
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0A0A0E).withOpacity(0.95), // Fondo mucho más sólido y oscuro
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: hasTarget
-                    ? AppTheme.neonGreen.withOpacity(0.8)
-                    : Colors.white.withOpacity(0.15),
-                width: hasTarget ? 2 : 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.4),
-                blurRadius: 10,
-                spreadRadius: 2,
-              )
-            ],
-          ),
-          child: Stack(
+  Widget _buildTopBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
             children: [
-              // Distractors
-              ..._distractors.map((d) => Positioned(
-                    left: d.position.dx *
-                        (MediaQuery.of(context).size.width - 80),
-                    top: d.position.dy * maxHeight,
-                    child: Opacity(
-                      opacity: 0.8, // Íconos mucho más visibles
-                      child: Transform.rotate(
-                        angle: d.rotation,
-                        child: Icon(d.icon, color: Colors.white, size: d.size),
-                      ),
-                    ),
-                  )),
-
-              // Target (Now visually identical to distractors)
-              if (hasTarget)
-                Positioned(
-                  left: _targetPosition.dx *
-                      (MediaQuery.of(context).size.width - 80),
-                  top: _targetPosition.dy * maxHeight,
-                  child: Opacity(
-                    opacity: 0.8, // Mismo opacity que los distractores
-                    child: Icon(_targetIcon, color: Colors.white, size: 22),
-                  ),
-                ),
-
-              // HIGHLIGHT BOX (Success Feedback)
-              if (showHighlight && _foundPosition != null)
-                Positioned(
-                  left: _foundPosition!.dx -
-                      9, // Centered over 22px icon (40-22)/2 = 9
-                  top: _foundPosition!.dy - 9,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                        color:
-                            AppTheme.neonGreen.withOpacity(0.5), // More visible
-                        border: Border.all(
-                            color: AppTheme.neonGreen, width: 3), // Thicker
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                              color: AppTheme.neonGreen.withOpacity(0.6),
-                              blurRadius: 15,
-                              spreadRadius: 2)
-                        ]),
-                    child: const Icon(Icons.check,
-                        color: Colors.white, size: 24), // Added check icon
-                  ),
-                ),
-
-              // Label sutil
-              Positioned(
-                top: 12,
-                left: 12,
-                child: Text(
-                  isTop ? "A" : "B",
-                  style: const TextStyle(
-                      color: Colors.white10,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10),
+              const Icon(Icons.timer_outlined, color: AppTheme.accentGold, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                "00:$_secondsRemaining",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  fontFamily: 'monospace',
                 ),
               ),
             ],
           ),
+          Container(height: 20, width: 1, color: Colors.white12),
+          const Text(
+            "MODO ANOMALÍA",
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernPanel({required bool isTop, required double maxHeight}) {
+    bool hasTarget = isTop == _targetInTopImage;
+    bool showHighlight = _foundPosition != null && _foundInTop == isTop;
+
+    return Container(
+      height: maxHeight,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0F172A),
+            const Color(0xFF1E293B),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: (_foundPosition != null && isTop == _targetInTopImage) 
+                 ? AppTheme.accentGold 
+                 : (isTop ? AppTheme.accentGold.withOpacity(0.5) : Colors.white.withOpacity(0.4)), 
+          width: (_foundPosition != null && isTop == _targetInTopImage) ? 3.5 : 2.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+          // Persistent Subtle Glow to identify sensors
+          BoxShadow(
+            color: (isTop ? AppTheme.accentGold : Colors.white).withOpacity(0.1),
+            blurRadius: 12,
+            spreadRadius: 1,
+          ),
+          if (_foundPosition != null && isTop == _targetInTopImage)
+            BoxShadow(
+              color: AppTheme.accentGold.withOpacity(0.4),
+              blurRadius: 25,
+              spreadRadius: 3,
+            )
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: GestureDetector(
+          onTapDown: (details) => _handleTap(isTop, details, MediaQuery.of(context).size.width, maxHeight),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            color: (_foundPosition != null && isTop == _targetInTopImage) 
+                   ? AppTheme.accentGold.withOpacity(0.08) 
+                   : Colors.transparent,
+            child: Stack(
+              children: [
+                // Distractors
+                ..._distractors.map((d) => Positioned(
+                      left: d.position.dx * (MediaQuery.of(context).size.width - 80),
+                      top: d.position.dy * (maxHeight - 35),
+                      child: Opacity(
+                        opacity: 0.7,
+                        child: Transform.rotate(
+                          angle: d.rotation,
+                          child: Icon(d.icon, color: Colors.white, size: d.size),
+                        ),
+                      ),
+                    )),
+
+                // Target
+                if (hasTarget)
+                  Positioned(
+                    left: _targetPosition.dx * (MediaQuery.of(context).size.width - 80),
+                    top: _targetPosition.dy * (maxHeight - 35),
+                    child: Opacity(
+                      opacity: 0.7,
+                      child: Icon(_targetIcon, color: Colors.white, size: 22),
+                    ),
+                  ),
+
+                // Found Highlight (Show on both panels with specific states)
+                if (_foundPosition != null)
+                  Positioned(
+                    left: _targetPosition.dx * (MediaQuery.of(context).size.width - 80) - 9,
+                    top: _targetPosition.dy * (maxHeight - 35) - 9,
+                    child: _buildSuccessBox(
+                      isAnomaly: isTop == _targetInTopImage,
+                    ),
+                  ),
+
+                // Found Message Overlay
+                if (_foundPosition != null && isTop == _targetInTopImage)
+                  Positioned.fill(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentGold,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(color: AppTheme.accentGold.withOpacity(0.5), blurRadius: 30)
+                          ],
+                        ),
+                        child: const Text(
+                          "ANOMALÍA DETECTADA",
+                          style: TextStyle(
+                            color: Color(0xFF150826),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            letterSpacing: 2.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPanelLabel(String label) {
+    final bool isA = label.contains("A");
+    final Color color = isA ? AppTheme.accentGold : Colors.white60;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(isA ? Icons.security_rounded : Icons.radar_rounded, color: color, size: 10),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2.0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuccessBox({required bool isAnomaly}) {
+    final Color color = isAnomaly ? AppTheme.accentGold : AppTheme.successGreen;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        border: Border.all(color: color, width: 2.5),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: color.withOpacity(0.3), blurRadius: 15)
+        ],
+      ),
+      child: Center(
+        child: Icon(
+          isAnomaly ? Icons.priority_high_rounded : Icons.check_rounded,
+          color: color,
+          size: 30,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLivesIndicator() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(3, (index) {
+        bool isActive = index < _localAttempts;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.symmetric(horizontal: 5),
+          width: isActive ? 20 : 10,
+          height: 6,
+          decoration: BoxDecoration(
+            color: isActive ? AppTheme.accentGold : Colors.white10,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isActive ? [BoxShadow(color: AppTheme.accentGold.withOpacity(0.4), blurRadius: 8)] : [],
+          ),
+        );
+      }),
     );
   }
 }
@@ -504,10 +600,5 @@ class _DistractorItem {
   final double rotation;
   final double size;
 
-  _DistractorItem({
-    required this.icon,
-    required this.position,
-    required this.rotation,
-    required this.size,
-  });
+  _DistractorItem({required this.icon, required this.position, required this.rotation, required this.size});
 }

@@ -11,6 +11,7 @@ import 'user_management_screen.dart';
 import 'admin_login_screen.dart';
 import 'clover_plans_management_screen.dart';
 import 'withdrawal_plans_management_screen.dart';
+import 'global_game_requests_screen.dart';
 import 'global_config_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -21,6 +22,9 @@ import 'sponsors_management_screen.dart';
 import 'online_automation_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
 import 'event_metrics_screen.dart';
+import 'stripe_orders_screen.dart';
+import 'merchandise_management_screen.dart';
+import 'outflow_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -39,12 +43,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "Modo Online",
     "Usuarios",
     "Compras",
-    "Retiros",
-    "Métricas", // Renamed from "Reportes"
+    "Planes Retiro",
+    "Solicitudes",
+    "Retiros y Canjes",
+    "Stripe",
+    "Tienda Admin",
+    "Métricas",
     "Minijuegos",
     "Patrocinadores",
     "Auditoría",
-    "Configuración"
+    "Configuración",
   ];
 
   final List<IconData> _icons = [
@@ -55,15 +63,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.people,
     Icons.local_offer,
     Icons.money_off,
-    Icons.analytics, // Icon for "Métricas" (formerly "Reportes")
+    Icons.pending_actions,
+    Icons.receipt_long,
+    Icons.credit_card,
+    Icons.storefront,
+    Icons.analytics,
     Icons.games,
     Icons.business_center,
     Icons.history_edu,
     Icons.settings,
   ];
 
-  /// Método para resetear la vista al Dashboard principal.
-  /// Se pasa como callback al EventCreationScreen.
   void _goToDashboard() {
     setState(() {
       _selectedIndex = 0;
@@ -71,14 +81,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _handleLogout(BuildContext context) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title:
-            const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
-        content: const Text('¿Estás seguro de que deseas salir?',
-            style: TextStyle(color: Colors.white70)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Cerrar Sesión',
+            style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        content: Text('¿Estás seguro de que deseas salir?',
+            style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -93,8 +104,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (shouldLogout == true && context.mounted) {
-      // Reset system UI mode before logout
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      if (!isDark) {
+         // If we are in light mode, ensure status bar stays readable
+         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+      }
       await Provider.of<PlayerProvider>(context, listen: false).logout();
       if (context.mounted) {
         Navigator.of(context).pushReplacement(
@@ -106,8 +119,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // DEFINIMOS LAS VISTAS DENTRO DEL BUILD
-    // Esto es necesario para poder pasarle la función _goToDashboard
+    final playerProvider = context.watch<PlayerProvider>();
+    final bool isDarkMode = playerProvider.isDarkMode;
+    final Color goldActionColor =
+        isDarkMode ? AppTheme.dGoldMain : AppTheme.lGoldAction;
+    final Color goldTextColor =
+        isDarkMode ? AppTheme.dGoldLight : AppTheme.lGoldText;
+
     final List<Widget> views = [
       _WelcomeDashboardView(
         onNavigate: (index) {
@@ -115,168 +133,201 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _selectedIndex = index;
           });
         },
-      ), // Index 0
-
-      // Index 1: Le pasamos el callback aquí
+      ),
       ChangeNotifierProvider(
         create: (_) => EventCreationProvider(),
         child: EventCreationScreen(
           onEventCreated: _goToDashboard,
         ),
       ),
-
-      const CompetitionsManagementScreen(), // Index 2
-      const OnlineAutomationScreen(), // Index 3 - Modo Online
-      const UserManagementScreen(), // Index 4
-      const CloverPlansManagementScreen(), // Index 5 - Planes Compra
-      const WithdrawalPlansManagementScreen(), // Index 6 - Planes Retiro
-      const EventMetricsScreen(), // Index 7 - Métricas
-      const _MinigamesListView(), // Index 8 - Minijuegos
-      const SponsorsManagementScreen(), // Index 9 - Patrocinadores
-      const AuditLogsScreen(), // Index 10 - Auditoría
-      const GlobalConfigScreen(), // Index 11 - Configuración
+      const CompetitionsManagementScreen(),
+      const OnlineAutomationScreen(),
+      const UserManagementScreen(),
+      const CloverPlansManagementScreen(),
+      const WithdrawalPlansManagementScreen(),
+      const GlobalGameRequestsScreen(),
+      const OutflowManagementScreen(),
+      const StripeOrdersScreen(),
+      const MerchandiseManagementScreen(),
+      const EventMetricsScreen(),
+      const _MinigamesListView(),
+      const SponsorsManagementScreen(),
+      const AuditLogsScreen(),
+      const GlobalConfigScreen(),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        
         return Scaffold(
-          backgroundColor: AppTheme.darkBg,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: SafeArea(
             child: Column(
               children: [
-                // ------------------------------------------------
-                // 1. HEADER SUPERIOR (Logo + Usuario)
-                // ------------------------------------------------
+                // 1. HEADER SUPERIOR
                 Container(
                   height: 70,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   decoration: BoxDecoration(
-                    color: AppTheme.cardBg,
+                    color: Theme.of(context).cardTheme.color,
                     border: Border(
                       bottom: BorderSide(
-                        color: Colors.white.withOpacity(0.1),
+                        color: goldActionColor.withOpacity(isDark ? 0.2 : 0.12),
+                        width: 1,
                       ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      // Logo / Título
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryPurple.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.admin_panel_settings,
-                            color: AppTheme.primaryPurple),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              "Sistema Admin", // Shortened title
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Text(
-                              "MapHunter Admin",
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Información de Usuario
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                  child: LayoutBuilder(
+                    builder: (context, headerConstraints) {
+                      final bool isNarrow = headerConstraints.maxWidth < 450;
+                      return Row(
                         children: [
-                          if (MediaQuery.of(context).size.width > 600) ...[
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: const [
-                                Text(
-                                  "Administrador",
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14),
-                                ),
-                                Text(
-                                  "admin@system.com",
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: goldActionColor.withOpacity(isDark ? 0.22 : 0.12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            const SizedBox(width: 12),
-                          ],
-                          CircleAvatar(
-                            backgroundColor: AppTheme.secondaryPink,
-                            radius: 16,
-                            child: const Text("A",
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 8),
-                          // Modo Jugador toggle
-                          IconButton(
-                            icon: const Icon(Icons.sports_esports,
-                                color: AppTheme.accentGold, size: 20),
-                            tooltip: "Modo Jugador",
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const GameModeSelectorScreen()),
-                                (route) => false,
-                              );
-                            },
+                            child: Icon(Icons.admin_panel_settings,
+                                color: goldActionColor, size: 22),
                           ),
                           const SizedBox(width: 12),
-                          IconButton(
-                            icon: const Icon(Icons.logout,
-                                color: Colors.white54, size: 20),
-                            tooltip: "Salir",
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () => _handleLogout(context),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Sistema Admin",
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                if (!isNarrow)
+                                  Text(
+                                    "MapHunter Admin",
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Theme.of(context).textTheme.bodySmall?.color,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isDarkMode
+                                        ? Icons.dark_mode
+                                        : Icons.light_mode,
+                                    color: goldActionColor,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Switch.adaptive(
+                                    value: isDarkMode,
+                                    onChanged: (value) {
+                                      playerProvider.toggleDarkMode(value);
+                                    },
+                                    activeColor: goldActionColor,
+                                    activeTrackColor:
+                                        goldActionColor.withOpacity(0.35),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 12),
+                              if (headerConstraints.maxWidth > 650) ...[
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      "Administrador",
+                                      style: TextStyle(
+                                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14),
+                                    ),
+                                    Text(
+                                      "admin@system.com",
+                                      style: TextStyle(
+                                        color: Theme.of(context).textTheme.bodySmall?.color,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                                CircleAvatar(
+                                backgroundColor: goldActionColor,
+                                radius: 16,
+                                child: const Text("A",
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                    color: Colors.white,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                              SizedBox(width: isNarrow ? 4 : 8),
+                              IconButton(
+                                icon: Icon(Icons.sports_esports,
+                                  color: goldActionColor, size: 20),
+                                tooltip: "Modo Jugador",
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const GameModeSelectorScreen()),
+                                    (route) => false,
+                                  );
+                                },
+                              ),
+                              SizedBox(width: isNarrow ? 4 : 12),
+                              IconButton(
+                                icon: Icon(Icons.logout,
+                                    color: Theme.of(context).textTheme.bodySmall?.color,
+                                    size: 20),
+                                tooltip: "Salir",
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _handleLogout(context),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
 
-                // ------------------------------------------------
-                // 2. BARRA DE NAVEGACIÓN HORIZONTAL
-                // ------------------------------------------------
+                // 2. BARRA DE NAVEGACIÓN HORIZONTAL (CATEGORÍAS)
                 Container(
                   height: 60,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E2342),
+                    color: Theme.of(context).cardTheme.color,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: goldActionColor.withOpacity(isDark ? 0.22 : 0.15),
+                        width: 1,
+                      ),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        offset: const Offset(0, 4),
-                        blurRadius: 8,
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+                        offset: const Offset(0, 2),
+                        blurRadius: 4,
                       ),
                     ],
                   ),
@@ -286,9 +337,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     itemCount: _titles.length,
                     itemBuilder: (context, index) {
                       final isSelected = _selectedIndex == index;
+
                       return GestureDetector(
                         onTap: () {
-                          // Usamos la lista local 'views' para verificar longitud
                           if (index < views.length) {
                             setState(() => _selectedIndex = index);
                           } else {
@@ -297,41 +348,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     content: Text("Módulo en desarrollo")));
                           }
                         },
-                        child: Container(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
                           margin: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 8),
+                              horizontal: 4, vertical: 10),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppTheme.primaryPurple.withOpacity(0.15)
+                                ? goldActionColor.withOpacity(0.12)
                                 : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: isSelected
-                                ? Border.all(
-                                    color:
-                                        AppTheme.primaryPurple.withOpacity(0.5))
-                                : null,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: isSelected
+                                    ? goldActionColor.withOpacity(0.4)
+                                    : Colors.transparent),
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 _icons[index],
-                                size: 20,
+                                size: 18,
                                 color: isSelected
-                                    ? AppTheme.primaryPurple
-                                    : Colors.white54,
+                                    ? goldActionColor
+                                    : goldTextColor.withOpacity(0.6),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 _titles[index],
                                 style: TextStyle(
                                   color: isSelected
-                                      ? AppTheme.primaryPurple
-                                      : Colors.white70,
+                                      ? goldTextColor
+                                      : goldTextColor.withOpacity(0.7),
                                   fontWeight: isSelected
                                       ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  fontSize: 14,
+                                      : FontWeight.w500,
+                                  fontSize: 13,
+                                  letterSpacing: 0.3,
                                 ),
                               ),
                             ],
@@ -342,13 +394,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
 
-                // ------------------------------------------------
                 // 3. ÁREA DE CONTENIDO PRINCIPAL
-                // ------------------------------------------------
                 Expanded(
-                  child: AnimatedCyberBackground(
+                  child: Container(
+                    color: Theme.of(context).scaffoldBackgroundColor,
                     child: IndexedStack(
-                      // Usamos la lista local 'views'
                       index: _selectedIndex < views.length ? _selectedIndex : 0,
                       children: views,
                     ),
@@ -359,13 +409,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       },
-    );
+      );
   }
 }
-
-// ------------------------------------------------------------------
-// WIDGETS AUXILIARES
-// ------------------------------------------------------------------
 
 class _WelcomeDashboardView extends StatefulWidget {
   final void Function(int)? onNavigate;
@@ -412,6 +458,9 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color accentGold = isDark ? AppTheme.dGoldMain : AppTheme.lGoldAction;
+
     return Center(
       child: SingleChildScrollView(
         child: Padding(
@@ -419,21 +468,23 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.analytics, size: 80, color: Colors.white24),
+              Icon(Icons.analytics_rounded,
+                  size: 80, color: accentGold),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 "Bienvenido al Panel de Administración",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold),
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 "Selecciona una opción del menú superior para comenzar.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
               ),
               const SizedBox(height: 40),
               Wrap(
@@ -441,20 +492,19 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
                 runSpacing: 20,
                 alignment: WrapAlignment.center,
                 children: [
-                  _SummaryCard(
-                      title: "Usuarios Activos",
-                      value: _activeUsers,
-                      color: Colors.blue),
-                  _SummaryCard(
-                      title: "Eventos Creados",
-                      value: _createdEvents,
-                      color: Colors.orange),
-                  _SummaryCard(
-                    title: "Solicitudes Pendientes",
-                    value: _pendingRequests,
-                    color: Colors.purple,
-                    onTap: () => widget.onNavigate
-                        ?.call(2), // Navigate to Competitions (Index 2)
+                   _SummaryCard(
+                       title: "Usuarios Activos",
+                       value: _activeUsers,
+                       color: accentGold),
+                   _SummaryCard(
+                       title: "Eventos Creados",
+                       value: _createdEvents,
+                       color: Colors.blueAccent),
+                   _SummaryCard(
+                     title: "Solicitudes Pendientes",
+                     value: _pendingRequests,
+                     color: Colors.orangeAccent,
+                    onTap: () => widget.onNavigate?.call(2),
                   ),
                 ],
               ),
@@ -471,6 +521,7 @@ class _MinigamesListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final List<Map<String, dynamic>> minigames = [
       {
         'title': 'Secuencia de Memoria',
@@ -493,15 +544,16 @@ class _MinigamesListView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Configuración de Minijuegos",
             style: TextStyle(
-                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                color: Theme.of(context).textTheme.bodyLarge?.color, 
+                fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             "Prueba y ajusta los parámetros de los desafíos del juego.",
-            style: TextStyle(color: Colors.white54, fontSize: 16),
+            style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 16),
           ),
           const SizedBox(height: 30),
           Expanded(
@@ -510,11 +562,10 @@ class _MinigamesListView extends StatelessWidget {
               itemBuilder: (context, index) {
                 final mg = minigames[index];
                 return Card(
-                  color: AppTheme.cardBg,
                   margin: const EdgeInsets.only(bottom: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.white.withOpacity(0.05)),
+                    side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.05)),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(20),
@@ -527,14 +578,15 @@ class _MinigamesListView extends StatelessWidget {
                       child: Icon(mg['icon'], color: mg['color']),
                     ),
                     title: Text(mg['title'],
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
                             fontWeight: FontWeight.bold,
                             fontSize: 18)),
                     subtitle: Text(mg['subtitle'],
-                        style: const TextStyle(color: Colors.white70)),
-                    trailing: const Icon(Icons.arrow_forward_ios,
-                        color: Colors.white24, size: 16),
+                        style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
+                    trailing: Icon(Icons.arrow_forward_ios,
+                      color: isDark ? Colors.white38 : Colors.black26,
+                      size: 16),
                     onTap: () {
                       Navigator.push(context,
                           MaterialPageRoute(builder: (_) => mg['screen']));
@@ -564,29 +616,30 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 250,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-            color: AppTheme.cardBg,
+            color: Theme.of(context).cardTheme.color,
             borderRadius: BorderRadius.circular(16),
             border: Border(left: BorderSide(color: color, width: 4)),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4))
+                  color: color.withOpacity(isDark ? 0.2 : 0.08),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5))
             ]),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(color: Colors.white70)),
+            Text(title, style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
             const SizedBox(height: 8),
             Text(value,
-                style: const TextStyle(
-                    color: Colors.white,
+                style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
                     fontSize: 28,
                     fontWeight: FontWeight.bold)),
           ],

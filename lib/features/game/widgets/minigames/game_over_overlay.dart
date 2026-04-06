@@ -1,5 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../auth/providers/player_provider.dart';
+import '../buy_coins_with_clovers_modal.dart';
 import '../../../../core/theme/app_theme.dart';
 
 /// Overlay that appears when a minigame ends (win or lose).
@@ -109,14 +112,36 @@ class GameOverOverlay extends StatelessWidget {
                             onTap: onRetry!,
                           ),
   
-                        // Go to shop button
+                        // Go to shop / buy coins button
                         if (onGoToShop != null) ...[
                           const SizedBox(height: 12),
-                          _buildButton(
-                            label: 'IR A LA TIENDA',
-                            icon: Icons.storefront_rounded,
-                            color: AppTheme.accentGold,
-                            onTap: onGoToShop!,
+                          Builder(
+                            builder: (btnContext) {
+                              final player = Provider.of<PlayerProvider>(btnContext, listen: true).currentPlayer;
+                              final int coins = player?.coins ?? 0;
+                              
+                              if (coins == 0) {
+                                return _buildButton(
+                                  label: 'COMPRAR MONEDAS',
+                                  icon: Icons.currency_exchange_rounded,
+                                  color: AppTheme.accentGold,
+                                  onTap: () async {
+                                    final bool? success = await BuyCoinsWithCloversModal.show(context);
+                                    if (success == true) {
+                                      // Después de comprar monedas, puede ir a la tienda a comprar vidas
+                                      onGoToShop!(); 
+                                    }
+                                  },
+                                );
+                              }
+                              
+                              return _buildButton(
+                                label: 'IR A LA TIENDA',
+                                icon: Icons.storefront_rounded,
+                                color: AppTheme.accentGold,
+                                onTap: onGoToShop!,
+                              );
+                            }
                           ),
                         ],
   

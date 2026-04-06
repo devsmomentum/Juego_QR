@@ -10,6 +10,8 @@ import '../../game/providers/connectivity_provider.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
 import 'login_screen.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/version_check_service.dart';
+import '../../../shared/widgets/maintenance_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -97,6 +99,39 @@ class _SplashScreenState extends State<SplashScreen>
           // 2. Iniciar servicios necesarios
           if (!mounted) return;
           context.read<ConnectivityProvider>().startMonitoring();
+
+          // 2.5 Check maintenance mode
+          final versionService = VersionCheckService(Supabase.instance.client);
+          final versionStatus = await versionService.checkVersion();
+          if (!mounted) return;
+
+          if (versionStatus.maintenanceMode) {
+            if (player.isAdmin) {
+              final shouldContinue = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => MaintenanceScreen(
+                    isAdmin: true,
+                    onContinueAsAdmin: () => Navigator.of(context).pop(true),
+                  ),
+                ),
+              );
+              if (!mounted) return;
+              if (shouldContinue != true) return;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+              );
+              return;
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MaintenanceScreen(isAdmin: false),
+                ),
+              );
+              return;
+            }
+          }
 
           // 3. Resolver destino (Lógica similar a LoginScreen)
           if (player.role == 'admin') {

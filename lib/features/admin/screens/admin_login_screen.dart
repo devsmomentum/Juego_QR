@@ -6,6 +6,7 @@ import 'dashboard-screen.dart';
 import 'package:provider/provider.dart';
 import '../../auth/services/auth_service.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../auth/providers/player_provider.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -18,7 +19,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
-  bool _isLoading = true; // Start true to hide form while checking session
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -27,10 +28,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   }
 
   Future<void> _checkSession() async {
-    // Check if user is already logged in
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
-      // Small delay to ensure context is ready
       await Future.delayed(Duration.zero);
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -55,7 +54,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
       try {
         final authService = context.read<AuthService>();
-        
         await authService.loginAdmin(
           _emailController.text.trim(),
           _passwordController.text,
@@ -75,7 +73,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       }
     }
   }
-
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -101,211 +98,180 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.darkGradient,
-        ),
-        child: SafeArea(
-          child: _isLoading 
-            ? const Center(child: LoadingIndicator())
-            : Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Container(
-                constraints: const BoxConstraints(
-                    maxWidth: 400), // Para que se vea bien en web/tablet
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo / Icono Admin
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [
-                              AppTheme.secondaryPink,
-                              AppTheme.primaryPurple
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.secondaryPink.withOpacity(0.4),
-                              blurRadius: 30,
-                              spreadRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.admin_panel_settings,
-                          size: 60,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Título
-                      Text(
-                        'Administrador',
-                        style:
-                            Theme.of(context).textTheme.displayMedium?.copyWith(
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Scaffold(
+        backgroundColor: AppTheme.lSurface0,
+        body: Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.lSurface0,
+          ),
+          child: SafeArea(
+            child: _isLoading
+                ? const Center(child: LoadingIndicator())
+                : Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
                                   color: Colors.white,
-                                ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Acceso al panel de control',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white70,
-                            ),
-                      ),
-                      const SizedBox(height: 50),
-
-                      // Email field
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Email Administrativo',
-                          labelStyle: const TextStyle(color: Colors.white60),
-                          prefixIcon: const Icon(Icons.email_outlined,
-                              color: AppTheme.primaryPurple),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                                color: Colors.white.withOpacity(0.1)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                const BorderSide(color: AppTheme.primaryPurple),
-                          ),
-                          filled: true,
-                          fillColor: AppTheme.cardBg,
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Por favor ingresa tu email';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Password field
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: !_isPasswordVisible,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          labelStyle: const TextStyle(color: Colors.white60),
-                          prefixIcon: const Icon(Icons.lock_outline,
-                              color: AppTheme.primaryPurple),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isPasswordVisible
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: Colors.white60,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isPasswordVisible = !_isPasswordVisible;
-                              });
-                            },
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                                color: Colors.white.withOpacity(0.1)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                const BorderSide(color: AppTheme.primaryPurple),
-                          ),
-                          filled: true,
-                          fillColor: AppTheme.cardBg,
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Por favor ingresa tu contraseña';
-                          }
-                          return null;
-                        },
-                        ),
-                      const SizedBox(height: 40),
-
-                      // Login Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Ink(
-                            decoration: BoxDecoration(
-                              gradient: AppTheme.primaryGradient,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Container(
-                              alignment: Alignment.center,
-                               child: _isLoading
-                                  ? const LoadingIndicator(fontSize: 14, color: Colors.white)
-                                  : const Text(
-                                      'INGRESAR',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        letterSpacing: 1.2,
-                                      ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.lGoldAction.withOpacity(0.15),
+                                      blurRadius: 40,
+                                      spreadRadius: 2,
                                     ),
-                            ),
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.02),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                                  border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.1), width: 1),
+                                ),
+                                child: const Icon(
+                                  Icons.admin_panel_settings_rounded,
+                                  size: 64,
+                                  color: AppTheme.lGoldAction,
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+                              Text(
+                                'Administrador',
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.black,
+                                  letterSpacing: -1,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Acceso al panel de control',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black.withOpacity(0.5),
+                                  letterSpacing: 0.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 50),
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+                                decoration: InputDecoration(
+                                  labelText: 'Email Administrativo',
+                                  labelStyle: const TextStyle(color: Colors.black45, fontSize: 14),
+                                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppTheme.lGoldAction, size: 20),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide(color: AppTheme.lGoldAction.withOpacity(0.1)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) return 'Por favor ingresa tu email';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: !_isPasswordVisible,
+                                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+                                decoration: InputDecoration(
+                                  labelText: 'Contraseña',
+                                  labelStyle: const TextStyle(color: Colors.black45, fontSize: 14),
+                                  prefixIcon: const Icon(Icons.lock_person_rounded, color: AppTheme.lGoldAction, size: 20),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _isPasswordVisible ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                      color: Colors.black38,
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      setState(() => _isPasswordVisible = !_isPasswordVisible);
+                                    },
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: BorderSide(color: AppTheme.lGoldAction.withOpacity(0.1)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    borderSide: const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) return 'Por favor ingresa tu contraseña';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 40),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 55,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.lGoldAction,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    elevation: 4,
+                                    shadowColor: AppTheme.lGoldAction.withOpacity(0.4),
+                                  ),
+                                  child: _isLoading
+                                      ? const LoadingIndicator(fontSize: 14, color: Colors.white)
+                                      : const Text(
+                                          'INGRESAR AL PANEL',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 1.5,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              TextButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(builder: (_) => const SplashScreen()),
+                                  );
+                                },
+                                icon: const Icon(Icons.videogame_asset_outlined, color: AppTheme.lGoldText),
+                                label: const Text(
+                                  'Entrar como Jugador',
+                                  style: TextStyle(color: AppTheme.lGoldText, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Opción para entrar como Jugador
-                      TextButton.icon(
-                        onPressed: () {
-                           Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(builder: (_) => const SplashScreen()),
-                            );
-                        },
-                        icon: const Icon(Icons.videogame_asset_outlined, color: AppTheme.accentGold),
-                        label: const Text(
-                          'Entrar como Jugador',
-                          style: TextStyle(
-                            color: AppTheme.accentGold, 
-                            fontWeight: FontWeight.bold
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
         ),
       ),

@@ -45,12 +45,13 @@ class _CompetitionsManagementScreenState
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Eliminar Competencia',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Eliminar Competencia',
+            style: TextStyle(
+                color: Theme.of(context).textTheme.displayLarge?.color)),
         content: Text(
           '¿Estás seguro de que deseas eliminar "${event.title}"?\n\nEsta acción no se puede deshacer.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
         ),
         actions: [
           TextButton(
@@ -123,9 +124,7 @@ class _CompetitionsManagementScreenState
 
     // Solo retornamos el contenido, el Dashboard provee el Scaffold y Header
     return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.darkGradient,
-      ),
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -135,19 +134,20 @@ class _CompetitionsManagementScreenState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     "Gestionar Competencias",
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Theme.of(context).textTheme.displayLarge?.color,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  icon: const Icon(Icons.refresh_rounded,
+                      color: AppTheme.lGoldAction),
                   onPressed: _isLoading ? null : _loadEvents,
                 ),
               ],
@@ -167,7 +167,7 @@ class _CompetitionsManagementScreenState
                     label: 'En Curso',
                     isActive: _selectedFilter == 'active',
                     onTap: () => setState(() => _selectedFilter = 'active'),
-                    activeColor: AppTheme.accentGold,
+                    activeColor: AppTheme.lGoldAction,
                     textColor: Colors.black,
                   ),
                   const SizedBox(width: 12),
@@ -209,20 +209,17 @@ class _CompetitionsManagementScreenState
                   ),
                   child: DropdownButtonFormField<String>(
                     value: _selectedTypeFilter,
-                    dropdownColor: AppTheme.cardBg,
-                    style: const TextStyle(color: Colors.white),
+                    dropdownColor: Theme.of(context).cardTheme.color,
+                    style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyLarge?.color),
                     decoration: InputDecoration(
                       labelText: 'Tipo de evento',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Colors.white24),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: AppTheme.accentGold),
-                      ),
+                      labelStyle: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.7)),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
                     ),
@@ -253,41 +250,43 @@ class _CompetitionsManagementScreenState
                         : double.infinity,
                     maxWidth: double.infinity,
                   ),
-                  child: IntrinsicWidth(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) =>
-                          setState(() => _searchQuery = value),
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar por título...',
-                        hintStyle: const TextStyle(color: Colors.white54),
-                        prefixIcon:
-                            const Icon(Icons.search, color: Colors.white54),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Colors.white24),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: AppTheme.accentGold),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.03),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.close,
-                                    color: Colors.white54),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                      ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                    style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyLarge?.color),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por título...',
+                      hintStyle: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.5)),
+                      prefixIcon: Icon(Icons.search,
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.5)),
+                      filled: true,
+                      fillColor: Theme.of(context).cardTheme.color,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.close,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.color
+                                      ?.withOpacity(0.5)),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -304,12 +303,22 @@ class _CompetitionsManagementScreenState
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.event_busy,
-                                size: 64, color: Colors.white.withOpacity(0.3)),
+                                size: 64,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.3)),
                             const SizedBox(height: 16),
-                            const Text(
+                            Text(
                               "No hay competencias con esos filtros",
                               style: TextStyle(
-                                  color: Colors.white70, fontSize: 18),
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.color
+                                      ?.withOpacity(0.7),
+                                  fontSize: 18),
                             ),
                           ],
                         ),
@@ -322,12 +331,9 @@ class _CompetitionsManagementScreenState
                         itemBuilder: (context, index) {
                           final event = events[index];
                           return Card(
-                            elevation: 4,
-                            color: AppTheme.cardBg,
+                            elevation: 2,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                  color: Colors.white.withOpacity(0.05)),
                             ),
                             child: Column(
                               children: [
@@ -347,20 +353,23 @@ class _CompetitionsManagementScreenState
                                                 fit: BoxFit.cover,
                                               )
                                             : null,
-                                        color: AppTheme.primaryPurple
-                                            .withOpacity(0.2),
+                                        color: AppTheme.lGoldAction
+                                            .withOpacity(0.12),
                                       ),
                                       child: event.imageUrl.isEmpty
                                           ? const Icon(
-                                              Icons.confirmation_number,
-                                              color: AppTheme.primaryPurple)
+                                              Icons.emoji_events_rounded,
+                                              color: AppTheme.lGoldAction)
                                           : null,
                                     ),
                                   ),
                                   title: Text(
                                     event.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .displayLarge
+                                          ?.color,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 18,
                                     ),
@@ -377,14 +386,22 @@ class _CompetitionsManagementScreenState
                                           children: [
                                             Icon(Icons.location_on,
                                                 size: 14,
-                                                color: Colors.white54),
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color
+                                                    ?.withOpacity(0.6)),
                                             const SizedBox(width: 4),
                                             Expanded(
                                               child: Text(
                                                 event.locationName ??
                                                     'Sin ubicación',
-                                                style: const TextStyle(
-                                                    color: Colors.white54),
+                                                  style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color
+                                                          ?.withOpacity(0.6)),
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -403,14 +420,22 @@ class _CompetitionsManagementScreenState
                                               children: [
                                                 Icon(Icons.calendar_today,
                                                     size: 14,
-                                                    color: Colors.white54),
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color
+                                                        ?.withOpacity(0.6)),
                                                 const SizedBox(width: 4),
                                                 Text(
                                                   event.date
                                                       .toString()
                                                       .split(' ')[0],
-                                                  style: const TextStyle(
-                                                      color: Colors.white54),
+                                                  style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color
+                                                          ?.withOpacity(0.6)),
                                                 ),
                                               ],
                                             ),
@@ -418,9 +443,13 @@ class _CompetitionsManagementScreenState
                                                 event.longitude != null)
                                               Text(
                                                 '(${event.latitude.toStringAsFixed(4)}, ${event.longitude.toStringAsFixed(4)})',
-                                                style: const TextStyle(
-                                                    color: Colors.white38,
-                                                    fontSize: 12),
+                                                  style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color
+                                                          ?.withOpacity(0.4),
+                                                      fontSize: 12),
                                               ),
                                           ],
                                         ),
@@ -438,7 +467,11 @@ class _CompetitionsManagementScreenState
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.2),
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color
+                                        ?.withOpacity(0.04),
                                     borderRadius: const BorderRadius.vertical(
                                         bottom: Radius.circular(16)),
                                   ),
@@ -459,10 +492,11 @@ class _CompetitionsManagementScreenState
                                     label: const Text(
                                         "Ver Detalles y Solicitudes"),
                                     style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppTheme.accentGold,
-                                      side: const BorderSide(
-                                          color: AppTheme.accentGold,
-                                          width: 0.5),
+                                      foregroundColor: AppTheme.lGoldAction,
+                                      side: BorderSide(
+                                          color: AppTheme.lGoldAction
+                                              .withOpacity(0.5),
+                                          width: 1),
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 12),
                                     ),
@@ -487,9 +521,12 @@ class _CompetitionsManagementScreenState
     required Color textColor,
   }) {
     final backgroundColor =
-        isActive ? activeColor : Colors.white.withOpacity(0.05);
-    final borderColor = isActive ? activeColor : Colors.white24;
-    final labelColor = isActive ? textColor : Colors.white60;
+        isActive ? activeColor : Theme.of(context).cardTheme.color;
+    final borderColor =
+        isActive ? activeColor : Theme.of(context).dividerColor.withOpacity(0.1);
+    final labelColor = isActive
+        ? textColor
+        : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7);
     final fontWeight = isActive ? FontWeight.bold : FontWeight.normal;
 
     return GestureDetector(

@@ -46,7 +46,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   late Stream<GameEvent> _eventStream;
   bool _hasNavigatedToPodium =
       false; // Prevent double-navigation when event completes
+  bool _isRedirectingToGame = false;
   Timer? _completionPollingTimer; // Fallback: polling si Realtime falla (Web)
+  Timer? _approvalPollingTimer;
 
   @override
   void initState() {
@@ -96,6 +98,25 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
               builder: (_) => HomeScreen(eventId: widget.eventId)));
           return;
         }
+
+        // If user is approved while spectating, redirect to player mode
+        final approvedRequest =
+            await requestProvider.getRequestForPlayer(userId, widget.eventId);
+        if (approvedRequest != null && approvedRequest.isApproved) {
+          if (!mounted) return;
+          debugPrint(
+              '🚫 SpectatorMode: User approved. Redirecting to HomeScreen...');
+          setState(() {
+            _isRedirectingToGame = true;
+          });
+
+          await Future.delayed(const Duration(milliseconds: 400));
+
+          playerProvider.setSpectatorRole(false);
+          Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (_) => HomeScreen(eventId: widget.eventId)));
+          return;
+        }
       }
       // -----------------------------------------------
 
@@ -108,6 +129,13 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
       // Registrarse como espectador para habilitar compras/sabotajes
       await playerProvider.joinAsSpectator(widget.eventId);
+
+      // Polling: detectar aprobaciones mientras está en modo espectador
+      _approvalPollingTimer?.cancel();
+      _approvalPollingTimer = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => _pollApprovalRedirect(),
+      );
 
       // Fix 3.7: Usar el PowerEffectManager GLOBAL (single source of truth).
       // Evita el split-brain donde SabotageOverlay usaba el global y esta pantalla
@@ -152,6 +180,40 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _pollApprovalRedirect() async {
+    if (!mounted || _isRedirectingToGame) return;
+
+    try {
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider =
+          Provider.of<GameRequestProvider>(context, listen: false);
+      final userId = playerProvider.currentPlayer?.userId;
+      if (userId == null) return;
+
+      final approvedRequest =
+          await requestProvider.getRequestForPlayer(userId, widget.eventId);
+      if (approvedRequest != null && approvedRequest.isApproved) {
+        if (!mounted) return;
+        debugPrint(
+            '🚫 SpectatorMode: Approval detected by polling. Redirecting...');
+        setState(() {
+          _isRedirectingToGame = true;
+        });
+        await Future.delayed(const Duration(milliseconds: 400));
+
+        playerProvider.setSpectatorRole(false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => HomeScreen(eventId: widget.eventId),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ SpectatorMode approval polling error: $e');
+    }
   }
 
   void _showExitConfirmation() {
@@ -362,6 +424,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   @override
   void dispose() {
     _completionPollingTimer?.cancel();
+    _approvalPollingTimer?.cancel();
     // Restaurar rol de espectador al salir
     // Usamos microtask para asegurar que se ejecute sin erores de contexto
     Future.microtask(() {
@@ -410,6 +473,70 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                 color: Colors.black.withOpacity(0.5),
               ),
             ),
+            if (_isRedirectingToGame)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.6),
+                  child: Center(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.92, end: 1.0),
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOut,
+                      builder: (context, scale, child) => Transform.scale(
+                        scale: scale,
+                        child: AnimatedOpacity(
+                          opacity: _isRedirectingToGame ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: child,
+                        ),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF151517),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppTheme.primaryPurple,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryPurple.withOpacity(0.25),
+                              blurRadius: 18,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.secondaryPink,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                'Redirigiendo a la competencia: solicitud aprobada...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             StreamBuilder<GameEvent>(
               stream: _eventStream,
               builder: (context, snapshot) {

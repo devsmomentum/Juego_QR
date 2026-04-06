@@ -13,6 +13,7 @@ import '../services/inventory_service.dart';
 import '../services/power_service.dart';
 import '../../admin/services/admin_service.dart';
 import '../../game/strategies/power_response.dart';
+import '../../../core/services/session_service.dart';
 
 enum PowerUseResult {
   success,
@@ -57,6 +58,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   bool _isAutoTheme = true; // Auto theme based on Venezuela time
   bool _isNewlyRegistered = false; // Flag to track if the user just registered
   Timer? _themeTimer; // Timer to periodically check time
+  DateTime? _lastLoginTime; // Guard: suppress stale session validation right after login
 
   List<PowerItem> _shopItems = PowerItem.getShopItems();
 
@@ -277,9 +279,11 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Future<void> login(String email, String password) async {
     try {
       _isNewlyRegistered = false; // Regular login is not a registration
+      _lastLoginTime = DateTime.now(); // Guard: mark login start
       final userId = await _authService.login(email, password);
       await restoreSession(userId);
     } catch (e) {
+      _lastLoginTime = null;
       debugPrint('Error logging in: $e');
       rethrow;
     }
@@ -289,6 +293,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
       {String? cedula, String? phone}) async {
     try {
       _isNewlyRegistered = true; // MARK AS NEWLY REGISTERED
+      _lastLoginTime = DateTime.now(); // Guard: same as login
       final userId = await _authService.register(name, email, password,
           cedula: cedula, phone: phone);
 
@@ -297,7 +302,17 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         await restoreSession(userId);
       }
     } catch (e) {
+      _lastLoginTime = null;
       debugPrint('Error registering: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> resendVerification(String email) async {
+    try {
+      await _authService.resendVerification(email);
+    } catch (e) {
+      debugPrint('Error resending verification: $e');
       rethrow;
     }
   }
@@ -382,6 +397,7 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   Future<void> logout({bool clearBanMessage = true}) async {
     if (_isLoggingOut) return;
     _isLoggingOut = true;
+    _lastLoginTime = null; // Clear login guard on logout
 
     try {
       // Use centralized AuthService logout which triggers callbacks
@@ -534,7 +550,6 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         } catch (e) {
           debugPrint('PlayerProvider: ⚠️ Error clearing power effects: $e');
         }
-        // NOTE: We do NOT update the status. Banned users remain banned.
         debugPrint(
             'PlayerProvider: ${existing['status']} user can now view as spectator (status unchanged)');
       }
@@ -628,7 +643,16 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
           // Jugadores activos pagan con monedas de sesión (game_players.coins)
           _currentPlayer!.coins -= cost;
         }
+        
+        // SYNC FIX: Fetch inventory immediately and notify
         await fetchInventory(_currentPlayer!.userId, eventId);
+        
+        // Optimistic local update for the item list (backward compatibility with _currentPlayer.inventory)
+        if (!isPower && itemId != 'extra_life') {
+           // If it's a generic item, reload profile to be sure
+           await reloadProfile();
+        }
+        
         notifyListeners();
       }
       return result.success;
@@ -976,6 +1000,8 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
   /// Restores session by fetching profile AND auto-joining the user's latest event if applicable.
   /// This should ONLY be called on explicit Login or App Start.
   Future<void> restoreSession(String userId) async {
+    // Guard: protect session validation during restore (covers SplashScreen auto-login)
+    _lastLoginTime ??= DateTime.now();
     await _fetchProfile(userId, restoreSessionContext: true);
     await _checkTutorialStatus();
   }
@@ -1248,9 +1274,52 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', userId)
-        .listen((data) {
+        .listen((data) async {
           if (data.isNotEmpty) {
-            debugPrint("Stream Profile Update: ${data.first['status']}");
+            final profile = data.first;
+            debugPrint("Stream Profile Update: ${profile['status']}");
+            
+            // SINGLE DEVICE POLICY VALIDATION
+            final String? remoteSessionId = profile['current_session_id'];
+            final sessionService = SessionService();
+            final isValid = await sessionService.isSessionValid(remoteSessionId);
+            
+            if (!isValid) {
+              // Grace period: skip validation for 8s after login to avoid
+              // stale Realtime events from causing a false logout.
+              if (_lastLoginTime != null &&
+                  DateTime.now().difference(_lastLoginTime!).inSeconds < 8) {
+                debugPrint('PlayerProvider: ⚠️ Session mismatch during login grace period. Skipping logout.');
+                _fetchProfile(userId);
+                return;
+              }
+
+              // Double-check: Realtime might have delivered stale data.
+              // A direct SELECT gives the authoritative DB value.
+              try {
+                final freshProfile = await _supabase
+                    .from('profiles')
+                    .select('current_session_id')
+                    .eq('id', userId)
+                    .maybeSingle();
+                final freshRemote = freshProfile?['current_session_id'] as String?;
+                final stillInvalid = !(await sessionService.isSessionValid(freshRemote));
+
+                if (!stillInvalid) {
+                  debugPrint('PlayerProvider: ✅ Realtime mismatch was stale. DB confirms session is valid.');
+                  _fetchProfile(userId);
+                  return;
+                }
+              } catch (e) {
+                debugPrint('PlayerProvider: Error double-checking session: $e');
+              }
+
+              debugPrint('PlayerProvider: 🚨 Session conflict confirmed! Logging out...');
+              _banMessage = 'Tu sesión se inició en otro dispositivo.';
+              await logout(clearBanMessage: false);
+              return;
+            }
+
             _fetchProfile(userId);
           }
         }, onError: (e) {

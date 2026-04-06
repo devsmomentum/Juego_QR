@@ -13,7 +13,6 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client for user authentication
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -24,239 +23,149 @@ serve(async (req) => {
       },
     );
 
-    // 1. AUTHENTICATE USER
     const {
       data: { user },
     } = await supabaseClient.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
 
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
-    // 2. PARSE REQUEST - Only plan_id is accepted (SECURITY: no amount from client)
     const { plan_id } = await req.json();
+    if (!plan_id) throw new Error("Missing plan_id parameter");
 
-    if (!plan_id) {
-      throw new Error("Missing plan_id parameter");
-    }
-
-    console.log(
-      `[api_pay_orders] Processing payment for user ${user.id}, plan_id: ${plan_id}`,
-    );
-
-    // 3. INITIALIZE ADMIN CLIENT (for bypassing RLS)
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!serviceRoleKey) {
-      console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing!");
-      throw new Error("Server Misconfiguration: Missing DB Permissions");
-    }
-
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       serviceRoleKey,
     );
 
-    // 4. VALIDATE PLAN FROM DATABASE (Unified Table)
-    const { data: plan, error: planError } = await supabaseAdmin
+    // 1. OBTENER DATOS (Plan, Perfil y Tasas) - Simplificado por brevedad
+    const { data: plan } = await supabaseAdmin
       .from("transaction_plans")
-      .select("id, name, amount, price, is_active, type")
+      .select("*")
       .eq("id", plan_id)
-      .eq("type", "buy") // Security: Ensure it is a BUY plan
       .single();
-
-    if (planError) {
-      console.error("Plan fetch error:", planError);
-      throw new Error(`Plan inválido: ${planError.message}`);
-    }
-
-    if (!plan) {
-      throw new Error("Plan no encontrado");
-    }
-
-    if (!plan.is_active) {
-      throw new Error("El plan seleccionado no está disponible");
-    }
-
-    // CRITICAL: Use price from DATABASE, not from client
-    // CRITICAL: Use price from DATABASE
-    const amount = plan.price;
-    const cloversQuantity = plan.amount;
-    const currency = "USD"; // Always USD
-
-    console.log(
-      `[api_pay_orders] Plan validated: ${plan.name}, Price: $${amount} USD, Clovers: ${cloversQuantity}`,
-    );
-
-    // 5. FETCH USER PROFILE DATA (for payment gateway)
-    const { data: profile, error: profileError } = await supabaseAdmin
+    const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("email, phone, dni")
+      .select("*")
       .eq("id", user.id)
       .single();
+    const { data: configRows } = await supabaseAdmin
+      .from("app_config")
+      .select("key, value")
+      .in("key", ["bcv_exchange_rate", "gateway_fee_percentage"]);
 
-    if (profileError || !profile) {
-      throw new Error("Perfil de usuario incompleto");
-    }
+    if (!plan || !profile || !configRows)
+      throw new Error("Datos incompletos para procesar la orden");
 
-    const { email, phone, dni } = profile;
-
-    if (!email || !phone || !dni) {
-      throw new Error("Perfil incompleto. Verifique email, teléfono y DNI.");
-    }
-
-    // 6. GET PAGO A PAGO API KEY
-    const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY");
-    if (!pagoApiKey) {
-      throw new Error("Server Misconfiguration: Missing PAGO_PAGO_API_KEY");
-    }
-
-    const PAGO_PAGO_URL = Deno.env.get("PAGO_PAGO_API_URL")!;
-
-    // Calculate expiration (30 minutes)
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-
-    // 7. PREPARE PAYLOAD FOR PAYMENT GATEWAY
-    const payload = {
-      amount: amount,
-      currency: currency, // USD
-      motive: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
-      email: email,
-      phone: phone,
-      dni: dni,
-      type_order: "EXTERNAL",
-      expires_at: expiresAt,
-      alias: `PLAN-${plan.name.toUpperCase()}-${user.id.substring(0, 8)}-${Date.now()}`,
-      convert_from_usd: false,
-      url_redirect: "io.supabase.maphunter://payment-return",
-      extra_data: {
-        user_id: user.id,
-        plan_id: plan.id,
-        plan_name: plan.name,
-        clovers_amount: cloversQuantity,
-        price_usd: amount,
-      },
-    };
-
-    console.log(
-      "[api_pay_orders] Sending to Pago a Pago:",
-      JSON.stringify(payload),
+    const configMap = Object.fromEntries(
+      configRows.map((r: any) => [r.key, r.value]),
+    );
+    const bcvRate = parseFloat(configMap["bcv_exchange_rate"]);
+    const gatewayFeePercent = parseFloat(
+      configMap["gateway_fee_percentage"] ?? "0",
     );
 
-    // 8. CALL PAYMENT GATEWAY
-    let data;
+    // Inflar el monto USD para absorber la comisión de PAP
+    // Así después de que PAP descuente su %, nos llega plan.price completo
+    const amountUsdToSend = plan.price / (1 - gatewayFeePercent / 100);
 
-    // MOCK CHECK (For Dev/Test environments)
-    if (
-      PAGO_PAGO_URL.includes("pagoapago.com/v1") ||
-      PAGO_PAGO_URL.includes("mock")
-    ) {
-      console.log("Simulating success via MOCK logic");
-      data = {
-        success: true,
-        message: "Mock Order Created",
-        data: {
-          payment_url: "https://pagoapago.com/checkout/mock-" + Date.now(),
-          order_id: `MOCK-${Date.now()}`,
-        },
-      };
-    } else {
-      // REAL API CALL
-      const response = await fetch(PAGO_PAGO_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          pago_pago_api: pagoApiKey,
-        },
-        body: JSON.stringify(payload),
-      });
+    // Fallback en VES por si PAP no devuelve monto
+    const amountVesFallback = amountUsdToSend * bcvRate;
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(
-          `Pago a Pago API Error (${response.status}): ${errText}`,
-        );
-      }
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const localOrderId = `MPAY-${Date.now()}-${user.id.substring(0, 8)}`;
 
-      data = await response.json();
-      console.log(
-        "[api_pay_orders] Pago a Pago Response:",
-        JSON.stringify(data),
+    // 2. CREAR ORDEN EN PAGO A PAGO (API EXTERNA)
+    const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY");
+    // ✅ AQUÍ ESTÁ LA MAGIA: Llamamos al Supabase de ELLOS, no al nuestro
+    const PAGO_A_PAGO_URL =
+      "https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_pay_orders";
+
+    const pagoAPagoPayload = {
+      amount: amountUsdToSend,
+      currency: "USD",
+      email: profile.email,
+      phone: profile.phone,
+      motive: `Compra de plan: ${plan.name}`,
+      dni: profile.dni,
+      type_order: "EXTERNAL",
+      expires_at: expiresAt,
+      alias: localOrderId,
+      extra_data: { local_plan_id: plan.id, user_id: user.id, clovers_amount: plan.amount },
+    };
+
+    console.log("[api_pay_orders] Solicitando link a Pago a Pago...");
+
+    const pagoResponse = await fetch(PAGO_A_PAGO_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        pago_pago_api: pagoApiKey!, // Pasamos tu clave secreta
+      },
+      body: JSON.stringify(pagoAPagoPayload),
+    });
+
+    if (!pagoResponse.ok) {
+      const err = await pagoResponse.text();
+      console.error("Error de Pago a Pago:", err);
+      throw new Error("No se pudo generar el link de pago con el banco.");
+    }
+
+    const pagoData = await pagoResponse.json();
+
+    // Extraemos los datos que nos devolvió Pago a Pago
+    const externalOrderId = pagoData.data.order_id;
+    const paymentUrl = pagoData.data.payment_url;
+    // Monto real en VES que PAP calculó (lo que el usuario debe pagar)
+    const amountVesReal = pagoData.data.amount_ves ?? pagoData.data.amount ?? amountVesFallback;
+
+    console.log(`[api_pay_orders] PAP amount_ves: ${amountVesReal}, fallback: ${amountVesFallback}`);
+
+    // 3. GENERAR CÓDIGO DE VALIDACIÓN ÚNICO
+    const { data: validationCode, error: codeError } = await supabaseAdmin.rpc(
+      "generate_validation_code",
+    );
+    if (codeError || !validationCode) {
+      console.error(
+        "[api_pay_orders] Error generando validation_code:",
+        codeError,
       );
+      throw new Error("No se pudo generar el código de validación");
     }
+    console.log("[api_pay_orders] Validation code generado:", validationCode);
 
-    // 9. PARSE RESPONSE
-    const orderId = data.data?.order_id || data.order_id;
-    const paymentUrl = data.data?.payment_url || data.payment_url;
-
-    if (!orderId || !paymentUrl) {
-      console.error("Invalid Response Data:", data);
-      if (data.success === false)
-        throw new Error(data.message || "Unknown API Error");
-      throw new Error("Missing order_id or payment_url in response");
-    }
-
-    // 10. PERSIST ORDER TO DATABASE
-    console.log(`[api_pay_orders] Persisting order ${orderId}...`);
-
-    const { error: dbError } = await supabaseAdmin
+    // 4. GUARDAR EN TU BASE DE DATOS LOCAL
+    const { data: insertedOrder, error: dbError } = await supabaseAdmin
       .from("clover_orders")
       .insert({
         user_id: user.id,
-        plan_id: plan.id, // NEW: Link to plan
-        amount: amount,
-        currency: currency,
+        plan_id: plan.id,
+        amount: plan.price,
+        currency: "USD",
         status: "pending",
-        pago_pago_order_id: orderId,
-        payment_url: paymentUrl,
+        pago_pago_order_id: externalOrderId, // Guardamos el ID que nos dio Pago a Pago
+        validation_code: validationCode, // Código para validar Pago Móvil
         expires_at: expiresAt,
         extra_data: {
-          plan_name: plan.name,
-          clovers_amount: cloversQuantity,
-          price_usd: amount,
-          initiated_at: new Date().toISOString(),
-          api_response: data,
-          function_version: "v3-plans",
+          payment_url: paymentUrl,
+          ...pagoAPagoPayload.extra_data,
+          amount_ves_total: amountVesReal,
         },
-      });
-
-    if (dbError) {
-      console.error("CRITICAL DB ERROR:", dbError);
-      throw new Error(`Database Persistence Failed: ${dbError.message}`);
-    }
-
-    // 11. VERIFY PERSISTENCE
-    const { data: verifyData, error: verifyError } = await supabaseAdmin
-      .from("clover_orders")
-      .select("id, status")
-      .eq("pago_pago_order_id", orderId)
+      })
+      .select("id, validation_code")
       .single();
 
-    if (verifyError || !verifyData) {
-      console.error("VERIFICATION FAILED:", verifyError);
-    } else {
-      console.log("VERIFICATION SUCCESS:", verifyData);
-    }
+    if (dbError) throw new Error("Error guardando orden local");
 
-    console.log("[api_pay_orders] Order persisted successfully.");
-
-    // 12. RETURN SUCCESS RESPONSE
+    // 5. RESPONDER A FLUTTER
     return new Response(
       JSON.stringify({
         success: true,
         data: {
-          order_id: orderId,
+          db_order_id: insertedOrder.id,
+          external_order_id: externalOrderId,
+          validation_code: insertedOrder.validation_code,
+          amount_ves: amountVesReal,
           payment_url: paymentUrl,
-          plan: {
-            id: plan.id,
-            name: plan.name,
-            clovers: cloversQuantity,
-            price_usd: amount,
-          },
-        },
-        debug_info: {
-          persistence_verified: !!verifyData,
-          server_time: new Date().toISOString(),
-          correlation_id: `v3-${Date.now()}`,
         },
       }),
       {
@@ -265,12 +174,9 @@ serve(async (req) => {
       },
     );
   } catch (error) {
-    console.error("[api_pay_orders] Error:", error);
+    console.error("[api_pay_orders] Error:", error.message);
     return new Response(
-      JSON.stringify({
-        error: error.message,
-        success: false,
-      }),
+      JSON.stringify({ error: error.message, success: false }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,

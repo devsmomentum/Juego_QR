@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../events/services/event_service.dart';
@@ -18,8 +17,8 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   List<GameEvent> _events = [];
   List<GameEvent> _filteredEvents = [];
   int _totalPlayers = 0;
-  String _timeFilter = 'Todo'; // 'Hoy', 'Semana', 'Todo'
-  Map<int, int> _hourlyFlow = {}; // Hour (0-23) -> Total Players
+  String _timeFilter = 'Todo';
+  Map<int, int> _hourlyFlow = {};
   int _peakHour = -1;
   int? _selectedHour;
 
@@ -37,7 +36,6 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
 
       final allEvents = await eventService.fetchEvents(type: 'online');
 
-      // Apply filters in Venezuela Time (UTC-4)
       final nowUtc = DateTime.now().toUtc();
       final nowVzla = nowUtc.subtract(const Duration(hours: 4));
 
@@ -60,8 +58,6 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
 
       for (var e in _events) {
         total += e.currentParticipants;
-
-        // Venezuela Hour (UTC-4)
         final vzlaHour = e.date.toUtc().subtract(const Duration(hours: 4)).hour;
         hourSum[vzlaHour] = (hourSum[vzlaHour] ?? 0) + e.currentParticipants;
         hourCount[vzlaHour] = (hourCount[vzlaHour] ?? 0) + 1;
@@ -72,12 +68,10 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
         if (_timeFilter == 'Hoy') {
           _hourlyFlow[hour] = sum;
         } else {
-          // Calculate average (rounded)
           _hourlyFlow[hour] = (sum / (hourCount[hour] ?? 1)).round();
         }
       });
 
-      // Calculate peak hour
       int maxPlayers = 0;
       _peakHour = -1;
       _hourlyFlow.forEach((hour, players) {
@@ -90,7 +84,7 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
       if (mounted) {
         setState(() {
           _totalPlayers = total;
-          _filteredEvents = _events; // Initial state: all filtered by date
+          _filteredEvents = _events;
           _selectedHour = null;
           _isLoading = false;
         });
@@ -125,8 +119,10 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor));
     }
+
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
 
     return SingleChildScrollView(
       child: Padding(
@@ -143,14 +139,16 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  _selectedHour == null
-                      ? "Historial de Eventos Online"
-                      : "Eventos a las ${_selectedHour.toString().padLeft(2, '0')}:00 (Vzla)",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    _selectedHour == null
+                        ? "Historial de Eventos Online"
+                        : "Eventos a las ${_selectedHour.toString().padLeft(2, '0')}:00 (Vzla)",
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 if (_selectedHour == null) _buildFilterDropdown(),
@@ -160,7 +158,7 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
                     icon: const Icon(Icons.close, size: 16),
                     label: const Text("Limpiar Filtro"),
                     style: TextButton.styleFrom(
-                        foregroundColor: AppTheme.secondaryPink),
+                        foregroundColor: Theme.of(context).colorScheme.error),
                   ),
               ],
             ),
@@ -176,15 +174,24 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
     final maxVal = _hourlyFlow.values.isNotEmpty
         ? _hourlyFlow.values.reduce((a, b) => a > b ? a : b)
         : 0;
-    // Evitamos división por cero si todos los valores son 0 (común en desarrollo)
     final maxPlayers = maxVal > 0 ? maxVal : 1;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
+    final primaryColor = Theme.of(context).primaryColor;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,18 +200,18 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
             _timeFilter == 'Hoy'
                 ? "Distribución por Horas (Flujo Real)"
                 : "Distribución por Horas (Promedio por Evento)",
-            style: const TextStyle(
-                color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                color: textColor, fontSize: 16, fontWeight: FontWeight.bold),
           ),
           Text(
             _timeFilter == 'Hoy'
                 ? "Pulsa una barra para filtrar eventos por rango de hora."
                 : "Promedio estimado de participantes históricos por cada hora.",
-            style: const TextStyle(color: Colors.white38, fontSize: 12),
+            style: TextStyle(color: textColor?.withOpacity(0.4), fontSize: 12),
           ),
           const SizedBox(height: 20),
           SizedBox(
-            height: 140, // Chart height
+            height: 140,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -230,20 +237,22 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
                               players > 0 ? "$players" : "",
                               style: TextStyle(
                                   color: isSelected
-                                      ? Colors.white
-                                      : Colors.white24,
-                                  fontSize: 8),
+                                      ? primaryColor
+                                      : textColor?.withOpacity(0.3),
+                                  fontSize: 8,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                             ),
                             const SizedBox(height: 4),
                             Flexible(
-                              child: Container(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? Colors.white
+                                      ? primaryColor
                                       : (isPeak
                                           ? Colors.orangeAccent.withOpacity(0.8)
-                                          : AppTheme.primaryPurple.withOpacity(
-                                              0.4 + (heightFactor * 0.6))),
+                                          : primaryColor.withOpacity(
+                                              0.2 + (heightFactor * 0.4))),
                                   borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(4)),
                                 ),
@@ -255,8 +264,8 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
                               "${index.toString().padLeft(2, '0')}",
                               style: TextStyle(
                                   color: isSelected
-                                      ? Colors.white
-                                      : Colors.white38,
+                                      ? textColor
+                                      : textColor?.withOpacity(0.4),
                                   fontSize: 9,
                                   fontWeight: isSelected
                                       ? FontWeight.bold
@@ -277,30 +286,31 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   }
 
   Widget _buildHeader() {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               "Métricas de Eventos",
               style: TextStyle(
-                color: Colors.white,
+                color: textColor,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
             Text(
               "Análisis de flujo y participación.",
-              style: TextStyle(color: Colors.white54, fontSize: 14),
+              style: TextStyle(color: textColor?.withOpacity(0.5), fontSize: 14),
             ),
           ],
         ),
         IconButton(
           onPressed: _loadMetrics,
-          icon: const Icon(Icons.refresh,
-              color: AppTheme.primaryPurple, size: 20),
+          icon: Icon(Icons.refresh,
+              color: Theme.of(context).primaryColor, size: 20),
           tooltip: "Actualizar",
         ),
       ],
@@ -314,16 +324,16 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
       crossAxisAlignment: WrapCrossAlignment.start,
       children: [
         _MetricCard(
-          title: "Eventos",
+          title: "Total Eventos",
           value: _events.length.toString(),
           icon: Icons.cloud_outlined,
-          color: AppTheme.primaryPurple,
+          color: Theme.of(context).primaryColor,
         ),
         _MetricCard(
           title: "Participantes",
           value: _totalPlayers.toString(),
           icon: Icons.people_outline,
-          color: AppTheme.secondaryPink,
+          color: Theme.of(context).colorScheme.secondary,
         ),
         if (_peakHour != -1)
           _MetricCard(
@@ -337,22 +347,24 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   }
 
   Widget _buildFilterDropdown() {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _timeFilter,
-          dropdownColor: AppTheme.cardBg,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
+          dropdownColor: cardColor,
+          style: TextStyle(color: textColor, fontSize: 13),
           items: ['Hoy', 'Semana', 'Todo'].map((String value) {
             return DropdownMenuItem<String>(
               value: value,
-              child: Text(value),
+              child: Text(value, style: TextStyle(color: textColor)),
             );
           }).toList(),
           onChanged: (val) {
@@ -367,11 +379,15 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   }
 
   Widget _buildEventsList() {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
     if (_filteredEvents.isEmpty) {
-      return const Center(
-        child: Text(
-          "No hay eventos para este filtro.",
-          style: TextStyle(color: Colors.white38),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Text(
+            "No hay eventos para este filtro.",
+            style: TextStyle(color: textColor?.withOpacity(0.4)),
+          ),
         ),
       );
     }
@@ -382,12 +398,16 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
       itemCount: _filteredEvents.length,
       itemBuilder: (context, index) {
         final event = _filteredEvents[index];
+        final primaryColor = Theme.of(context).primaryColor;
+        final cardColor = Theme.of(context).cardTheme.color;
+
         return Card(
-          color: AppTheme.cardBg,
+          color: cardColor,
+          elevation: 0,
           margin: const EdgeInsets.only(bottom: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.white.withOpacity(0.05)),
+            side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.08)),
           ),
           child: ListTile(
             dense: true,
@@ -397,16 +417,16 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppTheme.primaryPurple.withOpacity(0.1),
+                color: primaryColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.flash_on,
-                  color: AppTheme.primaryPurple, size: 20),
+              child: Icon(Icons.flash_on,
+                  color: primaryColor, size: 20),
             ),
             title: Text(
               event.title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: textColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -424,7 +444,7 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   "Vzla: ${_formatToVenezuelaTime(event.date)}",
-                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  style: TextStyle(color: textColor?.withOpacity(0.5), fontSize: 10),
                 ),
               ],
             ),
@@ -433,14 +453,14 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
               children: [
                 Text(
                   "${event.currentParticipants}",
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: textColor,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.person, color: Colors.white24, size: 14),
+                Icon(Icons.person, color: textColor?.withOpacity(0.25), size: 14),
               ],
             ),
           ),
@@ -452,13 +472,13 @@ class _EventMetricsScreenState extends State<EventMetricsScreen> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'active':
-        return Colors.greenAccent;
+        return Colors.green;
       case 'completed':
-        return Colors.blueAccent;
+        return Colors.blue;
       case 'pending':
-        return Colors.orangeAccent;
+        return Colors.orange;
       default:
-        return Colors.white54;
+        return Colors.grey;
     }
   }
 }
@@ -478,16 +498,18 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
     return Container(
       width: 180,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withOpacity(0.3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -505,13 +527,13 @@ class _MetricCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  style: TextStyle(color: textColor?.withOpacity(0.5), fontSize: 11),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   value,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: textColor,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),

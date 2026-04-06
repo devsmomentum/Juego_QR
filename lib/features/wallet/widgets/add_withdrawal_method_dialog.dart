@@ -7,7 +7,14 @@ import '../providers/payment_method_provider.dart';
 import '../repositories/payment_method_repository.dart';
 
 class AddWithdrawalMethodDialog extends StatefulWidget {
-  const AddWithdrawalMethodDialog({super.key});
+  final String? initialType;
+
+  const AddWithdrawalMethodDialog({super.key}) : initialType = null;
+
+  const AddWithdrawalMethodDialog.withInitialType({
+    super.key,
+    required this.initialType,
+  });
 
   @override
   State<AddWithdrawalMethodDialog> createState() => _AddWithdrawalMethodDialogState();
@@ -15,7 +22,7 @@ class AddWithdrawalMethodDialog extends StatefulWidget {
 
 class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
   final _formKey = GlobalKey<FormState>();
-  String _selectedType = 'pago_movil'; // 'pago_movil' or 'stripe'
+  String _selectedType = 'stripe'; // 'pago_movil' or 'stripe'
   String? _selectedBankCode;
   final _emailController = TextEditingController();
   bool _isLoading = false;
@@ -24,6 +31,14 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
   void dispose() {
     _emailController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialType != null && widget.initialType!.isNotEmpty) {
+      _selectedType = widget.initialType!;
+    }
   }
 
   final List<Map<String, String>> _banks = [
@@ -63,11 +78,23 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
       return;
     }
 
-    if (_selectedType == 'stripe' && _emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa tu email de Stripe')),
-      );
-      return;
+    if (_selectedType == 'stripe') {
+      final email = _emailController.text.trim();
+      if (email.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ingresa tu email de Stripe')),
+        );
+        return;
+      }
+      final bool emailValid = 
+          RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
+              .hasMatch(email);
+      if (!emailValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ingresa un email válido')),
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -78,8 +105,9 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
       final player = playerProvider.currentPlayer;
 
       if (player == null) throw Exception('Usuario no identificado');
-      if (player.cedula == null || player.phone == null) {
-         throw Exception('Perfil incompleto (Faltan datos de identidad)');
+      if (_selectedType == 'pago_movil' && 
+          (player.cedula == null || player.phone == null)) {
+         throw Exception('Perfil incompleto (DNI y Teléfono requeridos para Pago Móvil)');
       }
 
       final data = PaymentMethodCreate(
@@ -158,15 +186,7 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: _buildTypeSelector(
-                        'PAGO MÓVIL', 
-                        AppTheme.accentGold, 
-                        _selectedType == 'pago_movil',
-                        () => setState(() => _selectedType = 'pago_movil'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                    
                     Expanded(
                       child: _buildTypeSelector(
                         'STRIPE', 

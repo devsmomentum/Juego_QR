@@ -80,7 +80,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -109,7 +109,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
 
   void _handleGiveUp() {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return;
+    if (gameProvider.isPaused) return;
 
     _stopTimer();
     _loseLife("Te has rendido.");
@@ -147,7 +147,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
   void _onTileTap(int index) {
     if (!mounted) return;
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return;
+    if (gameProvider.isPaused) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -167,8 +167,13 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
     });
 
     if (_checkWin('X')) {
+      debugPrint('🏆 TicTacToe: Player X wins! Board: $board');
       _stopTimer();
-      widget.onSuccess();
+      // [FIX] Pequeño delay para que el usuario vea su última jugada ('X')
+      // antes de que inicie la transición/animación de éxito.
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) widget.onSuccess();
+      });
       return;
     }
 
@@ -186,7 +191,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
     if (_isGameOver) return;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) {
+    if (gameProvider.isPaused) {
       // If frozen, retry later
       Future.delayed(const Duration(milliseconds: 500), _computerMove);
       return;

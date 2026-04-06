@@ -127,7 +127,7 @@ class _ChronologicalOrderMinigameState
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivity =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivity.isOnline || gameProvider.isFrozen) return;
+        if (!connectivity.isOnline || gameProvider.isPaused) return;
 
         if (_secondsRemaining > 0) {
           _secondsRemaining--;

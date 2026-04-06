@@ -501,6 +501,10 @@ BEGIN
         WHERE game_player_id = v_game_player_id AND power_id = v_power_id 
         LIMIT 1;
         
+        IF COALESCE(v_current_qty, 0) >= 3 THEN
+             RAISE EXCEPTION 'Máximo alcanzado (3 unidades por poder).';
+        END IF;
+
         IF v_current_qty IS NOT NULL THEN
              UPDATE public.player_powers 
              SET quantity = quantity + 1 
@@ -4166,7 +4170,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "dni" "text",
     "phone" "text",
     "email_verified" boolean DEFAULT true,
-    CONSTRAINT "profiles_dni_format_check" CHECK (("dni" ~* '^[VEJPG][0-9]+$'::"text")),
+    CONSTRAINT "profiles_dni_format_check" CHECK (("dni" ~* '^[A-Z0-9]+$'::"text")),
     CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['user'::"text", 'admin'::"text", 'user_staff'::"text"])))
 );
 

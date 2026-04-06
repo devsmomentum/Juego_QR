@@ -45,8 +45,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _acceptedTerms = false;
   bool _isRegistering = false;
 
-  // Opciones de nacionalidad
-  final List<String> _nationalityTypes = ['V', 'E'];
+  // Opciones de nacionalidad: V (Venezolano), E (Extranjero), P (Pasaporte/Internacional)
+  final List<String> _nationalityTypes = ['V', 'E', 'P'];
 
   // Lista básica de palabras prohibidas (se puede expandir)
   final List<String> _bannedWords = [
@@ -209,31 +209,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Redirigir según el estado de la sesión
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // REGISTRATION SUCCESSFUL: Redirect always to Login wait for email
+      await Future.delayed(const Duration(milliseconds: 2500));
       if (!mounted) return;
 
+      // Ensure logout if a session was auto-created (so they must login/verify)
       if (playerProvider.isLoggedIn) {
-        // En un inicio de sesión exitoso, también iniciamos monitoreo
-        context.read<ConnectivityProvider>().startMonitoring();
-
-        // El usuario ya tiene sesión (auto-login tras registro)
-        final player = playerProvider.currentPlayer;
-        if (player?.role == 'admin') {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const DashboardScreen()),
-          );
-        } else {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
-          );
-        }
-      } else {
-        // No hay sesión (probablemente requiere confirmación de email)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
+        await playerProvider.logout();
       }
+
+      // Always return to LoginScreen to fulfill the "verification flow"
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
 
@@ -268,10 +257,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final baseUrl =
           dotenv.env['SUPABASE_URL']?.replaceAll(RegExp(r'/$'), '') ?? '';
+      final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
       // Usamos el servicio centralizado que maneja el enmascaramiento (Blob URLs)
       final termsService = getTermsService();
-      await termsService.launchTerms(baseUrl);
+      await termsService.launchTerms(baseUrl, anonKey);
     } catch (e) {
       debugPrint('Error al abrir términos: $e');
     }
@@ -488,22 +478,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                             color: Colors.white),
                                         keyboardType: TextInputType.number,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter
-                                              .digitsOnly,
-                                          LengthLimitingTextInputFormatter(9),
+                                           FilteringTextInputFormatter
+                                               .allow(RegExp(r'[0-9]')),
+                                           LengthLimitingTextInputFormatter(15),
                                         ],
                                         decoration: const InputDecoration(
-                                          labelText: 'CÉDULA/PASAPORTE',
+                                          labelText: 'CÉDULA / PASAPORTE',
                                           prefixIcon:
                                               Icon(Icons.badge_outlined),
                                           hintText: '12345678',
                                         ),
                                         validator: (value) {
-                                          if (value == null || value.isEmpty)
-                                            return 'Ingresa tu cédula';
-                                          if (value.length < 6)
-                                            return 'Mínimo 6 dígitos';
-                                          return null;
+                                           if (value == null || value.isEmpty)
+                                             return 'Ingresa tu identificación';
+                                           if (value.length < 5)
+                                             return 'Mínimo 5 caracteres';
+                                           return null;
                                         },
                                       ),
                                     ),
@@ -718,7 +708,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 // Términos y condiciones
                                 Theme(
                                   data: ThemeData(
-                                    unselectedWidgetColor: Colors.white30,
+                                    checkboxTheme: CheckboxThemeData(
+                                      side: const BorderSide(color: Colors.white, width: 2),
+                                    ),
                                   ),
                                   child: CheckboxListTile(
                                     contentPadding: EdgeInsets.zero,

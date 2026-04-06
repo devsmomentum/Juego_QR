@@ -238,6 +238,12 @@ abstract class Clue {
   final double? longitude;
   final String? qrCode;
 
+  // Puzzle and Riddle data (Universal for all clues)
+  final String? minigameUrl;
+  final String? riddleQuestion;
+  final String? riddleAnswer;
+  final PuzzleType puzzleType;
+
   Clue({
     required this.id,
     required this.title,
@@ -252,6 +258,10 @@ abstract class Clue {
     this.latitude,
     this.longitude,
     this.qrCode,
+    this.minigameUrl,
+    this.riddleQuestion,
+    this.riddleAnswer,
+    this.puzzleType = PuzzleType.slidingPuzzle,
   });
 
   /// Abstract getters
@@ -260,11 +270,6 @@ abstract class Clue {
 
   /// Strategy Pattern: Each clue type knows how to check its own unlock requirements.
   Future<bool> checkUnlockRequirements();
-
-  String? get minigameUrl => null;
-  String? get riddleQuestion => null;
-  String? get riddleAnswer => null;
-  PuzzleType get puzzleType => PuzzleType.slidingPuzzle;
 
   factory Clue.fromJson(Map<String, dynamic> json) {
     // Safety check for image URLs in JSON
@@ -303,6 +308,10 @@ class PhysicalClue extends Clue {
     super.latitude,
     super.longitude,
     super.qrCode,
+    super.minigameUrl,
+    super.riddleQuestion,
+    super.riddleAnswer,
+    super.puzzleType = PuzzleType.slidingPuzzle,
   });
 
   factory PhysicalClue.fromJson(Map<String, dynamic> json, ClueType type) {
@@ -316,10 +325,18 @@ class PhysicalClue extends Clue {
       longitude: (json['longitude'] as num?)?.toDouble(),
       qrCode: json['qr_code'],
       xpReward: (json['xp_reward'] as num?)?.toInt() ?? 50,
-      // coinReward: (json['coin_reward'] as num?)?.toInt() ?? 10, // REMOVED
       isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
       isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
       sequenceIndex: json['sequence_index'] ?? 0,
+      minigameUrl: json['minigame_url'],
+      riddleQuestion: json['riddle_question'],
+      riddleAnswer: json['riddle_answer'],
+      puzzleType: json['puzzle_type'] != null
+          ? PuzzleType.values.firstWhere(
+              (e) => e.toString().split('.').last == json['puzzle_type'],
+              orElse: () => PuzzleType.slidingPuzzle,
+            )
+          : PuzzleType.slidingPuzzle,
     );
   }
 
@@ -358,11 +375,6 @@ class PhysicalClue extends Clue {
 }
 
 class OnlineClue extends Clue {
-  final String? minigameUrl;
-  final String? riddleQuestion;
-  final String? riddleAnswer;
-  final PuzzleType puzzleType;
-
   OnlineClue({
     required super.id,
     required super.title,
@@ -370,14 +382,13 @@ class OnlineClue extends Clue {
     required super.hint,
     required super.type,
     super.xpReward,
-    // super.coinReward, // REMOVED
     super.isCompleted,
     super.isLocked,
     super.sequenceIndex,
-    this.minigameUrl,
-    this.riddleQuestion,
-    this.riddleAnswer,
-    this.puzzleType = PuzzleType.slidingPuzzle,
+    super.minigameUrl,
+    super.riddleQuestion,
+    super.riddleAnswer,
+    super.puzzleType = PuzzleType.slidingPuzzle,
     super.latitude,
     super.longitude,
     super.qrCode,
@@ -400,11 +411,9 @@ class OnlineClue extends Clue {
             )
           : PuzzleType.slidingPuzzle,
       xpReward: (json['xp_reward'] as num?)?.toInt() ?? 50,
-      // coinReward: (json['coin_reward'] as num?)?.toInt() ?? 10, // REMOVED
       isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
       isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
       sequenceIndex: json['sequence_index'] ?? 0,
-      // Parse coordinates for online clues
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       qrCode: json['qr_code'],

@@ -176,7 +176,7 @@ class WalletProvider extends ChangeNotifier {
   }
 
   /// Initiate external payment flow via Pago a Pago
-  Future<void> initiateExternalTopUp(double amount) async {
+  Future<void> initiateExternalTopUp(double amount, double cloversAmount) async {
     if (_paymentService == null) {
       _errorMessage = "Servicio de pagos no configurado";
       notifyListeners();
@@ -191,6 +191,7 @@ class WalletProvider extends ChangeNotifier {
     try {
       final url = await _paymentService!.createPaymentOrder(
         amount: amount,
+        cloversAmount: cloversAmount,
         userId: _currentUserId!,
       );
 

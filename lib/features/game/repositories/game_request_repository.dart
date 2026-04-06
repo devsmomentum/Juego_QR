@@ -219,11 +219,21 @@ class GameRequestRepository implements IGameRequestRepository {
   @override
   Future<Map<String, dynamic>> approveAndPayEntry(String requestId) async {
     try {
-      final result =
-          await _supabase.rpc('approve_and_pay_event_entry', params: {
-        'p_request_id': requestId,
-      });
-      return Map<String, dynamic>.from(result as Map);
+      final response = await _supabase.functions.invoke(
+        'admin-actions/approve-request',
+        body: {'requestId': requestId},
+        method: HttpMethod.post,
+      );
+
+      if (response.status != 200) {
+        throw Exception('approve-request failed: ${response.status}');
+      }
+
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+      return Map<String, dynamic>.from(data as Map? ?? {'success': true});
     } catch (e) {
       debugPrint('GameRequestRepository: Error in approveAndPayEntry: $e');
       rethrow;

@@ -87,7 +87,13 @@ technical_documentation.pdf
 eliminacion_cuenta_usuario.md
 
 Terminos_y_Condiciones_Maphunter.pdf
+supabase/import_map.json
 
 # Java heap dumps
 *.hprof
 supabase/import_map.json
+
+node_modules/
+package-lock.json
+package.json
+*.js

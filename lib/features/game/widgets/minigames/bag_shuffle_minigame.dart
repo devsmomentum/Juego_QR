@@ -94,10 +94,9 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
   void _startGameTimer() {
     _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
+      // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
-
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -149,6 +148,13 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
     for (int i = 0; i < _totalShuffles; i++) {
       if (!mounted || _isGameOver) return;
 
+      // [PAUSE CHECK]
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+      while (gameProvider.isPaused && !_isGameOver && mounted) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+      if (!mounted || _isGameOver) return;
+
       int idx1 = Random().nextInt(3);
       int idx2;
       do {
@@ -178,8 +184,9 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
     await Future.delayed(const Duration(milliseconds: 700));
   }
 
-  void _onBagTap(BagModel bag) {
-    if (_state != GameState.guessing || _isGameOver) return;
+  void _onBagTap(BagModel bag) async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (_state != GameState.guessing || _isGameOver || gameProvider.isPaused) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -188,6 +195,10 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
 
     setState(() => _state = GameState.reveal);
     HapticFeedback.mediumImpact();
+
+    // Give it time to reveal the color!
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
 
     if (bag.ballColor == _targetColor) {
       _handleWin();
@@ -444,7 +455,7 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 600), // Speed of the swap movement
-      curve: Curves.easeInOutBack,
+      curve: Curves.easeInOutCubic,
       left: targetLeft,
       top: isSmall ? 10 : 30,
       width: slotWidth,
@@ -456,7 +467,7 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
               alignment: Alignment.bottomCenter,
               children: [
                 // Ball
-                if (_state == GameState.showing || _state == GameState.reveal)
+                if (_state == GameState.showing || _state == GameState.reveal || _state == GameState.finished)
                   Padding(
                     padding: EdgeInsets.only(bottom: isSmall ? 10.0 : 20.0),
                     child: Container(
@@ -477,15 +488,15 @@ class _BagShuffleMinigameState extends State<BagShuffleMinigame>
                 // BAG DESIGN (Pouch shape)
                 AnimatedContainer(
                   duration: const Duration(
-                      milliseconds: 1200), // Slower entry/covering animation
+                      milliseconds: 800), // Speed up reveal slightly
                   height: (_state == GameState.showing ||
-                          _state == GameState.reveal)
+                          _state == GameState.reveal || _state == GameState.finished)
                       ? (isSmall ? 60 : 100)
                       : (isSmall ? 100 : 160),
                   width: isSmall ? 60 : 95,
                   margin: EdgeInsets.only(
                       bottom: (_state == GameState.showing ||
-                              _state == GameState.reveal)
+                              _state == GameState.reveal || _state == GameState.finished)
                           ? (isSmall ? 40 : 80)
                           : 0),
                   child: CustomPaint(

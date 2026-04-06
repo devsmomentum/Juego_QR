@@ -5,6 +5,7 @@ import '../models/transaction_item.dart';
 abstract class ITransactionRepository {
   Future<List<TransactionItem>> getMyTransactions({int? limit});
   Future<bool> cancelOrder(String orderId);
+  Future<bool> cancelWithdrawal(String requestId);
 }
 
 class SupabaseTransactionRepository implements ITransactionRepository {
@@ -58,6 +59,21 @@ class SupabaseTransactionRepository implements ITransactionRepository {
       return true;
     } catch (e) {
       debugPrint('Error cancelling order: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> cancelWithdrawal(String requestId) async {
+    try {
+      final response = await _supabase.rpc(
+        'cancel_withdrawal_request',
+        params: {'p_request_id': requestId},
+      );
+
+      return response != null && response['success'] == true;
+    } catch (e) {
+      debugPrint('Error cancelling withdrawal: $e');
       return false;
     }
   }

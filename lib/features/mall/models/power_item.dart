@@ -98,7 +98,7 @@ class PowerItem {
 
   static List<PowerItem> getShopItems() {
     int getCost(String id, int defaultCost) {
-      return _dbCosts[id] ?? defaultCost;
+      return _dbCosts[id] ?? _dbCosts[id.trim().toLowerCase()] ?? defaultCost;
     }
 
     return [
@@ -188,5 +188,57 @@ class PowerItem {
         durationMinutes: 0,
       ),
     ];
+  }
+
+  /// Busca un item por su ID/Slug de forma robusta y con normalización.
+  static PowerItem fromId(String id, {List<PowerItem>? customItems}) {
+    final List<PowerItem> catalog = customItems ?? getShopItems();
+    final String normalized = id.trim().toLowerCase();
+
+    // 1. Intento por ID exacto (ignoring case/trim)
+    for (var item in catalog) {
+      if (item.id.trim().toLowerCase() == normalized) return item;
+    }
+
+    // 2. Mapeo de sinónimos comunes (Para IDs de DB viejos o inconsistentes)
+    if (normalized.contains('shield')) {
+      return catalog.firstWhere((p) => p.id == 'shield',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('life') || normalized.contains('vida')) {
+      return catalog.firstWhere((p) => p.id == 'extra_life',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('black') || normalized.contains('negra')) {
+      return catalog.firstWhere((p) => p.id == 'black_screen',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('blur') || normalized.contains('borros')) {
+      return catalog.firstWhere((p) => p.id == 'blur_screen',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('freeze') || normalized.contains('hielo')) {
+      return catalog.firstWhere((p) => p.id == 'freeze',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('return') || normalized.contains('devolu')) {
+      return catalog.firstWhere((p) => p.id == 'return',
+          orElse: () => _unknownFallback(id));
+    }
+
+    // 3. Fallback final
+    return _unknownFallback(id);
+  }
+
+  static PowerItem _unknownFallback(String id) {
+    return PowerItem(
+      id: id,
+      name: 'Poder Misterioso',
+      description: 'Consultando registro...',
+      type: PowerType.buff,
+      cost: 0,
+      icon: '⚡',
+      color: Colors.grey,
+    );
   }
 }

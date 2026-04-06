@@ -14,6 +14,8 @@ import '../services/event_domain_service.dart';
 import '../../mall/models/power_item.dart'; // NEW
 import '../models/sponsor.dart';
 import '../services/sponsor_service.dart';
+import '../../../core/services/app_config_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EventCreationProvider extends ChangeNotifier {
   // Estado del Formulario
@@ -107,6 +109,8 @@ class EventCreationProvider extends ChangeNotifier {
       // Note: Image and Clues are not fully loaded here in original code either
     } else {
       resetForm();
+      // Try to load automation defaults for new events
+      loadAutomationDefaults();
     }
     checkFormValidity();
     // Start loading sponsors if not loaded
@@ -129,6 +133,56 @@ class EventCreationProvider extends ChangeNotifier {
     _sponsorId = id;
     checkFormValidity();
     notifyListeners();
+  }
+
+  /// Loads default values from the Online Automation Dashboard (AppConfigService).
+  Future<void> loadAutomationDefaults() async {
+    try {
+      final configService =
+          AppConfigService(supabaseClient: Supabase.instance.client);
+      final settings = await configService.getAutoEventSettings();
+
+      if (settings.isNotEmpty) {
+        // Only override if we are in Online mode or just started
+        if (_eventType == 'online' || _title.isEmpty) {
+          if (settings['max_players'] != null) {
+            _maxParticipants = int.tryParse(settings['max_players'].toString()) ??
+                _maxParticipants;
+          }
+          if (settings['max_fee'] != null) {
+            _entryFee =
+                int.tryParse(settings['max_fee'].toString()) ?? _entryFee;
+          }
+
+          // Load Player Prices (Store)
+          if (settings['player_prices'] != null &&
+              settings['player_prices'] is Map) {
+            final prices = settings['player_prices'] as Map<String, dynamic>;
+            prices.forEach((key, value) {
+              _playerPrices[key] = int.tryParse(value.toString()) ??
+                  _playerPrices[key] ??
+                  0;
+            });
+          }
+
+          // Load Spectator Prices
+          if (settings['spectator_prices'] != null &&
+              settings['spectator_prices'] is Map) {
+            final prices = settings['spectator_prices'] as Map<String, dynamic>;
+            prices.forEach((key, value) {
+              _spectatorPrices[key] = int.tryParse(value.toString()) ??
+                  _spectatorPrices[key] ??
+                  0;
+            });
+          }
+
+          notifyListeners();
+          checkFormValidity();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading automation defaults: $e");
+    }
   }
 
   void resetForm() {
@@ -175,7 +229,11 @@ class EventCreationProvider extends ChangeNotifier {
   // --- Setters & Logic ---
 
   void setEventType(String value) {
+    final oldType = _eventType;
     _eventType = value;
+    if (value == 'online' && oldType != 'online') {
+      loadAutomationDefaults();
+    }
     checkFormValidity();
     notifyListeners();
   }
@@ -231,6 +289,7 @@ class EventCreationProvider extends ChangeNotifier {
     if (value > 20) value = 20;
     if (value < 0) value = 0;
     _numberOfClues = value;
+    checkFormValidity(); // Update validity if they set it back to 0
     notifyListeners();
   }
 
@@ -370,6 +429,7 @@ class EventCreationProvider extends ChangeNotifier {
     } else {
       _clueForms = [];
     }
+    checkFormValidity(); // Trigger validity update when forms are generated
     notifyListeners();
   }
 
@@ -480,6 +540,9 @@ class EventCreationProvider extends ChangeNotifier {
       if (_latitude == null || _longitude == null) isValid = false;
     }
 
+    // CRITICAL: At least one minigame/clue required
+    if (_clueForms.isEmpty || _numberOfClues <= 0) isValid = false;
+
     // Validate key fields for all modes
     if (_entryFee == null) isValid = false;
 
@@ -504,7 +567,11 @@ class EventCreationProvider extends ChangeNotifier {
     // Final check
     checkFormValidity();
     if (!_isFormValid) {
-      onError("Faltan campos por completar");
+      if (_clueForms.isEmpty || _numberOfClues <= 0) {
+        onError("Debes agregar al menos un minijuego/pista");
+      } else {
+        onError("Faltan campos por completar");
+      }
       return false;
     }
 

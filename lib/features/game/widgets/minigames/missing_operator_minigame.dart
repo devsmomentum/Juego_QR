@@ -81,7 +81,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -151,6 +151,7 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
           isCorrect = (_operand1 * _operand2 == _result);
           break;
         case '/':
+        case '÷':
           if (_operand2 != 0) {
             // Check for integer division equality
             isCorrect = (_operand1 / _operand2 == _result.toDouble());
@@ -255,163 +256,166 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Título con Estilo Cyberpunk
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  border:
-                      Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
-                  borderRadius: BorderRadius.circular(4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.accentGold.withOpacity(0.1),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: const Text(
-                  "SISTEMA: OPERADOR FALTANTE",
-                  style: TextStyle(
-                    color: AppTheme.accentGold,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.0,
-                    shadows: [
-                      Shadow(color: AppTheme.accentGold, blurRadius: 12),
+        SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Título con Estilo Cyberpunk
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    border:
+                        Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accentGold.withOpacity(0.1),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
                     ],
                   ),
+                  child: const Text(
+                    "SISTEMA: OPERADOR FALTANTE",
+                    style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.0,
+                      shadows: [
+                        Shadow(color: AppTheme.accentGold, blurRadius: 12),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 35),
-
-              // Stats Bar (Glassmorphic)
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatItem(
-                      icon: Icons.timer_outlined,
-                      label: "TIEMPO",
-                      value: "$_secondsRemaining",
-                      color: _secondsRemaining < 10
-                          ? AppTheme.dangerRed
-                          : Colors.white,
+                const SizedBox(height: 35),
+        
+                // Stats Bar (Glassmorphic)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatItem(
+                        icon: Icons.timer_outlined,
+                        label: "TIEMPO",
+                        value: "$_secondsRemaining",
+                        color: _secondsRemaining < 10
+                            ? AppTheme.dangerRed
+                            : Colors.white,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _buildStatItem(
-                      icon: Icons.bolt_rounded,
-                      label: "OBJETIVO",
-                      value: "$_score / $_targetScore",
-                      color: AppTheme.successGreen,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-
-              // Equation Card (Panel Holográfico)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _buildStatItem(
+                        icon: Icons.bolt_rounded,
+                        label: "OBJETIVO",
+                        value: "$_score / $_targetScore",
+                        color: AppTheme.successGreen,
+                      ),
                     ),
                   ],
                 ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildNumberText("$_operand1"),
-                      const SizedBox(width: 18),
-
-                      // Slot del Operador
-                      Container(
-                        width: 65,
-                        height: 65,
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(16),
-                          border:
-                              Border.all(color: AppTheme.accentGold, width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.accentGold.withOpacity(0.2),
-                              blurRadius: 15,
-                            ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Text(
-                            "?",
-                            style: TextStyle(
-                              fontSize: 32,
-                              color: AppTheme.accentGold,
-                              fontWeight: FontWeight.w900,
+                const SizedBox(height: 30),
+        
+                // Equation Card (Panel Holográfico)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: Colors.white.withOpacity(0.15)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 30,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildNumberText("$_operand1"),
+                        const SizedBox(width: 18),
+        
+                        // Slot del Operador
+                        Container(
+                          width: 65,
+                          height: 65,
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(16),
+                            border:
+                                Border.all(color: AppTheme.accentGold, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.accentGold.withOpacity(0.2),
+                                blurRadius: 15,
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Text(
+                              "?",
+                              style: TextStyle(
+                                fontSize: 32,
+                                color: AppTheme.accentGold,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-
-                      const SizedBox(width: 18),
-                      _buildNumberText("$_operand2"),
-                      const SizedBox(width: 15),
-                      const Text(
-                        "=",
-                        style: TextStyle(
-                          fontSize: 48,
-                          color: Colors.white38,
-                          fontWeight: FontWeight.w300,
+        
+                        const SizedBox(width: 18),
+                        _buildNumberText("$_operand2"),
+                        const SizedBox(width: 15),
+                        const Text(
+                          "=",
+                          style: TextStyle(
+                            fontSize: 48,
+                            color: Colors.white38,
+                            fontWeight: FontWeight.w300,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 15),
-                      Text(
-                        "$_result",
-                        style: const TextStyle(
-                          fontSize: 52,
-                          color: AppTheme.successGreen,
-                          fontWeight: FontWeight.w900,
-                          shadows: [
-                            Shadow(
-                                color: AppTheme.successGreen, blurRadius: 20),
-                          ],
+                        const SizedBox(width: 15),
+                        Text(
+                          "$_result",
+                          style: const TextStyle(
+                            fontSize: 52,
+                            color: AppTheme.successGreen,
+                            fontWeight: FontWeight.w900,
+                            shadows: [
+                              Shadow(
+                                  color: AppTheme.successGreen, blurRadius: 20),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 50),
-
-              // Botones de Operadores
-              Wrap(
-                spacing: 20,
-                runSpacing: 20,
-                alignment: WrapAlignment.center,
-                children: [
-                  _buildOperatorButton('+', AppTheme.accentGold),
-                  _buildOperatorButton('-', AppTheme.dangerRed),
-                  _buildOperatorButton('x', Colors.cyanAccent),
-                  _buildOperatorButton('/', Colors.deepPurpleAccent),
-                ],
-              ),
-            ],
+                const SizedBox(height: 40),
+        
+                // Botones de Operadores
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _buildOperatorButton('+', AppTheme.accentGold),
+                    _buildOperatorButton('-', AppTheme.dangerRed),
+                    _buildOperatorButton('x', Colors.cyanAccent),
+                    _buildOperatorButton('÷', Colors.purpleAccent),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
         if (_showOverlay)
@@ -499,8 +503,8 @@ class _MissingOperatorMinigameState extends State<MissingOperatorMinigame> {
       onTap: () => _handleSelection(op),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 75,
-        height: 75,
+        width: 68,
+        height: 68,
         decoration: BoxDecoration(
           color: Colors.black.withOpacity(0.4),
           shape: BoxShape.circle,

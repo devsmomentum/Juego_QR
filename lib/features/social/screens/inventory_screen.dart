@@ -99,16 +99,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
     final uniqueItems = inventoryCounts.keys.toList()..sort();
 
+    final isDayNightMode = playerProvider.isDarkMode;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           AnimatedCyberBackground(
+            showBackgroundBase: false,
+            showParticles: false,
             child: Stack(
               children: [
                 Positioned.fill(
                   child: Image.asset(
-                    'assets/images/fotogrupalnoche.png', // Default to night/dark image
+                    isDayNightMode 
+                        ? 'assets/images/fotogrupalnoche.png' 
+                        : 'assets/images/personajesgrupal.png',
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                   ),
@@ -279,17 +285,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                         final count =
                                             inventoryCounts[itemId] ?? 1;
 
-                                        final itemDef = PowerItem.getShopItems()
-                                            .firstWhere(
-                                          (item) => item.id == itemId,
-                                          orElse: () => PowerItem(
-                                            id: itemId,
-                                            name: 'Poder Misterioso',
-                                            description: 'Poder desconocido',
-                                            type: PowerType.buff,
-                                            cost: 0,
-                                            icon: '⚡',
-                                          ),
+                                        // Lookup definition robustly using our helper
+                                        final itemDef = PowerItem.fromId(
+                                          itemId,
+                                          customItems: playerProvider.shopItems,
                                         );
 
                                         final effectProvider =

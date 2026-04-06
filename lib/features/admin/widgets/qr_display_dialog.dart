@@ -96,18 +96,14 @@ class QRDisplayDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1A1F3A), Color(0xFF0A0E27)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+          color: AppTheme.lSurface1,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.3)),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.accentGold.withOpacity(0.2),
-              blurRadius: 20,
-              spreadRadius: 5,
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -122,25 +118,32 @@ class QRDisplayDialog extends StatelessWidget {
                     child: Text(
                       title,
                       style: const TextStyle(
-                        color: AppTheme.accentGold,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        color: AppTheme.lGoldText,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
+                    icon: const Icon(Icons.close, color: Colors.black45),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
                 child: QrImageView(
                   data: data,
@@ -152,108 +155,108 @@ class QRDisplayDialog extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppTheme.lSurface0,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black.withOpacity(0.05)),
                 ),
-                child: SelectableText( // Allows copying manually if needed
+                child: SelectableText(
                   label,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
+                    color: AppTheme.lGoldText,
+                    fontSize: 20,
                     fontFamily: 'Courier',
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2.0,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
               if (hint != null && hint!.isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Text(
                   "Pista: $hint",
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: AppTheme.accentGold,
+                    color: Colors.black54,
                     fontSize: 16,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               const Text(
                 "Escanea este código para acceder",
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: Colors.black38, fontSize: 13),
               ),
               const SizedBox(height: 24),
-             const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _printPdf(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _printPdf(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.black87,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         side: const BorderSide(color: Colors.black12),
                       ),
-                    ),
-                    icon: const Icon(Icons.print),
-                    label: const Text(
-                      "IMPRIMIR",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _downloadPdf(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      icon: const Icon(Icons.print, size: 20),
+                      label: const Text(
+                        "IMPRIMIR",
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    icon: const Icon(Icons.download),
-                    label: const Text(
-                      "DESCARGAR",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _downloadPdf(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.lBrandMain,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.download, size: 20),
+                      label: const Text(
+                        "GUARDAR",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.lGoldAction,
+                    foregroundColor: Colors.black87,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    "LISTO",
+                    style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
-                icon: const Icon(Icons.check),
-                label: const Text(
-                  "LISTO",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

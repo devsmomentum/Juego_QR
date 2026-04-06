@@ -3,6 +3,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
 import '../../../core/storage/secure_local_storage.dart';
+import '../../../core/services/session_service.dart';
+
+/// Excepción personalizada para errores de autenticación con metadatos.
+class AuthUserException implements Exception {
+  final String message;
+  final bool isUnverified;
+
+  AuthUserException(this.message, {this.isUnverified = false});
+
+  @override
+  String toString() => message;
+}
 
 /// Servicio de autenticación que encapsula la lógica de login, registro y logout.
 ///
@@ -38,13 +50,18 @@ class AuthService {
 
       if (response.status != 200) {
         final error = (data is Map) ? (data['error'] ?? 'Error desconocido') : 'Error del servidor (${response.status})';
+        final bool isUnverified = (data is Map) && data['unverified'] == true;
 
         if (response.status == 403) {
           try {
             await _supabase.auth.signOut();
           } catch (_) {}
         }
-        throw error;
+        
+        if (isUnverified) {
+          throw AuthUserException(_handleAuthError(error), isUnverified: true);
+        }
+        throw _handleAuthError(error);
       }
 
       if (data == null) throw 'No se recibió respuesta del servidor';
@@ -71,17 +88,46 @@ class AuthService {
 
           if (user['email_confirmed_at'] == null) {
             await logout(); 
-            throw 'Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.';
+            throw AuthUserException('Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.', isUnverified: true);
           }
 
-          return user['id'] as String;
+          final userId = user['id'] as String;
+          
+          // SINGLE DEVICE POLICY: Generate session token and update profile BEFORE granting access
+          try {
+            final sessionService = SessionService();
+            final sessionToken = await sessionService.generateAndSaveSessionToken();
+            await _supabase.rpc('set_current_session_id', params: {
+              'p_session_id': sessionToken,
+            });
+          } catch (e) {
+            debugPrint('AuthService: Failed to set current_session_id during login: $e');
+            // Allow login to proceed even if token update fails, or you could throw. Throwing is safer for strict policy.
+            // But we will just log it here for minimum disruption.
+          }
+
+          return userId;
         }
         throw 'No se recibió información del usuario';
       } else {
         throw 'No se recibió una sesión válida';
       }
     } catch (e) {
+      if (e is AuthUserException) rethrow;
+      
       debugPrint('AuthService: Error logging in: $e');
+
+      // Detect unverified status inside FunctionException details
+      if (e is FunctionException) {
+        final details = e.details;
+        if (details is Map && details['unverified'] == true) {
+          throw AuthUserException(
+            _handleAuthError(details['error'] ?? 'Debes confirmar tu correo para entrar.'),
+            isUnverified: true,
+          );
+        }
+      }
+
       throw _handleAuthError(e);
     }
   }
@@ -155,6 +201,18 @@ class AuthService {
         // Si no hay sesión (requiere confirmación de email), continuamos igual.
         if (data['session'] != null) {
           await _supabase.auth.setSession(data['session']['refresh_token']);
+          
+          // SINGLE DEVICE POLICY: Create new session token for the newly registered user
+          final userId = data['user']['id'] as String;
+          try {
+            final sessionService = SessionService();
+            final sessionToken = await sessionService.generateAndSaveSessionToken();
+            await _supabase.rpc('set_current_session_id', params: {
+              'p_session_id': sessionToken,
+            });
+          } catch(e) {
+            debugPrint('AuthService: Failed to set current_session_id during register: $e');
+          }
         }
 
         return data['user']['id'] as String;
@@ -183,17 +241,32 @@ class AuthService {
     //    incluso si signOut() falla por red, sesión expirada, etc.
     try {
       await SecureLocalStorage().removePersistedSession();
-      debugPrint('AuthService: Local token cleared.');
+      await SessionService().clearSessionToken();
+      debugPrint('AuthService: Local tokens cleared.');
     } catch (e) {
       debugPrint('AuthService: Error clearing local token: $e');
     }
 
-    // 3. Cerrar sesión en Supabase (invalida el token en el servidor)
+    // 3. Cerrar sesión local (no revoca tokens del servidor para evitar
+    //    invalidar sesiones de otros dispositivos que acaban de loguearse).
     try {
-      await _supabase.auth.signOut();
+      await _supabase.auth.signOut(scope: SignOutScope.local);
     } catch (e) {
-      debugPrint('AuthService: Error closing server session (token already cleared locally): $e');
+      debugPrint('AuthService: Error closing local session: $e');
       // No re-lanzamos — el token local ya fue borrado, la App puede continuar
+    }
+  }
+
+  /// Reenvía el correo de verificación.
+  Future<void> resendVerification(String email) async {
+    try {
+      await _supabase.auth.resend(
+        type: OtpType.signup,
+        email: email.trim(),
+      );
+    } catch (e) {
+      debugPrint('AuthService: Error resending verification: $e');
+      throw _handleAuthError(e);
     }
   }
 

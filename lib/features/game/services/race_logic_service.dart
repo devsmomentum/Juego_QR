@@ -99,99 +99,123 @@ class RaceLogicService {
     // 6. Identify Leader from filtered list
     Player? leader = filteredRacers.isNotEmpty ? filteredRacers.first : null;
 
-    // 7. Build View Models
+    // 8. Generate Progress Groups for UI overlap detection & vertical spreading
+    final progressGroups = _buildProgressGroups(filteredRacers, totalClues);
+
+    // 9. Assign lanes using the distribution logic
     final List<RacerViewModel> viewModels = [];
     final Set<String> addedIds = {};
 
-    // Find my position in filtered list for lane calculation
-    final meFilteredIndex = filteredRacers
-        .indexWhere((p) => _normalizeId(p.userId) == normalizedCurrentUserId);
+    for (final group in progressGroups) {
+      // Members are sorted by leaderboard rank in the group
+      final members = group.members;
+      
+      // Vertical distribution within the group
+      for (int i = 0; i < members.length; i++) {
+        final p = members[i];
+        final normalizedUserId = _normalizeId(p.userId);
+        
+        final bool isMe = normalizedUserId == normalizedCurrentUserId;
+        final bool isLeader = (leader != null && 
+            _normalizeId(p.userId) == _normalizeId(leader.userId));
 
-    void addRacer(Player p, int lane) {
-      // Use UserID for uniqueness check in this context
-      final normalizedUserId = _normalizeId(p.userId);
-      if (addedIds.contains(normalizedUserId)) return;
+        // LANE LOGIC:
+        // System spreads members of the group vertically. 
+        // 0 is the center line. 
+        // Small stagger: -1, 1, -2, 2...
+        int laneIndex = 0;
+        
+        if (members.length > 1) {
+           // If I am in the group, I MUST be lane 0
+           final meInGroupIdx = members.indexWhere((m) => _normalizeId(m.userId) == normalizedCurrentUserId);
+           
+           if (meInGroupIdx != -1) {
+             if (isMe) {
+               laneIndex = 0;
+             } else {
+               // Offset others from me: 1, -1, 2, -2...
+               int offsetFromMe = i - meInGroupIdx;
+               if (offsetFromMe > 0) {
+                 laneIndex = offsetFromMe;
+               } else {
+                 laneIndex = offsetFromMe; // -1, -2...
+               }
+             }
+           } else {
+             // Group doesn't contain me. Use position relative to me to pick a base "sector"
+             // meIndex is original leaderboard index
+             final firstInGroupIdx = sortedPlayers.indexWhere((m) => _normalizeId(m.userId) == _normalizeId(members.first.userId));
+             final myOriginalIdx = sortedPlayers.indexWhere((m) => _normalizeId(m.userId) == normalizedCurrentUserId);
+             
+             final bool groupIsAhead = firstInGroupIdx < myOriginalIdx || myOriginalIdx == -1;
+             
+             // Stagger around -1 if ahead, and around 1 if behind
+             if (groupIsAhead) {
+                // Ahead: -1, -2, -3...
+                laneIndex = -(i + 1);
+             } else {
+                // Behind: 1, 2, 3...
+                laneIndex = (i + 1);
+             }
+           }
+        } else {
+          // Single member: standard lane
+          final myOriginalIdx = sortedPlayers.indexWhere((m) => _normalizeId(m.userId) == normalizedCurrentUserId);
+          final playerIdx = sortedPlayers.indexWhere((m) => _normalizeId(m.userId) == normalizedUserId);
+          
+          if (isMe) laneIndex = 0;
+          else if (playerIdx < myOriginalIdx || myOriginalIdx == -1) laneIndex = -1;
+          else laneIndex = 1;
+        }
 
-      final bool isMe = normalizedUserId == normalizedCurrentUserId;
-      // Leader check also by userId
-      final bool isLeader = (leader != null &&
-          _normalizeId(p.userId) == _normalizeId(leader.userId));
+        // Clamp laneIndex to avoid going too far out of bounds (max +/- 3 lanes)
+        laneIndex = laneIndex.clamp(-3, 3);
 
-      // Calculate visual state
-      double opacity = 1.0;
-      if (isMe) {
-        final amInvisible = activePowers.any((e) =>
-            _normalizeId(e.targetId) == _normalizeId(p.id) &&
-            (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') &&
-            !e.isExpired);
-        if (amInvisible || p.isInvisible) opacity = 0.5;
+        // Calculate visual state
+        double opacity = 1.0;
+        if (isMe) {
+          final amInvisible = activePowers.any((e) =>
+              _normalizeId(e.targetId) == _normalizeId(p.id) &&
+              (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') &&
+              !e.isExpired);
+          if (amInvisible || p.isInvisible) opacity = 0.5;
+        }
+
+        IconData? statusIcon;
+        Color? statusColor;
+
+        final activeDebuffs = activePowers
+            .where((e) =>
+                _normalizeId(e.targetId) == _normalizeId(p.id) && !e.isExpired)
+            .toList();
+
+        if (activeDebuffs.any((e) => e.powerSlug == 'freeze')) {
+          statusIcon = Icons.ac_unit;
+          statusColor = Colors.cyanAccent;
+        } else if (activeDebuffs.any(
+            (e) => e.powerSlug == 'black_screen' || e.powerSlug == 'blind')) {
+          statusIcon = Icons.visibility_off;
+          statusColor = Colors.black;
+        } else if (p.status == PlayerStatus.shielded || p.isProtected) {
+          statusIcon = Icons.shield;
+          statusColor = Colors.indigoAccent;
+        }
+
+        viewModels.add(RacerViewModel(
+          data: p,
+          lane: laneIndex,
+          isMe: isMe,
+          isLeader: isLeader,
+          isTargetable: isVisible(p),
+          opacity: opacity,
+          statusIcon: statusIcon,
+          statusColor: statusColor,
+        ));
       }
-
-      IconData? statusIcon;
-      Color? statusColor;
-
-      // Check for debuffs on this player (Powers use ID/GamePlayerID)
-      final activeDebuffs = activePowers
-          .where((e) =>
-              _normalizeId(e.targetId) == _normalizeId(p.id) && !e.isExpired)
-          .toList();
-
-      // Priority icons
-      if (activeDebuffs.any((e) => e.powerSlug == 'freeze')) {
-        statusIcon = Icons.ac_unit;
-        statusColor = Colors.cyanAccent;
-      } else if (activeDebuffs.any(
-          (e) => e.powerSlug == 'black_screen' || e.powerSlug == 'blind')) {
-        statusIcon = Icons.visibility_off;
-        statusColor = Colors.black;
-      } else if (p.status == PlayerStatus.shielded) {
-        statusIcon = Icons.shield;
-        statusColor = Colors.indigoAccent;
-      }
-
-      viewModels.add(RacerViewModel(
-        data: p,
-        lane: lane,
-        isMe: isMe,
-        isLeader: isLeader,
-        isTargetable:
-            isVisible(p), // Can target self (for defense) and visible rivals
-        opacity: opacity,
-        statusIcon: statusIcon,
-        statusColor: statusColor,
-      ));
-
-      addedIds.add(normalizedUserId);
     }
 
-    // Add racers with lane calculation based on position relative to me
-    for (int i = 0; i < filteredRacers.length; i++) {
-      final player = filteredRacers[i];
-      int lane;
-
-      if (meFilteredIndex == -1) {
-        // I'm not in the list, treat all as ahead
-        lane = -1;
-      } else if (i < meFilteredIndex) {
-        lane = -1; // Ahead
-      } else if (i > meFilteredIndex) {
-        lane = 1; // Behind
-      } else {
-        lane = 0; // Me
-      }
-
-      addRacer(player, lane);
-    }
-
-    // If me was not in filtered list but exists, add them
-    if (me != null && !addedIds.contains(normalizedCurrentUserId)) {
-      addRacer(me, 0);
-    }
-
-    // 8. Generate Progress Groups for UI overlap detection
-    final progressGroups = _buildProgressGroups(viewModels, totalClues);
-
-    // 9. Motivation Text
+    // 10. Finalize result
+    // 11. Motivation Text
     String motivation = "";
     if (me != null) {
       if (me.completedCluesCount == 0)
@@ -262,14 +286,14 @@ class RaceLogicService {
     return result;
   }
 
-  /// Groups racers by their integer progress count for overlap detection
+  /// Groups players by their integer progress count for overlap detection
   List<ProgressGroup> _buildProgressGroups(
-      List<RacerViewModel> racers, int totalClues) {
-    final Map<int, List<RacerViewModel>> grouped = {};
+      List<Player> players, int totalClues) {
+    final Map<int, List<Player>> grouped = {};
 
-    for (final racer in racers) {
-      final progressCount = racer.data.progress.toInt();
-      grouped.putIfAbsent(progressCount, () => []).add(racer);
+    for (final player in players) {
+      final progressCount = player.completedCluesCount;
+      grouped.putIfAbsent(progressCount, () => []).add(player);
     }
 
     return grouped.entries.map((entry) {
@@ -277,7 +301,7 @@ class RaceLogicService {
       return ProgressGroup(
         progress: progress.clamp(0.0, 1.0),
         progressCount: entry.key,
-        memberIds: entry.value.map((r) => r.data.id).toList(),
+        memberIds: entry.value.map((p) => p.userId).toList(),
         members: entry.value,
       );
     }).toList()

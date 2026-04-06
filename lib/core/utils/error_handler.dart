@@ -1,8 +1,13 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../features/auth/services/auth_service.dart';
 
 class ErrorHandler {
   static String getFriendlyErrorMessage(Object error) {
+    if (error is AuthUserException) {
+      return error.message;
+    }
+
     if (error is SocketException) {
       return 'Revisa tu conexión a internet, la aventura no puede comenzar sin conexión.';
     }

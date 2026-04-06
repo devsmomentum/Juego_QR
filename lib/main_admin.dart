@@ -20,6 +20,8 @@ import 'features/game/providers/event_provider.dart';
 import 'features/admin/screens/auth_save.dart';
 import 'features/game/services/game_service.dart';
 import 'features/events/services/event_service.dart';
+import 'features/mall/providers/store_provider.dart';
+import 'features/mall/services/store_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,20 +85,25 @@ class MapHunterAdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<AuthService>(
+          create: (_) => AuthService(supabaseClient: Supabase.instance.client),
+        ),
+        Provider<AdminService>(
+          create: (context) => AdminService(
+            supabaseClient: Supabase.instance.client,
+            authService: Provider.of<AuthService>(context, listen: false),
+          ),
+        ),
         ChangeNotifierProvider(create: (_) {
           final supabase = Supabase.instance.client;
           return GameProvider(gameService: GameService(supabase));
         }),
-        ChangeNotifierProvider(create: (_) {
+        ChangeNotifierProvider(create: (context) {
           final supabase = Supabase.instance.client;
-          final authService = AuthService(supabaseClient: supabase);
           return PlayerProvider(
             supabaseClient: supabase,
-            authService: authService,
-            adminService: AdminService(
-              supabaseClient: supabase,
-              authService: authService,
-            ),
+            authService: Provider.of<AuthService>(context, listen: false),
+            adminService: Provider.of<AdminService>(context, listen: false),
             inventoryService: InventoryService(supabaseClient: supabase),
             powerService: PowerService(supabaseClient: supabase),
           );
@@ -110,6 +117,10 @@ class MapHunterAdminApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) {
           final supabase = Supabase.instance.client;
           return EventProvider(eventService: EventService(supabase));
+        }),
+        ChangeNotifierProvider(create: (_) {
+          final supabase = Supabase.instance.client;
+          return StoreProvider(storeService: StoreService(supabase));
         }),
       ],
       child: MaterialApp(

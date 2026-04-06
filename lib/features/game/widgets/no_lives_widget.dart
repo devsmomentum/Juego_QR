@@ -1,8 +1,12 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/player_provider.dart';
 import '../../mall/screens/mall_screen.dart';
+import '../providers/game_provider.dart';
+import 'buy_coins_with_clovers_modal.dart';
 
 class NoLivesWidget extends StatefulWidget {
   const NoLivesWidget({super.key});
@@ -265,67 +269,150 @@ class _NoLivesWidgetState extends State<NoLivesWidget>
                             padding: const EdgeInsets.symmetric(horizontal: 40),
                             child: Column(
                               children: [
-                                // Primary: Comprar Vidas
-                                Container(
-                                  padding: const EdgeInsets.all(2.5),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.accentGold.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: AppTheme.accentGold.withOpacity(0.35),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Container(
-                                    width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(15),
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          AppTheme.accentGold.withOpacity(0.9),
-                                          AppTheme.accentGold,
-                                        ],
-                                      ),
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(15),
-                                        onTap: () async {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const MallScreen()),
-                                          );
-                                          if (!context.mounted) return;
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(
-                                              vertical: 16),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.shopping_cart,
-                                                  color: Colors.black,
-                                                  size: 20),
-                                              SizedBox(width: 10),
-                                              Text(
-                                                "COMPRAR VIDAS",
-                                                style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontWeight: FontWeight.w900,
-                                                  fontSize: 15,
-                                                  letterSpacing: 1.0,
+                                Builder(
+                                  builder: (btnContext) {
+                                    final playerProvider = Provider.of<PlayerProvider>(btnContext, listen: true);
+                                    final coins = playerProvider.currentPlayer?.coins ?? 0;
+
+                                    if (coins == 0) {
+                                      return Container(
+                                        padding: const EdgeInsets.all(2.5),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.accentGold.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(18),
+                                          border: Border.all(
+                                            color: AppTheme.accentGold.withOpacity(0.35),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Container(
+                                          width: double.infinity,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(15),
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                AppTheme.accentGold.withOpacity(0.9),
+                                                AppTheme.accentGold,
+                                              ],
+                                            ),
+                                          ),
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.circular(15),
+                                              onTap: () async {
+                                                final bool? success = await BuyCoinsWithCloversModal.show(context);
+                                                if (success == true) {
+                                                  if (!btnContext.mounted) return;
+                                                  // Usamos el context del builder que tiene acceso directo a PlayerProvider
+                                                  final pp = Provider.of<PlayerProvider>(btnContext, listen: false);
+                                                  final gp = Provider.of<GameProvider>(btnContext, listen: false);
+                                                  
+                                                  await Navigator.push(
+                                                    btnContext,
+                                                    MaterialPageRoute(builder: (_) => const MallScreen()),
+                                                  );
+                                                  
+                                                  // Al regresar del Mall, refrescamos el perfil para detectar si compró vidas
+                                                  if (btnContext.mounted) {
+                                                    debugPrint("[NO_LIVES] Returning from Mall: Refreshing profile and GameProvider lives...");
+                                                    await pp.refreshProfile(eventId: gp.currentEventId);
+                                                    // CRITICAL: Sync lives to GameProvider so NoLivesWidget can be dismissed by PuzzleScreen
+                                                    if (pp.currentPlayer != null) {
+                                                      await gp.fetchLives(pp.currentPlayer!.userId);
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              child: const Padding(
+                                                padding: EdgeInsets.symmetric(vertical: 16),
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.currency_exchange_rounded, color: Colors.black, size: 20),
+                                                    SizedBox(width: 10),
+                                                    Text(
+                                                      "COMPRAR MONEDAS",
+                                                      style: TextStyle(
+                                                        color: Colors.black,
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 15,
+                                                        letterSpacing: 1.0,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }
+
+                                    return Container(
+                                      padding: const EdgeInsets.all(2.5),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.accentGold.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: AppTheme.accentGold.withOpacity(0.35),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Container(
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(15),
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              AppTheme.accentGold.withOpacity(0.9),
+                                              AppTheme.accentGold,
                                             ],
                                           ),
                                         ),
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(15),
+                                              onTap: () async {
+                                                final pp = Provider.of<PlayerProvider>(btnContext, listen: false);
+                                                final gp = Provider.of<GameProvider>(btnContext, listen: false);
+
+                                                await Navigator.push(
+                                                  btnContext,
+                                                  MaterialPageRoute(builder: (_) => const MallScreen()),
+                                                );
+                                                
+                                                // Al regresar del Mall, refrescamos el perfil para detectar si compró vidas
+                                                if (btnContext.mounted) {
+                                                  debugPrint("[NO_LIVES] Returning from Mall: Refreshing profile...");
+                                                  await pp.refreshProfile(eventId: gp.currentEventId);
+                                                }
+                                              },
+                                            child: const Padding(
+                                              padding: EdgeInsets.symmetric(vertical: 16),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.shopping_cart, color: Colors.black, size: 20),
+                                                  SizedBox(width: 10),
+                                                  Text(
+                                                    "COMPRAR VIDAS",
+                                                    style: TextStyle(
+                                                      color: Colors.black,
+                                                      fontWeight: FontWeight.w900,
+                                                      fontSize: 15,
+                                                      letterSpacing: 1.0,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  }
                                 ),
 
                                 const SizedBox(height: 14),

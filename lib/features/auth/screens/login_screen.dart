@@ -17,10 +17,14 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../game/providers/connectivity_provider.dart';
 import '../../game/providers/game_provider.dart';
+import '../services/auth_service.dart';
 import 'dart:async'; // For TimeoutException
 import 'dart:math' as math;
 import '../../../shared/widgets/loading_overlay.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../core/services/version_check_service.dart';
+import '../../../shared/widgets/maintenance_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -140,6 +144,40 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
+      // === CHECK MAINTENANCE MODE ===
+      final versionService = VersionCheckService(Supabase.instance.client);
+      final versionStatus = await versionService.checkVersion();
+      if (!mounted) return;
+
+      if (versionStatus.maintenanceMode) {
+        if (player.isAdmin) {
+          // Admin: mostrar pantalla de mantenimiento con opción de continuar
+          final shouldContinue = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => MaintenanceScreen(
+                isAdmin: true,
+                onContinueAsAdmin: () => Navigator.of(context).pop(true),
+              ),
+            ),
+          );
+          if (!mounted) return;
+          if (shouldContinue != true) return;
+          // Admin eligió continuar → sigue el flujo normal hacia Dashboard
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+          return;
+        } else {
+          // Usuario normal: bloquear
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const MaintenanceScreen(isAdmin: false),
+            ),
+          );
+          return;
+        }
+      }
+
       // Administradores van directamente al Dashboard
       if (player.role == 'admin') {
         Navigator.of(context).pushReplacement(
@@ -217,6 +255,8 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       LoadingOverlay.hide(context); // Dismiss loading
 
+      final isUnverified = e is AuthUserException && e.isUnverified;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -233,14 +273,50 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           backgroundColor: AppTheme.dangerRed,
           behavior: SnackBarBehavior.floating,
+          action: isUnverified 
+            ? SnackBarAction(
+                label: 'REENVIAR',
+                textColor: Colors.white,
+                onPressed: () => _resendVerification(_emailController.text.trim().toLowerCase()),
+              )
+            : null,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(20),
-          duration: const Duration(seconds: 4),
+          duration: isUnverified ? const Duration(seconds: 8) : const Duration(seconds: 4),
         ),
       );
     } finally {
       if (mounted) setState(() => _isLoggingIn = false);
+    }
+  }
+
+  Future<void> _resendVerification(String email) async {
+    if (email.isEmpty) return;
+    
+    LoadingOverlay.show(context);
+    try {
+      await context.read<PlayerProvider>().resendVerification(email);
+      if (!mounted) return;
+      LoadingOverlay.hide(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Correo de verificación reenviado. Revisa tu bandeja de entrada.'),
+          backgroundColor: AppTheme.successGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      LoadingOverlay.hide(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ErrorHandler.getFriendlyErrorMessage(e)),
+          backgroundColor: AppTheme.dangerRed,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

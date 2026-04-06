@@ -179,19 +179,13 @@ void clearLocalRequests() {
     }
   }
 
-  /// Aprueba una solicitud de acceso y ejecuta el pago atómicamente.
-  /// 
-  /// Usa la RPC [approve_and_pay_event_entry] que en una sola transacción:
-  /// 1. Valida que la solicitud esté en estado 'pending'
-  /// 2. Ejecuta secure_clover_payment (si el evento tiene costo)
-  /// 3. Crea el registro game_player
-  /// 4. Incrementa el pote del evento
+  /// Aprueba una solicitud de acceso usando la Edge Function de admin-actions.
   ///
-  /// Retorna un Map con el resultado incluyendo si se cobró y el monto.
-  /// Lanza excepción si falla para que el UI muestre feedback.
+  /// Retorna un Map con el resultado. Lanza excepción si falla para que el UI
+  /// muestre feedback.
   Future<Map<String, dynamic>> approveRequest(String requestId) async {
     try {
-      debugPrint('[APPROVE] 🎯 Approving request via atomic RPC: $requestId');
+      debugPrint('[APPROVE] 🎯 Approving request via edge: $requestId');
       
       final result = await _repository.approveAndPayEntry(requestId);
       

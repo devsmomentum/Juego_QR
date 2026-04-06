@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,8 +42,8 @@ serve(async (req) => {
       );
     }
 
-    // 2. PARSE REQUEST — only plan_id from client (price validated server-side)
-    const { plan_id } = await req.json();
+    // 2. PARSE REQUEST
+    const { plan_id, is_web, success_url, cancel_url, save_card } = await req.json();
 
     if (!plan_id) {
       return new Response(
@@ -52,7 +52,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[stripe-create-pi] User: ${user.id}, Plan: ${plan_id}`);
+    const shouldSaveCard = save_card === true;
+    console.log(`[stripe-create-pi] User: ${user.id}, Plan: ${plan_id}, SaveCard: ${shouldSaveCard}`);
 
     // 3. ADMIN CLIENT
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -83,7 +84,6 @@ serve(async (req) => {
 
     const amountUsd = plan.price as number;         // e.g. 4.99
     const cloversQuantity = plan.amount as number;  // e.g. 150
-    // Stripe requires amount in cents (smallest currency unit)
     const amountCents = Math.round(amountUsd * 100);
 
     console.log(`[stripe-create-pi] Plan: ${plan.name}, $${amountUsd} USD (${amountCents} cents), ${cloversQuantity} tréboles`);
@@ -94,27 +94,151 @@ serve(async (req) => {
       throw new Error("Server Misconfiguration: Missing STRIPE_SECRET_KEY");
     }
 
-    // 6. CREATE STRIPE PAYMENT INTENT
+    const internalOrderId = crypto.randomUUID();
+    let paymentIntentId = "";
+    let clientSecret = "";
+    let checkoutUrl = "";
+    let ephemeralKeySecret = "";
+    let stripeCustomerId = "";
+    let newCustomerCreated = false;
+
+    // 6. INITIALIZE STRIPE
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2024-06-20",
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
-      currency: "usd",
-      description: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
-      metadata: {
-        user_id: user.id,
-        plan_id: plan.id,
-        plan_name: plan.name,
-        clovers_amount: String(cloversQuantity),
-      },
-      // Allows Google Pay, Apple Pay, and other methods managed in Stripe Dashboard
-      automatic_payment_methods: { enabled: true },
-    });
+    if (is_web) {
+      // 6a. CREATE STRIPE CHECKOUT SESSION (Web)
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
+                description: plan.name,
+              },
+              unit_amount: amountCents,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        success_url: success_url || `${supabaseUrl}/auth/v1/verify`,
+        cancel_url: cancel_url || success_url,
+        metadata: {
+          user_id: user.id,
+          plan_id: plan.id,
+          plan_name: plan.name,
+          clovers_amount: String(cloversQuantity),
+          clover_order_id: internalOrderId,
+        },
+        payment_intent_data: {
+          metadata: {
+            user_id: user.id,
+            plan_id: plan.id,
+            plan_name: plan.name,
+            clovers_amount: String(cloversQuantity),
+            clover_order_id: internalOrderId,
+          },
+        },
+      });
+      checkoutUrl = session.url!;
+      paymentIntentId = session.payment_intent as string || session.id; 
+    } else {
+      // 6b. CREATE STRIPE PAYMENT INTENT (Mobile)
+      
+      // --- STRIPE CUSTOMER LOGIC ---
+      // Get the user's existing stripe_customer_id from their profile
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_customer_id, name")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntent.id}`);
+      stripeCustomerId = profile?.stripe_customer_id ?? "";
+      
+      // FALLBACK: If name is missing in profile, try to get it from Auth metadata
+      const customerName = profile?.name || 
+                           user.user_metadata?.full_name || 
+                           user.user_metadata?.name || 
+                           "Usuario de MapHunter";
+      const customerEmail = user.email || undefined;
+
+      // If saving card and no customer exists yet, create one
+      if (!stripeCustomerId) {
+        const customer = await stripe.customers.create({
+          metadata: { supabase_user_id: user.id },
+          email: customerEmail,
+          name: customerName,
+        });
+        stripeCustomerId = customer.id;
+        newCustomerCreated = true;
+
+        await supabaseAdmin
+          .from("profiles")
+          .upsert({ 
+            id: user.id,
+            stripe_customer_id: stripeCustomerId,
+            email: customerEmail,
+            name: customerName
+          }, { onConflict: 'id' });
+
+        console.log(`[stripe-create-pi] Created Stripe Customer: ${stripeCustomerId}`);
+      } else {
+        // OPTIONAL: Update existing customer to ensure name/email are present
+        try {
+          await stripe.customers.update(stripeCustomerId, {
+            name: customerName,
+            email: customerEmail,
+          });
+          console.log(`[stripe-create-pi] Updated existing Stripe Customer: ${stripeCustomerId}`);
+        } catch (updateErr) {
+          console.warn(`[stripe-create-pi] Could not update customer ${stripeCustomerId}:`, (updateErr as any).message);
+        }
+      }
+
+      // Generate an Ephemeral Key so Flutter can authenticate with Stripe
+      const ephemeralKey = await stripe.ephemeralKeys.create(
+        { customer: stripeCustomerId },
+        { apiVersion: "2024-06-20" }
+      );
+      ephemeralKeySecret = ephemeralKey.secret!;
+
+      // Build PaymentIntent options
+      const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
+        amount: amountCents,
+        currency: "usd",
+        customer: stripeCustomerId,
+        description: `Compra de ${cloversQuantity} Tréboles - Plan ${plan.name}`,
+        metadata: {
+          user_id: user.id,
+          plan_id: plan.id,
+          plan_name: plan.name,
+          clovers_amount: String(cloversQuantity),
+          clover_order_id: internalOrderId,
+        },
+        automatic_payment_methods: { 
+          enabled: true,
+          allow_redirects: "never",
+        },
+        receipt_email: customerEmail,
+      };
+
+      // If user wants to save the card, use setup_future_usage
+      if (shouldSaveCard) {
+        paymentIntentParams.setup_future_usage = "off_session";
+        console.log(`[stripe-create-pi] Card will be saved for future use (off_session)`);
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+      paymentIntentId = paymentIntent.id;
+      clientSecret = paymentIntent.client_secret!;
+
+      console.log(`[stripe-create-pi] Created PaymentIntent: ${paymentIntentId}, AllowRedirects: never`);
+    }
 
     // 7. PERSIST ORDER IN DATABASE
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -122,27 +246,29 @@ serve(async (req) => {
     const { error: dbError } = await supabaseAdmin
       .from("clover_orders")
       .insert({
+        id: internalOrderId,
         user_id: user.id,
         plan_id: plan.id,
         amount: amountUsd,
         currency: "USD",
         status: "pending",
         gateway: "stripe",
-        stripe_payment_intent_id: paymentIntent.id,
+        stripe_payment_intent_id: paymentIntentId || null,
         expires_at: expiresAt,
         extra_data: {
           plan_name: plan.name,
           clovers_amount: cloversQuantity,
           price_usd: amountUsd,
           initiated_at: new Date().toISOString(),
-          function_version: "stripe-v1",
+          function_version: "stripe-v3-customer-support",
+          is_web: !!is_web,
+          save_card: shouldSaveCard,
+          stripe_customer_id: stripeCustomerId || null,
         },
       });
 
     if (dbError) {
       console.error("[stripe-create-pi] DB Error:", dbError);
-      // Cancel the PaymentIntent if DB insert fails to avoid orphaned intents
-      await stripe.paymentIntents.cancel(paymentIntent.id).catch(console.error);
       throw new Error(`Database error: ${dbError.message}`);
     }
 
@@ -153,11 +279,16 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         data: {
-          client_secret: paymentIntent.client_secret,
-          payment_intent_id: paymentIntent.id,
+          client_secret: clientSecret,
+          payment_intent_id: paymentIntentId,
+          checkout_url: checkoutUrl,
           amount_cents: amountCents,
           amount_usd: amountUsd,
           clovers: cloversQuantity,
+          // Customer data for Flutter Payment Sheet
+          stripe_customer_id: stripeCustomerId || null,
+          ephemeral_key_secret: ephemeralKeySecret || null,
+          new_customer_created: newCustomerCreated,
           plan: {
             id: plan.id,
             name: plan.name,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,14 +29,15 @@ class SlidingPuzzleMinigame extends StatefulWidget {
   State<SlidingPuzzleMinigame> createState() => _SlidingPuzzleMinigameState();
 }
 
-class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with WidgetsBindingObserver {
+class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame>
+    with WidgetsBindingObserver {
   // Configuración
   final int gridSize = 3;
   late List<int> tiles;
 
   // Estado del juego
   late Timer _timer;
-  int _secondsRemaining = 120; // 2 minutos
+  int _secondsRemaining = 150; // 2.5 minutos
   bool _isGameOver = false;
 
   // Overlay State
@@ -91,7 +93,8 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
   Future<void> _playMusic() async {
     if (_isMusicPlaying) return;
     try {
-      await _audioPlayer.play(AssetSource('audio/easy-arcade-hartzmann-main-version-28392-02-32.mp3'));
+      await _audioPlayer.play(AssetSource(
+          'audio/easy-arcade-hartzmann-main-version-28392-02-32.mp3'));
       if (mounted) {
         setState(() => _isMusicPlaying = true);
       }
@@ -126,15 +129,35 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
         gridSize * gridSize, (index) => (index + 1) % (gridSize * gridSize));
     tiles[gridSize * gridSize - 1] = 0; // El último es el vacío
 
-    // Hacer 50 movimientos aleatorios válidos
+    // Hacer movimientos más complejos para mezclar, evitando deshacer el movimiento anterior
     int emptyIndex = tiles.indexOf(0);
-    for (int i = 0; i < 50; i++) {
+    int previousIndex = -1;
+    final random = Random();
+
+    for (int i = 0; i < 1180; i++) {
       final neighbors = _getNeighbors(emptyIndex);
-      final randomNeighbor =
-          neighbors[DateTime.now().microsecond % neighbors.length];
+
+      // Evitar volver instantáneamente a la posición anterior para una mejor mezcla
+      if (neighbors.length > 1 && previousIndex != -1) {
+        neighbors.remove(previousIndex);
+      }
+
+      final randomNeighbor = neighbors[random.nextInt(neighbors.length)];
       _swap(emptyIndex, randomNeighbor);
+
+      previousIndex = emptyIndex;
       emptyIndex = randomNeighbor;
     }
+
+    // Verificación de seguridad: Si por casualidad quedó resuelto, re-mezclar
+    bool isResolved = true;
+    for (int i = 0; i < tiles.length - 1; i++) {
+      if (tiles[i] != i + 1) {
+        isResolved = false;
+        break;
+      }
+    }
+    if (isResolved) _shuffleSolvable();
   }
 
   List<int> _getNeighbors(int index) {
@@ -194,7 +217,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -333,70 +356,73 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                           child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 10)
-                          ]),
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: gridSize,
-                          crossAxisSpacing: 4,
-                          mainAxisSpacing: 4,
-                        ),
-                        itemCount: tiles.length,
-                        itemBuilder: (context, index) {
-                          final number = tiles[index];
-                          if (number == 0)
-                            return const SizedBox.shrink(); // Espacio vacío
-
-                          return GestureDetector(
-                            onTap: () => _onTileTap(index),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: AppTheme.primaryPurple,
-                                  borderRadius: BorderRadius.circular(8),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      AppTheme.primaryPurple,
-                                      AppTheme.secondaryPink
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.2),
-                                        offset: const Offset(2, 2))
-                                  ]),
-                              child: Center(
-                                child: Text(
-                                  "$number",
-                                  style: const TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.15),
+                                  width: 1.5,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 10)
+                                ]),
+                            child: GridView.builder(
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: gridSize,
+                                crossAxisSpacing: 4,
+                                mainAxisSpacing: 4,
                               ),
+                              itemCount: tiles.length,
+                              itemBuilder: (context, index) {
+                                final number = tiles[index];
+                                if (number == 0)
+                                  return const SizedBox
+                                      .shrink(); // Espacio vacío
+
+                                return GestureDetector(
+                                  onTap: () => _onTileTap(index),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                        color: AppTheme.primaryPurple,
+                                        borderRadius: BorderRadius.circular(8),
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            AppTheme.primaryPurple,
+                                            AppTheme.secondaryPink
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                              color:
+                                                  Colors.black.withOpacity(0.2),
+                                              offset: const Offset(2, 2))
+                                        ]),
+                                    child: Center(
+                                      child: Text(
+                                        "$number",
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                ),
-                ),
                 ),
               ),
 
@@ -418,7 +444,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> with Widg
                       setState(() {
                         _showOverlay = false;
                         _isGameOver = false;
-                        _secondsRemaining = 120;
+                        _secondsRemaining = 150;
                         _initializePuzzle();
                         _startTimer();
                         _playMusic();

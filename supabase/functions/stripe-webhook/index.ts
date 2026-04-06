@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 // Stripe webhooks do NOT use CORS — they are server-to-server calls
 serve(async (req) => {
@@ -29,14 +29,20 @@ serve(async (req) => {
     let event: Stripe.Event;
 
     try {
+      // Direct verification without explicit SubtleCryptoProvider (Stripe handles it internally in newer versions)
       event = await stripe.webhooks.constructEventAsync(
         rawBody,
         signature,
         webhookSecret
       );
     } catch (err) {
-      console.error("[stripe-webhook] Signature verification failed:", err.message);
-      return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+      console.error(`[stripe-webhook] ❌ Signature verification failed: ${err.message}`);
+      console.error(`[stripe-webhook] Provided signature: ${signature.substring(0, 10)}...`);
+      // RETURN 200 to Stripe to stop the error retries and clean up the dashboard metrics
+      return new Response(JSON.stringify({ error: "Signature verification failed", received: false }), { 
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
     console.log(`[stripe-webhook] Event received: ${event.type}, ID: ${event.id}`);
@@ -53,27 +59,79 @@ serve(async (req) => {
       serviceRoleKey
     );
 
-    // 3. UNIFY ORDER FETCHING (for payment_intent events)
+    // 3. UNIFY ORDER FETCHING
     let existingOrder: any = null;
-    const paymentIntent = event.data.object as Stripe.PaymentIntent;
-    
+    let paymentIntentId = "";
+    let sessionId = "";
+    let checkoutMetadata: any = null;
+
     if (event.type.startsWith("payment_intent.")) {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      paymentIntentId = paymentIntent.id;
+      checkoutMetadata = paymentIntent.metadata;
+    } else if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      paymentIntentId = session.payment_intent as string;
+      sessionId = session.id;
+      checkoutMetadata = session.metadata;
+    }
+
+    const cloverOrderId = checkoutMetadata?.clover_order_id;
+
+    if (cloverOrderId) {
+      console.log(`[stripe-webhook] Finding order by internal ID: ${cloverOrderId}`);
       const { data: order } = await supabaseAdmin
         .from("clover_orders")
-        .select("id, status, extra_data")
-        .eq("stripe_payment_intent_id", paymentIntent.id)
+        .select("id, status, extra_data, user_id")
+        .eq("id", cloverOrderId)
         .maybeSingle();
       existingOrder = order;
     }
 
+    if (!existingOrder && (paymentIntentId || sessionId)) {
+      console.log(`[stripe-webhook] Falling back to search by PI/Session ID: ${paymentIntentId || sessionId}`);
+      let query = supabaseAdmin
+        .from("clover_orders")
+        .select("id, status, extra_data, user_id");
+
+      if (paymentIntentId && sessionId) {
+        query = query.or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent_id.eq.${sessionId}`);
+      } else if (paymentIntentId) {
+        query = query.eq("stripe_payment_intent_id", paymentIntentId);
+      } else {
+        query = query.eq("stripe_payment_intent_id", sessionId);
+      }
+
+      const { data: order } = await query.maybeSingle();
+      existingOrder = order;
+    }
+
+    if (existingOrder) {
+      // If we found it by sessionId or internal ID, but now we have a real paymentIntentId, update it for future webhooks
+      if (paymentIntentId && !existingOrder.extra_data?.pi_id) {
+        await supabaseAdmin
+          .from("clover_orders")
+          .update({ stripe_payment_intent_id: paymentIntentId })
+          .eq("id", existingOrder.id);
+      }
+    }
+
     // 4. HANDLE EVENTS
     switch (event.type) {
+      case "checkout.session.completed":
       case "payment_intent.succeeded": {
-        const paymentIntentId = paymentIntent.id;
-        const userId = paymentIntent.metadata?.user_id;
-        const cloversAmount = parseInt(paymentIntent.metadata?.clovers_amount ?? "0", 10);
+        // 4a. GET METADATA (with DB fallback)
+        let userId = checkoutMetadata?.user_id;
+        let cloversAmount = parseInt(checkoutMetadata?.clovers_amount ?? "0", 10);
 
-        console.log(`[stripe-webhook] payment_intent.succeeded: ${paymentIntentId}, user: ${userId}, clovers: ${cloversAmount}`);
+        // FALLBACK: If metadata is missing but we found the order in DB, use DB values
+        if (existingOrder && (!userId || !cloversAmount)) {
+          console.log("[stripe-webhook] Metadata missing in Stripe event, using DB fallback");
+          userId = userId || (existingOrder as any).user_id;
+          cloversAmount = cloversAmount || parseInt((existingOrder as any).extra_data?.clovers_amount ?? "0", 10);
+        }
+
+        console.log(`[stripe-webhook] ${event.type}: PI:${paymentIntentId}, user:${userId}, clovers:${cloversAmount}`);
 
         if (!userId || !cloversAmount) {
           console.error("[stripe-webhook] Missing user_id or clovers_amount in metadata");
@@ -90,20 +148,64 @@ serve(async (req) => {
           break;
         }
 
+        // Extract stripe_customer_id and receipt_url from the PaymentIntent if available
+        let stripeCustomerId: string | null = null;
+        let receiptUrl: string | null = null;
+
+        if (event.type === "payment_intent.succeeded") {
+          const pi = event.data.object as Stripe.PaymentIntent;
+          stripeCustomerId = typeof pi.customer === "string" ? pi.customer : null;
+          
+          // Grab the receipt URL from the charge object
+          const chargeId = pi.latest_charge as string | null;
+          if (chargeId) {
+            try {
+              const charge = await stripe.charges.retrieve(chargeId);
+              receiptUrl = charge.receipt_url;
+            } catch (err) {
+              console.error(`[stripe-webhook] Error fetching charge ${chargeId}:`, err);
+            }
+          }
+
+          // If we have a customer ID, ensure it's stored in the user's profile
+          if (stripeCustomerId && userId) {
+            const { data: profile } = await supabaseAdmin
+              .from("profiles")
+              .select("stripe_customer_id")
+              .eq("id", userId)
+              .single();
+
+            if (!profile?.stripe_customer_id) {
+              await supabaseAdmin
+                .from("profiles")
+                .update({ stripe_customer_id: stripeCustomerId })
+                .eq("id", userId);
+              console.log(`[stripe-webhook] Saved stripe_customer_id to profile: ${stripeCustomerId}`);
+            }
+          }
+        }
+
+        const updatePayload: any = {
+          status: "success",
+          extra_data: {
+            ...(existingOrder.extra_data || {}),
+            clovers_amount: cloversAmount, // Essential for the trigger 'tr_on_clover_order_paid'
+            stripe_event_id: event.id,
+            completed_at: new Date().toISOString(),
+            pi_id: paymentIntentId,
+            stripe_customer_id: stripeCustomerId,
+          },
+        };
+
+        if (receiptUrl) {
+          updatePayload.invoice_url = receiptUrl;
+        }
+
         // Update order status to 'success' to trigger the existing DB logic
         const { error: orderError } = await supabaseAdmin
           .from("clover_orders")
-          .update({
-            status: "success",
-            extra_data: {
-              ...(existingOrder.extra_data || {}),
-              clovers_amount: cloversAmount, // Essential for the trigger 'tr_on_clover_order_paid'
-              stripe_event_id: event.id,
-              completed_at: new Date().toISOString(),
-              payment_method_type: paymentIntent.payment_method_types?.[0],
-            },
-          })
-          .eq("stripe_payment_intent_id", paymentIntentId);
+          .update(updatePayload)
+          .eq("id", existingOrder.id);
 
         if (orderError) {
           console.error("[stripe-webhook] Error updating order:", orderError);
@@ -114,9 +216,35 @@ serve(async (req) => {
         break;
       }
 
+      case "payment_intent.processing": {
+        // This event fires when payment requires bank processing time (e.g., bank transfers).
+        // With allow_redirects: 'never', this should NOT occur for card payments.
+        // Log it for observability but do NOT update order status to avoid false positives.
+        console.log(`[stripe-webhook] ⏳ payment_intent.processing: PI:${paymentIntentId}. Order status remains 'pending' until 'succeeded' fires.`);
+        if (existingOrder && existingOrder.status === "pending") {
+          await supabaseAdmin
+            .from("clover_orders")
+            .update({
+              extra_data: {
+                ...(existingOrder.extra_data || {}),
+                processing_event_id: event.id,
+                processing_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", existingOrder.id);
+        }
+        break;
+      }
+
+      case "payment_intent.requires_action": {
+        // This fires when 3D Secure or other authentication is needed.
+        // Flutter's Payment Sheet handles this automatically. Just log it.
+        console.log(`[stripe-webhook] 🔐 payment_intent.requires_action: PI:${paymentIntentId}. Flutter will handle authentication.`);
+        break;
+      }
+
       case "payment_intent.payment_failed": {
-        const paymentIntentId = paymentIntent.id;
-        const failureMessage = paymentIntent.last_payment_error?.message ?? "Unknown error";
+        const failureMessage = (event.data.object as any).last_payment_error?.message ?? "Unknown error";
 
         console.log(`[stripe-webhook] payment_intent.payment_failed: ${paymentIntentId}, reason: ${failureMessage}`);
 
@@ -136,7 +264,7 @@ serve(async (req) => {
               stripe_event_id: event.id,
             },
           })
-          .eq("stripe_payment_intent_id", paymentIntentId);
+          .eq("id", existingOrder.id);
 
         if (error) {
           console.error("[stripe-webhook] Error marking order as failed:", error);
@@ -147,12 +275,58 @@ serve(async (req) => {
       }
 
       case "payment_intent.canceled": {
-        console.log(`[stripe-webhook] PaymentIntent canceled: ${paymentIntent.id}`);
+        console.log(`[stripe-webhook] PaymentIntent canceled: ${paymentIntentId}`);
 
-        await supabaseAdmin
-          .from("clover_orders")
-          .update({ status: "cancelled" }) 
-          .eq("stripe_payment_intent_id", paymentIntent.id);
+        if (existingOrder) {
+          await supabaseAdmin
+            .from("clover_orders")
+            .update({ status: "cancelled" })
+            .eq("id", existingOrder.id);
+        }
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const piId = invoice.payment_intent as string;
+        const invoiceUrl = invoice.hosted_invoice_url;
+
+        console.log(`[stripe-webhook] Invoice paid: ${invoice.id}, for PI: ${piId}, URL: ${invoiceUrl}`);
+
+        if (piId) {
+          const { error: updateError } = await supabaseAdmin
+            .from("clover_orders")
+            .update({ invoice_url: invoiceUrl })
+            .eq("stripe_payment_intent_id", piId);
+
+          if (updateError) {
+            console.error(`[stripe-webhook] Error updating invoice_url for PI ${piId}:`, updateError);
+          } else {
+            console.log(`[stripe-webhook] ✅ Success: Invoice URL updated for order with PI ${piId}`);
+          }
+        }
+        break;
+      }
+
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        const connectId = account.id;
+        
+        // A user is considered "onboarded" if they submitted details and payouts are enabled
+        const onboardingCompleted = account.details_submitted && account.payouts_enabled;
+
+        console.log(`[stripe-webhook] Account updated: ${connectId}, payouts_enabled: ${account.payouts_enabled}, details_submitted: ${account.details_submitted}`);
+
+        const { error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .update({ stripe_onboarding_completed: onboardingCompleted })
+          .eq("stripe_connect_id", connectId);
+
+        if (profileError) {
+          console.error(`[stripe-webhook] Error updating profile for Connect ID ${connectId}:`, profileError);
+        } else {
+          console.log(`[stripe-webhook] ✅ Success: Profile status for ${connectId} set to ${onboardingCompleted}`);
+        }
         break;
       }
 

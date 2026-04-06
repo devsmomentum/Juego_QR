@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -93,12 +94,18 @@ class GameAccessService {
     
     // Additionally skip for desktop platforms (development)
     if (shouldCheckLocation) {
-      try {
-        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-          shouldCheckLocation = false;
+      if (kIsWeb) {
+        // En la web, generalmente omitimos la geocerca estricta de GPS nativo 
+        // a menos que sea un requisito crítico (pero Platform.is fallaría).
+        shouldCheckLocation = false;
+      } else {
+        try {
+          if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+            shouldCheckLocation = false;
+          }
+        } catch (e) {
+          // On unknown platform, keep the original decision
         }
-      } catch (e) {
-        // On web or unknown platform, keep the original decision
       }
     }
 

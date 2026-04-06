@@ -31,14 +31,28 @@ serve(async (req) => {
         throw new Error("Email and password are required");
       }
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
+      const { data, error: loginError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (loginError) {
+        const isUnconfirmed = loginError.message.toLowerCase().includes("confirm") || 
+                            loginError.message.toLowerCase().includes("verified");
+        
+        return new Response(
+          JSON.stringify({ 
+            error: loginError.message, 
+            unverified: isUnconfirmed 
+          }),
+          {
+            status: isUnconfirmed ? 403 : 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
 
-      // Check if email is confirmed (Login Guard - Server Side)
+      // Check if email is confirmed (Login Guard - Server Side, for when Confirm Email is OFF but we want to enforce it via metadata)
       if (
         data?.user?.email_confirmed_at === null ||
         data?.user?.email_confirmed_at === undefined
@@ -49,6 +63,7 @@ serve(async (req) => {
           JSON.stringify({
             error:
               "Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.",
+            unverified: true,
           }),
           {
             status: 403,
@@ -59,20 +74,46 @@ serve(async (req) => {
 
       // Check if user is banned
       if (data?.user?.id) {
-        const { data: profile, error: profileError } = await supabaseClient
-          .from("profiles")
-          .select("status")
-          .eq("id", data.user.id)
-          .single();
+        let profile = null;
+        try {
+          const { data: fetchedProfile, error: profileError } = await supabaseClient
+            .from("profiles")
+            .select("status")
+            .eq("id", data.user.id)
+            .single();
 
-        if (profileError) {
-          console.error("Error checking profile status:", profileError);
+          if (profileError) {
+            console.error("Error checking profile status:", profileError);
+          }
+          profile = fetchedProfile;
+        } catch (error: any) {
+          console.error("Critical error in edge function:", error);
         }
 
         if (profile && profile.status === "banned") {
           await supabaseClient.auth.signOut();
           throw new Error("Tu cuenta ha sido suspendida permanentemente.");
         }
+      }
+
+      // Enforce single session: remove all OTHER sessions
+      const userSupabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        {
+          global: {
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          },
+        }
+      );
+      
+      // We don't await/throw here to not break the login flow if something minor fails,
+      // but typically we can just await it since it's an internal call.
+      try {
+        await userSupabase.auth.signOut({ scope: "others" });
+        console.log(`Revoked other sessions for user ${data.user.id}`);
+      } catch (signOutError) {
+        console.error("Failed to revoke other sessions:", signOutError);
       }
 
       return new Response(JSON.stringify(data), {
@@ -128,34 +169,22 @@ serve(async (req) => {
         );
       }
 
-      // Sanitize inputs removing non-alphanumeric characters (dots, spaces, hyphens)
-      // except for the V/E prefix which is expected in the regex if not separated
+      // Sanitize inputs removing non-alphanumeric characters (dots, spaces, hyphens, parentheses)
+      const sanitize = (val: string) => val.replace(/[.\s\-()]/g, "").trim();
+      let sanitizedPhone = sanitize(phone || "");
+      const sanitizedCedula = sanitize(cedula || "").toUpperCase();
 
-      let sanitizedCedula = cedula;
-      if (cedula) {
-        // Remove dots, spaces, hyphens
-        sanitizedCedula = cedula.replace(/[\.\-\s]/g, "").toUpperCase();
-      }
-
-      let sanitizedPhone = phone;
-      if (phone) {
-        // Eliminar espacios, guiones y puntos pero conservar el "+" inicial
-        sanitizedPhone = phone.replace(/[\.\-\s]/g, "");
-      }
-
-      // Validar formato de cédula venezolana (V/E + 6-9 dígitos)
+      // VALIDATIONS
+      const cedulaRegex = /^[A-Z0-9]{5,20}$/i; // Más flexible para internacional
       if (sanitizedCedula) {
-        const cedulaRegex = /^[VE]\d{6,9}$/i;
         if (!cedulaRegex.test(sanitizedCedula)) {
           throw new Error(
-            "Formato de cédula inválido. Usa V12345678 o E12345678",
+            "Formato de identificación inválido. Debe tener entre 5 y 20 caracteres alfanuméricos.",
           );
         }
       }
 
       // Validar formato de teléfono E.164: +[código país][número local]
-      // Acepta formato internacional (+58412..., +1202..., +3491..., etc.)
-      // y también el formato venezolano legacy (04121234567)
       if (sanitizedPhone) {
         // E.164: "+" seguido de 7 a 15 dígitos
         const e164Regex = /^\+\d{7,15}$/;
@@ -174,13 +203,7 @@ serve(async (req) => {
         }
       }
 
-      // ── PRE-FLIGHT UNIQUENESS CHECKS ────────────────────────────────
-      // Use service role client to bypass RLS and reliably check for
-      // existing cedula/phone BEFORE calling signUp.
-      // This provides user-friendly error messages instead of the generic
-      // "Database error saving new user" that Supabase Auth returns when
-      // the trigger fails due to a constraint violation.
-      // ────────────────────────────────────────────────────────────────
+      // ── PRE-FLIGHT AUTH CHECK ──────────────────────────────────────
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
       const serviceClient = serviceKey
         ? createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey, {
@@ -188,13 +211,24 @@ serve(async (req) => {
           })
         : null;
 
+      // Note: We avoid serviceClient.auth.admin.getUserByEmail due to environment issues.
+      // We will check for existence in the profiles table first.
+      let existingProfile = null;
+      if (serviceClient) {
+        const { data } = await serviceClient
+          .from("profiles")
+          .select("id, email")
+          .eq("email", email)
+          .maybeSingle();
+        existingProfile = data;
+      }
+
+      // ── PRE-FLIGHT UNIQUENESS CHECKS ────────────────────────────────
       if (serviceClient) {
         if (sanitizedCedula) {
-          const { data: existingCedula } = await serviceClient
-            .from("profiles")
-            .select("id")
-            .eq("dni", sanitizedCedula)
-            .maybeSingle();
+          const query = serviceClient.from("profiles").select("id").eq("dni", sanitizedCedula);
+          if (existingProfile) query.neq("id", existingProfile.id);
+          const { data: existingCedula } = await query.maybeSingle();
 
           if (existingCedula) {
             return new Response(
@@ -205,11 +239,9 @@ serve(async (req) => {
         }
 
         if (sanitizedPhone) {
-          const { data: existingPhone } = await serviceClient
-            .from("profiles")
-            .select("id")
-            .eq("phone", sanitizedPhone)
-            .maybeSingle();
+          const query = serviceClient.from("profiles").select("id").eq("phone", sanitizedPhone);
+          if (existingProfile) query.neq("id", existingProfile.id);
+          const { data: existingPhone } = await query.maybeSingle();
 
           if (existingPhone) {
             return new Response(
@@ -218,6 +250,58 @@ serve(async (req) => {
             );
           }
         }
+      }
+
+      // ── HANDLE PENDING VERIFICATION (Smart Resend) ──────────────────
+      // If profile exists, we assume user exists in auth.users.
+      // We try to resend to check confirmation status and trigger email.
+      if (existingProfile) {
+        const { error: resendError } = await supabaseClient.auth.resend({
+          type: 'signup',
+          email: email,
+        });
+
+        if (resendError) {
+          const resMsg = resendError.message.toLowerCase();
+          // If already confirmed, block with error
+          if (resMsg.includes("already confirmed") || resMsg.includes("verified")) {
+            return new Response(
+              JSON.stringify({ error: "Este correo ya está registrado. Intenta iniciar sesión." }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+          // If other error (like rate limit), report it
+          return new Response(
+            JSON.stringify({ error: resendError.message }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        console.log(`User ${email} exists and is unconfirmed. Updating profile and resent email.`);
+        
+        if (serviceClient) {
+          // Update profile with new data
+          await serviceClient.from("profiles").update({
+            name,
+            dni: sanitizedCedula,
+            phone: sanitizedPhone,
+          }).eq("id", existingProfile.id);
+
+          // Update auth metadata (defensive check)
+          const adminClient = serviceClient?.auth?.admin;
+          if (adminClient && typeof adminClient.updateUserById === 'function') {
+            await adminClient.updateUserById(existingProfile.id, {
+              user_metadata: { name, cedula: sanitizedCedula, phone: sanitizedPhone }
+            }).catch(e => console.error("Auth metadata update failed (non-critical):", e));
+          }
+        }
+
+        return new Response(JSON.stringify({ 
+          message: "Se ha reenviado el correo de verificación. Por favor revisa tu bandeja de entrada.",
+          user: existingProfile
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // ── ATOMIC SIGN-UP ──────────────────────────────────────────────
@@ -821,9 +905,10 @@ serve(async (req) => {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Critical error in edge function:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -133,7 +133,7 @@ class LeaderboardCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        player.profession,
+                        player.localizedProfession,
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white70,

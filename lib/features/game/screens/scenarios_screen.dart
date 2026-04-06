@@ -10,13 +10,14 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:ui';
+import 'dart:async'; // Added back
 import '../models/scenario.dart';
 import '../providers/event_provider.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../social/screens/profile_screen.dart';
-import '../../wallet/providers/payment_method_provider.dart'; // NEW
-import '../../auth/providers/player_inventory_provider.dart'; // ADDED
+import '../../wallet/providers/payment_method_provider.dart';
+import '../../auth/providers/player_inventory_provider.dart';
 import '../../../shared/widgets/coin_image.dart';
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
@@ -30,24 +31,27 @@ import 'code_finder_screen.dart';
 import 'game_request_screen.dart';
 import '../../auth/screens/avatar_selection_screen.dart';
 import 'event_waiting_screen.dart';
-import '../models/event.dart'; // Import GameEvent model
+import '../models/event.dart';
+import '../widgets/safe_image.dart';
+import '../../mall/screens/mall_screen.dart';
+import '../../mall/screens/merchandise_store_screen.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../widgets/scenario_countdown.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/services/video_preload_service.dart';
 import 'winner_celebration_screen.dart';
-import 'spectator_mode_screen.dart'; // ADDED
-import '../services/game_access_service.dart'; // NEW
+import 'spectator_mode_screen.dart';
+import '../services/game_access_service.dart';
 import 'game_mode_selector_screen.dart';
 import '../../../shared/widgets/loading_overlay.dart';
-import '../mappers/scenario_mapper.dart'; // NEW
+import '../mappers/scenario_mapper.dart';
 import '../../../core/enums/user_role.dart';
-import '../../social/screens/profile_screen.dart'; // For navigation
-import '../../social/screens/wallet_screen.dart'; // For wallet navigation
-import 'package:shared_preferences/shared_preferences.dart'; // For prize persistence
+import '../../social/screens/wallet_screen.dart';
 import '../../../shared/widgets/loading_indicator.dart';
-import '../../../shared/utils/global_keys.dart'; // To access routeObserver
+import '../../../shared/utils/global_keys.dart';
+import '../services/betting_service.dart';
+import '../../../core/services/app_config_service.dart';
 
 class ScenariosScreen extends StatefulWidget {
   final bool isOnline;
@@ -85,6 +89,14 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
   // Cache for ban status to show banned button
   Map<String, String?> _banStatusMap = {}; // NEW
+
+  late BettingService _bettingService;
+  final Map<String, int> _bettingPotMap = {};
+  final Map<String, int> _bettingCountMap = {};
+  final Set<String> _bettingLoadingEvents = {};
+
+  // Merchandise store (Tienda) visibility flag
+  bool _isMerchandiseStoreEnabled = false;
 
   // The default user role for scenario selection
   UserRole get role => UserRole.player;
@@ -487,10 +499,11 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     try {
       final baseUrl =
           dotenv.env['SUPABASE_URL']?.replaceAll(RegExp(r'/$'), '') ?? '';
+      final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
       // Usamos el servicio centralizado que maneja el enmascaramiento (Blob URLs)
       final termsService = getTermsService();
-      await termsService.launchTerms(baseUrl);
+      await termsService.launchTerms(baseUrl, anonKey);
     } catch (e) {
       debugPrint('Error al abrir términos: $e');
     }
@@ -558,6 +571,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     // Online mode: show pending (lobby) events by default
     if (widget.isOnline) _selectedFilter = 'pending';
 
+    _bettingService = BettingService(Supabase.instance.client);
+
     _pageController = PageController(viewportFraction: 0.85);
 
     // 1. Levitation (Hover) Animation
@@ -603,6 +618,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
       _cleanupGameState();
 
       _refreshData();
+      // Check merchandise store visibility
+      _loadMerchandiseStoreFlag();
       // Empezar a precargar el video del primer avatar para que sea instantáneo
       VideoPreloadService()
           .preloadVideo('assets/escenarios.avatar/explorer_m_scene.mp4');
@@ -613,7 +630,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Subscribe to route observer to detect when returning to this screen
-    routeObserver.subscribe(this, ModalRoute.of(context) as ModalRoute<void>);
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route as ModalRoute<void>);
+    }
 
     // Precargar imágenes de fondo para transiciones suaves (con límites de memoria)
     precacheImage(
@@ -661,76 +681,127 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     print("DEBUG: _loadEvents start");
     setState(() => _isLoading = true);
 
-    final eventProvider = Provider.of<EventProvider>(context, listen: false);
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final requestProvider =
-        Provider.of<GameRequestProvider>(context, listen: false);
+    try {
+      final eventProvider = Provider.of<EventProvider>(context, listen: false);
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider =
+          Provider.of<GameRequestProvider>(context, listen: false);
 
-    await eventProvider.fetchEvents();
+      await eventProvider.fetchEvents();
 
-    // Load participation status and ban status for each event
-    final userId = playerProvider.currentPlayer?.userId;
-    if (userId != null) {
-      final Map<String, bool> statusMap = {};
-      final Map<String, String?> banMap = {}; // NEW
-      final Map<String, String> roleMap = {}; // NEW - Role tracking
+      // Load participation status and ban status for each event
+      final userId = playerProvider.currentPlayer?.userId;
+      if (userId != null) {
+        final Map<String, bool> statusMap = {};
+        final Map<String, String?> banMap = {}; // NEW
+        final Map<String, String> roleMap = {}; // NEW - Role tracking
 
-      // Fetch all participations in a single query to prevent N+1 bottleneck
-      try {
-        final allParticipations =
-            await requestProvider.getAllUserParticipations(userId);
+        // Fetch all participations in a single query to prevent N+1 bottleneck
+        try {
+          final allParticipations =
+              await requestProvider.getAllUserParticipations(userId);
 
-        // Pre-fill defaults
-        for (final event in eventProvider.events) {
-          statusMap[event.id] = false;
-          banMap[event.id] = null;
-          roleMap[event.id] = 'none';
-        }
+          // Pre-fill defaults
+          for (final event in eventProvider.events) {
+            statusMap[event.id] = false;
+            banMap[event.id] = null;
+            roleMap[event.id] = 'none';
+          }
 
-        // Apply actual data
-        for (final participation in allParticipations) {
-          final eventId = participation['event_id'] as String;
-          final status = participation['status'] as String?;
+          // Apply actual data
+          for (final participation in allParticipations) {
+            final eventId = participation['event_id'] as String;
+            final status = participation['status'] as String?;
 
-          statusMap[eventId] = true;
-          banMap[eventId] = status;
+            statusMap[eventId] = true;
+            banMap[eventId] = status;
 
-          if (status == 'spectator') {
-            roleMap[eventId] = 'spectator';
-          } else {
-            roleMap[eventId] = 'player';
+            if (status == 'spectator') {
+              roleMap[eventId] = 'spectator';
+            } else {
+              roleMap[eventId] = 'player';
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading all participations: $e');
+          for (final event in eventProvider.events) {
+            statusMap[event.id] = false;
+            banMap[event.id] = null;
+            roleMap[event.id] = 'none';
           }
         }
-      } catch (e) {
-        debugPrint('Error loading all participations: $e');
-        for (final event in eventProvider.events) {
-          statusMap[event.id] = false;
-          banMap[event.id] = null;
-          roleMap[event.id] = 'none';
+        if (mounted) {
+          setState(() {
+            _participantStatusMap = statusMap;
+            _banStatusMap = banMap; // NEW
+            _eventRoleMap = roleMap; // NEW
+          });
         }
       }
+    } catch (e) {
+      debugPrint('Error in _loadEvents: $e');
+    } finally {
+      print("DEBUG: _loadEvents end. Mounted: $mounted");
       if (mounted) {
         setState(() {
-          _participantStatusMap = statusMap;
-          _banStatusMap = banMap; // NEW
-          _eventRoleMap = roleMap; // NEW
+          _isLoading = false;
         });
+
+        // Show tutorial if first time viewing scenarios
+        _showScenariosTutorial();
       }
-    }
-
-    print("DEBUG: _loadEvents end. Mounted: $mounted");
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      // Show tutorial if first time viewing scenarios
-      _showScenariosTutorial();
     }
   }
 
   Future<void> _refreshData() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    // ⚡ CRÍTICO: Recargar perfil para ver compras recientes (vidas/monedas)
+    await playerProvider.reloadProfile();
     await _loadEvents();
+  }
+
+  Future<void> _loadMerchandiseStoreFlag() async {
+    final configService = AppConfigService(supabaseClient: Supabase.instance.client);
+    final enabled = await configService.isMerchandiseStoreEnabled();
+    if (mounted) {
+      setState(() => _isMerchandiseStoreEnabled = enabled);
+    }
+  }
+
+  String _formatCompactAmount(int amount) {
+    if (amount >= 1000000) {
+      final value = amount / 1000000.0;
+      final compact = value.toStringAsFixed(1);
+      return compact.endsWith('.0')
+          ? '${compact.substring(0, compact.length - 2)}M'
+          : '${compact}M';
+    }
+    if (amount >= 1000) {
+      final value = amount / 1000.0;
+      final compact = value.toStringAsFixed(1);
+      return compact.endsWith('.0')
+          ? '${compact.substring(0, compact.length - 2)}K'
+          : '${compact}K';
+    }
+    return amount.toString();
+  }
+
+  Future<void> _ensureBettingStats(String eventId) async {
+    if (_bettingPotMap.containsKey(eventId) ||
+        _bettingLoadingEvents.contains(eventId)) {
+      return;
+    }
+    _bettingLoadingEvents.add(eventId);
+    try {
+      final stats = await _bettingService.getEventBettingStats(eventId);
+      if (!mounted) return;
+      setState(() {
+        _bettingPotMap[eventId] = stats['totalPot'] ?? 0;
+        _bettingCountMap[eventId] = stats['totalBets'] ?? 0;
+      });
+    } finally {
+      _bettingLoadingEvents.remove(eventId);
+    }
   }
 
   void _showScenariosTutorial() async {
@@ -776,7 +847,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
   void didPopNext() {
     // This is called when the top route has been popped off, and this route shows up.
     debugPrint("🔄 ScenariosScreen: didPopNext - Refreshing data...");
-    _loadEvents();
+    _refreshData();
   }
 
   Future<void> _onScenarioSelected(Scenario scenario) async {
@@ -1782,7 +1853,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                   _buildNavItem(1, Icons.explore_outlined, 'Escenarios'),
                   _buildNavItem(
                       2, Icons.account_balance_wallet_outlined, 'Wallet'),
-                  _buildNavItem(3, Icons.person_outline, 'Perfil'),
+                  if (_isMerchandiseStoreEnabled)
+                    _buildNavItem(3, Icons.storefront_outlined, 'Tienda'),
+                  _buildNavItem(4, Icons.person_outline, 'Perfil'),
                 ],
               ),
             ),
@@ -2069,7 +2142,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               ),
               body: (playerProvider.currentPlayer != null &&
                       !playerProvider.currentPlayer!.emailVerified &&
-                      _navIndex != 3)
+                      _navIndex != 4)
                   ? _buildVerificationBlock()
                   : IndexedStack(
                       index: _navIndex,
@@ -2079,6 +2152,10 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                         // WalletScreen and ProfileScreen are separate widgets,
                         // their RefreshIndicators should be implemented within their own files.
                         WalletScreen(hideScaffold: true),
+                        if (_isMerchandiseStoreEnabled)
+                          const MerchandiseStoreScreen()
+                        else
+                          const SizedBox.shrink(),
                         const ProfileScreen(hideScaffold: true),
                       ],
                     ),
@@ -2708,6 +2785,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                           itemCount: scenarios.length,
                                           itemBuilder: (context, index) {
                                             final scenario = scenarios[index];
+                                              _ensureBettingStats(scenario.id);
                                             return AnimatedBuilder(
                                               animation: _pageController,
                                               builder: (context, child) {
@@ -2756,9 +2834,11 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                     Positioned.fill(
                                                       child: ClipRRect(
                                                         borderRadius: BorderRadius.circular(24),
-                                                        child: scenario.imageUrl.isNotEmpty
-                                                            ? Image.network(scenario.imageUrl, fit: BoxFit.cover)
-                                                            : Container(color: Colors.black54),
+                                                        child: SafeNetworkImage(
+                                                          url: scenario.imageUrl,
+                                                          height: double.infinity,
+                                                          fit: BoxFit.cover,
+                                                        ),
                                                       ),
                                                     ),
                                                     Positioned.fill(
@@ -2776,67 +2856,70 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                     // Status Badges
                                                     Positioned(
                                                       top: 20,
-                                                      right: 20,
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                                        children: [
-                                                          if (scenario.status == 'active')
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                              decoration: BoxDecoration(
-                                                                color: AppTheme.successGreen.withOpacity(0.85),
-                                                                borderRadius: BorderRadius.circular(20),
-                                                                border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                                                              ),
-                                                              child: const Row(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  Icon(Icons.play_arrow, color: Colors.white, size: 16),
-                                                                  SizedBox(width: 6),
-                                                                  Text(
-                                                                    'EN CURSO',
-                                                                    style: TextStyle(
-                                                                      color: Colors.white,
-                                                                      fontWeight: FontWeight.bold,
-                                                                      fontSize: 12,
-                                                                      letterSpacing: 0.5,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            )
-                                                              else if (scenario.date != null && !scenario.isCompleted && scenario.date!.isBefore(DateTime.now()))
-                                                                // Date passed but not active yet = waiting for admin
-                                                                Container(
-                                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors.orangeAccent.withOpacity(0.85),
-                                                                    borderRadius: BorderRadius.circular(20),
-                                                                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                                                                  ),
-                                                                  child: const Row(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      Icon(Icons.admin_panel_settings, color: Colors.white, size: 16),
-                                                                      SizedBox(width: 6),
-                                                                      Text(
-                                                                        'ESPERANDO ADMIN',
-                                                                        style: TextStyle(
-                                                                          color: Colors.white,
-                                                                          fontWeight: FontWeight.bold,
-                                                                          fontSize: 12,
-                                                                          letterSpacing: 0.5,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                )
-                                                              else if (scenario.date != null && !scenario.isCompleted)
-                                                                ScenarioCountdown(
-                                                                  targetDate: scenario.date!,
-                                                                  eventStatus: scenario.status,
+                                                      left: 0,
+                                                      right: 0,
+                                                      child: Center(
+                                                        child: Column(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            if (scenario.status == 'active')
+                                                              Container(
+                                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                                decoration: BoxDecoration(
+                                                                  color: AppTheme.successGreen.withOpacity(0.85),
+                                                                  borderRadius: BorderRadius.circular(20),
+                                                                  border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
                                                                 ),
-                                                            ],
+                                                                child: const Row(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: [
+                                                                    Icon(Icons.play_arrow, color: Colors.white, size: 16),
+                                                                    SizedBox(width: 6),
+                                                                    Text(
+                                                                      'EN CURSO',
+                                                                      style: TextStyle(
+                                                                        color: Colors.white,
+                                                                        fontWeight: FontWeight.bold,
+                                                                        fontSize: 12,
+                                                                        letterSpacing: 0.5,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              )
+                                                                else if (scenario.date != null && !scenario.isCompleted && scenario.date!.isBefore(DateTime.now()))
+                                                                  // Date passed but not active yet = waiting for admin
+                                                                  Container(
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors.orangeAccent.withOpacity(0.85),
+                                                                      borderRadius: BorderRadius.circular(20),
+                                                                      border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                                                                    ),
+                                                                    child: const Row(
+                                                                      mainAxisSize: MainAxisSize.min,
+                                                                      children: [
+                                                                        Icon(Icons.admin_panel_settings, color: Colors.white, size: 16),
+                                                                        SizedBox(width: 6),
+                                                                        Text(
+                                                                          'ESPERANDO ADMIN',
+                                                                          style: TextStyle(
+                                                                            color: Colors.white,
+                                                                            fontWeight: FontWeight.bold,
+                                                                            fontSize: 12,
+                                                                            letterSpacing: 0.5,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  )
+                                                                else if (scenario.date != null && !scenario.isCompleted)
+                                                                  ScenarioCountdown(
+                                                                    targetDate: scenario.date!,
+                                                                    eventStatus: scenario.status,
+                                                                  ),
+                                                              ],
+                                                            ),
                                                           ),
                                                         ),
 
@@ -2898,9 +2981,9 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                           ],
                                                                         ),
                                                                       ),
-                                                                      if (!scenario.isCompleted && scenario.entryFee > 0)
+                                                                      if (scenario.pot > 0)
                                                                         const SizedBox(width: 8),
-                                                                      if (!scenario.isCompleted && scenario.entryFee > 0)
+                                                                      if (scenario.pot > 0)
                                                                         Container(
                                                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                                           decoration: BoxDecoration(
@@ -2929,9 +3012,42 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                                                 mainAxisSize: MainAxisSize.min,
                                                                                 children: [
                                                                                   Text(
-                                                                                    "BOTÍN: ${(scenario.pot * 0.70).toStringAsFixed(0)} ",
+                                                                                    "BOTÍN: ${_formatCompactAmount((scenario.pot * 0.70).round())} ",
                                                                                     style: const TextStyle(
                                                                                       color: AppTheme.accentGold,
+                                                                                      fontWeight: FontWeight.bold,
+                                                                                      fontSize: 10,
+                                                                                      letterSpacing: 0.5,
+                                                                                    ),
+                                                                                  ),
+                                                                                  const CoinImage(size: 10),
+                                                                                ],
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                        ),
+                                                                      if ((_bettingCountMap[scenario.id] ?? 0) > 0)
+                                                                        const SizedBox(width: 8),
+                                                                      if ((_bettingCountMap[scenario.id] ?? 0) > 0)
+                                                                        Container(
+                                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                                          decoration: BoxDecoration(
+                                                                            color: Colors.black.withOpacity(0.6),
+                                                                            borderRadius: BorderRadius.circular(20),
+                                                                            border: Border.all(color: AppTheme.dBrandMain.withOpacity(0.5), width: 1),
+                                                                          ),
+                                                                          child: Row(
+                                                                            mainAxisSize: MainAxisSize.min,
+                                                                            children: [
+                                                                              const Icon(Icons.casino, color: AppTheme.dBrandMain, size: 14),
+                                                                              const SizedBox(width: 4),
+                                                                              Row(
+                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                children: [
+                                                                                  Text(
+                                                                                    "APUESTAS: ${_formatCompactAmount(_bettingPotMap[scenario.id] ?? 0)} ",
+                                                                                    style: const TextStyle(
+                                                                                      color: AppTheme.dBrandMain,
                                                                                       fontWeight: FontWeight.bold,
                                                                                       fontSize: 10,
                                                                                       letterSpacing: 0.5,

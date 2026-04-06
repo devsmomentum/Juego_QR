@@ -101,7 +101,7 @@ class _VirusTapMinigameState extends State<VirusTapMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -130,7 +130,7 @@ class _VirusTapMinigameState extends State<VirusTapMinigame> {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final connectivityByProvider =
           Provider.of<ConnectivityProvider>(context, listen: false);
-      if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+      if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
         return; // Skip tick
       }
 
@@ -146,7 +146,7 @@ class _VirusTapMinigameState extends State<VirusTapMinigame> {
       if (mounted && !_isGameOver) {
         // [FIX] Pause spawning if game is frozen (sabotage)
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
-        if (!gameProvider.isFrozen) {
+        if (!gameProvider.isPaused) {
           _spawnItem();
         }
         _rescheduleSpawn();

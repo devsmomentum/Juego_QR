@@ -37,8 +37,7 @@ class VersionCheckService {
 
       final String minVersion =
           data['min_supported_version'] as String? ?? '0.0.0';
-      final bool maintenanceMode =
-          data['maintenance_mode'] as bool? ?? false;
+      final bool maintenanceMode = data['maintenance_mode'] as bool? ?? false;
 
       // 3. Selección de URL según plataforma:
       //    iOS              → ios_store_url  (App Store)
@@ -50,20 +49,15 @@ class VersionCheckService {
         final iosUrl = data['ios_store_url'] as String?;
         downloadUrl = (iosUrl != null && iosUrl.isNotEmpty) ? iosUrl : null;
       } else if (defaultTargetPlatform == TargetPlatform.android) {
-        final storeUrl = data['android_store_url'] as String?;
-        final apkUrl   = data['apk_download_url']  as String?;
-        // Si ya está en Play Store usa esa URL; si no, descarga directa
-        downloadUrl = (storeUrl != null && storeUrl.isNotEmpty)
-            ? storeUrl
-            : ((apkUrl != null && apkUrl.isNotEmpty) ? apkUrl : null);
+        final apkUrl = data['apk_download_url'] as String?;
+        downloadUrl = (apkUrl != null && apkUrl.isNotEmpty) ? apkUrl : null;
       }
       // En web no forzamos descarga
 
       // 4. Compare versions
       final bool updateRequired = _isUpdateRequired(localVersion, minVersion);
 
-      debugPrint(
-          'VersionCheck: minVersion=$minVersion, local=$localVersion, '
+      debugPrint('VersionCheck: minVersion=$minVersion, local=$localVersion, '
           'updateRequired=$updateRequired, maintenance=$maintenanceMode');
 
       return VersionStatus(
@@ -100,7 +94,7 @@ class VersionCheckService {
       int l = i < localParts.length ? localParts[i] : 0;
       int m = i < minParts.length ? minParts[i] : 0;
 
-      if (l < m) return true;  // versión local menor que la mínima
+      if (l < m) return true; // versión local menor que la mínima
       if (l > m) return false; // versión local mayor
     }
 

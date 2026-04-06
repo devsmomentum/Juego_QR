@@ -6,9 +6,6 @@ import '../../wallet/models/clover_plan.dart';
 import '../../wallet/services/clover_plan_service.dart';
 import '../../../shared/widgets/coin_image.dart';
 
-/// Admin screen for managing clover purchase plans.
-///
-/// Allows editing price_usd, clovers_quantity, and is_active status.
 class CloverPlansManagementScreen extends StatefulWidget {
   const CloverPlansManagementScreen({super.key});
 
@@ -38,7 +35,6 @@ class _CloverPlansManagementScreenState
     });
 
     try {
-      // Use fetchAllPlans for admin (includes inactive)
       final plans = await _planService.fetchAllPlans();
       setState(() {
         _plans = plans;
@@ -94,20 +90,31 @@ class _CloverPlansManagementScreenState
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
+          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
           return AlertDialog(
-            backgroundColor: AppTheme.cardBg,
+            backgroundColor: Theme.of(context).cardTheme.color,
+            surfaceTintColor: Colors.transparent,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: AppTheme.accentGold.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: AppTheme.lGoldAction.withOpacity(0.1)),
             ),
             title: Row(
               children: [
-                const CoinImage(size: 24),
-                const SizedBox(width: 12),
-                Text(
-                  'Editar ${plan.name}',
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.lGoldAction.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const CoinImage(size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'Editar ${plan.name}',
+                    style: TextStyle(
+                        color: textColor, fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                 ),
               ],
             ),
@@ -116,70 +123,71 @@ class _CloverPlansManagementScreenState
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Price USD
-                  const Text('Precio (USD)',
-                      style: TextStyle(color: Colors.white70)),
+                  Text('Precio (USD)',
+                      style: TextStyle(color: textColor?.withOpacity(0.7))),
                   const SizedBox(height: 8),
                   TextField(
                     controller: priceController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      prefixText: '\$ ',
-                      prefixStyle: const TextStyle(color: AppTheme.accentGold),
+                      prefixIcon: const Icon(Icons.attach_money, color: AppTheme.lGoldAction, size: 20),
+                      filled: true,
+                      fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                       enabledBorder: OutlineInputBorder(
                         borderSide:
-                            BorderSide(color: Colors.white.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(8),
+                            BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderSide:
-                            const BorderSide(color: AppTheme.accentGold),
-                        borderRadius: BorderRadius.circular(8),
+                             const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Clovers Quantity
-                  const Text('Cantidad de Tréboles',
-                      style: TextStyle(color: Colors.white70)),
+                  Text('Cantidad de Tréboles',
+                      style: TextStyle(color: textColor?.withOpacity(0.7))),
                   const SizedBox(height: 8),
                   TextField(
                     controller: cloversController,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      suffix: const CoinImage(size: 16),
+                      suffixIcon: const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CoinImage(size: 20),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
                       enabledBorder: OutlineInputBorder(
                         borderSide:
-                            BorderSide(color: Colors.white.withOpacity(0.3)),
-                        borderRadius: BorderRadius.circular(8),
+                            BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderSide:
-                            const BorderSide(color: AppTheme.accentGold),
-                        borderRadius: BorderRadius.circular(8),
+                             const BorderSide(color: AppTheme.lGoldAction, width: 2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Active Toggle
                   SwitchListTile(
-                    title: const Text('Plan Activo',
-                        style: TextStyle(color: Colors.white)),
+                    title: Text('Plan Activo',
+                        style: TextStyle(color: textColor)),
                     subtitle: Text(
                       isActive
                           ? 'Visible para usuarios'
                           : 'Oculto para usuarios',
                       style:
-                          const TextStyle(color: Colors.white60, fontSize: 12),
+                           TextStyle(color: textColor?.withOpacity(0.6), fontSize: 12),
                     ),
                     value: isActive,
-                    activeColor: AppTheme.accentGold,
+                    activeColor: Theme.of(context).primaryColor,
                     onChanged: (value) => setState(() => isActive = value),
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -189,8 +197,8 @@ class _CloverPlansManagementScreenState
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar',
-                    style: TextStyle(color: Colors.white60)),
+                child: Text('Cancelar',
+                    style: TextStyle(color: textColor?.withOpacity(0.6))),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -220,8 +228,10 @@ class _CloverPlansManagementScreenState
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentGold,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppTheme.lGoldAction,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
                 child: const Text('Guardar'),
               ),
@@ -234,175 +244,193 @@ class _CloverPlansManagementScreenState
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Scaffold(
-      backgroundColor: AppTheme.darkBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Gestión de Planes',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: textColor, fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back_rounded, color: AppTheme.lGoldAction),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.lGoldAction),
             onPressed: _loadPlans,
             tooltip: 'Recargar',
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.accentGold))
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+      body: Container(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: _isLoading
+            ? Center(
+                child: CircularProgressIndicator(color: primaryColor))
+            : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(_error!,
+                            style: const TextStyle(color: Colors.redAccent)),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadPlans,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
-                      Text(_error!,
-                          style: const TextStyle(color: Colors.redAccent)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadPlans,
-                        child: const Text('Reintentar'),
+                      Text(
+                        'Planes de Tréboles',
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      ..._plans.map((plan) => _buildPlanCard(plan)),
                     ],
                   ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    // Section Title
-                    const Text(
-                      'Planes de Tréboles',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Plans List
-                    ..._plans.map((plan) => _buildPlanCard(plan)),
-                  ],
-                ),
+      ),
     );
   }
 
   Widget _buildPlanCard(CloverPlan plan) {
+    final primaryColor = Theme.of(context).primaryColor;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: plan.isActive
-              ? AppTheme.accentGold.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.3),
+              ? AppTheme.lGoldAction.withOpacity(0.15)
+              : Theme.of(context).dividerColor.withOpacity(0.1),
         ),
-      ),
-      child: Row(
-        children: [
-          // Icon
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: plan.isActive
-                  ? AppTheme.accentGold.withOpacity(0.2)
-                  : Colors.grey.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: const CoinImage(size: 28),
-            ),
-          ),
-          const SizedBox(width: 16),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    Text(
-                      plan.name,
-                      style: TextStyle(
-                        color: plan.isActive ? Colors.white : Colors.grey,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (!plan.isActive)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'INACTIVO',
-                          style: TextStyle(color: Colors.grey, fontSize: 10),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${plan.cloversQuantity} Tréboles',
-                  style: TextStyle(
-                    color: plan.isActive ? Colors.white70 : Colors.grey,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Price Info
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    plan.formattedPrice,
-                    style: TextStyle(
-                      color: plan.isActive ? AppTheme.accentGold : Colors.grey,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const Text(
-                  'USD',
-                  style: TextStyle(color: Colors.white54, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Edit Button
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white54),
-            onPressed: () => _showEditDialog(plan),
-            tooltip: 'Editar',
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, cardConstraints) {
+          final bool isNarrow = cardConstraints.maxWidth < 360;
+          return Row(
+            children: [
+              Container(
+                width: isNarrow ? 48 : 60,
+                height: isNarrow ? 48 : 60,
+                decoration: BoxDecoration(
+                  color: plan.isActive
+                      ? AppTheme.lGoldAction.withOpacity(0.12)
+                      : Theme.of(context).dividerColor.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: CoinImage(size: isNarrow ? 22 : 28),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          plan.name,
+                          style: TextStyle(
+                            color: plan.isActive ? textColor : Colors.grey,
+                            fontSize: isNarrow ? 15 : 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (!plan.isActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).dividerColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'INACTIVO',
+                              style: TextStyle(color: textColor?.withOpacity(0.4), fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${plan.cloversQuantity} Tréboles',
+                      style: TextStyle(
+                        color: plan.isActive ? textColor?.withOpacity(0.5) : Colors.grey.withOpacity(0.5),
+                        fontSize: isNarrow ? 12 : 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        plan.formattedPrice,
+                        style: TextStyle(
+                          color:
+                              plan.isActive ? AppTheme.lGoldAction : Colors.grey,
+                          fontSize: isNarrow ? 16 : 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'USD',
+                      style: TextStyle(
+                          color: plan.isActive ? AppTheme.lGoldAction.withOpacity(0.5) : Colors.grey, 
+                          fontSize: isNarrow ? 8 : 10,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(Icons.edit_rounded,
+                    color: AppTheme.lGoldAction.withOpacity(0.7), size: isNarrow ? 18 : 24),
+                onPressed: () => _showEditDialog(plan),
+                tooltip: 'Editar',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
