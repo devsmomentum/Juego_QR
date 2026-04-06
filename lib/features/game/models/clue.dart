@@ -244,6 +244,10 @@ abstract class Clue {
   final String? riddleAnswer;
   final PuzzleType puzzleType;
 
+  /// Effective puzzle type (used to be assignedPuzzleType ?? puzzleType)
+  /// Now that Station Mode is removed, it simply returns puzzleType.
+  PuzzleType get effectivePuzzleType => puzzleType;
+
   Clue({
     required this.id,
     required this.title,
@@ -263,6 +267,20 @@ abstract class Clue {
     this.riddleAnswer,
     this.puzzleType = PuzzleType.slidingPuzzle,
   });
+
+  // --- MOCK FACTORY FOR PRACTICE ---
+  factory Clue.mock(PuzzleType type) {
+    return PhysicalClue(
+      id: 'practice_${type.name}',
+      title: 'ZONA DE ENTRENAMIENTO',
+      hint: 'Practica este minijuego para dominar el evento.',
+      type: ClueType.minigame,
+      xpReward: 0,
+      isCompleted: false,
+      isLocked: false,
+      puzzleType: type,
+    );
+  }
 
   /// Abstract getters
   String get typeName;

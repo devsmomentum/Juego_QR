@@ -198,19 +198,17 @@ class ClueNavigatorService {
     
     // 3. Navigate to the actual content (Puzzle/Interaction)
     if (context.mounted) {
-      // If it has a puzzle type that is NOT just a basic scan, show it
-      final isMinigame = clue.type == ClueType.minigame ||
-          (clue.puzzleType != PuzzleType.slidingPuzzle && clue.puzzleType != PuzzleType.ticTacToe) ||
-          (clue.riddleAnswer != null && clue.riddleAnswer!.isNotEmpty);
-      
-      // Actually, any clue can have a puzzle. Let's check based on type and data.
-      if (clue is OnlineClue || (clue is PhysicalClue && clue.riddleAnswer != null && clue.riddleAnswer!.isNotEmpty)) {
+      // OR it's a minigame type, OR it has a riddle, navigate to PuzzleScreen.
+      final isMinigameType = clue.type == ClueType.minigame;
+      final hasRiddle = clue.riddleAnswer != null && clue.riddleAnswer!.isNotEmpty;
+
+      if (isMinigameType || hasRiddle) {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => PuzzleScreen(clue: clue)),
         );
       } else if (clue is PhysicalClue) {
-        // For physical clues without explicit minigames (pure QR scan/NPC)
+        // For physical clues without any minigame/puzzle (pure QR scan/NPC)
         _handlePhysicalClueAfterQR(context, clue);
       }
     }

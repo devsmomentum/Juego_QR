@@ -45,6 +45,7 @@ import 'spectator_mode_screen.dart';
 import '../services/game_access_service.dart';
 import 'game_mode_selector_screen.dart';
 import '../../../shared/widgets/loading_overlay.dart';
+import 'training_center_screen.dart';
 import '../mappers/scenario_mapper.dart';
 import '../../../core/enums/user_role.dart';
 import '../../social/screens/wallet_screen.dart';
@@ -569,7 +570,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
 
     _bettingService = BettingService(Supabase.instance.client);
 
-    _pageController = PageController(viewportFraction: 0.85);
+    _pageController = PageController(viewportFraction: 0.78);
 
     // 1. Levitation (Hover) Animation
     _hoverController = AnimationController(
@@ -2283,6 +2284,21 @@ class _ScenariosScreenState extends State<ScenariosScreen>
           ),
           const SizedBox(height: 16),
           _buildModeCard(
+            title: "MODO ENTRENAMIENTO",
+            description: "Practica los minijuegos sin riesgo.",
+            icon: Icons.model_training,
+            color: AppTheme.successGreen,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TrainingCenterScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildModeCard(
             title: "MODO LOCAL",
             description: "Juega en casa con amigos. Próximamente.",
             icon: Icons.home_outlined,
@@ -2421,6 +2437,173 @@ class _ScenariosScreenState extends State<ScenariosScreen>
             child: const Text('VOLVER A ESCENARIOS'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTrainingSwipeCard(BoxConstraints constraints) {
+    const isDarkMode = true;
+    final Color currentAction = AppTheme.successGreen;
+
+    return AnimatedBuilder(
+      animation: _pageController,
+      builder: (context, child) {
+        double value = 1.0;
+        if (_pageController.position.haveDimensions) {
+          value = (_pageController.page! - 0).abs();
+          value = (1 - (value * 0.3)).clamp(0.0, 1.0);
+        } else {
+          value = _currentPage == 0 ? 1.0 : 0.7;
+        }
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: Curves.easeOut.transform(value) * constraints.maxHeight * 0.88,
+            width: Curves.easeOut.transform(value) * 300,
+            child: child,
+          ),
+        );
+      },
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TrainingCenterScreen()),
+          );
+        },
+        child: Stack(
+          children: [
+            // Background Image (Using a clear group photo for training context)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  'assets/images/mision_iniciacion.jpg',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.85),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            
+            // Status Badge
+            Positioned(
+              top: 20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.successGreen.withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      )
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.model_training, color: Colors.white, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'MODO ENTRENAMIENTO',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Text Content
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      "CENTRO DE PRÁCTICA",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22.0,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'Orbitron',
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Domina los minijuegos antes de ir por el tesoro real. ¡Sin límites!",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Main Action Button
+                    SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const TrainingCenterScreen()),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.successGreen,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          elevation: 8,
+                          shadowColor: AppTheme.successGreen.withOpacity(0.5),
+                        ),
+                        child: const Text(
+                          "ENTRENAR AHORA",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2758,9 +2941,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                           controller: _pageController,
                                           onPageChanged: (index) => setState(
                                               () => _currentPage = index),
-                                          itemCount: scenarios.length,
+                                          itemCount: scenarios.length + 1,
                                           itemBuilder: (context, index) {
-                                            final scenario = scenarios[index];
+                                            if (index == 0) {
+                                              return _buildTrainingSwipeCard(constraints);
+                                            }
+                                            final scenarioIndex = index - 1;
+                                            final scenario = scenarios[scenarioIndex];
                                               _ensureBettingStats(scenario.id);
                                             return AnimatedBuilder(
                                               animation: _pageController,
@@ -2781,8 +2968,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                                 return Align(
                                                   alignment: Alignment.bottomCenter,
                                                   child: SizedBox(
-                                                    height: Curves.easeOut.transform(value) * constraints.maxHeight,
-                                                    width: Curves.easeOut.transform(value) * 360,
+                                                    height: Curves.easeOut.transform(value) * constraints.maxHeight * 0.88,
+                                                    width: Curves.easeOut.transform(value) * 300,
                                                     child: child,
                                                   ),
                                                 );
@@ -3238,7 +3425,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                             bottom: 5, top: 10), // Lowered dots
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(scenarios.length, (index) {
+                          children: List.generate(scenarios.length + 1, (index) {
                             return AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
                               margin: const EdgeInsets.symmetric(horizontal: 4),

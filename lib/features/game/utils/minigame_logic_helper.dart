@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
+import 'practice_mode_resolver.dart';
 
 class MinigameLogicHelper {
   /// Ejecuta la lógica centralizada de pérdida de vida:
@@ -9,13 +10,21 @@ class MinigameLogicHelper {
   /// 2. Actualiza forzosamente el estado local (PlayerProvider)
   /// 3. Inicia la sincronización en background
   /// Retorna la cantidad definitiva de vidas restantes.
-  static Future<int> executeLoseLife(BuildContext context) async {
+  static Future<int> executeLoseLife(BuildContext context, {bool isPractice = false}) async {
     // 1. Capturar providers INMEDIATAMENTE antes de cualquier async
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final messenger = ScaffoldMessenger.maybeOf(context);
 
     if (playerProvider.currentPlayer == null) return 0;
+    
+    // Check if we are in practice mode either by explicit flag OR InheritedWidget
+    final bool effectiveIsPractice = isPractice || PracticeModeResolver.of(context);
+    
+    if (effectiveIsPractice) {
+      debugPrint('[Practice] 🛡️ Life loss simulated (LogicHelper). No real life was taken.');
+      return playerProvider.currentPlayer!.lives;
+    }
+
     final userId = playerProvider.currentPlayer!.userId;
 
     // 2. Backend + Source of Truth
@@ -28,9 +37,6 @@ class MinigameLogicHelper {
     // 4. Sincronización (Solo si el contexto sigue vivo)
     if (context.mounted) {
       playerProvider.refreshProfile(eventId: gameProvider.currentEventId);
-    } else {
-      debugPrint(
-          'MinigameLogicHelper: Context unmounted during lifecycle. Skipping refresh.');
     }
 
     return newLives;

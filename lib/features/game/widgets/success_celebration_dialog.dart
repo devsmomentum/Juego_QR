@@ -19,7 +19,10 @@ class SuccessCelebrationDialog extends StatefulWidget {
     this.totalClues = 5, // Default/Placeholder
     this.coinsEarned = 0, // Default if not provided
     this.nextClueHint,
+    this.isPractice = false,
   });
+
+  final bool isPractice;
 
   final int totalClues;
 
@@ -93,10 +96,12 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            '¡DESAFÍO COMPLETADO!',
+                          Text(
+                            widget.isPractice
+                                ? '¡ENTRENAMIENTO COMPLETADO!'
+                                : '¡DESAFÍO COMPLETADO!',
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 18, // Slightly smaller to avoid overflow
                               fontWeight: FontWeight.bold,
                               color: AppTheme.successGreen,
                             ),
@@ -135,7 +140,9 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  widget.nextClueHint ?? "¡Has completado todas las misiones!",
+                                  widget.isPractice
+                                      ? "Has dominado este minijuego en modo entrenamiento."
+                                      : (widget.nextClueHint ?? "¡Has completado todas las misiones!"),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -150,15 +157,18 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                                _buildRewardBadge(icon: Icons.star, text: "+${widget.clue.xpReward}", color: AppTheme.accentGold),
-                                const SizedBox(width: 15),
-                                _buildRewardBadge(
-                                  icon: Icons.monetization_on,
-                                  text: "+${widget.coinsEarned}",
-                                  color: Colors.amber,
-                                ),
-                              ],
-                            ),
+                              _buildRewardBadge(
+                                  icon: Icons.star,
+                                  text: widget.isPractice ? "+0 XP" : "+${widget.clue.xpReward}",
+                                  color: AppTheme.accentGold),
+                              const SizedBox(width: 15),
+                              _buildRewardBadge(
+                                icon: Icons.monetization_on,
+                                text: widget.isPractice ? "+0" : "+${widget.coinsEarned}",
+                                color: Colors.amber,
+                              ),
+                            ],
+                          ),
                           if (widget.showNextStep) ...[
                             const SizedBox(height: 20),
                             Text(
@@ -182,10 +192,10 @@ class _SuccessCelebrationDialogState extends State<SuccessCelebrationDialog> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 elevation: 5,
                               ),
-                              icon: const Icon(Icons.map),
-                              label: const Text(
-                                'VOLVER AL MAPA',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              icon: Icon(widget.isPractice ? Icons.check_circle : Icons.map),
+                              label: Text(
+                                widget.isPractice ? 'CONTINUAR' : 'VOLVER AL MAPA',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),

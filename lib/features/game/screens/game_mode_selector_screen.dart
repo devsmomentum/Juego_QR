@@ -12,6 +12,7 @@ import 'scenarios_screen.dart';
 import 'game_request_screen.dart'; // Mantener import por si se usa en futuro
 import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
 import '../../game/providers/power_effect_provider.dart';
+import 'training_center_screen.dart';
 
 class GameModeSelectorScreen extends StatefulWidget {
   const GameModeSelectorScreen({super.key});
@@ -111,7 +112,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                   hasScrollBody: false,
                   child: Column(
                     children: [
-                      const Spacer(flex: 2),
+                      const Spacer(flex: 1),
 
                       // HEADER
                       Column(
@@ -147,7 +148,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         ],
                       ),
 
-                      const Spacer(flex: 3),
+                      const Spacer(flex: 1),
 
                       // CARDS
                       Padding(
@@ -176,7 +177,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               },
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
 
                             // MODO ONLINE
                             _buildModeCard(
@@ -200,7 +201,25 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               },
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
+
+                            // MODO ENTRENAMIENTO (NUEVO)
+                            _buildModeCard(
+                              title: "MODO ENTRENAMIENTO",
+                              description:
+                                  "Practica tus habilidades y domina los minijuegos antes de competir por el tesoro.",
+                              icon: Icons.model_training,
+                              color: AppTheme.successGreen, // Verde
+                              onTap: () {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const TrainingCenterScreen()));
+                              },
+                            ),
+
+                            const SizedBox(height: 16),
 
                             // MODO LOCAL
                             _buildModeCard(
@@ -217,7 +236,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         ),
                       ),
 
-                      const Spacer(flex: 4),
+                      const Spacer(flex: 1),
 
                       // FOOTER - BOTÓN VOLVER
                       Padding(
@@ -549,7 +568,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
               ],
             ),
             child: Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
@@ -564,7 +583,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                 children: [
                   // Icon Circle
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: color.withOpacity(0.1),
@@ -576,7 +595,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               blurRadius: 10,
                               spreadRadius: 1)
                         ]),
-                    child: Icon(icon, color: color, size: 28),
+                    child: Icon(icon, color: color, size: 24),
                   ),
                   const SizedBox(width: 16),
 
@@ -589,7 +608,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                           title,
                           style: TextStyle(
                               fontFamily: 'Orbitron',
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
                               color: color,
                               letterSpacing: 1.0,
@@ -604,7 +623,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                           description,
                           style: const TextStyle(
                             fontFamily: 'Roboto',
-                            fontSize: 13,
+                            fontSize: 12,
                             color: Colors.white70,
                             height: 1.4,
                           ),

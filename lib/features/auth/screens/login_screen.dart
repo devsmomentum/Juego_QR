@@ -11,6 +11,7 @@ import 'avatar_selection_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../game/screens/game_request_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
+import '../../game/screens/training_center_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../../admin/screens/dashboard-screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -22,6 +23,7 @@ import 'dart:async'; // For TimeoutException
 import 'dart:math' as math;
 import '../../../shared/widgets/loading_overlay.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/development_bypass_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -197,9 +199,9 @@ class _LoginScreenState extends State<LoginScreen>
           break;
 
         case UserEventStatus.waitingApproval:
-          // Usuario esperando aprobación - ir a selector de modo
+          // Usuario esperando aprobación - ir a Centro de Entrenamiento
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+            MaterialPageRoute(builder: (_) => const TrainingCenterScreen()),
           );
           break;
 
@@ -210,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen>
         case UserEventStatus.rejected:
         case UserEventStatus.noEvent:
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+            MaterialPageRoute(builder: (_) => const TrainingCenterScreen()),
           );
           break;
       }
@@ -948,8 +950,6 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 40),
-
                                       // Morna Branding
                                       _buildMornaBranding(isDark: isDarkMode),
                                       const SizedBox(height: 10),

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapHunter | Eliminación de Datos</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --yellow: #FECB00;
+            --purple: #2D1B4E;
+            --bg-overlay: rgba(13, 13, 15, 0.7);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: url('delete_data_bg.jpg') no-repeat center center fixed;
+            background-size: cover;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Overlay */
+        .page-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-overlay);
+            z-index: 0;
+        }
+
+        /* Header (Same as Landing Page) */
+        header {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 5%;
+        }
+
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-logo img {
+            height: 60px;
+        }
+
+        .header-logo span {
+            font-weight: 900;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .nav-links a:hover {
+            opacity: 1;
+        }
+
+        .btn-trial {
+            background-color: var(--yellow);
+            color: black;
+            padding: 12px 25px;
+            border-radius: 12px;
+            font-weight: 900;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            box-shadow: 0 4px 15px rgba(254, 203, 0, 0.3);
+        }
+
+        /* Hero / Container */
+        main {
+            position: relative;
+            z-index: 10;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .hero-logo {
+            height: 180px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 20px rgba(254, 203, 0, 0.3));
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .hero-subtitle {
+            color: var(--yellow);
+            font-weight: 900;
+            letter-spacing: 5px;
+            font-size: 0.9rem;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+        }
+
+        .form-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--yellow);
+        }
+
+        .btn-delete {
+            width: 100%;
+            padding: 20px;
+            margin-top: 10px;
+            background-color: var(--yellow);
+            color: black;
+            border: none;
+            border-radius: 15px;
+            font-family: inherit;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-delete:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(254, 203, 0, 0.4);
+        }
+
+        .warning-text {
+            margin-top: 25px;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.5;
+        }
+
+        /* Success screen */
+        #success-view { display: none; }
+        .success-icon {
+            font-size: 4rem;
+            color: var(--yellow);
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .nav-links { display: none; }
+            .hero-title { font-size: 2rem; }
+            .hero-logo { height: 120px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-overlay"></div>
+
+    <header>
+        <div class="header-logo">
+            <img src="logo4.1.png" alt="MapHunter Logo">
+        </div>
+        <div class="nav-links">
+            <!-- Navegación eliminada para simplicidad -->
+        </div>
+    </header>
+
+    <main>
+        <div id="form-view">
+            <img src="../assets/images/logo4.1.png" alt="MapHunter Hero Logo" class="hero-logo">
+            <p class="hero-subtitle">Eliminación de Datos</p>
+
+            <div class="form-card">
+                <h2>Solicitar Baja Permanentemente</h2>
+                <form id="delete-form">
+                    <div class="form-group">
+                        <label>Correo Electrónico de Usuario</label>
+                        <input type="email" id="email" required placeholder="tu@email.com" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$">
+                    </div>
+                    <div class="form-group">
+                        <label>Contraseña para Confirmar</label>
+                        <input type="password" id="password" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn-delete">Eliminar mi Cuenta</button>
+                </form>
+                <div class="warning-text">
+                    Esta acción purgará de forma irreversible tu perfil, items, XP y datos asociados a MapHunter.
+                </div>
+            </div>
+        </div>
+
+        <div id="success-view">
+            <div class="success-icon">✓</div>
+            <h1 class="hero-title">Solicitud Recibida</h1>
+            <p style="margin-bottom: 30px; opacity: 0.8;">Tu cuenta será eliminada en un plazo de 72 horas laborales.</p>
+            <a href="#" onclick="location.reload()" class="btn-trial">VOLVER</a>
+        </div>
+    </main>
+
+    <script>
+        const deleteForm = document.getElementById('delete-form');
+        const deleteBtn = deleteForm.querySelector('.btn-delete');
+        const originalBtnText = deleteBtn.innerText;
+
+        deleteForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!confirm('¿Estás seguro? Esta acción es permanente e irreversible.')) {
+                return;
+            }
+
+            // Estado de carga
+            deleteBtn.disabled = true;
+            deleteBtn.innerText = 'PROCESANDO...';
+            deleteBtn.style.opacity = '0.5';
+
+            try {
+                // 1. INICIAR SESIÓN PARA OBTENER TOKEN
+                const loginRes = await fetch('https://dpgcterrszryrvywbnqo.supabase.co/functions/v1/auth-service/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const loginData = await loginRes.json();
+
+                if (!loginRes.ok) {
+                    throw new Error(loginData.error || 'Credenciales inválidas o error de conexión.');
+                }
+
+                if (!loginData.session || !loginData.session.access_token) {
+                    throw new Error('No se pudo obtener la sesión de usuario.');
+                }
+
+                const accessToken = loginData.session.access_token;
+
+                // 2. SOLICITAR ELIMINACIÓN DE CUENTA
+                const deleteRes = await fetch('https://dpgcterrszryrvywbnqo.supabase.co/functions/v1/auth-service/delete-account', {
+                    method: 'DELETE',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ password })
+                });
+
+                const deleteData = await deleteRes.json();
+
+                if (!deleteRes.ok) {
+                    throw new Error(deleteData.error || 'Error al procesar el borrado de la cuenta.');
+                }
+
+                // ÉXITO
+                document.getElementById('form-view').style.display = 'none';
+                document.getElementById('success-view').style.display = 'block';
+
+            } catch (err) {
+                console.error('Error:', err);
+                alert('ERROR: ' + err.message);
+                
+                // Restaurar botón
+                deleteBtn.disabled = false;
+                deleteBtn.innerText = originalBtnText;
+                deleteBtn.style.opacity = '1';
+            }
+        });
+    </script>
+</body>
+</html>
