@@ -22,6 +22,9 @@ import 'dart:async'; // For TimeoutException
 import 'dart:math' as math;
 import '../../../shared/widgets/loading_overlay.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../core/services/version_check_service.dart';
+import '../../../shared/widgets/maintenance_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -139,6 +142,40 @@ class _LoginScreenState extends State<LoginScreen>
           playerProvider.clearBanMessage();
         }
         return;
+      }
+
+      // === CHECK MAINTENANCE MODE ===
+      final versionService = VersionCheckService(Supabase.instance.client);
+      final versionStatus = await versionService.checkVersion();
+      if (!mounted) return;
+
+      if (versionStatus.maintenanceMode) {
+        if (player.isAdmin) {
+          // Admin: mostrar pantalla de mantenimiento con opción de continuar
+          final shouldContinue = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => MaintenanceScreen(
+                isAdmin: true,
+                onContinueAsAdmin: () => Navigator.of(context).pop(true),
+              ),
+            ),
+          );
+          if (!mounted) return;
+          if (shouldContinue != true) return;
+          // Admin eligió continuar → sigue el flujo normal hacia Dashboard
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+          return;
+        } else {
+          // Usuario normal: bloquear
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const MaintenanceScreen(isAdmin: false),
+            ),
+          );
+          return;
+        }
       }
 
       // Administradores van directamente al Dashboard

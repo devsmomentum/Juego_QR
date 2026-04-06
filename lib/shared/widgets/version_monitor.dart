@@ -53,17 +53,8 @@ class _VersionMonitorState extends State<VersionMonitor> {
       return widget.child;
     }
 
-    // 1. Modo mantenimiento: bloquea por completo sin ofrecer descarga
-    if (_status != null && _status!.maintenanceMode) {
-      return _buildBlockScreen(
-        icon: Icons.construction_rounded,
-        iconColor: Colors.orange,
-        title: 'En Mantenimiento',
-        message:
-            'La aplicación está en mantenimiento temporalmente. Intenta nuevamente en unos minutos.',
-        showDownloadButton: false,
-      );
-    }
+    // 1. Modo mantenimiento: se maneja DESPUÉS del login (LoginScreen / SplashScreen)
+    //    para poder diferenciar admin vs usuario normal.
 
     // 2. Actualización requerida: versión local < mínima
     if (_status != null && _status!.isUpdateRequired) {
