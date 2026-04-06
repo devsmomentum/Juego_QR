@@ -222,7 +222,7 @@ serve(async (req) => {
         },
         automatic_payment_methods: { 
           enabled: true,
-          allow_redirects: "never",
+          // Removed allow_redirects: "never" to support SCA/3D Secure authentication
         },
         receipt_email: customerEmail,
       };

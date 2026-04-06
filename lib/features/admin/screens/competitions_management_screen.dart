@@ -340,7 +340,7 @@ class _CompetitionsManagementScreenState
                                 ListTile(
                                   contentPadding: const EdgeInsets.all(20),
                                   leading: Hero(
-                                    tag: 'event_${event.id}',
+                                    tag: 'event_${event.id}_${index}',
                                     child: Container(
                                       width: 60,
                                       height: 60,
@@ -484,8 +484,13 @@ class _CompetitionsManagementScreenState
                                               CompetitionDetailScreen(
                                                   event: event),
                                         ),
-                                      ).then((_) =>
-                                          _loadEvents()); // Refresh on return
+                                      ).then((_) {
+                                        if (mounted) {
+                                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                                            _loadEvents();
+                                          });
+                                        }
+                                      }); // Refresh on return
                                     },
                                     icon:
                                         const Icon(Icons.visibility, size: 18),
