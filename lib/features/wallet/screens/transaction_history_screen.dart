@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/stripe_service.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/glitch_text.dart';
@@ -11,6 +13,8 @@ import '../providers/wallet_provider.dart'; // Keep for balance refresh only
 import '../widgets/payment_webview_modal.dart';
 import '../widgets/payment_validation_widget.dart';
 import '../widgets/transaction_card.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -75,6 +79,139 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         ),
       );
       _loadData();
+    }
+  }
+
+  Future<void> _onResumeStripePayment(TransactionItem item) async {
+    if (!StripeService.isAvailable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Stripe no está disponible en este momento.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      LoadingOverlay.show(context, message: 'Retomando pago...');
+
+      final response = await Supabase.instance.client.functions.invoke(
+        'stripe-resume-payment',
+        body: {'order_id': item.id},
+      );
+
+      if (mounted) LoadingOverlay.hide(context);
+
+      if (response.status != 200) {
+        final errorMsg = (response.data as Map<String, dynamic>?)?['error'] ?? 'Error desconocido';
+        throw Exception(errorMsg);
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      if (data['success'] != true) {
+        throw Exception(data['error'] ?? 'Respuesta inválida del servidor');
+      }
+
+      final paymentData = data['data'] as Map<String, dynamic>;
+      final clientSecret = paymentData['client_secret'] as String;
+      final stripeCustomerId = paymentData['stripe_customer_id'] as String?;
+      final ephemeralKeySecret = paymentData['ephemeral_key_secret'] as String?;
+
+      if (kIsWeb) {
+        // On web, we can't re-present the payment sheet — user should create a new order
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Para completar este pago en web, por favor crea una nueva compra.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Initialize and present the Payment Sheet
+      final sheetParams = (stripeCustomerId != null && ephemeralKeySecret != null)
+          ? SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'MapHunter',
+              customerId: stripeCustomerId,
+              customerEphemeralKeySecret: ephemeralKeySecret,
+              style: ThemeMode.dark,
+              appearance: const PaymentSheetAppearance(
+                colors: PaymentSheetAppearanceColors(
+                  primary: Color(0xFFFECB00),
+                  background: Color(0xFF151517),
+                  componentBackground: Color(0xFF1E1E21),
+                  primaryText: Colors.white,
+                  secondaryText: Color(0xFFAAAAAA),
+                ),
+                shapes: PaymentSheetShape(
+                  borderWidth: 1.5,
+                  borderRadius: 12.0,
+                ),
+              ),
+            )
+          : SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'MapHunter',
+              style: ThemeMode.dark,
+              appearance: const PaymentSheetAppearance(
+                colors: PaymentSheetAppearanceColors(
+                  primary: Color(0xFFFECB00),
+                  background: Color(0xFF151517),
+                  componentBackground: Color(0xFF1E1E21),
+                  primaryText: Colors.white,
+                  secondaryText: Color(0xFFAAAAAA),
+                ),
+                shapes: PaymentSheetShape(
+                  borderWidth: 1.5,
+                  borderRadius: 12.0,
+                ),
+              ),
+            );
+
+      await Stripe.instance.initPaymentSheet(paymentSheetParameters: sheetParams);
+      await Stripe.instance.presentPaymentSheet();
+
+      // If we get here, payment succeeded
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pago completado exitosamente. Actualizando...'),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+        _loadData();
+      }
+    } on StripeException catch (e) {
+      if (e.error.code == FailureCode.Canceled) {
+        debugPrint('[StripeResume] User cancelled payment sheet');
+      } else {
+        debugPrint('[StripeResume] Stripe error: ${e.error.message}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error en el pago: ${e.error.localizedMessage ?? e.error.message ?? "Error"}'),
+              backgroundColor: AppTheme.dangerRed,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) LoadingOverlay.hide(context);
+      debugPrint('[StripeResume] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$e'),
+            backgroundColor: AppTheme.dangerRed,
+          ),
+        );
+      }
     }
   }
 
@@ -368,7 +505,13 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                             return TransactionCard(
                               item: item,
                               onResumePayment: item.canResumePayment
-                                  ? () => _onResumePayment(item.paymentUrl!)
+                                  ? () {
+                                      if (item.gateway == 'stripe' && item.stripePaymentIntentId != null) {
+                                        _onResumeStripePayment(item);
+                                      } else if (item.paymentUrl != null && item.paymentUrl!.isNotEmpty) {
+                                        _onResumePayment(item.paymentUrl!);
+                                      }
+                                    }
                                   : null,
                               onCancelOrder: item.canCancel
                                   ? () async {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -45,7 +46,7 @@ serve(async (req) => {
         // 1. Get order details — verify ownership via user_id
         const { data: order, error: fetchError } = await supabaseAdmin
             .from('clover_orders')
-            .select('pago_pago_order_id, status, user_id, extra_data')
+            .select('pago_pago_order_id, status, user_id, extra_data, gateway, stripe_payment_intent_id')
             .eq('id', order_id)
             .single()
 
@@ -63,18 +64,7 @@ serve(async (req) => {
             throw new Error(`No se puede cancelar una orden con estado: ${order.status}`)
         }
 
-        const externalId = order.pago_pago_order_id
-        if (!externalId) {
-            throw new Error("ID de orden externa no encontrado")
-        }
-
-        // 2. Get API Key & Config
-        const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')
-        if (!pagoApiKey) {
-            throw new Error("Server Misconfiguration: Missing PAGO_PAGO_API_KEY")
-        }
-
-        // 3. Optimistic: Mark as cancelled in DB FIRST so client gets fast response
+        // 2. Optimistic: Mark as cancelled in DB FIRST so client gets fast response
         const existingExtra = order.extra_data ?? {}
         const { error: updateError } = await supabaseAdmin
             .from('clover_orders')
@@ -93,55 +83,112 @@ serve(async (req) => {
             throw new Error("Error actualizando estado de la orden")
         }
 
-        console.log(`Order ${order_id} marked as cancelled in DB (optimistic).`)
+        console.log(`Order ${order_id} marked as cancelled in DB (optimistic). Gateway: ${order.gateway ?? 'unknown'}`)
 
-        // 4. Fire-and-forget: Cancel on Provider (best-effort, don't block response)
-        const cancelUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_cancel_order`
-        console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago (fire-and-forget)`)
+        // 3. Fire-and-forget: Cancel on the corresponding provider
+        const orderGateway = order.gateway ?? 'pago_movil'
 
-        // Don't await — let provider call run in background while we return 200 immediately
-        fetch(cancelUrl, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'pago_pago_api': pagoApiKey
-            },
-            body: JSON.stringify({ order_id: externalId }),
-            signal: AbortSignal.timeout(10_000),
-        })
-            .then(async (response) => {
-                const data = await response.json()
-                if (!response.ok) {
-                    const errMsg = data?.message || data?.error || ''
-                    if (!errMsg.toLowerCase().includes('already cancelled')) {
-                        console.warn("[api_cancel_order] Provider cancel failed:", data)
+        if (orderGateway === 'stripe') {
+            // --- STRIPE CANCELLATION ---
+            const stripePI = order.stripe_payment_intent_id
+            if (stripePI) {
+                const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')
+                if (stripeSecretKey) {
+                    try {
+                        const stripe = new Stripe(stripeSecretKey, {
+                            apiVersion: "2024-06-20",
+                            httpClient: Stripe.createFetchHttpClient(),
+                        })
+                        const pi = await stripe.paymentIntents.cancel(stripePI)
+                        console.log(`[api_cancel_order] Stripe PI ${stripePI} cancelled. Status: ${pi.status}`)
+                        await supabaseAdmin
+                            .from('clover_orders')
+                            .update({
+                                extra_data: {
+                                    ...existingExtra,
+                                    cancelled_at: new Date().toISOString(),
+                                    stripe_cancel_status: pi.status,
+                                }
+                            })
+                            .eq('id', order_id)
+                    } catch (stripeErr: any) {
+                        // PaymentIntent may already be cancelled/succeeded — that's OK
+                        console.warn(`[api_cancel_order] Stripe cancel for ${stripePI} failed:`, stripeErr.message)
+                        await supabaseAdmin
+                            .from('clover_orders')
+                            .update({
+                                extra_data: {
+                                    ...existingExtra,
+                                    cancelled_at: new Date().toISOString(),
+                                    stripe_cancel_error: stripeErr.message,
+                                }
+                            })
+                            .eq('id', order_id)
                     }
+                } else {
+                    console.warn('[api_cancel_order] STRIPE_SECRET_KEY not configured, skipping Stripe cancel')
                 }
-                await supabaseAdmin
-                    .from('clover_orders')
-                    .update({
-                        extra_data: {
-                            ...existingExtra,
-                            cancelled_at: new Date().toISOString(),
-                            cancellation_response: data,
-                        }
+            } else {
+                console.warn(`[api_cancel_order] Stripe order ${order_id} has no payment_intent_id`)
+            }
+        } else {
+            // --- PAGO MOVIL CANCELLATION (legacy) ---
+            const externalId = order.pago_pago_order_id
+            if (externalId) {
+                const pagoApiKey = Deno.env.get('PAGO_PAGO_API_KEY')
+                if (pagoApiKey) {
+                    const cancelUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_cancel_order`
+                    console.log(`Cancelling order ${order_id} (External: ${externalId}) via Pago a Pago (fire-and-forget)`)
+
+                    fetch(cancelUrl, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'pago_pago_api': pagoApiKey
+                        },
+                        body: JSON.stringify({ order_id: externalId }),
+                        signal: AbortSignal.timeout(10_000),
                     })
-                    .eq('id', order_id)
-                console.log(`[api_cancel_order] Provider cancel synced for ${order_id}`)
-            })
-            .catch((providerError) => {
-                console.warn(`[api_cancel_order] Provider cancel failed/timed out for ${order_id}:`, providerError)
-                supabaseAdmin
-                    .from('clover_orders')
-                    .update({
-                        extra_data: {
-                            ...existingExtra,
-                            cancelled_at: new Date().toISOString(),
-                            provider_cancel_error: String(providerError),
-                        }
-                    })
-                    .eq('id', order_id)
-            })
+                        .then(async (response) => {
+                            const data = await response.json()
+                            if (!response.ok) {
+                                const errMsg = data?.message || data?.error || ''
+                                if (!errMsg.toLowerCase().includes('already cancelled')) {
+                                    console.warn("[api_cancel_order] Provider cancel failed:", data)
+                                }
+                            }
+                            await supabaseAdmin
+                                .from('clover_orders')
+                                .update({
+                                    extra_data: {
+                                        ...existingExtra,
+                                        cancelled_at: new Date().toISOString(),
+                                        cancellation_response: data,
+                                    }
+                                })
+                                .eq('id', order_id)
+                            console.log(`[api_cancel_order] Provider cancel synced for ${order_id}`)
+                        })
+                        .catch((providerError) => {
+                            console.warn(`[api_cancel_order] Provider cancel failed/timed out for ${order_id}:`, providerError)
+                            supabaseAdmin
+                                .from('clover_orders')
+                                .update({
+                                    extra_data: {
+                                        ...existingExtra,
+                                        cancelled_at: new Date().toISOString(),
+                                        provider_cancel_error: String(providerError),
+                                    }
+                                })
+                                .eq('id', order_id)
+                        })
+                } else {
+                    console.warn('[api_cancel_order] PAGO_PAGO_API_KEY not configured')
+                }
+            } else {
+                console.log(`[api_cancel_order] Order ${order_id} has no external ID, DB-only cancel.`)
+            }
+        }
 
         // Return immediately — DB is already updated
         return new Response(JSON.stringify({ success: true, message: "Orden cancelada exitosamente" }), {

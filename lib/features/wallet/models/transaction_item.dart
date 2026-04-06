@@ -15,6 +15,7 @@ class TransactionItem {
   final String? pagoOrderId;
   final String? gateway;
   final String? invoiceUrl;
+  final String? stripePaymentIntentId;
 
   const TransactionItem({
     required this.id,
@@ -30,6 +31,7 @@ class TransactionItem {
     this.pagoOrderId,
     this.gateway,
     this.invoiceUrl,
+    this.stripePaymentIntentId,
   });
 
   static DateTime _toVenezuelaTime(DateTime dateTime) {
@@ -54,6 +56,7 @@ class TransactionItem {
       pagoOrderId: map['pago_pago_order_id']?.toString(),
       gateway: map['gateway']?.toString(),
       invoiceUrl: map['invoice_url']?.toString(),
+      stripePaymentIntentId: map['stripe_payment_intent_id']?.toString(),
     );
   }
 
@@ -62,7 +65,10 @@ class TransactionItem {
   
   bool get isPending => status == 'pending';
   
-  bool get canResumePayment => isPending && paymentUrl != null && paymentUrl!.isNotEmpty;
+  bool get canResumePayment => isPending && (
+    (paymentUrl != null && paymentUrl!.isNotEmpty) ||
+    (gateway == 'stripe' && stripePaymentIntentId != null && stripePaymentIntentId!.isNotEmpty)
+  );
 
   bool get canValidateMpay => isPending && gateway == 'pago_movil' && pagoOrderId != null;
   
