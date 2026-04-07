@@ -208,32 +208,97 @@ class StripeService {
       );
 
     } on StripeException catch (e) {
+      final String code = e.error.code.toString();
+      final String? declineCode = e.error.declineCode;
+      final String? message = e.error.localizedMessage ?? e.error.message;
+      
+      debugPrint('[StripeService] ❌ Stripe error: $code');
+      if (declineCode != null) debugPrint('[StripeService] 🚩 Decline code: $declineCode');
+      debugPrint('[StripeService] 📝 Message: $message');
+      debugPrint('[StripeService] 🔍 Full Error Object: ${e.error.toJson()}');
+
       switch (e.error.code) {
         case FailureCode.Canceled:
           debugPrint('[StripeService] Payment cancelled by user.');
           return const StripePaymentResultData(result: StripePaymentResult.cancelled);
-        case FailureCode.Failed:
-          debugPrint('[StripeService] Payment failed: ${e.error.message}');
+        default:
+          // Show detailed error for ANY other Stripe failure, not just FailureCode.Failed
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Pago fallido: ${e.error.localizedMessage ?? e.error.message ?? "Error desconocido"}'),
+                content: Text('Pago fallido: $message ${declineCode != null ? "($declineCode)" : ""}'),
                 backgroundColor: Colors.red,
+                duration: const Duration(seconds: 10),
+                action: SnackBarAction(
+                  label: 'VER MÁS',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Detalle del Rechazo'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Código del error: ${e.error.code}'),
+                            const SizedBox(height: 8),
+                            Text('Motivo técnico (Decline): ${declineCode ?? "No disponible"}'),
+                            const SizedBox(height: 8),
+                            Text('Mensaje de Stripe: $message'),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Sugerencia: Si es una tarjeta real, verifica si tiene activadas las compras internacionales/online.',
+                              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Entendido'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             );
           }
           return const StripePaymentResultData(result: StripePaymentResult.failed);
-        default:
-          debugPrint('[StripeService] Stripe error: ${e.error.code} — ${e.error.message}');
-          return const StripePaymentResultData(result: StripePaymentResult.failed);
       }
     } catch (e) {
-      debugPrint('[StripeService] Unexpected error: $e');
+      debugPrint('[StripeService] Unexpected error type: ${e.runtimeType}');
+      debugPrint('[StripeService] Error details: $e');
+      
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error inesperado: $e'),
-            backgroundColor: Colors.red,
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Error en el Proceso'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Ha ocurrido un error inesperado al procesar el pago.'),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.grey[200],
+                  child: Text(
+                    e.toString(),
+                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
           ),
         );
       }
