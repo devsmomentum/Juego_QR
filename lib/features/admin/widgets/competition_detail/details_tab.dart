@@ -4,17 +4,15 @@ import 'package:provider/provider.dart';
 import '../../../../shared/widgets/coin_image.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../game/models/event.dart';
-import '../../models/sponsor.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DetailsTab extends StatefulWidget {
   final GameEvent event;
   final GlobalKey<FormState> formKey;
   final bool isEventActive;
-  final List<Sponsor> sponsors;
+  final bool sponsorsEnabled;
   
   // State values
-  final String? sponsorId;
   final String title;
   final String description;
   final String pin;
@@ -28,7 +26,7 @@ class DetailsTab extends StatefulWidget {
   final TextEditingController locationController;
 
   // Callbacks
-  final Function(String?) onSponsorChanged;
+  final Function(bool) onSponsorsEnabledChanged;
   final Function(int) onWinnersChanged;
   final Function(DateTime) onDateChanged;
   final Function() onSelectLocation;
@@ -52,8 +50,7 @@ class DetailsTab extends StatefulWidget {
     required this.event,
     required this.formKey,
     required this.isEventActive,
-    required this.sponsors,
-    required this.sponsorId,
+    required this.sponsorsEnabled,
     required this.title,
     required this.description,
     required this.pin,
@@ -65,7 +62,7 @@ class DetailsTab extends StatefulWidget {
     required this.configuredWinners,
     required this.selectedDate,
     required this.locationController,
-    required this.onSponsorChanged,
+    required this.onSponsorsEnabledChanged,
     required this.onWinnersChanged,
     required this.onDateChanged,
     required this.onSelectLocation,
@@ -217,31 +214,37 @@ class _DetailsTabState extends State<DetailsTab> {
             ),
             const SizedBox(height: 16),
 
-            // --- Sponsor Selection ---
-            if (widget.sponsors.isNotEmpty)
-              DropdownButtonFormField<String>(
-                value: widget.sponsorId,
-                 decoration: _buildInputDecoration('Patrocinador (Opcional)',
-                   icon: Icons.star_border_rounded),
-                 dropdownColor: Theme.of(context).cardTheme.color,
-                 style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text("Sin Patrocinador"),
-                  ),
-                  ...widget.sponsors.map((sponsor) {
-                    return DropdownMenuItem<String>(
-                      value: sponsor.id,
-                      child: Text(sponsor.name),
-                    );
-                  }).toList(),
-                ],
-                onChanged: widget.isEventActive
-                    ? null
-                    : widget.onSponsorChanged,
+            // --- Sponsors Toggle ---
+            SwitchListTile(
+              title: Text(
+                'Patrocinadores',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
               ),
-            if (widget.sponsors.isNotEmpty) const SizedBox(height: 16),
+              subtitle: Text(
+                widget.sponsorsEnabled
+                    ? 'Los sponsors activos rotarán en este evento'
+                    : 'Sin publicidad de sponsors',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: Icon(
+                Icons.star_border,
+                color: widget.sponsorsEnabled
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+              value: widget.sponsorsEnabled,
+              activeColor: AppTheme.lGoldAction,
+              onChanged: widget.isEventActive
+                  ? null
+                  : widget.onSponsorsEnabledChanged,
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 16),
             
             MediaQuery.of(context).size.width < 600
                 ? Column(

@@ -330,74 +330,45 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // --- Selección de Sponsor ---
-                        if (provider.sponsors.isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              DropdownButtonFormField<String>(
-                                value: provider.sponsorId,
-                                decoration: inputDecoration.copyWith(
-                                  labelText: 'Patrocinador (Opcional)',
-                                  prefixIcon: Icon(Icons.star_border,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color),
-                                ),
-                                dropdownColor: Theme.of(context).cardTheme.color,
-                                style: TextStyle(
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .displayLarge
-                                        ?.color),
-                                items: [
-                                  const DropdownMenuItem<String>(
-                                    value: null,
-                                    child: Text("Sin Patrocinador"),
-                                  ),
-                                  ...provider.sponsors.map((sponsor) {
-                                    return DropdownMenuItem<String>(
-                                      value: sponsor.id,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (sponsor.logoUrl != null &&
-                                              sponsor.logoUrl!.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                  right: 8.0),
-                                              child: kIsWeb
-                                                  ? Image.network(
-                                                      sponsor.logoUrl!,
-                                                      width: 24,
-                                                      height: 24,
-                                                      errorBuilder:
-                                                          (_, __, ___) =>
-                                                              const SizedBox())
-                                                  : const Icon(Icons.image,
-                                                      size: 16),
-                                            ),
-                                          Flexible(
-                                              child: Text(sponsor.name,
-                                                  overflow:
-                                                      TextOverflow.ellipsis)),
-                                          if (!sponsor.isActive)
-                                            Text(" (Inactivo)",
-                                                style: TextStyle(
-                                                    color: Colors.red.shade400,
-                                                    fontSize: 12)),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ],
-                                onChanged: (value) =>
-                                    provider.setSponsorId(value),
-                              ),
-                              const SizedBox(height: 20),
-                            ],
+                        // --- Sponsors Toggle ---
+                        SwitchListTile(
+                          title: Text(
+                            'Patrocinadores',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color,
+                            ),
                           ),
+                          subtitle: Text(
+                            provider.sponsorsEnabled
+                                ? 'Los sponsors activos rotarán en este evento'
+                                : 'Sin publicidad de sponsors',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color,
+                              fontSize: 12,
+                            ),
+                          ),
+                          secondary: Icon(
+                            Icons.star_border,
+                            color: provider.sponsorsEnabled
+                                ? AppTheme.lGoldAction
+                                : Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                          ),
+                          value: provider.sponsorsEnabled,
+                          activeColor: AppTheme.lGoldAction,
+                          onChanged: (value) =>
+                              provider.setSponsorsEnabled(value),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        const SizedBox(height: 20),
 
                         // --- Date & Time ---
                         InkWell(

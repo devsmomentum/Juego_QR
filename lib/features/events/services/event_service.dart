@@ -66,7 +66,7 @@ class EventService {
                 event.spectatorConfig, // NEW: Persist spectator prices
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
-            'sponsor_id': event.sponsorId, // NEW
+            'sponsors_enabled': event.sponsorsEnabled,
           })
           .select()
           .single();
@@ -168,7 +168,7 @@ class EventService {
                 event.spectatorConfig, // NEW: Persist spectator prices
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
-            'sponsor_id': event.sponsorId, // NEW
+            'sponsors_enabled': event.sponsorsEnabled,
           })
           .eq('id', event.id)
           .select()
@@ -339,7 +339,7 @@ class EventService {
           ? Map<String, dynamic>.from(data['spectator_config'])
           : {},
       betTicketPrice: (data['bet_ticket_price'] as num?)?.toInt() ?? 100,
-      sponsorId: data['sponsor_id'] as String?,
+      sponsorsEnabled: (data['sponsors_enabled'] as bool?) ?? false,
       storePrices: data['store_prices'] != null
           ? Map<String, int>.from(
               data['store_prices'].map((k, v) => MapEntry(k, v as int)))
