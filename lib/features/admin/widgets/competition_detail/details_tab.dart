@@ -5,6 +5,7 @@ import '../../../../shared/widgets/coin_image.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../game/models/event.dart';
 import '../../models/sponsor.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DetailsTab extends StatefulWidget {
   final GameEvent event;
@@ -799,9 +800,176 @@ class _DetailsTabState extends State<DetailsTab> {
               ),
             ),
 
+            // --- Station QR Access Code ---
+            if (widget.event.type != 'online') ...[
+              const SizedBox(height: 24),
+              const Text("Estación QR (Tablets)",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.lGoldAction)),
+              const SizedBox(height: 12),
+              _StationAccessCodeWidget(eventId: widget.event.id),
+            ],
+
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Widget to generate and display station access codes.
+class _StationAccessCodeWidget extends StatefulWidget {
+  final String eventId;
+  const _StationAccessCodeWidget({required this.eventId});
+
+  @override
+  State<_StationAccessCodeWidget> createState() =>
+      _StationAccessCodeWidgetState();
+}
+
+class _StationAccessCodeWidgetState extends State<_StationAccessCodeWidget> {
+  String? _code;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingCode();
+  }
+
+  Future<void> _loadExistingCode() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('station_access_code')
+          .eq('id', widget.eventId)
+          .maybeSingle();
+      if (mounted && response != null) {
+        setState(
+            () => _code = response['station_access_code'] as String?);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _generateCode() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await Supabase.instance.client
+          .rpc('generate_station_access_code', params: {
+        'p_event_id': widget.eventId,
+      });
+      if (mounted) {
+        setState(() {
+          _code = result as String?;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(12),
+        border:
+            Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
+      child: Column(
+        children: [
+          if (_code != null) ...[
+            Row(
+              children: [
+                const Icon(Icons.qr_code_2_rounded,
+                    color: AppTheme.lGoldAction, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Código de Estación',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        _code!,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          color: AppTheme.lGoldAction,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, size: 20),
+                  tooltip: 'Copiar código',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _code!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Código copiado'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Comparte este código con los operadores de las tablets.',
+              style: TextStyle(
+                  color: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.color
+                      ?.withOpacity(0.5),
+                  fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isLoading ? null : _generateCode,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(
+                      _code == null
+                          ? Icons.add_rounded
+                          : Icons.refresh_rounded,
+                      size: 18),
+              label: Text(
+                  _code == null ? 'Generar Código' : 'Regenerar Código'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.lGoldAction,
+                side: const BorderSide(color: AppTheme.lGoldAction),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

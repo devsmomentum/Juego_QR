@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../admin/models/merchandise_item.dart';
@@ -6,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/coin_image.dart';
+import '../../../shared/widgets/animated_cyber_background.dart';
 
 class MerchandiseStoreScreen extends StatefulWidget {
   const MerchandiseStoreScreen({super.key});
@@ -31,90 +34,64 @@ class _MerchandiseStoreScreenState extends State<MerchandiseStoreScreen> {
     final player = context.watch<PlayerProvider>().currentPlayer;
     final isMobile = MediaQuery.of(context).size.width < 800;
     
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0F),
-      drawer: isMobile ? Drawer(
-        backgroundColor: const Color(0xFF151517),
-        child: _buildSidebarContent(context, provider),
-      ) : null,
-      appBar: isMobile ? AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text("TIENDA", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          _buildCoinBalance(player?.clovers ?? 0),
-          const SizedBox(width: 16),
-        ],
-      ) : null,
-      body: Row(
+    final isDayNightMode = context.watch<PlayerProvider>().isDarkMode;
+    
+    return AnimatedCyberBackground(
+      child: Stack(
         children: [
-          // 1. SIDEBAR (Solo en Desktop)
-          if (!isMobile) _buildSidebarContent(context, provider),
-          
-          // 2. MAIN CONTENT
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF0D0D0F),
-                    Color(0xFF1A1A1E),
-                  ],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!isMobile) _buildHeader(context, player?.clovers ?? 0),
-                  
-                  // Grid or Loading
-                  Expanded(
-                    child: provider.isLoading
-                        ? const Center(child: LoadingIndicator())
-                        : _buildStoreGrid(context, provider, isMobile),
+          // Dynamic Day/Night Background
+          Positioned.fill(
+            child: Image.asset(
+              isDayNightMode
+                  ? 'assets/images/fotogrupalnoche.png'
+                  : 'assets/images/personajesgrupal.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+            ),
+          ),
+          // Consistent 0.6 opacity overlay (same as scenarios screen)
+          Positioned.fill(
+            child: Container(color: Colors.black.withOpacity(0.6)),
+          ),
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            drawer: isMobile ? Drawer(
+              backgroundColor: const Color(0xFF151517),
+              child: _buildSidebarContent(context, provider),
+            ) : null,
+            appBar: isMobile ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: const Text("TIENDA", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.white)),
+              iconTheme: const IconThemeData(color: Colors.white),
+              actions: [
+                _buildCoinBalance(player?.clovers ?? 0),
+                const SizedBox(width: 16),
+              ],
+            ) : null,
+            body: Row(
+              children: [
+                // 1. SIDEBAR (Solo en Desktop)
+                if (!isMobile) _buildSidebarContent(context, provider),
+                
+                // 2. MAIN CONTENT
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isMobile) _buildHeader(context, player?.clovers ?? 0),
+                      
+                      // Grid or Loading
+                      Expanded(
+                        child: provider.isLoading
+                            ? const Center(child: LoadingIndicator())
+                            : _buildStoreGrid(context, provider, isMobile),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCoinBalance(int amount) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-            ),
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/coin.png', 
-                width: 20, 
-                height: 20,
-                color: Colors.white.withOpacity(0.9),
-                colorBlendMode: BlendMode.modulate,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            NumberFormat('#,###').format(amount),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
           ),
         ],
       ),
@@ -124,13 +101,18 @@ class _MerchandiseStoreScreenState extends State<MerchandiseStoreScreen> {
   Widget _buildSidebarContent(BuildContext context, MerchandiseProvider provider) {
     return Container(
       width: 260,
-      color: const Color(0xFF151517),
+      color: const Color(0xFF151517).withOpacity(0.95),
       child: Column(
         children: [
           const SizedBox(height: 60),
           const Text(
             "CATEGORÍAS",
-            style: TextStyle(color: AppTheme.accentGold, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+            style: TextStyle(
+              color: AppTheme.accentGold,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
           ),
           const SizedBox(height: 20),
           const Divider(color: Colors.white10),
@@ -169,6 +151,28 @@ class _MerchandiseStoreScreenState extends State<MerchandiseStoreScreen> {
                 );
               }).toList(),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoinBalance(int amount) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CoinImage(size: 26),
+          const SizedBox(width: 8),
+          Text(
+            NumberFormat('#,###').format(amount),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
           ),
         ],
       ),
@@ -225,10 +229,10 @@ class _MerchandiseStoreScreenState extends State<MerchandiseStoreScreen> {
         140 // Aumentamos más el padding inferior para evitar la barra de navegación
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: isMobile ? 1 : (MediaQuery.of(context).size.width > 1200 ? 3 : 2),
-        childAspectRatio: isMobile ? 1.2 : 0.68,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
+        crossAxisCount: isMobile ? 2 : (MediaQuery.of(context).size.width > 1200 ? 3 : 2),
+        childAspectRatio: isMobile ? 0.52 : 0.68,
+        crossAxisSpacing: isMobile ? 12 : 20,
+        mainAxisSpacing: isMobile ? 12 : 20,
       ),
       itemCount: filteredItems.length,
       itemBuilder: (context, index) {
@@ -249,191 +253,232 @@ class _StoreItemCard extends StatelessWidget {
     final isOutOfStock = item.stock <= 0;
     final canAfford = userClovers >= item.priceClovers && !isOutOfStock;
     
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
+    return Stack(
+      children: [
+        // Container EXTERIOR - borde sutil (same as inventory cards)
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryPurple.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: AppTheme.primaryPurple.withOpacity(0.2),
+              width: 1,
+            ),
           ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Image Area
-              Expanded(
-                flex: 4,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    image: item.imageUrl != null ? DecorationImage(
-                      image: NetworkImage(item.imageUrl!),
-                      fit: BoxFit.cover,
-                      colorFilter: isOutOfStock ? ColorFilter.mode(Colors.black.withOpacity(0.7), BlendMode.darken) : null,
-                    ) : null,
+          // Container INTERIOR con blur
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF150826).withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppTheme.primaryPurple.withOpacity(0.6),
+                    width: 2,
                   ),
-                  child: item.imageUrl == null 
-                    ? const Center(child: Icon(Icons.shopping_bag_outlined, color: Colors.white12, size: 60))
-                    : Image.network(
-                        item.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const Center(
-                          child: Icon(Icons.broken_image_outlined, color: Colors.white12, size: 60),
-                        ),
-                        // Ocultamos el widget hijo si la decoración ya muestra la imagen correctamente
-                        color: Colors.transparent, 
-                        colorBlendMode: BlendMode.dst,
-                      ),
                 ),
-              ),
-              
-              // Info Area
-              Expanded(
-                flex: 7,
-                child: Container(
-                  padding: const EdgeInsets.all(16.0),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.0),
-                        Colors.black.withOpacity(0.8),
-                      ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Product Image
+                    Expanded(
+                      flex: 5,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                        child: Container(
+                          color: Colors.black.withOpacity(0.3),
+                          child: item.imageUrl != null
+                              ? Image.network(
+                                  item.imageUrl!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  colorBlendMode: isOutOfStock ? BlendMode.saturation : null,
+                                  color: isOutOfStock ? Colors.grey : null,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Icon(Icons.shopping_bag_outlined, color: Colors.white12, size: 50),
+                                  ),
+                                )
+                              : const Center(
+                                  child: Icon(Icons.shopping_bag_outlined, color: Colors.white12, size: 50),
+                                ),
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      // Category Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentGold.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppTheme.accentGold.withOpacity(0.5), width: 0.5),
-                        ),
-                        child: Text(
-                          item.category.toUpperCase(),
-                          style: const TextStyle(color: AppTheme.accentGold, fontWeight: FontWeight.bold, fontSize: 9, letterSpacing: 1),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, height: 1.1),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      if (item.subtitle != null)
-                        Text(item.subtitle!, style: const TextStyle(color: Colors.white38, fontSize: 11), maxLines: 1),
-                      
-                      const Spacer(),
-                      
-                      // Price & Button Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  // Aplicamos un clip circular y un filtro para disimular el fondo blanco
-                                  Container(
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white,
-                                    ),
-                                    child: ClipOval(
-                                      child: Image.asset(
-                                        'assets/images/coin.png', 
-                                        width: 18, 
-                                        height: 18,
-                                        color: Colors.white.withOpacity(0.9),
-                                        colorBlendMode: BlendMode.modulate,
+
+                    // Info Area
+                    Expanded(
+                      flex: 6,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Category Badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentGold.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.accentGold.withOpacity(0.4), width: 0.5),
+                              ),
+                              child: Text(
+                                item.category.toUpperCase(),
+                                style: const TextStyle(
+                                  color: AppTheme.accentGold,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 9,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            
+                            // Product Name
+                            Text(
+                              item.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                height: 1.2,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (item.subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                item.subtitle!,
+                                style: const TextStyle(color: Colors.white38, fontSize: 10),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            
+                            const Spacer(),
+                            
+                            // Price Row
+                            Row(
+                              children: [
+                                const CoinImage(size: 20),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      NumberFormat('#,###').format(item.priceClovers),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    NumberFormat('#,###').format(item.priceClovers),
-                                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    isOutOfStock
+                                        ? "AGOTADO"
+                                        : (canAfford ? "DISPONIBLE" : "FALTAN ${item.priceClovers - userClovers}"),
+                                    style: TextStyle(
+                                      color: isOutOfStock
+                                          ? AppTheme.dangerRed
+                                          : (canAfford ? Colors.greenAccent : Colors.white24),
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ],
-                              ),
-                              Text(
-                                isOutOfStock 
-                                  ? "AGOTADO" 
-                                  : (canAfford ? "DISPONIBLE" : "FALTAN ${item.priceClovers - userClovers}"),
-                                style: TextStyle(
-                                  color: isOutOfStock 
-                                    ? AppTheme.dangerRed 
-                                    : (canAfford ? Colors.greenAccent : Colors.white24),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
                                 ),
-                              ),
-                            ],
-                          ),
-                          ElevatedButton(
-                            onPressed: (canAfford && !context.watch<MerchandiseProvider>().isLoading) 
-                              ? () => _confirmRedemption(context) 
-                              : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: canAfford ? AppTheme.accentGold : Colors.white.withOpacity(0.05),
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: canAfford ? 4 : 0,
+                              ],
                             ),
-                            child: context.watch<MerchandiseProvider>().isLoading 
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                              : Icon(
-                                  isOutOfStock ? Icons.block : (canAfford ? Icons.shopping_cart : Icons.lock_outline),
-                                  size: 20,
-                                  color: canAfford ? Colors.black : Colors.white24,
+                            const SizedBox(height: 8),
+                            
+                            // Buy Button (matching inventory card style)
+                            SizedBox(
+                              width: double.infinity,
+                              height: 34,
+                              child: ElevatedButton(
+                                onPressed: (canAfford && !context.watch<MerchandiseProvider>().isLoading)
+                                    ? () => _confirmRedemption(context)
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: canAfford
+                                      ? AppTheme.accentGold
+                                      : Colors.grey.withOpacity(0.3),
+                                  foregroundColor: Colors.black,
+                                  padding: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  elevation: canAfford ? 4 : 0,
                                 ),
-                          ),
-                        ],
+                                child: context.watch<MerchandiseProvider>().isLoading
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                      )
+                                    : Text(
+                                        isOutOfStock
+                                            ? "AGOTADO"
+                                            : (canAfford ? "CANJEAR" : "BLOQUEADO"),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1,
+                                          color: canAfford ? Colors.black : Colors.white38,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          
-          // Stock indicator top right
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Text(
-                "STOCK: ${item.stock}",
-                style: const TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+
+        // Stock Badge (top-right, glassmorphism style)
+        Positioned(
+          right: 8,
+          top: 8,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D0D0F).withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppTheme.accentGold.withOpacity(0.6),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  "x${item.stock}",
+                  style: const TextStyle(
+                    color: AppTheme.accentGold,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -445,21 +490,7 @@ class _StoreItemCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/coin.png', 
-                  width: 28, 
-                  height: 28,
-                  color: Colors.white.withOpacity(0.9),
-                  colorBlendMode: BlendMode.modulate,
-                ),
-              ),
-            ),
+            const CoinImage(size: 30),
             const SizedBox(width: 12),
             const Text("Confirmar Canje", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
@@ -482,21 +513,7 @@ class _StoreItemCard extends StatelessWidget {
                   const Text("Costo:", style: TextStyle(color: Colors.white60)),
                   Row(
                     children: [
-                      Container(
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                        ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/coin.png', 
-                            width: 16, 
-                            height: 16,
-                            color: Colors.white.withOpacity(0.9),
-                            colorBlendMode: BlendMode.modulate,
-                          ),
-                        ),
-                      ),
+                      const CoinImage(size: 22),
                       const SizedBox(width: 6),
                       Text(
                         NumberFormat('#,###').format(item.priceClovers),

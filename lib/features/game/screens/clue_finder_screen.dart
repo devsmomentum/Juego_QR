@@ -289,23 +289,20 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
 
   // --- LOGIC ---
 
-  void _handleScannedCode(String scannedCode) {
-    // Expected format: Simple ID match or specific prefix
-    // For now, we trust the scanner returned something useful.
-    // If the clue has a specific QR code string, we match it.
-    // If not, we assume ANY valid scan of the clue ID works.
-
+  void _handleScannedCode(String scannedCode) async {
+    // Expected format: Simple ID match, specific prefix, or station token (hex)
+    
     bool isValid = false;
 
     // DEV: Simulated scan bypasses validation
     if (scannedCode == "DEV_SKIP_CODE") {
       isValid = true;
     }
-    // 1. Check if it matches clue ID explicitly
+    // Legacy: Check if it matches clue ID explicitly
     else if (scannedCode.contains(widget.clue.id)) {
       isValid = true;
     }
-    // 2. Check if it matches the stored expected QR code (if any)
+    // Legacy: Check if it matches the stored expected QR code (if any)
     else if (widget.clue.qrCode != null && widget.clue.qrCode!.isNotEmpty) {
       if (scannedCode == widget.clue.qrCode) isValid = true;
     }

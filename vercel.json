@@ -14,6 +14,10 @@
       "destination": "https://shxbfwdapwbizxspicai.supabase.co/functions/v1/get-terms"
     },
     {
+      "source": "/delete-account",
+      "destination": "/delete_data.html"
+    },
+    {
       "source": "/.well-known/assetlinks.json",
       "destination": "/.well-known/assetlinks.json"
     }
