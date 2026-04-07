@@ -4,8 +4,10 @@ class Sponsor {
   final String planType; // 'bronce', 'plata', 'oro'
   final String? logoUrl;
   final String? bannerUrl;
+  final String? targetUrl;
   final String? minigameAssetUrl;
   final bool isActive;
+  final int weight;
   final DateTime createdAt;
 
   Sponsor({
@@ -14,8 +16,10 @@ class Sponsor {
     required this.planType,
     this.logoUrl,
     this.bannerUrl,
+    this.targetUrl,
     this.minigameAssetUrl,
     required this.isActive,
+    this.weight = 1,
     required this.createdAt,
   });
 
@@ -26,10 +30,21 @@ class Sponsor {
       planType: json['plan_type'],
       logoUrl: json['logo_url'],
       bannerUrl: json['banner_url'],
+      targetUrl: json['target_url'],
       minigameAssetUrl: json['minigame_asset_url'],
       isActive: json['is_active'] ?? true,
+      weight: json['weight'] ?? _defaultWeight(json['plan_type']),
       createdAt: DateTime.parse(json['created_at']),
     );
+  }
+
+  static int _defaultWeight(String? planType) {
+    switch (planType?.toLowerCase()) {
+      case 'oro':    return 5;
+      case 'plata':  return 3;
+      case 'bronce': return 1;
+      default:       return 1;
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -38,6 +53,7 @@ class Sponsor {
       'plan_type': planType,
       'logo_url': logoUrl,
       'banner_url': bannerUrl,
+      'target_url': targetUrl,
       'minigame_asset_url': minigameAssetUrl,
       'is_active': isActive,
     };
@@ -49,8 +65,10 @@ class Sponsor {
     String? planType,
     String? logoUrl,
     String? bannerUrl,
+    String? targetUrl,
     String? minigameAssetUrl,
     bool? isActive,
+    int? weight,
     DateTime? createdAt,
   }) {
     return Sponsor(
@@ -59,8 +77,10 @@ class Sponsor {
       planType: planType ?? this.planType,
       logoUrl: logoUrl ?? this.logoUrl,
       bannerUrl: bannerUrl ?? this.bannerUrl,
+      targetUrl: targetUrl ?? this.targetUrl,
       minigameAssetUrl: minigameAssetUrl ?? this.minigameAssetUrl,
       isActive: isActive ?? this.isActive,
+      weight: weight ?? this.weight,
       createdAt: createdAt ?? this.createdAt,
     );
   }

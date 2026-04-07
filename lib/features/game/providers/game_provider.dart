@@ -7,6 +7,7 @@ import '../../../shared/interfaces/i_resettable.dart';
 import '../services/game_service.dart';
 import '../../admin/models/sponsor.dart';
 import '../../admin/services/sponsor_service.dart';
+import '../services/sponsor_rotation_manager.dart';
 import '../models/power_effect.dart';
 import '../../../core/services/leaderboard_debouncer.dart';
 
@@ -115,9 +116,11 @@ class GameProvider extends ChangeNotifier implements IResettable {
   List<Map<String, dynamic>> _minigameEmojiMovies = [];
   bool _isMinigameDataLoading = false;
 
-  // New: Current Sponsor
+  // New: Sponsor Pool & Rotation
   Sponsor? _currentSponsor;
   Sponsor? get currentSponsor => _currentSponsor;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
+  SponsorRotationManager get sponsorRotation => _sponsorRotation;
 
   List<PowerEffect> get activePowerEffects => _activePowerEffects;
   bool get isPowerActionLoading => _isPowerActionLoading;
@@ -245,6 +248,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _minigameEmojiMovies = [];
     _isMinigameDataLoading = false;
     _currentSponsor = null;
+    _sponsorRotation.reset();
     _currentUserId = null;
     _subscribedRaceEventId = null; // Fix: resetear tracking
 
@@ -612,26 +616,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
       // ⚡ CRÍTICO: Suscribirse o actualizar suscripción una vez que totalClues es real
       subscribeToRaceStatus();
 
-      // Fetch Sponsor if not loaded (and eventId is valid)
+      // Fetch Sponsor pool if not loaded (and eventId is valid)
       if (idToUse != null && _currentSponsor == null) {
         try {
-          // We use a small service instance here or inject usage
-          final sponsorService = SponsorService();
-          final sponsor = await sponsorService.getSponsorForEvent(idToUse);
-          if (sponsor != null) {
-            _currentSponsor = sponsor;
+          await _sponsorRotation.loadPool(idToUse);
+          _currentSponsor = _sponsorRotation.selectSponsor();
+          if (_currentSponsor != null) {
             debugPrint(
-                '✅ GameProvider: Loaded Sponsor: ${sponsor.name} (${sponsor.planType})');
-          } else {
-            _currentSponsor =
-                await sponsorService.getActiveSponsor(); // Fallback
-            if (_currentSponsor != null) {
-              debugPrint(
-                  '✅ GameProvider: Loaded Global Sponsor (Fallback): ${_currentSponsor!.name}');
-            }
+                '✅ GameProvider: Selected Sponsor from pool: ${_currentSponsor!.name} (${_currentSponsor!.planType}, weight=${_currentSponsor!.weight})');
           }
         } catch (e) {
-          debugPrint('⚠️ Error fetching sponsor in GameProvider: $e');
+          debugPrint('⚠️ Error fetching sponsor pool in GameProvider: $e');
         }
       }
     } catch (e) {
@@ -660,6 +655,14 @@ class GameProvider extends ChangeNotifier implements IResettable {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Selects a new sponsor from the pool via weighted random rotation.
+  /// Call this each time a new banner display is needed.
+  Sponsor? rotateSponsor() {
+    _currentSponsor = _sponsorRotation.selectSponsor();
+    notifyListeners();
+    return _currentSponsor;
   }
 
   Future<Map<String, dynamic>?> startMinigameSession({

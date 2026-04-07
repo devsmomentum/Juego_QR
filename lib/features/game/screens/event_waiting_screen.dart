@@ -8,6 +8,7 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../admin/services/sponsor_service.dart'; // NEW
 import '../../admin/models/sponsor.dart'; // NEW
 import '../widgets/sponsor_banner.dart'; // NEW
+import '../services/sponsor_rotation_manager.dart'; // Sponsor Pool
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
@@ -79,10 +80,11 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   }
 
   Sponsor? _eventSponsor;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
 
   Future<void> _loadSponsor() async {
-    final service = SponsorService();
-    final sponsor = await service.getSponsorForEvent(widget.event.id);
+    await _sponsorRotation.loadPool(widget.event.id);
+    final sponsor = _sponsorRotation.selectSponsor();
     if (mounted && sponsor != null && sponsor.hasSponsoredByBanner) {
       setState(() {
         _eventSponsor = sponsor;
@@ -820,7 +822,15 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                             Padding(
                               padding:
                                   const EdgeInsets.only(top: 20, bottom: 80),
-                              child: SponsorBanner(sponsor: _eventSponsor),
+                              child: SponsorBanner(
+                                sponsor: _eventSponsor,
+                                onImpression: () => _sponsorRotation
+                                    .trackImpression(_eventSponsor!,
+                                        context: 'event_waiting'),
+                                onTap: () => _sponsorRotation.trackClick(
+                                    _eventSponsor!,
+                                    context: 'event_waiting'),
+                              ),
                             ),
                         ],
                       ),
