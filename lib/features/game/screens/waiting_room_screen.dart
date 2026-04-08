@@ -9,6 +9,8 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../shared/widgets/exit_protection_wrapper.dart';
 import '../widgets/race_track_widget.dart';
 import '../widgets/sponsor_banner.dart'; // NEW
+import '../services/sponsor_rotation_manager.dart';
+import '../../admin/models/sponsor.dart';
 import '../providers/spectator_feed_provider.dart';
 import 'scenarios_screen.dart';
 
@@ -29,6 +31,12 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   bool _isNavigating = false; // Guard: evita doble-navegación
 
   Timer? _pollingTimer;
+  Timer? _bannerTimer;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
+  Sponsor? _currentSponsor;
+  List<Sponsor> _bannerPool = [];
+  int _bannerIndex = 0;
+  final PageController _bannerController = PageController();
 
   @override
   void initState() {
@@ -36,6 +44,41 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _initWaitingRoom();
     });
+    _initBannerRotation();
+  }
+
+  Future<void> _initBannerRotation() async {
+    await _sponsorRotation.loadPool(widget.eventId);
+    if (!mounted) return;
+    _bannerPool = _sponsorRotation.pool.toList();
+    _bannerIndex = 0;
+    if (_bannerPool.isNotEmpty) {
+      setState(() => _currentSponsor = _bannerPool.first);
+    }
+    if (_bannerPool.length <= 1) return;
+    _bannerTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) _setNextSponsor();
+    });
+  }
+
+  void _setNextSponsor() {
+    if (_bannerPool.isEmpty) {
+      if (mounted && _currentSponsor != null) {
+        setState(() => _currentSponsor = null);
+      }
+      return;
+    }
+
+    _bannerIndex = (_bannerIndex + 1) % _bannerPool.length;
+    final next = _bannerPool[_bannerIndex];
+    if (next.id != _currentSponsor?.id) {
+      setState(() => _currentSponsor = next);
+      _bannerController.animateToPage(
+        _bannerIndex,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _initWaitingRoom() async {
@@ -82,6 +125,8 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
     _gameProviderRef?.removeListener(_onGameProviderChange);
     _gameProviderRef?.stopLeaderboardUpdates();
     super.dispose();
@@ -299,6 +344,32 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
                       ),
                     ),
                   ),
+
+                  if (_bannerPool.isNotEmpty)
+                    SizedBox(
+                      height: 86,
+                      child: PageView.builder(
+                        controller: _bannerController,
+                        itemCount: _bannerPool.length,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final sponsor = _bannerPool[index];
+                          return SponsorBanner(
+                            sponsor: sponsor,
+                            isCompact: true,
+                            onImpression: () =>
+                                _sponsorRotation.trackImpression(
+                              sponsor,
+                              context: 'waiting_room',
+                            ),
+                            onTap: () => _sponsorRotation.trackClick(
+                              sponsor,
+                              context: 'waiting_room',
+                            ),
+                          );
+                        },
+                      ),
+                    ),
 
                   // ── Race Tracker Label ───────────────────────────────
                   Padding(
