@@ -36,6 +36,8 @@ import '../widgets/competition_detail/clues_tab.dart';
 import '../widgets/competition_detail/stores_tab.dart';
 import '../widgets/competition_detail/safe_reset_confirm_dialog.dart';
 import '../widgets/competition_detail/reset_summary_dialog.dart';
+import '../services/sponsor_service.dart';
+import '../models/sponsor.dart';
 
 class CompetitionDetailScreen extends StatefulWidget {
   final GameEvent event;
@@ -103,6 +105,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   late int _configuredWinners; // NEW
   late int _betTicketPrice; // NEW
   bool _sponsorsEnabled = false;
+  bool _sponsorsSelective = false;
+  List<Sponsor> _availableSponsors = [];
+  final List<String> _selectedSponsorIds = [];
   Map<String, int> _spectatorPrices = {}; // NEW
 
   XFile? _selectedImage;
@@ -224,6 +229,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     _configuredWinners = widget.event.configuredWinners; // NEW
     _betTicketPrice = widget.event.betTicketPrice; // NEW
     _sponsorsEnabled = widget.event.sponsorsEnabled;
+    _sponsorsSelective = widget.event.sponsorsSelective;
     _spectatorPrices = Map<String, int>.from(widget.event.spectatorConfig.map(
       (k, v) => MapEntry(k, (v as num).toInt()),
     )); // NEW
@@ -242,6 +248,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       _cluesFuture = Provider.of<EventProvider>(context, listen: false)
           .fetchCluesForEvent(widget.event.id);
       _fetchPlayerStatuses(); // Cargar estados locales
+
+      _loadSponsorOptions();
 
       // Capture AdminService before subscription to avoid context issues
       final adminService = Provider.of<AdminService>(context, listen: false);
@@ -293,6 +301,27 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
       _checkPrizeStatus(adminService); // Check on init
     });
+  }
+
+  Future<void> _loadSponsorOptions() async {
+    try {
+      final sponsorService = SponsorService();
+      final sponsors = await sponsorService.getSponsors();
+      final activeSponsors = sponsors.where((s) => s.isActive).toList();
+      final selectedIds =
+          await sponsorService.getEventSponsorIds(widget.event.id);
+
+      if (mounted) {
+        setState(() {
+          _availableSponsors = activeSponsors;
+          _selectedSponsorIds
+            ..clear()
+            ..addAll(selectedIds);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading sponsor options: $e');
+    }
   }
 
   Future<void> _checkPrizeStatus([AdminService? service]) async {
@@ -514,11 +543,20 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         configuredWinners: _configuredWinners,
         betTicketPrice: _betTicketPrice,
         sponsorsEnabled: _sponsorsEnabled,
+        sponsorsSelective: _sponsorsSelective,
         spectatorConfig: _spectatorPrices,
       );
 
       await Provider.of<EventProvider>(context, listen: false)
           .updateEvent(updatedEvent, _selectedImage);
+
+      if (_sponsorsEnabled && _sponsorsSelective) {
+        final sponsorService = SponsorService();
+        await sponsorService.setEventSponsors(
+          widget.event.id,
+          _selectedSponsorIds,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1003,6 +1041,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       formKey: _formKey,
       isEventActive: _isEventActive,
       sponsorsEnabled: _sponsorsEnabled,
+      sponsorsSelective: _sponsorsSelective,
+      availableSponsors: _availableSponsors,
+      selectedSponsorIds: _selectedSponsorIds,
       title: _title,
       description: _description,
       pin: _pin,
@@ -1014,7 +1055,27 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       configuredWinners: _configuredWinners,
       selectedDate: _selectedDate,
       locationController: _locationController,
-      onSponsorsEnabledChanged: (value) => setState(() => _sponsorsEnabled = value),
+      onSponsorsEnabledChanged: (value) {
+        setState(() {
+          _sponsorsEnabled = value;
+          if (!value) {
+            _sponsorsSelective = false;
+          }
+        });
+      },
+      onSponsorsSelectiveChanged: (value) =>
+          setState(() => _sponsorsSelective = value),
+      onSponsorSelectionChanged: (sponsorId, selected) {
+        setState(() {
+          if (selected) {
+            if (!_selectedSponsorIds.contains(sponsorId)) {
+              _selectedSponsorIds.add(sponsorId);
+            }
+          } else {
+            _selectedSponsorIds.remove(sponsorId);
+          }
+        });
+      },
       onWinnersChanged: (value) => setState(() => _configuredWinners = value),
       onDateChanged: (value) => setState(() => _selectedDate = value),
       onSelectLocation: _selectLocationOnMap,

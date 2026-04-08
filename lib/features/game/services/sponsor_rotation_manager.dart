@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../admin/models/sponsor.dart';
 import '../../admin/services/sponsor_service.dart';
 
@@ -23,6 +24,26 @@ class SponsorRotationManager {
   /// for this event, this is a no-op (use [forceReload] to bypass cache).
   Future<void> loadPool(String eventId, {bool forceReload = false}) async {
     if (!forceReload && _loadedEventId == eventId && _pool.isNotEmpty) return;
+
+    bool sponsorsEnabled = true;
+    try {
+      final eventRow = await Supabase.instance.client
+          .from('events')
+          .select('sponsors_enabled')
+          .eq('id', eventId)
+          .maybeSingle();
+      sponsorsEnabled = (eventRow?['sponsors_enabled'] as bool?) ?? true;
+    } catch (e) {
+      debugPrint('⚠️ SponsorRotation: Failed to read sponsors_enabled: $e');
+    }
+
+    if (!sponsorsEnabled) {
+      _pool = [];
+      _loadedEventId = eventId;
+      _impressionsSent.clear();
+      debugPrint('✅ SponsorRotation: Sponsors disabled for event $eventId');
+      return;
+    }
 
     try {
       _pool = await _sponsorService.getSponsorPoolForEvent(eventId);

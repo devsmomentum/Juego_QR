@@ -67,6 +67,7 @@ class EventService {
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
             'sponsors_enabled': event.sponsorsEnabled,
+            'sponsors_selective': event.sponsorsSelective,
           })
           .select()
           .single();
@@ -169,6 +170,7 @@ class EventService {
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
             'sponsors_enabled': event.sponsorsEnabled,
+            'sponsors_selective': event.sponsorsSelective,
           })
           .eq('id', event.id)
           .select()
@@ -340,6 +342,7 @@ class EventService {
           : {},
       betTicketPrice: (data['bet_ticket_price'] as num?)?.toInt() ?? 100,
       sponsorsEnabled: (data['sponsors_enabled'] as bool?) ?? false,
+        sponsorsSelective: (data['sponsors_selective'] as bool?) ?? false,
       storePrices: data['store_prices'] != null
           ? Map<String, int>.from(
               data['store_prices'].map((k, v) => MapEntry(k, v as int)))

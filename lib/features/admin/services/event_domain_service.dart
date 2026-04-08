@@ -138,6 +138,7 @@ class EventDomainService {
     Map<String, dynamic> spectatorConfig = const {}, // NEW
     int betTicketPrice = 100, // NEW
     bool sponsorsEnabled = false,
+    bool sponsorsSelective = false,
   }) {
     final isOnline = eventType == 'online';
     final finalPin = isOnline ? generatePin(isOnline: true) : pin;
@@ -169,6 +170,7 @@ class EventDomainService {
       spectatorConfig: spectatorConfig,
       betTicketPrice: betTicketPrice, // NEW
       sponsorsEnabled: sponsorsEnabled,
+      sponsorsSelective: sponsorsSelective,
     );
   }
 

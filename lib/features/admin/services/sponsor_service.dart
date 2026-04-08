@@ -19,6 +19,39 @@ class SponsorService {
     return (response as List).map((json) => Sponsor.fromJson(json)).toList();
   }
 
+  Future<List<String>> getEventSponsorIds(String eventId) async {
+    try {
+      final response = await _supabase
+          .from('event_sponsors')
+          .select('sponsor_id')
+          .eq('event_id', eventId);
+
+      return (response as List)
+          .map((row) => row['sponsor_id'] as String)
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching event sponsors: $e');
+      return [];
+    }
+  }
+
+  Future<void> setEventSponsors(String eventId, List<String> sponsorIds) async {
+    // Clear existing selections first
+    await _supabase.from('event_sponsors').delete().eq('event_id', eventId);
+
+    if (sponsorIds.isEmpty) return;
+
+    final rows = sponsorIds
+        .map((sponsorId) => {
+              'event_id': eventId,
+              'sponsor_id': sponsorId,
+              'is_active': true,
+            })
+        .toList();
+
+    await _supabase.from('event_sponsors').insert(rows);
+  }
+
   Future<Sponsor?> getActiveSponsor() async {
     try {
       final response = await _supabase

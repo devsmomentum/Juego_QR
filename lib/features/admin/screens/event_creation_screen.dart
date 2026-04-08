@@ -22,6 +22,8 @@ import '../../mall/models/mall_store.dart';
 import '../../mall/models/power_item.dart'; // NEW
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../services/sponsor_service.dart';
+import '../models/sponsor.dart';
 
 class EventCreationScreen extends StatefulWidget {
   final VoidCallback? onEventCreated;
@@ -40,6 +42,8 @@ class EventCreationScreen extends StatefulWidget {
 class _EventCreationScreenState extends State<EventCreationScreen> {
   GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
+  Future<List<Sponsor>>? _sponsorsFuture;
+
   // UX Refinement Variables (UI ONLY)
   late TextEditingController _pinController;
   // We keep pin locked state in UI as it is a UI behavior
@@ -49,12 +53,20 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
   void initState() {
     super.initState();
     _pinController = TextEditingController(text: widget.event?.pin ?? '');
+    _sponsorsFuture = SponsorService()
+        .getSponsors()
+        .then((list) => list.where((s) => s.isActive).toList());
 
     // Defer provider initialization to next frame to avoid context issues
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider =
           Provider.of<EventCreationProvider>(context, listen: false);
       provider.init(widget.event);
+      if (widget.event != null) {
+        SponsorService()
+            .getEventSponsorIds(widget.event!.id)
+            .then(provider.setSelectedSponsorIds);
+      }
       // Sync controller if editing
       if (widget.event != null) {
         _pinController.text = widget.event!.pin;
@@ -343,8 +355,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                           ),
                           subtitle: Text(
                             provider.sponsorsEnabled
-                                ? 'Los sponsors activos rotarán en este evento'
-                                : 'Sin publicidad de sponsors',
+                                ? 'Sponsors activos habilitados en este evento'
+                                : 'Sin patrocinadores en este evento',
                             style: TextStyle(
                               color: Theme.of(context)
                                   .textTheme
@@ -368,6 +380,114 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               provider.setSponsorsEnabled(value),
                           contentPadding: EdgeInsets.zero,
                         ),
+                        const SizedBox(height: 8),
+                        SwitchListTile(
+                          title: Text(
+                            'Solo ciertos patrocinadores',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color,
+                            ),
+                          ),
+                          subtitle: Text(
+                            provider.sponsorsEnabled
+                                ? 'Selecciona manualmente los sponsors'
+                                : 'Activa patrocinadores primero',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color,
+                              fontSize: 12,
+                            ),
+                          ),
+                          secondary: Icon(
+                            Icons.tune_rounded,
+                            color: provider.sponsorsSelective
+                                ? AppTheme.lGoldAction
+                                : Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                          ),
+                          value: provider.sponsorsSelective,
+                          activeColor: AppTheme.lGoldAction,
+                          onChanged: provider.sponsorsEnabled
+                              ? (value) =>
+                                  provider.setSponsorsSelective(value)
+                              : null,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        if (provider.sponsorsEnabled &&
+                            provider.sponsorsSelective) ...[
+                          const SizedBox(height: 8),
+                          FutureBuilder<List<Sponsor>>(
+                            future: _sponsorsFuture,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: LinearProgressIndicator(),
+                                );
+                              }
+
+                              final sponsors = snapshot.data ?? [];
+                              if (sponsors.isEmpty) {
+                                return Text(
+                                  'No hay sponsors activos disponibles',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color,
+                                  ),
+                                );
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: sponsors.map((sponsor) {
+                                  final isSelected = provider
+                                      .selectedSponsorIds
+                                      .contains(sponsor.id);
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    value: isSelected,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(
+                                      sponsor.name,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      'Plan: ${sponsor.planType}',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.color,
+                                      ),
+                                    ),
+                                    onChanged: (value) {
+                                      provider.toggleSponsorSelection(
+                                        sponsor.id,
+                                        value ?? false,
+                                      );
+                                    },
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 20),
 
                         // --- Date & Time ---

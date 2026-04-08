@@ -5,12 +5,16 @@ import '../../../../shared/widgets/coin_image.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../game/models/event.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/sponsor.dart';
 
 class DetailsTab extends StatefulWidget {
   final GameEvent event;
   final GlobalKey<FormState> formKey;
   final bool isEventActive;
   final bool sponsorsEnabled;
+  final bool sponsorsSelective;
+  final List<Sponsor> availableSponsors;
+  final List<String> selectedSponsorIds;
   
   // State values
   final String title;
@@ -27,6 +31,8 @@ class DetailsTab extends StatefulWidget {
 
   // Callbacks
   final Function(bool) onSponsorsEnabledChanged;
+  final Function(bool) onSponsorsSelectiveChanged;
+  final Function(String, bool) onSponsorSelectionChanged;
   final Function(int) onWinnersChanged;
   final Function(DateTime) onDateChanged;
   final Function() onSelectLocation;
@@ -51,6 +57,9 @@ class DetailsTab extends StatefulWidget {
     required this.formKey,
     required this.isEventActive,
     required this.sponsorsEnabled,
+    required this.sponsorsSelective,
+    required this.availableSponsors,
+    required this.selectedSponsorIds,
     required this.title,
     required this.description,
     required this.pin,
@@ -63,6 +72,8 @@ class DetailsTab extends StatefulWidget {
     required this.selectedDate,
     required this.locationController,
     required this.onSponsorsEnabledChanged,
+    required this.onSponsorsSelectiveChanged,
+    required this.onSponsorSelectionChanged,
     required this.onWinnersChanged,
     required this.onDateChanged,
     required this.onSelectLocation,
@@ -224,8 +235,8 @@ class _DetailsTabState extends State<DetailsTab> {
               ),
               subtitle: Text(
                 widget.sponsorsEnabled
-                    ? 'Los sponsors activos rotarán en este evento'
-                    : 'Sin publicidad de sponsors',
+                    ? 'Sponsors activos habilitados en este evento'
+                    : 'Sin patrocinadores en este evento',
                 style: TextStyle(
                   color: Theme.of(context).textTheme.bodySmall?.color,
                   fontSize: 12,
@@ -244,6 +255,79 @@ class _DetailsTabState extends State<DetailsTab> {
                   : widget.onSponsorsEnabledChanged,
               contentPadding: EdgeInsets.zero,
             ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              title: Text(
+                'Solo ciertos patrocinadores',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
+              subtitle: Text(
+                widget.sponsorsEnabled
+                    ? 'Selecciona manualmente los sponsors'
+                    : 'Activa patrocinadores primero',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: Icon(
+                Icons.tune_rounded,
+                color: widget.sponsorsSelective
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+              value: widget.sponsorsSelective,
+              activeColor: AppTheme.lGoldAction,
+              onChanged: (widget.isEventActive || !widget.sponsorsEnabled)
+                  ? null
+                  : widget.onSponsorsSelectiveChanged,
+              contentPadding: EdgeInsets.zero,
+            ),
+            if (widget.sponsorsEnabled && widget.sponsorsSelective) ...[
+              const SizedBox(height: 8),
+              if (widget.availableSponsors.isEmpty)
+                Text(
+                  'No hay sponsors activos disponibles',
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.availableSponsors.map((sponsor) {
+                    final isSelected =
+                        widget.selectedSponsorIds.contains(sponsor.id);
+                    return CheckboxListTile(
+                      dense: true,
+                      value: isSelected,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        sponsor.name,
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Plan: ${sponsor.planType}',
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                      onChanged: widget.isEventActive
+                          ? null
+                          : (value) => widget.onSponsorSelectionChanged(
+                                sponsor.id,
+                                value ?? false,
+                              ),
+                    );
+                  }).toList(),
+                ),
+            ],
             const SizedBox(height: 16),
             
             MediaQuery.of(context).size.width < 600

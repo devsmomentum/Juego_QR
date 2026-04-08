@@ -25,6 +25,7 @@ class GameEvent {
   final Map<String, dynamic> spectatorConfig; // NEW: Spectator pricing
   final int betTicketPrice; // NEW: Price per bet
   final bool sponsorsEnabled; // Pool-based sponsor rotation
+  final bool sponsorsSelective; // Only selected sponsors for this event
   final Map<String, int> storePrices; // NEW: Custom prices for this event
   final bool isAutomated; // TRUE = created by automation, auto-starts without admin
 
@@ -52,6 +53,7 @@ class GameEvent {
     this.spectatorConfig = const {}, // NEW
     this.betTicketPrice = 100, // NEW
     this.sponsorsEnabled = false,
+    this.sponsorsSelective = false,
     this.storePrices = const {}, // NEW
     this.isAutomated = false,
   });
@@ -95,6 +97,7 @@ class GameEvent {
           : {}, // NEW
       betTicketPrice: (json['bet_ticket_price'] as num?)?.toInt() ?? 100, // NEW
       sponsorsEnabled: (json['sponsors_enabled'] as bool?) ?? false,
+      sponsorsSelective: (json['sponsors_selective'] as bool?) ?? false,
       storePrices: (json['store_prices'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as num).toInt()),
           ) ??
@@ -127,6 +130,7 @@ class GameEvent {
       'pot': pot, // NEW: Include pot in serialization
       'spectator_config': spectatorConfig, // NEW
       'sponsors_enabled': sponsorsEnabled,
+      'sponsors_selective': sponsorsSelective,
       'store_prices': storePrices, // NEW
       'is_automated': isAutomated,
     };
@@ -158,6 +162,7 @@ class GameEvent {
     bool? sponsorsEnabled,
     Map<String, int>? storePrices,
     bool? isAutomated,
+    bool? sponsorsSelective,
   }) {
     return GameEvent(
       id: id ?? this.id,
@@ -183,6 +188,7 @@ class GameEvent {
       spectatorConfig: spectatorConfig ?? this.spectatorConfig,
       betTicketPrice: betTicketPrice ?? this.betTicketPrice,
       sponsorsEnabled: sponsorsEnabled ?? this.sponsorsEnabled,
+      sponsorsSelective: sponsorsSelective ?? this.sponsorsSelective,
       storePrices: storePrices ?? this.storePrices,
       isAutomated: isAutomated ?? this.isAutomated,
     );

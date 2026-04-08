@@ -83,6 +83,14 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
   final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
 
   Future<void> _loadSponsor() async {
+    if (!widget.event.sponsorsEnabled) {
+      if (mounted) {
+        setState(() {
+          _eventSponsor = null;
+        });
+      }
+      return;
+    }
     await _sponsorRotation.loadPool(widget.event.id);
     final sponsor = _sponsorRotation.selectSponsor();
     if (mounted && sponsor != null && sponsor.hasSponsoredByBanner) {
