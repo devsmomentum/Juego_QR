@@ -10,10 +10,6 @@ import '../widgets/race_track_widget.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
 import '../../../shared/models/player.dart'; // Import Player model
 import '../providers/connectivity_provider.dart';
-import '../../mall/models/power_item.dart';
-import '../widgets/effects/blur_effect.dart';
-import '../providers/power_interfaces.dart';
-import '../providers/power_effect_provider.dart'; // NEW IMPORT
 import 'package:flutter/foundation.dart' show kDebugMode; // NEW IMPORT
 
 // --- Imports de Minijuegos Existentes ---
@@ -2301,21 +2297,7 @@ Widget _buildMinigameScaffold(
                           ),
                         ),
 
-                      // EFECTO BLUR (Inyectado aquí)
-                      if (context
-                          .watch<PowerEffectReader>()
-                          .isPowerActive(PowerType.blur))
-                        Builder(builder: (context) {
-                          final expiry = context
-                              .read<PowerEffectReader>()
-                              .getPowerExpirationByType(PowerType.blur);
-                          if (expiry != null) {
-                            return Positioned.fill(
-                              child: BlurScreenEffect(expiresAt: expiry),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        }),
+                      // NOTE: Blur effect is handled globally by SabotageOverlay
 
                       // Efecto Visual de Daño (Flash Rojo) al perder vida
                       LossFlashOverlay(lives: game.lives),

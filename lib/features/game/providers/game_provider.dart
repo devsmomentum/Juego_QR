@@ -215,6 +215,15 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _voluntaryExit = true;
   }
 
+  /// Ensures the current event context is set without forcing a full reset.
+  /// This is used to enable global overlays (e.g., powers) before clues load.
+  void ensureEventContext(String eventId) {
+    if (eventId.isEmpty) return;
+    if (_currentEventId == eventId) return;
+    _currentEventId = eventId;
+    notifyListeners();
+  }
+
   /// Limpia la bandera de salida voluntaria. Se llama desde
   /// GameSessionMonitor después de procesar la transición.
   void clearVoluntaryExit() {
