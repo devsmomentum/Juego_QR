@@ -2566,7 +2566,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
             Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(16.0), // Reduced from 24
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2575,27 +2575,28 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                       "CENTRO DE PRÁCTICA",
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 22.0,
+                        fontSize: 20.0, // Slightly reduced from 22
                         fontWeight: FontWeight.w900,
                         fontFamily: 'Orbitron',
                         letterSpacing: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2), // Even smaller
                     const Text(
-                      "Domina los minijuegos antes de ir por el tesoro real. ¡Sin límites!",
+                      "Domina los minijuegos antes de ir por el tesoro real.",
                       style: TextStyle(
                         color: Colors.white70,
-                        fontSize: 13,
-                        height: 1.4,
+                        fontSize: 11, // Reduced font
+                        height: 1.2,
                       ),
-                      maxLines: 2,
+                      maxLines: 1, // Only 1 line
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8), // Reduced spacing
                     
                     // Main Action Button
                     SizedBox(
-                      height: 50,
+                      height: 44, // Reduced from 50
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.push(
@@ -2850,7 +2851,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                     Center(
                       child: Image.asset(
                         'assets/images/logo4.1.png',
-                        height: 140, // Reduced size
+                        height: 110, // Further reduced to free vertical space
                         fit: BoxFit.contain,
                       ),
                     ),

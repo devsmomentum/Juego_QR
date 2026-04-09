@@ -332,21 +332,23 @@ class _UserCard extends StatelessWidget {
               tooltip: isBanned ? 'Desbanear Usuario' : 'Banear Usuario',
               onPressed: () => _confirmBanAction(context, player),
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.admin_panel_settings, color: Colors.blue),
-              tooltip: 'Cambiar Rol',
-              onSelected: (newRole) => _confirmChangeRole(context, player, newRole),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'user', child: Text('Rol: Usuario')),
-                const PopupMenuItem(value: 'staff', child: Text('Rol: Staff')),
-                const PopupMenuItem(value: 'admin', child: Text('Rol: Administrador')),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_forever, color: Colors.red),
-              tooltip: 'Eliminar Usuario',
-              onPressed: () => _confirmDeleteAction(context, player),
-            ),
+            if (Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.isAdmin == true) ...[
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+                tooltip: 'Cambiar Rol',
+                onSelected: (newRole) => _confirmChangeRole(context, player, newRole),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'user', child: Text('Rol: Usuario')),
+                  const PopupMenuItem(value: 'staff', child: Text('Rol: Staff')),
+                  const PopupMenuItem(value: 'admin', child: Text('Rol: Administrador')),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                tooltip: 'Eliminar Usuario',
+                onPressed: () => _confirmDeleteAction(context, player),
+              ),
+            ],
           ],
         ),
       ),

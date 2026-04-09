@@ -56,7 +56,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       "title": "Competencias",
       "icon": Icons.emoji_events,
       "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const CompetitionsManagementScreen(),
-      "onlyAdmin": true,
     },
     {
       "title": "Modo Online",
