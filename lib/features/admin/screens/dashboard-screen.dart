@@ -36,42 +36,103 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  final List<String> _titles = [
-    "Dashboard",
-    "Crear Evento",
-    "Competencias",
-    "Modo Online",
-    "Usuarios",
-    "Compras",
-    "Planes Retiro",
-    "Solicitudes",
-    "Retiros y Canjes",
-    "Stripe",
-    "Tienda Admin",
-    "Métricas",
-    "Minijuegos",
-    "Patrocinadores",
-    "Auditoría",
-    "Configuración",
-  ];
-
-  final List<IconData> _icons = [
-    Icons.dashboard,
-    Icons.add_circle_outline,
-    Icons.emoji_events,
-    Icons.cloud_done,
-    Icons.people,
-    Icons.local_offer,
-    Icons.money_off,
-    Icons.pending_actions,
-    Icons.receipt_long,
-    Icons.credit_card,
-    Icons.storefront,
-    Icons.analytics,
-    Icons.games,
-    Icons.business_center,
-    Icons.history_edu,
-    Icons.settings,
+  // Definición completa de todos los módulos disponibles para 'admin'
+  final List<Map<String, dynamic>> _allModules = [
+    {
+      "title": "Dashboard",
+      "icon": Icons.dashboard,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => 
+          _WelcomeDashboardView(onNavigate: setIndex, moduleTitles: currentTitles),
+    },
+    {
+      "title": "Crear Evento",
+      "icon": Icons.add_circle_outline,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => ChangeNotifierProvider(
+        create: (_) => EventCreationProvider(),
+        child: EventCreationScreen(onEventCreated: goToDashboard),
+      ),
+    },
+    {
+      "title": "Competencias",
+      "icon": Icons.emoji_events,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const CompetitionsManagementScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Modo Online",
+      "icon": Icons.cloud_done,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const OnlineAutomationScreen(),
+    },
+    {
+      "title": "Usuarios",
+      "icon": Icons.people,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const UserManagementScreen(),
+    },
+    {
+      "title": "Compras",
+      "icon": Icons.local_offer,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const CloverPlansManagementScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Planes Retiro",
+      "icon": Icons.money_off,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const WithdrawalPlansManagementScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Solicitudes",
+      "icon": Icons.pending_actions,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const GlobalGameRequestsScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Retiros y Canjes",
+      "icon": Icons.receipt_long,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const OutflowManagementScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Stripe",
+      "icon": Icons.credit_card,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const StripeOrdersScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Tienda Admin",
+      "icon": Icons.storefront,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const MerchandiseManagementScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Métricas",
+      "icon": Icons.analytics,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const EventMetricsScreen(),
+    },
+    {
+      "title": "Minijuegos",
+      "icon": Icons.games,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const _MinigamesListView(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Patrocinadores",
+      "icon": Icons.business_center,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const SponsorsManagementScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Auditoría",
+      "icon": Icons.history_edu,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const AuditLogsScreen(),
+      "onlyAdmin": true,
+    },
+    {
+      "title": "Configuración",
+      "icon": Icons.settings,
+      "view": (VoidCallback goToDashboard, Function(int) setIndex, List<String> currentTitles) => const GlobalConfigScreen(),
+      "onlyAdmin": true,
+    },
   ];
 
   void _goToDashboard() {
@@ -120,41 +181,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final playerProvider = context.watch<PlayerProvider>();
+    final player = playerProvider.currentPlayer;
     final bool isDarkMode = playerProvider.isDarkMode;
     final Color goldActionColor =
         isDarkMode ? AppTheme.dGoldMain : AppTheme.lGoldAction;
     final Color goldTextColor =
         isDarkMode ? AppTheme.dGoldLight : AppTheme.lGoldText;
 
-    final List<Widget> views = [
-      _WelcomeDashboardView(
-        onNavigate: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-      ),
-      ChangeNotifierProvider(
-        create: (_) => EventCreationProvider(),
-        child: EventCreationScreen(
-          onEventCreated: _goToDashboard,
-        ),
-      ),
-      const CompetitionsManagementScreen(),
-      const OnlineAutomationScreen(),
-      const UserManagementScreen(),
-      const CloverPlansManagementScreen(),
-      const WithdrawalPlansManagementScreen(),
-      const GlobalGameRequestsScreen(),
-      const OutflowManagementScreen(),
-      const StripeOrdersScreen(),
-      const MerchandiseManagementScreen(),
-      const EventMetricsScreen(),
-      const _MinigamesListView(),
-      const SponsorsManagementScreen(),
-      const AuditLogsScreen(),
-      const GlobalConfigScreen(),
-    ];
+    // Filtrar módulos según rol
+    final bool isAdmin = player?.isAdmin ?? false;
+    final List<Map<String, dynamic>> filteredModules = _allModules.where((m) {
+      if (isAdmin) return true;
+      return m['onlyAdmin'] != true;
+    }).toList();
+
+    // Extraer títulos, iconos y vistas de los módulos filtrados
+    final List<String> titles = filteredModules.map((m) => m['title'] as String).toList();
+    final List<IconData> icons = filteredModules.map((m) => m['icon'] as IconData).toList();
+    
+    final List<Widget> views = filteredModules.map((m) {
+      final viewBuilder = m['view'] as Widget Function(VoidCallback, Function(int), List<String>);
+      return viewBuilder(_goToDashboard, (index) => setState(() => _selectedIndex = index), titles);
+    }).toList();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -251,14 +299,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      "Administrador",
+                                      isAdmin ? "Administrador" : "Staff",
                                       style: TextStyle(
                                           color: Theme.of(context).textTheme.bodyLarge?.color,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14),
                                     ),
                                     Text(
-                                      "admin@system.com",
+                                      player?.email ?? "staff@system.com",
                                       style: TextStyle(
                                         color: Theme.of(context).textTheme.bodySmall?.color,
                                         fontSize: 11,
@@ -271,8 +319,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 CircleAvatar(
                                 backgroundColor: goldActionColor,
                                 radius: 16,
-                                child: const Text("A",
-                                    style: TextStyle(
+                                child: Text(isAdmin ? "A" : "S",
+                                    style: const TextStyle(
                                         fontSize: 14,
                                     color: Colors.white,
                                         fontWeight: FontWeight.bold)),
@@ -334,7 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _titles.length,
+                    itemCount: titles.length,
                     itemBuilder: (context, index) {
                       final isSelected = _selectedIndex == index;
 
@@ -366,7 +414,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Row(
                             children: [
                               Icon(
-                                _icons[index],
+                                icons[index],
                                 size: 18,
                                 color: isSelected
                                     ? goldActionColor
@@ -374,7 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _titles[index],
+                                titles[index],
                                 style: TextStyle(
                                   color: isSelected
                                       ? goldTextColor
@@ -415,7 +463,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class _WelcomeDashboardView extends StatefulWidget {
   final void Function(int)? onNavigate;
-  const _WelcomeDashboardView({this.onNavigate});
+  final List<String> moduleTitles;
+  const _WelcomeDashboardView({this.onNavigate, this.moduleTitles = const []});
 
   @override
   State<_WelcomeDashboardView> createState() => _WelcomeDashboardViewState();
@@ -459,6 +508,8 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final playerProvider = context.watch<PlayerProvider>();
+    final player = playerProvider.currentPlayer;
     final Color accentGold = isDark ? AppTheme.dGoldMain : AppTheme.lGoldAction;
 
     return Center(
@@ -500,12 +551,17 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
                        title: "Eventos Creados",
                        value: _createdEvents,
                        color: Colors.blueAccent),
-                   _SummaryCard(
-                     title: "Solicitudes Pendientes",
-                     value: _pendingRequests,
-                     color: Colors.orangeAccent,
-                    onTap: () => widget.onNavigate?.call(2),
-                  ),
+                    if (isDark || player?.isAdmin == true)
+                      _SummaryCard(
+                        title: "Solicitudes Pendientes",
+                        value: _pendingRequests,
+                        color: Colors.orangeAccent,
+                        onTap: () {
+                          // Buscar el índice de 'Competencias' o 'Solicitudes' en la lista filtrada
+                          final idx = widget.moduleTitles.indexWhere((t) => t == 'Solicitudes' || t == 'Competencias');
+                          if (idx != -1) widget.onNavigate?.call(idx);
+                        },
+                      ),
                 ],
               ),
             ],

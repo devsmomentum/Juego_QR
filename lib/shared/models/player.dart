@@ -217,6 +217,12 @@ class Player implements ITargetable {
   /// True only for 'admin' role.
   bool get isAdmin => role == 'admin';
 
+  /// True for 'staff' role.
+  bool get isStaff => role == 'staff';
+
+  /// True for any role that can access the Admin Dashboard.
+  bool get hasAdminAccess => isAdmin || isStaff;
+
   // --- Status Getters ---
 
   bool get isInvisible => status == PlayerStatus.invisible;

@@ -951,4 +951,18 @@ class AdminService {
       rethrow;
     }
   }
+
+  /// Actualiza el rol de un usuario.
+  Future<void> updateUserRole(String userId, String newRole) async {
+    try {
+      debugPrint('AdminService: Updating user $userId to role $newRole');
+      await _supabase
+          .from('profiles')
+          .update({'role': newRole})
+          .eq('id', userId);
+    } catch (e) {
+      debugPrint('AdminService: Error updating user role: $e');
+      rethrow;
+    }
+  }
 }

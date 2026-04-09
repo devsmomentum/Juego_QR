@@ -1739,6 +1739,22 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
+  /// Actualiza el rol de un usuario (admin only).
+  Future<void> updateUserRole(String userId, String newRole) async {
+    try {
+      await _adminService.updateUserRole(userId, newRole);
+      // Actualizar lista local
+      final index = _allPlayers.indexWhere((p) => p.userId == userId);
+      if (index != -1) {
+        _allPlayers[index] = _allPlayers[index].copyWith(role: newRole);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('PlayerProvider: Error in updateUserRole: $e');
+      rethrow;
+    }
+  }
+
   @override
   void dispose() {
     _isDisposed = true;

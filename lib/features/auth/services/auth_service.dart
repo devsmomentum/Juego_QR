@@ -150,10 +150,10 @@ class AuthService {
 
       final role = profile['role'] as String?;
 
-      if (role != 'admin') {
+      if (role != 'admin' && role != 'staff') {
         debugPrint('AuthService: Access denied for $email (Role: $role)');
         await logout(); // Limpiar sesión inmediatamente
-        throw 'Acceso denegado: No tienes permisos de administrador.';
+        throw 'Acceso denegado: No tienes permisos suficientes.';
       }
 
       return userId;

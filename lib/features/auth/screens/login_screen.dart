@@ -152,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
 
       if (versionStatus.maintenanceMode) {
-        if (player.isAdmin) {
+        if (player.hasAdminAccess) {
           // Admin: mostrar pantalla de mantenimiento con opción de continuar
           final shouldContinue = await Navigator.of(context).push<bool>(
             MaterialPageRoute(
@@ -180,8 +180,8 @@ class _LoginScreenState extends State<LoginScreen>
         }
       }
 
-      // Administradores van directamente al Dashboard
-      if (player.role == 'admin') {
+      // Administradores y Staff van directamente al Dashboard
+      if (player.hasAdminAccess) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const DashboardScreen()),
         );

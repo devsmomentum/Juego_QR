@@ -106,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen>
           if (!mounted) return;
 
           if (versionStatus.maintenanceMode) {
-            if (player.isAdmin) {
+            if (player.hasAdminAccess) {
               final shouldContinue = await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
                   builder: (_) => MaintenanceScreen(
@@ -134,7 +134,7 @@ class _SplashScreenState extends State<SplashScreen>
           }
 
           // 3. Resolver destino (Lógica similar a LoginScreen)
-          if (player.role == 'admin') {
+          if (player.hasAdminAccess) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const DashboardScreen()),
