@@ -642,12 +642,12 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                             // Banner de Victoria (Solo si terminó)
                             if (event.isCompleted) _buildVictoryBanner(),
 
-                            // B. POTE DE APUESTAS (NUEVO)
-                            SpectatorBettingPotWidget(eventId: widget.eventId),
+                            // B. POTE DE APUESTAS (OCULTO TEMPORALMENTE)
+                            // SpectatorBettingPotWidget(eventId: widget.eventId),
 
-                            // RESULTADOS DE APUESTAS (Solo si terminó)
-                            if (event.isCompleted)
-                              _buildUserWinningsSection(event.id),
+                            // RESULTADOS DE APUESTAS (OCULTO TEMPORALMENTE)
+                            // if (event.isCompleted)
+                            //   _buildUserWinningsSection(event.id),
 
                             // C. Carrera en Curso / Finalizada (Race Tracker siempre visible)
                             SizedBox(
@@ -1018,6 +1018,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         'Toca un poder de tu inventario para usarlo.',
                   ),
                   const SizedBox(height: 16),
+                  /* 🎰 Apuestas (OCULTO TEMPORALMENTE)
                   _buildTutorialSection(
                     '🎰 Apuestas',
                     'Apuesta 100 tréboles por el jugador que crees que ganará la carrera. '
@@ -1025,6 +1026,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         'Las apuestas se realizan con tréboles (moneda premium).',
                   ),
                   const SizedBox(height: 16),
+                  */
                   _buildTutorialSection(
                     '💰 Moneda del Juego',
                     'Los tréboles son la moneda del juego. '
@@ -1685,6 +1687,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            /* BOTONES DE APUESTAS OCULTOS TEMPORALMENTE
                             if (event.status == 'pending')
                               ElevatedButton(
                                 onPressed: () => _showBetDialog(),
@@ -1701,6 +1704,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                                     style: TextStyle(fontSize: 11)),
                               )
                             else
+                            */
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 6),
@@ -1711,11 +1715,12 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                                 child: Text(
                                   event.status == 'active'
                                       ? 'En Curso'
-                                      : 'Finalizado',
+                                      : event.status == 'pending' ? 'Pendiente' : 'Finalizado',
                                   style: const TextStyle(
                                       color: Colors.white54, fontSize: 11),
                                 ),
                               ),
+                            /*
                             const SizedBox(width: 6),
                             OutlinedButton(
                               onPressed: () => _showMyBetsDialog(context),
@@ -1732,6 +1737,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                               child: const Text('Mis Apuestas',
                                   style: TextStyle(fontSize: 11)),
                             ),
+                            */
                             const SizedBox(width: 8),
                             Consumer<PlayerProvider>(
                               builder: (context, playerProvider, child) {
