@@ -473,6 +473,8 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
   String _activeUsers = "...";
   String _createdEvents = "...";
   String _pendingRequests = "...";
+  String _platformEarnings = "...";
+  String _totalGrossIncome = "...";
 
   @override
   void initState() {
@@ -490,6 +492,8 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
           _activeUsers = stats.activeUsers.toString();
           _createdEvents = stats.createdEvents.toString();
           _pendingRequests = stats.pendingRequests.toString();
+          _platformEarnings = stats.platformEarnings.toString();
+          _totalGrossIncome = "\$${stats.totalGrossIncome.toStringAsFixed(2)}";
         });
       }
     } catch (e) {
@@ -499,6 +503,8 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
           _activeUsers = "-";
           _createdEvents = "-";
           _pendingRequests = "-";
+          _platformEarnings = "-";
+          _totalGrossIncome = "-";
         });
       }
     }
@@ -550,6 +556,28 @@ class _WelcomeDashboardViewState extends State<_WelcomeDashboardView> {
                        title: "Eventos Creados",
                        value: _createdEvents,
                        color: Colors.blueAccent),
+                    if (player?.isAdmin == true)
+                      _SummaryCard(
+                        title: "Tesorería (Ganancia)",
+                        value: "$_platformEarnings ☘️",
+                        color: AppTheme.successGreen,
+                        onTap: () {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             const SnackBar(content: Text('Este es el balance acumulado del 30% de comisiones.'))
+                           );
+                        },
+                      ),
+                    if (player?.isAdmin == true)
+                      _SummaryCard(
+                        title: "Ingresos Brutos (Stripe)",
+                        value: _totalGrossIncome,
+                        color: Colors.deepPurpleAccent,
+                        onTap: () {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             const SnackBar(content: Text('Total recolectado por Stripe/PayPal antes de comisiones y premios.'))
+                           );
+                        },
+                      ),
                     if (isDark || player?.isAdmin == true)
                       _SummaryCard(
                         title: "Solicitudes Pendientes",

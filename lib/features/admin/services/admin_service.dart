@@ -37,10 +37,29 @@ class AdminService {
           .eq('status', 'pending')
           .count(CountOption.exact);
 
+      // 4. Fetch Platform Earnings (Treasury account)
+      final treasuryData = await _supabase
+          .from('profiles')
+          .select('clovers')
+          .eq('email', 'tesoreria@maphunter.com')
+          .maybeSingle();
+
+      // 5. Fetch Total Gross Income (from clover_orders)
+      final ordersResponse = await _supabase
+          .from('clover_orders')
+          .select('amount')
+          .eq('status', 'success')
+          .eq('gateway', 'stripe');
+
+      final totalGross = (ordersResponse as List)
+          .fold<double>(0.0, (sum, order) => sum + ((order['amount'] as num?)?.toDouble() ?? 0.0));
+
       return AdminStats(
         activeUsers: usersCount,
         createdEvents: eventsCount,
         pendingRequests: requestsCount.count,
+        platformEarnings: (treasuryData?['clovers'] as num?)?.toInt() ?? 0,
+        totalGrossIncome: totalGross,
       );
     } catch (e) {
       debugPrint('AdminService: Error fetching stats: $e');
