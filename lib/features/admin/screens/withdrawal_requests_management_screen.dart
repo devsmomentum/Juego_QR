@@ -117,7 +117,8 @@ class _WithdrawalRequestsManagementScreenState
     return Column(
       children: [
         // Header & Filters
-        Padding(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [

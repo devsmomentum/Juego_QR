@@ -26,6 +26,7 @@ import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/development_bypass_button.dart';
 import '../../../core/services/version_check_service.dart';
 import '../../../shared/widgets/maintenance_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -58,6 +59,27 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(milliseconds: 2500),
       vsync: this,
     )..repeat();
+
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('remembered_email');
+      final savedPassword = prefs.getString('remembered_password');
+
+      if (savedEmail != null && savedPassword != null) {
+        if (mounted) {
+          setState(() {
+            _emailController.text = savedEmail;
+            _passwordController.text = savedPassword;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading saved credentials: $e');
+    }
   }
 
   @override
@@ -144,6 +166,16 @@ class _LoginScreenState extends State<LoginScreen>
           playerProvider.clearBanMessage();
         }
         return;
+      }
+
+
+      // 4. SAVE CREDENTIALS ON SUCCESS
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('remembered_email', _emailController.text.trim().toLowerCase());
+        await prefs.setString('remembered_password', _passwordController.text);
+      } catch (e) {
+        debugPrint('Error saving credentials: $e');
       }
 
       // === CHECK MAINTENANCE MODE ===
