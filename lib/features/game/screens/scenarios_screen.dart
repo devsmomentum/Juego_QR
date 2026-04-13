@@ -2314,7 +2314,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
             },
           ),
           const SizedBox(height: 16),
-          _buildModeCard(
+          /*_buildModeCard(
             title: "MODO ENTRENAMIENTO",
             description: "Practica los minijuegos sin riesgo.",
             icon: Icons.model_training,
@@ -2328,7 +2328,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
               );
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 16),*/
           _buildModeCard(
             title: "MODO LOCAL",
             description: "Juega en casa con amigos. Próximamente.",
@@ -2472,7 +2472,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
     );
   }
 
-  Widget _buildTrainingSwipeCard(BoxConstraints constraints) {
+  /*Widget _buildTrainingSwipeCard(BoxConstraints constraints) {
     const isDarkMode = true;
     final Color currentAction = AppTheme.successGreen;
 
@@ -2640,7 +2640,8 @@ class _ScenariosScreenState extends State<ScenariosScreen>
         ),
       ),
     );
-  }
+  }*/
+
 
   Widget _buildScenariosContent(List<Scenario> scenarios) {
     final playerProvider = Provider.of<PlayerProvider>(context);
@@ -3070,13 +3071,13 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                           controller: _pageController,
                                           onPageChanged: (index) => setState(
                                               () => _currentPage = index),
-                                          itemCount: scenarios.length + 1,
+                                          itemCount: scenarios.length, // + 1
                                           itemBuilder: (context, index) {
-                                            if (index == 0) {
+                                            /*if (index == 0) {
                                               return _buildTrainingSwipeCard(
                                                   constraints);
-                                            }
-                                            final scenarioIndex = index - 1;
+                                            }*/
+                                            final scenarioIndex = index; // - 1
                                             final scenario =
                                                 scenarios[scenarioIndex];
                                             _ensureBettingStats(scenario.id);

@@ -230,7 +230,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
         );
       } else {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const TrainingCenterScreen()),
+          MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
         );
       }
     } catch (e) {

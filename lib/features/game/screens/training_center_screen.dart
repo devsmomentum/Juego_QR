@@ -30,6 +30,25 @@ class _TrainingCenterScreenState extends State<TrainingCenterScreen> with Ticker
   final PageController _scenarioPageController = PageController(viewportFraction: 0.8);
 
   @override
+  void initState() {
+    super.initState();
+    // Escudo de seguridad: Evitar que usuarios no administradores entren aquí
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final player = playerProvider.currentPlayer;
+      
+      // Permitir SOLO a administradores. Todos los demás fuera.
+      if (player == null || player.role != 'admin') {
+        debugPrint('🛡️ ESCUDO: Usuario no autorizado intentó acceder a TrainingCenterScreen. Redirigiendo...');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => TutorialStateProvider(),

@@ -270,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen>
         case UserEventStatus.waitingApproval:
           // Usuario esperando aprobación - ir a Centro de Entrenamiento
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const TrainingCenterScreen()),
+            MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
           );
           break;
 
@@ -281,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen>
         case UserEventStatus.rejected:
         case UserEventStatus.noEvent:
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const TrainingCenterScreen()),
+            MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
           );
           break;
       }

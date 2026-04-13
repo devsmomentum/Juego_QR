@@ -204,7 +204,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                             const SizedBox(height: 16),
 
                             // MODO ENTRENAMIENTO (NUEVO)
-                            _buildModeCard(
+                            /*_buildModeCard(
                               title: "MODO ENTRENAMIENTO",
                               description:
                                   "Practica tus habilidades y domina los minijuegos antes de competir por el tesoro.",
@@ -219,7 +219,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               },
                             ),
 
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 16),*/
 
                             // MODO LOCAL
                             _buildModeCard(
