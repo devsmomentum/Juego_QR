@@ -61,55 +61,52 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // Precargar ambas imágenes de fondo para transiciones suaves
-    precacheImage(const AssetImage('assets/images/hero.png'), context);
-    precacheImage(const AssetImage('assets/images/loginclaro.png'), context);
+    // Precargar la imagen de fondo unificada para una transición inmediata
+    precacheImage(const AssetImage('assets/images/intro_bg.png'), context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = true /* always dark UI */;
-    final isNightImage = Provider.of<PlayerProvider>(context).isDarkMode;
+    // Forzar estilo de barra de estado para máxima limpieza visual
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.black,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
+
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.dSurface0,
+      backgroundColor: Colors.black, // Fondo base oscuro
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // BACKGROUND (Mismo que Login)
-
-          // BACKGROUND (Mismo que Login)
-          Positioned.fill(
-            child: isNightImage
-                ? Opacity(
-                    opacity: 0.7,
-                    child: Image.asset(
-                      'assets/images/hero.png',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                    ),
-                  )
-                : Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/loginclaro.png',
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
-                      Container(
-                        color: Colors.black.withOpacity(0.2),
-                      ),
-                    ],
-                  ),
+          // BACKGROUND UNIFICADO (Mismo que Splash para evitar destellos)
+          Image.asset(
+            'assets/images/intro_bg.png',
+            fit: BoxFit.cover,
           ),
 
-          SafeArea(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverFillRemaining(
-                  hasScrollBody: false,
+          // OVERLAY OSCURO PARA LEGIBILIDAD
+          Container(
+            color: Colors.black.withOpacity(0.5),
+          ),
+
+          // CONTENIDO SIN SAFE_AREA (Manualmente espaciado)
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: topPadding + 20,
+                    bottom: bottomPadding + 30,
+                    left: 20,
+                    right: 20,
+                  ),
                   child: Column(
                     children: [
                       const Spacer(flex: 1),
@@ -123,12 +120,13 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                                 fontFamily: 'Orbitron',
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color:
-                                    AppTheme.dGoldMain, // Amarillo/Dorado consistente
+                                color: AppTheme
+                                    .dGoldMain, // Amarillo/Dorado consistente
                                 letterSpacing: 1.5,
                                 shadows: [
                                   BoxShadow(
-                                      color: AppTheme.dGoldMain.withOpacity(0.5),
+                                      color:
+                                          AppTheme.dGoldMain.withOpacity(0.5),
                                       blurRadius: 10,
                                       spreadRadius: 2)
                                 ]),
@@ -264,12 +262,12 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                                   ]),
                               child: TextButton.icon(
                                 onPressed: _showLogoutDialog,
-                                icon: const Icon(Icons.arrow_back,
+                                icon: const Icon(Icons.logout_rounded,
                                     color: Colors.white, size: 20),
-                                label: const Text("Volver",
+                                label: const Text("CERRAR SESIÓN",
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontFamily: 'Orbitron',
                                       letterSpacing: 1.0,
                                     )),
@@ -294,8 +292,8 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
