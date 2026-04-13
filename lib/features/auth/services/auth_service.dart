@@ -417,12 +417,18 @@ class AuthService {
   }
 
   /// Agrega un método de pago vinculado al usuario.
-  Future<void> addPaymentMethod({required String bankCode}) async {
+  Future<void> addPaymentMethod({
+    String? bankCode,
+    String? type,
+    String? identifier,
+  }) async {
     try {
       final response = await _supabase.functions.invoke(
         'auth-service/add-payment-method',
         body: {
-          'bank_code': bankCode,
+          if (bankCode != null) 'bank_code': bankCode,
+          if (type != null) 'type': type,
+          if (identifier != null) 'identifier': identifier,
         },
         method: HttpMethod.post,
       );

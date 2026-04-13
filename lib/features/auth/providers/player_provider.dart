@@ -385,9 +385,17 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
-  Future<void> addPaymentMethod({required String bankCode}) async {
+  Future<void> addPaymentMethod({
+    String? bankCode,
+    String? type,
+    String? identifier,
+  }) async {
     try {
-      await _authService.addPaymentMethod(bankCode: bankCode);
+      await _authService.addPaymentMethod(
+        bankCode: bankCode,
+        type: type,
+        identifier: identifier,
+      );
     } catch (e) {
       debugPrint('Error adding payment method in provider: $e');
       rethrow;

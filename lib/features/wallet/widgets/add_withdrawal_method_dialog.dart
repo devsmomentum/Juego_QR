@@ -22,7 +22,7 @@ class AddWithdrawalMethodDialog extends StatefulWidget {
 
 class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
   final _formKey = GlobalKey<FormState>();
-  String _selectedType = 'stripe'; // 'pago_movil' or 'stripe'
+  String _selectedType = 'pago_movil'; // 'pago_movil', 'stripe' or 'paypal'
   String? _selectedBankCode;
   final _emailController = TextEditingController();
   bool _isLoading = false;
@@ -78,11 +78,12 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
       return;
     }
 
-    if (_selectedType == 'stripe') {
+    if (_selectedType == 'stripe' || _selectedType == 'paypal') {
       final email = _emailController.text.trim();
       if (email.isEmpty) {
+        final label = _selectedType == 'stripe' ? 'Stripe' : 'PayPal';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ingresa tu email de Stripe')),
+          SnackBar(content: Text('Ingresa tu email de $label')),
         );
         return;
       }
@@ -116,7 +117,7 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
         bankCode: _selectedType == 'pago_movil' ? _selectedBankCode : null,
         phoneNumber: _selectedType == 'pago_movil' ? player.phone : null,
         dni: _selectedType == 'pago_movil' ? player.cedula : null,
-        identifier: _selectedType == 'stripe' ? _emailController.text.trim() : null,
+        identifier: (_selectedType == 'stripe' || _selectedType == 'paypal') ? _emailController.text.trim() : null,
         isDefault: false,
       );
 
@@ -184,15 +185,31 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    
+                    Expanded(
+                      child: _buildTypeSelector(
+                        'P. MÓVIL', 
+                        AppTheme.secondaryPink, 
+                        _selectedType == 'pago_movil',
+                        () => setState(() => _selectedType = 'pago_movil'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _buildTypeSelector(
                         'STRIPE', 
-                        const Color(0xFF635BFF), // Stripe Purple
+                        const Color(0xFF635BFF), 
                         _selectedType == 'stripe',
                         () => setState(() => _selectedType = 'stripe'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildTypeSelector(
+                        'PAYPAL', 
+                        const Color(0xFF0070BA), 
+                        _selectedType == 'paypal',
+                        () => setState(() => _selectedType = 'paypal'),
                       ),
                     ),
                   ],
@@ -263,17 +280,21 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                           onChanged: (val) => setState(() => _selectedBankCode = val),
                         ),
                       ] else ...[
-                        const Text(
-                          'CONFIGURACIÓN STRIPE',
-                          style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold),
+                        Text(
+                          _selectedType == 'stripe' ? 'CONFIGURACIÓN STRIPE' : 'CONFIGURACIÓN PAYPAL',
+                          style: const TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           style: const TextStyle(color: Colors.white, fontSize: 14),
-                          decoration: _inputDecoration('Email de tu cuenta Stripe').copyWith(
-                            prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF635BFF), size: 20),
+                          decoration: _inputDecoration('Email de tu cuenta ${_selectedType == 'stripe' ? 'Stripe' : 'PayPal'}').copyWith(
+                            prefixIcon: Icon(
+                              Icons.email_outlined, 
+                              color: _selectedType == 'stripe' ? const Color(0xFF635BFF) : const Color(0xFF0070BA), 
+                              size: 20
+                            ),
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) return 'Por favor ingresa un email';
@@ -285,13 +306,15 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF635BFF).withOpacity(0.1),
+                            color: (_selectedType == 'stripe' ? const Color(0xFF635BFF) : const Color(0xFF0070BA)).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF635BFF).withOpacity(0.3)),
+                            border: Border.all(
+                              color: (_selectedType == 'stripe' ? const Color(0xFF635BFF) : const Color(0xFF0070BA)).withOpacity(0.3)
+                            ),
                           ),
-                          child: const Text(
-                            'Asegúrate de que este email corresponde a tu cuenta de Stripe para evitar retrasos en el procesamiento.',
-                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          child: Text(
+                            'Asegúrate de que este email corresponde a tu cuenta de ${_selectedType == 'stripe' ? 'Stripe' : 'PayPal'} para evitar retrasos en el procesamiento.',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
                           ),
                         ),
                       ],
@@ -312,7 +335,9 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _saveMethod,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _selectedType == 'pago_movil' ? AppTheme.accentGold : const Color(0xFF635BFF),
+                          backgroundColor: _selectedType == 'pago_movil' 
+                            ? AppTheme.accentGold 
+                            : (_selectedType == 'stripe' ? const Color(0xFF635BFF) : const Color(0xFF0070BA)),
                           foregroundColor: _selectedType == 'pago_movil' ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -361,7 +386,7 @@ class _AddWithdrawalMethodDialogState extends State<AddWithdrawalMethodDialog> {
           textAlign: TextAlign.center,
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.white38,
-            fontSize: 11,
+            fontSize: 9, // Reduced font size to fit 3 items
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
             letterSpacing: 0.5,

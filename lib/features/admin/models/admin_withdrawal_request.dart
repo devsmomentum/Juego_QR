@@ -54,10 +54,12 @@ class AdminWithdrawalRequest {
   }
 
   bool get isStripe => gateway == 'stripe';
+  bool get isPaypal => gateway == 'paypal';
   bool get isPagoMovil => gateway == 'pago_movil';
   bool get isPending => status == 'pending';
   bool get isCompleted => status == 'completed';
   bool get isFailed => status == 'failed';
 
   String get stripeEmail => providerData['stripe_email'] as String? ?? '---';
+  String get paypalEmail => (providerData['paypal_email'] ?? providerData['stripe_email']) as String? ?? '---';
 }

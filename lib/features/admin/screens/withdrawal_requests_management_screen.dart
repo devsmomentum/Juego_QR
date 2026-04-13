@@ -199,7 +199,9 @@ class _WithdrawalRequestsManagementScreenState
 
   Widget _buildRequestCard(AdminWithdrawalRequest request) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final color = request.isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink;
+    final color = request.isStripe 
+        ? const Color(0xFF635BFF) 
+        : (request.isPaypal ? const Color(0xFF0070BA) : AppTheme.secondaryPink);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -230,7 +232,10 @@ class _WithdrawalRequestsManagementScreenState
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
-                  child: Text(request.isStripe ? '💳' : '💸', style: const TextStyle(fontSize: 20)),
+                  child: Text(
+                    request.isStripe ? '💳' : (request.isPaypal ? '🅿️' : '💸'), 
+                    style: const TextStyle(fontSize: 20)
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -276,7 +281,9 @@ class _WithdrawalRequestsManagementScreenState
                   const Text('MÉTODO', style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1)),
                   const SizedBox(height: 4),
                   Text(
-                    request.isStripe ? 'Stripe (${request.stripeEmail})' : 'Pago Móvil',
+                    request.isStripe 
+                        ? 'Stripe (${request.stripeEmail})' 
+                        : (request.isPaypal ? 'PayPal (${request.paypalEmail})' : 'Pago Móvil'),
                     style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 13),
                   ),
                 ],
