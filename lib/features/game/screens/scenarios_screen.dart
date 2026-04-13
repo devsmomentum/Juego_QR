@@ -132,10 +132,17 @@ class _ScenariosScreenState extends State<ScenariosScreen>
           label: 'CERRAR SESIÓN',
           gradientColors: [AppTheme.dangerRed, const Color(0xFFB71C1C)],
           textColor: Colors.white,
-          onTap: () {
+          onTap: () async {
+            // [FIX] Cerrar el diálogo primero y esperar un instante para evitar "congestion"
+            // de animaciones en el Navigator mientras AuthMonitor actúa sobre el Root.
             Navigator.pop(context);
-            playerProvider.logout();
-            // AuthMonitor handles navigation to LoginScreen
+            
+            // Un pequeño delay para que la animación de pop comience antes del barrido del monitor
+            await Future.delayed(const Duration(milliseconds: 100));
+            
+            if (context.mounted) {
+              playerProvider.logout();
+            }
           },
         ),
       ],
