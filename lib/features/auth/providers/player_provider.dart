@@ -1047,7 +1047,12 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     try {
       // 1. Fetch basic profile
       final profileData =
-          await _supabase.from('profiles').select().eq('id', userId).single();
+          await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
+      
+      if (profileData == null) {
+        debugPrint('PlayerProvider: ⚠️ Profile not found for $userId (transient RLS/auth issue?). Skipping refresh.');
+        return;
+      }
       debugPrint('PlayerProvider: Raw profile data from DB: $profileData');
 
       // 2. Determine which GamePlayer context to fetch (if any)
@@ -1281,6 +1286,14 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
             
             // SINGLE DEVICE POLICY VALIDATION
             final String? remoteSessionId = profile['current_session_id'];
+            final String? role = profile['role'];
+            
+            // Allow admins and staff to use multiple devices (dashboard + app)
+            if (role == 'admin' || role == 'staff') {
+              _fetchProfile(userId);
+              return;
+            }
+
             final sessionService = SessionService();
             final isValid = await sessionService.isSessionValid(remoteSessionId);
             

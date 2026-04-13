@@ -117,7 +117,11 @@ serve(async (req) => {
       }
 
       // Build the HMAC challenge: binds session to context
-      const challengePayload = `${sessionId}:${hashedIp}:${challengeNonce}`;
+      // FIX: Removed hashedIp from challenge payload. Mobile carriers frequently
+      // rotate IPs mid-session (cell handoffs, WiFi↔cellular), causing
+      // CHALLENGE_MISMATCH for legitimate users. IP abuse detection remains
+      // intact via the separate ip_hash column in minigame_sessions.
+      const challengePayload = `${sessionId}:${challengeNonce}`;
       const challengeToken = await hmacSign(challengePayload, challengeSecret);
 
       // Store challenge_hash in the session row via RPC (bypasses RLS safely)
@@ -153,7 +157,8 @@ serve(async (req) => {
 
       if (session?.challenge_hash && session?.challenge_nonce) {
         // Reconstruct the payload using stored nonce + current IP
-        const verifyPayload = `${sessionId}:${hashedIp}:${session.challenge_nonce}`;
+        // FIX: Match start-session payload (without IP) to avoid mismatch on mobile networks
+        const verifyPayload = `${sessionId}:${session.challenge_nonce}`;
         challengeValid = await hmacVerify(verifyPayload, challengeSecret, receivedChallenge);
 
         if (!challengeValid) {

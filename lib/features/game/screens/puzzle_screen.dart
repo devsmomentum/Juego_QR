@@ -1266,7 +1266,9 @@ void _showSuccessDialog(
   }
 
   try {
-    result = await clueCompletionFuture.timeout(const Duration(seconds: 6));
+    // FIX: Increased from 6s to 15s. The full chain (Edge Function → verify_and_complete_minigame
+    // → submit_clue_answer → potentially register_race_finisher) can exceed 6s on slow mobile networks.
+    result = await clueCompletionFuture.timeout(const Duration(seconds: 15));
     coinsEarned = result?['coins_earned'] ?? 0;
     debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
   } catch (e) {
@@ -1513,7 +1515,9 @@ void _showSuccessDialog(
             ],
           ),
         );
-      } else if (errorCode == 'SESSION_EXPIRED') {
+      } else if (errorCode == 'SESSION_EXPIRED' || errorCode == '0xERR-992A-4B') {
+        // FIX: Map opaque server error code 0xERR-992A-4B (session expired on server)
+        // to the same user-friendly SESSION_EXPIRED dialog.
         await showDialog<void>(
           context: navigator.context,
           barrierDismissible: false,
@@ -1558,7 +1562,56 @@ void _showSuccessDialog(
         } else if (navigator.mounted) {
           navigator.maybePop();
         }
+      } else if (errorCode == 'CHALLENGE_MISMATCH' || errorCode == '0xERR-CHALLENGE' || errorCode == '0xERR-HMAC') {
+        // FIX: Map challenge/HMAC errors to a specific, helpful dialog.
+        // This can happen if the user's network context changed significantly.
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.orange.shade700, width: 1.5),
+            ),
+            title: Text(
+              'Conexion inestable',
+              style: TextStyle(
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Tu conexion cambio durante el minijuego. Asegurate de tener una conexion estable e intentalo de nuevo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(
+                  'REINTENTAR',
+                  style: TextStyle(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
       } else {
+        // Generic fallback for truly unknown errors
+        debugPrint('⚠️ Unmapped validation error code: $errorCode (full result: $result)');
         await showDialog<void>(
           context: navigator.context,
           barrierDismissible: false,

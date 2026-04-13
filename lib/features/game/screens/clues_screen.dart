@@ -94,6 +94,7 @@ class _CluesScreenState extends State<CluesScreen> {
         });
 
         // 5. SHIELD CONSISTENCY FIX: Iniciar escucha de eventos de poderes
+        if (!mounted) return; // Guard: widget may have been unmounted during async gaps above
         final powerEffectProvider = Provider.of<PowerEffectProvider>(context, listen: false);
         final gamePlayerId = playerProvider.currentPlayer?.gamePlayerId;
         
