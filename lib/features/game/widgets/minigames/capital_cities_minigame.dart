@@ -11,6 +11,7 @@ import 'game_over_overlay.dart';
 import '../../utils/minigame_logic_helper.dart';
 import '../../../auth/providers/player_provider.dart';
 import '../../../mall/screens/mall_screen.dart';
+import '../../utils/country_helper.dart';
 
 class CapitalCitiesMinigame extends StatefulWidget {
   final Clue clue;
@@ -39,6 +40,8 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
 
+  List<String> _shuffledCountries = [];
+  int _currentCountryIndex = 0;
   late String _currentCountry;
   late String _correctAnswer;
   List<String> _options = [];
@@ -79,7 +82,32 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
           _startGame();
         } else {
           // Fallback logic if Supabase is empty or fails
-          _capitals = {"❓": "Error de carga"};
+          _capitals = {
+            "España": "Madrid",
+            "Francia": "París",
+            "Italia": "Roma",
+            "Alemania": "Berlín",
+            "Reino Unido": "Londres",
+            "Portugal": "Lisboa",
+            "EEUU": "Washington D.C.",
+            "Canadá": "Ottawa",
+            "México": "Ciudad de México",
+            "Brasil": "Brasilia",
+            "Argentina": "Buenos Aires",
+            "Chile": "Santiago",
+            "Colombia": "Bogotá",
+            "Venezuela": "Caracas",
+            "Perú": "Lima",
+            "Japón": "Tokio",
+            "China": "Pekín",
+            "Corea del Sur": "Seúl",
+            "Australia": "Camberra",
+            "Rusia": "Moscú",
+            "Egipto": "El Cairo",
+            "Sudáfrica": "Pretoria",
+            "India": "Nueva Delhi",
+            "Turquía": "Ankara",
+          };
           _startGame();
         }
       });
@@ -91,6 +119,11 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
     _secondsRemaining = _gameDurationSeconds;
     _isGameOver = false;
     _showOverlay = false;
+    
+    // Prepare shuffled pool to avoid repeats
+    _shuffledCountries = _capitals.keys.toList()..shuffle(_random);
+    _currentCountryIndex = 0;
+    
     _generateRound();
     _startTimer();
   }
@@ -107,7 +140,7 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -121,22 +154,29 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
   }
 
   void _generateRound() {
-    // Pick a random country
-    List<String> countries = _capitals.keys.toList();
-    _currentCountry = countries[_random.nextInt(countries.length)];
+    if (_shuffledCountries.isEmpty) return;
+    
+    // Pick next country from shuffled pool
+    if (_currentCountryIndex >= _shuffledCountries.length) {
+      _shuffledCountries.shuffle(_random);
+      _currentCountryIndex = 0;
+    }
+    
+    _currentCountry = _shuffledCountries[_currentCountryIndex];
     _correctAnswer = _capitals[_currentCountry]!;
+    _currentCountryIndex++;
 
-    // Generate 3 distractors
+    // Generate 3 distractors (Total 4 options) for better mobile visibility
     Set<String> optionsSet = {_correctAnswer};
     List<String> allCapitals = _capitals.values.toList();
 
-    while (optionsSet.length < 4) {
+    while (optionsSet.length < 4 && optionsSet.length < allCapitals.length) {
       String distractor = allCapitals[_random.nextInt(allCapitals.length)];
       optionsSet.add(distractor);
     }
 
     _options = optionsSet.toList();
-    _options.shuffle();
+    _options.shuffle(_random);
   }
 
   void _handleSelection(String selected) {
@@ -164,6 +204,7 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
   Future<void> _handleMistake() async {
     _gameTimer?.cancel();
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+
     if (playerProvider.currentPlayer != null) {
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
       if (!mounted) return;
@@ -171,16 +212,48 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
       if (newLives <= 0) {
         _endGame(
             win: false,
-            reason: "Capital incorrecta. Sin vidas.",
+            reason: "Capital incorrecta.\n\nLa respuesta era: $_correctAnswer",
             lives: newLives);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("¡ERROR! -1 Vida"),
-              backgroundColor: AppTheme.dangerRed,
-              duration: Duration(milliseconds: 1000)),
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppTheme.surfaceDark,
+            title: const Text("¡RESPUESTA INCORRECTA!",
+                style: TextStyle(color: AppTheme.dangerRed, fontSize: 18)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("La capital de esta bandera:",
+                    style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 10),
+                Text(CountryHelper.getEmoji(_currentCountry) ?? "🏳️",
+                    style: const TextStyle(fontSize: 60)),
+                const SizedBox(height: 10),
+                const Text("es:", style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 10),
+                Text(_correctAnswer,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: AppTheme.accentGold,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _generateRound();
+                  _startTimer();
+                },
+                child: const Text("CONTINUAR",
+                    style: TextStyle(color: AppTheme.accentGold)),
+              ),
+            ],
+          ),
         );
-        _startTimer();
       }
     }
   }
@@ -202,8 +275,8 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
 
       setState(() {
         _showOverlay = true;
-        _overlayTitle = "GAME OVER";
-        _overlayMessage = reason ?? "Perdiste";
+        _overlayTitle = currentLives <= 0 ? "GAME OVER" : "INTENTA DE NUEVO";
+        _overlayMessage = reason ?? "Capital incorrecta";
         _canRetry = currentLives > 0;
         _showShopButton = true;
       });
@@ -230,12 +303,11 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: _capitals.isEmpty ||
-                  (_capitals.length == 1 && _capitals.containsKey("❓"))
+          child: _capitals.isEmpty
               ? const Center(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                       CircularProgressIndicator(color: AppTheme.accentGold),
                       SizedBox(height: 10),
                       Text("Cargando datos...",
@@ -244,73 +316,137 @@ class _CapitalCitiesMinigameState extends State<CapitalCitiesMinigame> {
                   ),
                 )
               : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Top Bar
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Text("Tiempo: $_secondsRemaining",
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 16)),
-                        Text("Progreso: $_score/$_targetScore",
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 16)),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    // const Text("BANDERA DE:",
-                    //     style: TextStyle(color: Colors.white54, fontSize: 18)),
-                    // const SizedBox(height: 10),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _currentCountry,
-                        style: const TextStyle(
-                            color: Colors.amberAccent,
-                            fontSize: 80, // slightly smaller to save space
-                            fontWeight: FontWeight.bold),
+                    // Header Card
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).size.height < 700 ? 5 : 15),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.timer, color: AppTheme.accentGold),
+                              const SizedBox(width: 8),
+                              Text("$_secondsRemaining s",
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryPurple.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text("$_score/$_targetScore",
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    // Options Grid
+
+                    const Text("¿CUÁL ES LA CAPITAL DE ESTA BANDERA?",
+                        style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 14,
+                            letterSpacing: 1.2)),
+                    
+                    SizedBox(height: MediaQuery.of(context).size.height < 700 ? 5 : 10),
+                    
                     Center(
-                      child: GridView.count(
-                        shrinkWrap: true,
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 2.2, // Taller buttons
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        children: _options.map((opt) {
+                      child: Container(
+                        height: MediaQuery.of(context).size.height < 700 ? 120 : 180,
+                        alignment: Alignment.center,
+                        child: Builder(
+                          builder: (context) {
+                            final emoji = CountryHelper.getEmoji(_currentCountry);
+                            if (emoji != null) {
+                              return FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  emoji,
+                                  style: const TextStyle(
+                                      fontSize: 100,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              // FALLBACK: Nombre del país como último recurso
+                              return Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.accentGold.withOpacity(0.1),
+                                      blurRadius: 20,
+                                    ),
+                                  ],
+                                ),
+                                child: AutoSizeText(
+                                  _currentCountry.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2,
+                                  ),
+                                  maxLines: 1,
+                                  textAlign: TextAlign.center,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: MediaQuery.of(context).size.height < 700 ? 10 : 20),
+                    
+                    // Options Grid
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 2.2,
+                      children: _options.map((opt) {
                           return ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white10,
+                              backgroundColor: const Color(0xFF2C3E50),
                               foregroundColor: Colors.white,
+                              elevation: 4,
+                              shadowColor: Colors.black45,
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side:
-                                      const BorderSide(color: Colors.white24)),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
+                                  borderRadius: BorderRadius.circular(15),
+                                  side: const BorderSide(color: Colors.white10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
                             ),
                             onPressed: () => _handleSelection(opt),
-                            child: Center(
-                              child: AutoSizeText(
-                                opt,
-                                style: const TextStyle(fontSize: 18),
-                                maxLines: 2,
-                                textAlign: TextAlign.center,
-                                minFontSize: 10,
-                                wrapWords: false,
-                              ),
+                            child: AutoSizeText(
+                              opt,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              minFontSize: 10,
                             ),
                           );
                         }).toList(),
                       ),
-                    ),
-                    const SizedBox(height: 4),
                   ],
                 ),
         ),

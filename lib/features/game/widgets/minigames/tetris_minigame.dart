@@ -26,7 +26,7 @@ class TetrisMinigame extends StatefulWidget {
   State<TetrisMinigame> createState() => _TetrisMinigameState();
 }
 
-class _TetrisMinigameState extends State<TetrisMinigame> {
+class _TetrisMinigameState extends State<TetrisMinigame> with WidgetsBindingObserver {
   // Configuración del tablero
   static const int rows = 20;
   static const int columns = 10;
@@ -134,6 +134,7 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _audioPlayer = AudioPlayer();
     _audioPlayer.setReleaseMode(ReleaseMode.loop);
     _audioPlayer.setVolume(0.5);
@@ -141,6 +142,19 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
     // Iniciar lo más rápido posible
     _playMusic();
     _startGame();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // App went to background
+      _audioPlayer.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      // App came back to foreground
+      if (_isMusicPlaying && !_isGameOver && !_isPaused && !_showOverlay) {
+        _audioPlayer.resume();
+      }
+    }
   }
 
   Future<void> _playMusic() async {
@@ -193,7 +207,7 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause game loop
+      if (gameProvider.isPaused) return; // Pause game loop
 
       // [FIX] Pause game loop if connectivity is bad
       final connectivityByProvider =
@@ -448,6 +462,7 @@ class _TetrisMinigameState extends State<TetrisMinigame> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _audioPlayer.dispose();
     super.dispose();

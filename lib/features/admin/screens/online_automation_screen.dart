@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/app_config_service.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../../mall/models/power_item.dart';
+import '../../game/providers/online_schedule_provider.dart';
 
 class OnlineAutomationScreen extends StatefulWidget {
   const OnlineAutomationScreen({super.key});
@@ -59,6 +62,9 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
   Future<void> _triggerManual() async {
     setState(() => _isLoading = true);
     try {
+      // Refresh session to ensure a valid JWT before calling the edge function
+      await _supabase.auth.refreshSession();
+
       final response = await _supabase.functions.invoke(
         'automate-online-events',
         body: {'trigger': 'manual'},
@@ -106,8 +112,11 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             const SizedBox(height: 24),
             Expanded(
               child: ListView(
+                physics: const BouncingScrollPhysics(),
                 children: [
                   _buildToggleCard(),
+                  const SizedBox(height: 20),
+                  _buildModeCard(),
                   const SizedBox(height: 20),
                   _buildSettingsCard(),
                 ],
@@ -126,37 +135,40 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: const Text(
+              child: Text(
                 'Automatización Online',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: Theme.of(context).textTheme.displayLarge?.color,
                     fontSize: 28,
                     fontWeight: FontWeight.bold),
               ),
             ),
-            const Text(
+            Text(
               'Configura la creación automática de competencias.',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+              style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                  fontSize: 16),
             ),
           ],
         ),
         ElevatedButton.icon(
           onPressed: _triggerManual,
-          icon: const Icon(Icons.flash_on),
+          icon: const Icon(Icons.flash_on_rounded),
           label: const Text('Generar Ahora'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.secondaryPink,
+            backgroundColor: AppTheme.lGoldAction,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
           ),
         ),
       ],
@@ -165,50 +177,428 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
 
   Widget _buildToggleCard() {
     final bool isEnabled = _config['enabled'] == true;
+    return LayoutBuilder(
+      builder: (context, cardConstraints) {
+        final bool isNarrow = cardConstraints.maxWidth < 450;
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+                color: isEnabled
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context).dividerColor.withOpacity(0.1)),
+          ),
+          child: isNarrow
+              ? Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.auto_awesome,
+                            color: isEnabled
+                                ? AppTheme.lGoldAction
+                                : Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.2),
+                            size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              isEnabled
+                                  ? 'Automatización ACTIVA'
+                                  : 'Automatización DESACTIVADA',
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: isEnabled,
+                          onChanged: (val) {
+                            setState(() => _config['enabled'] = val);
+                            _saveConfig();
+                          },
+                          activeColor: AppTheme.lGoldAction,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Si está activa, el sistema generará eventos según el intervalo definido.',
+                      style: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.6),
+                          fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Icon(Icons.auto_awesome,
+                        color: isEnabled
+                            ? AppTheme.lGoldAction
+                            : Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withOpacity(0.2),
+                        size: 32),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              isEnabled
+                                  ? 'Automatización ACTIVA'
+                                  : 'Automatización DESACTIVADA',
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          Text(
+                            'Si está activa, el sistema generará eventos según el intervalo definido.',
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color
+                                    ?.withOpacity(0.6),
+                                fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: isEnabled,
+                      onChanged: (val) {
+                        setState(() => _config['enabled'] = val);
+                        _saveConfig();
+                      },
+                      activeColor: AppTheme.lGoldAction,
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModeCard() {
+    final String mode = (_config['mode'] as String?) ?? 'automatic';
+    final List<String> hours = (_config['scheduled_hours'] is List)
+        ? List<String>.from(_config['scheduled_hours'] as List)
+        : [];
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-            color: isEnabled ? AppTheme.primaryPurple : Colors.white10),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.auto_awesome,
-              color: isEnabled ? AppTheme.primaryPurple : Colors.white24,
-              size: 32),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Text('Modo de Creación',
+              style: TextStyle(
+                  color: Theme.of(context).textTheme.displayLarge?.color,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(
+            'Solo un modo puede estar activo. "Automático" usa el intervalo; "Programado" usa horarios fijos (hora Venezuela).',
+            style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.6),
+                fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, btnConstraints) {
+              final bool useVertical = btnConstraints.maxWidth < 400;
+              if (useVertical) {
+                return Column(
+                  children: [
+                    _ModeButton(
+                      label: 'Automático',
+                      icon: Icons.autorenew,
+                      selected: mode == 'automatic',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'automatic');
+                        _saveConfig();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _ModeButton(
+                      label: 'Programado',
+                      icon: Icons.schedule,
+                      selected: mode == 'scheduled',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'scheduled');
+                        _saveConfig();
+                      },
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: _ModeButton(
+                      label: 'Automático',
+                      icon: Icons.autorenew,
+                      selected: mode == 'automatic',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'automatic');
+                        _saveConfig();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ModeButton(
+                      label: 'Programado',
+                      icon: Icons.schedule,
+                      selected: mode == 'scheduled',
+                      onTap: () {
+                        setState(() => _config['mode'] = 'scheduled');
+                        _saveConfig();
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          if (mode == 'scheduled') ...[
+            const SizedBox(height: 20),
+            Row(
               children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
+                Expanded(
                   child: Text(
-                    isEnabled
-                        ? 'Automatización ACTIVA'
-                        : 'Automatización DESACTIVADA',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
+                    'Horarios programados (VEN)',
+                    style: TextStyle(
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color
+                            ?.withOpacity(0.8),
+                        fontSize: 14,
                         fontWeight: FontWeight.bold),
                   ),
                 ),
-                const Text(
-                  'Si está activa, el sistema generará eventos según el intervalo definido.',
-                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                IconButton(
+                  icon: const Icon(Icons.add_circle,
+                      color: AppTheme.lGoldAction),
+                  onPressed: () => _addScheduledHour(hours),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            if (hours.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No hay horarios configurados. Presiona + para agregar.',
+                  style: TextStyle(
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withOpacity(0.4),
+                      fontSize: 13),
+                ),
+              ),
+            ...hours.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final hour = entry.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time,
+                          color: AppTheme.lGoldAction, size: 20),
+                      const SizedBox(width: 12),
+                      Text(hour,
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .displayLarge
+                                  ?.color,
+                              fontSize: 16,
+                              fontFamily: 'Orbitron',
+                              fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            color: Colors.redAccent, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            hours.removeAt(idx);
+                            _config['scheduled_hours'] = hours;
+                          });
+                          _saveConfig();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            _buildNextEventPreview(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addScheduledHour(List<String> hours) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 12, minute: 0),
+      helpText: 'Selecciona hora Venezuela',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppTheme.lGoldAction,
+              surface: Theme.of(context).cardTheme.color!,
+            ),
           ),
-          Switch(
-            value: isEnabled,
-            onChanged: (val) {
-              setState(() => _config['enabled'] = val);
-              _saveConfig();
-            },
-            activeColor: AppTheme.primaryPurple,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: child!,
+          ),
+        );
+      },
+    );
+    if (picked != null) {
+      final formatted =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      if (!hours.contains(formatted)) {
+        setState(() {
+          hours.add(formatted);
+          hours.sort();
+          _config['scheduled_hours'] = hours;
+        });
+        _saveConfig();
+      }
+    }
+  }
+
+  Widget _buildNextEventPreview() {
+    final hours = (_config['scheduled_hours'] is List)
+        ? List<String>.from(_config['scheduled_hours'] as List)
+        : <String>[];
+    if (hours.isEmpty) return const SizedBox.shrink();
+
+    // VET = UTC-4 (Venezuela, no DST)
+    const vetOffsetHours = -4;
+    final nowUtc = DateTime.now().toUtc();
+    DateTime? nextSlot;
+
+    final todaySlots = <DateTime>[];
+    for (final h in hours) {
+      final parts = h.split(':');
+      if (parts.length < 2) continue;
+      final hr = int.tryParse(parts[0]);
+      final mn = int.tryParse(parts[1]);
+      if (hr == null || mn == null) continue;
+      // Hours stored in VET → convert to UTC for comparison
+      final utcHour = hr - vetOffsetHours;
+      todaySlots
+          .add(DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, utcHour, mn));
+    }
+    todaySlots.sort();
+
+    for (final slot in todaySlots) {
+      if (slot.isAfter(nowUtc)) {
+        nextSlot = slot;
+        break;
+      }
+    }
+    nextSlot ??=
+        todaySlots.isNotEmpty ? todaySlots.first.add(const Duration(days: 1)) : null;
+
+    if (nextSlot == null) return const SizedBox.shrink();
+
+    final local = nextSlot.toLocal();
+    final diff = nextSlot.difference(nowUtc);
+    final hh = diff.inHours;
+    final mm = diff.inMinutes % 60;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.lGoldAction.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_available,
+              color: AppTheme.lGoldAction, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Próximo evento: ${DateFormat('HH:mm').format(local)} (hora VEN) — en ${hh}h ${mm}m',
+              style: TextStyle(
+                  color: Theme.of(context).textTheme.displayLarge?.color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -216,40 +606,171 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
   }
 
   Widget _buildSettingsCard() {
+    final String mode = (_config['mode'] as String?) ?? 'automatic';
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.cardBg,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text('Parámetros de Generación',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: Theme.of(context).textTheme.displayLarge?.color,
                         fontSize: 18,
                         fontWeight: FontWeight.bold)),
               ),
               IconButton(
                   onPressed: _saveConfig,
-                  icon: const Icon(Icons.save, color: AppTheme.primaryPurple)),
+                  icon: const Icon(Icons.save, color: AppTheme.lGoldAction)),
             ],
           ),
           const SizedBox(height: 24),
-          _buildSlider('Intervalo (minutos)', 'interval_minutes', 10, 1440, 1),
-          _buildSlider('Copa Mín. Jugadores', 'min_players', 2, 20, 1),
-          _buildSlider('Copa Máx. Jugadores', 'max_players', 20, 50, 1),
+          // Show interval slider only in automatic mode
+          if (mode == 'automatic')
+            _buildSlider('Intervalo (minutos)', 'interval_minutes', 10, 1440, 1),
+          _buildSlider('Copa Mín. Jugadores', 'min_players', 5, 20, 1),
+          _buildSlider('Copa Máx. Jugadores', 'max_players', 20, 60, 1),
           _buildSlider('Cant. Mín. Minijuegos', 'min_games', 2, 6, 1),
           _buildSlider('Cant. Máx. Minijuegos', 'max_games', 6, 15, 1),
           _buildSlider('Entry Fee Mín [COIN]', 'min_fee', 0, 50, 5),
-          _buildSlider('Entry Fee Máx [COIN]', 'max_fee', 50, 200, 5),
+          _buildSlider('Entry Fee Máx [COIN]', 'max_fee', 0, 300, 5),
+          const Padding(
+            padding: EdgeInsets.only(left: 16.0, bottom: 20.0),
+            child: Text(
+              "💡 Si Mín != Máx, el precio de entrada será aleatorio entre ambos.",
+              style: TextStyle(
+                  color: AppTheme.lGoldText,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic),
+            ),
+          ),
+          const Divider(height: 32),
+          Text(
+            'Inicio de Sala (Pending → Active)',
+            style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5),
+          ),
+          const SizedBox(height: 8),
+          _buildSlider('Espera antes de iniciar (min)', 'pending_wait_minutes',
+              1, 120, 1),
+          _buildSlider(
+              'Jugadores mín. para iniciar', 'min_players_to_start', 2, 20, 1),
+          const Divider(height: 32),
+          _buildPriceSection(
+            'player_prices',
+            '🎮 Precios Tienda (Jugadores)',
+            AppTheme.lGoldAction,
+          ),
+          Divider(color: Theme.of(context).dividerColor.withOpacity(0.2), height: 32),
+          _buildPriceSection(
+            'spectator_prices',
+            '👁 Precios Tienda (Espectadores)',
+            AppTheme.lGoldAction.withOpacity(0.8),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPriceSection(String configKey, String title, Color color) {
+    final Map<String, dynamic> priceMap = (_config[configKey] is Map)
+        ? Map<String, dynamic>.from(_config[configKey] as Map)
+        : {};
+    final powers = PowerItem.getShopItems();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5)),
+        const SizedBox(height: 12),
+        ...powers.map((power) {
+          final currentPrice = priceMap.containsKey(power.id)
+              ? (priceMap[power.id] as num).toInt()
+              : power.cost;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Text(power.icon, style: const TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(power.name,
+                        style: TextStyle(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.color
+                                ?.withOpacity(0.8),
+                            fontSize: 13))),
+                SizedBox(
+                  width: 80,
+                  child: TextFormField(
+                    key: ValueKey('$configKey-${power.id}'),
+                    initialValue: currentPrice.toString(),
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: color, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Theme.of(context).cardTheme.color,
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 5),
+                      isDense: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: color.withOpacity(0.3))),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                              color: color.withOpacity(0.1))),
+                    ),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (val) {
+                      final newCost = int.tryParse(val);
+                      if (newCost != null) {
+                        final current = (_config[configKey] is Map)
+                            ? Map<String, dynamic>.from(
+                                _config[configKey] as Map)
+                            : <String, dynamic>{};
+                        current[power.id] = newCost;
+                        _config[configKey] = current;
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
@@ -265,7 +786,13 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
             Row(
               children: [
                 Text(label.replaceAll('[COIN]', '').trim(),
-                    style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                    style: TextStyle(
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color
+                            ?.withOpacity(0.7),
+                        fontSize: 14)),
                 if (label.contains('[COIN]')) ...[
                   const SizedBox(width: 4),
                   const CoinImage(size: 14),
@@ -273,8 +800,8 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
               ],
             ),
             Text(value.toInt().toString(),
-                style: const TextStyle(
-                    color: AppTheme.primaryPurple,
+                style: TextStyle(
+                    color: AppTheme.lGoldAction,
                     fontWeight: FontWeight.bold)),
           ],
         ),
@@ -283,12 +810,77 @@ class _OnlineAutomationScreenState extends State<OnlineAutomationScreen> {
           min: min,
           max: max,
           divisions: ((max - min) / (divisions)).toInt(),
-          activeColor: AppTheme.primaryPurple,
-          inactiveColor: Colors.white10,
+          activeColor: AppTheme.lGoldAction,
+          inactiveColor: Theme.of(context).dividerColor.withOpacity(0.1),
           onChanged: (val) => setState(() => _config[key] = val.toInt()),
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppTheme.lGoldAction.withOpacity(0.15)
+              : Theme.of(context).cardTheme.color,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? AppTheme.lGoldAction
+                : Theme.of(context).dividerColor.withOpacity(0.1),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon,
+                color: selected
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.3),
+                size: 28),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? Theme.of(context).textTheme.displayLarge?.color
+                    : Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.5),
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

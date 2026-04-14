@@ -32,8 +32,15 @@ class PowerRepositoryImpl implements PowerRepository {
         .from('combat_events')
         .stream(primaryKey: ['id'])
         .eq('target_id', targetId)
-        .order('created_at', ascending: false)
-        .order('created_at', ascending: false); // Note: Keep existing weird ordering if it was there, or clean it up.
+        .order('created_at', ascending: false); // Fix 3.7: removed duplicate .order() call
+  }
+
+  @override
+  RealtimeChannel getCombatBroadcastChannel({required String gamePlayerId}) {
+    // Canal nombrado por gamePlayerId para aislamiento por jugador.
+    // Los triggers de BD (trg_combat_event_broadcast, trg_active_power_broadcast)
+    // envían mensajes a este canal inmediatamente después del INSERT.
+    return _supabase.channel('game:$gamePlayerId');
   }
 
   @override

@@ -9,9 +9,12 @@ import 'story_screen.dart';
 import '../../../core/services/video_preload_service.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
+import '../../game/screens/training_center_screen.dart';
+import '../widgets/avatar_card.dart';
 
 class AvatarSelectionScreen extends StatefulWidget {
   final String? eventId;
+  final bool isFromProfile;
 
   static const List<String> validAvatarIds = [
     'explorer_m',
@@ -24,7 +27,7 @@ class AvatarSelectionScreen extends StatefulWidget {
     'spec_f',
   ];
 
-  const AvatarSelectionScreen({super.key, this.eventId});
+  const AvatarSelectionScreen({super.key, this.eventId, this.isFromProfile = false});
 
   @override
   State<AvatarSelectionScreen> createState() => _AvatarSelectionScreenState();
@@ -212,6 +215,11 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
 
       if (!mounted) return;
 
+      if (widget.isFromProfile) {
+        Navigator.of(context).pop();
+        return;
+      }
+
       if (widget.eventId != null) {
         await gameProvider.initializeGameForApprovedUser(
             playerProvider.currentPlayer!.userId, widget.eventId!);
@@ -244,6 +252,30 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
   void _previousPage() {
     _pageController.previousPage(
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  }
+
+  Map<String, Color> _getAvatarTheme(String avatarId) {
+    if (avatarId.contains('hacker')) {
+      return {
+        'primary': const Color(0xFFD500F9), // Purple
+        'secondary': const Color(0xFF00E5FF), // Cyan
+      };
+    } else if (avatarId.contains('warrior')) {
+      return {
+        'primary': const Color(0xFFFECB00), // Gold
+        'secondary': const Color(0xFFD500F9), // Purple
+      };
+    } else if (avatarId.contains('spec')) {
+      return {
+        'primary': const Color(0xFF448AFF), // Blue
+        'secondary': const Color(0xFFE0E0E0), // White/Silver
+      };
+    }
+    // Default / Explorer
+    return {
+      'primary': const Color(0xFFE28551), // Copper
+      'secondary': const Color(0xFF8B4513), // Dark Copper
+    };
   }
 
   @override
@@ -323,19 +355,20 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
           SafeArea(
             child: Column(
               children: [
-                // // Back Button (Estilo Congelado/Segmentado)
-                // Padding(
-                //   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                //   child: Row(
-                //     children: [
-                //       CyberRingButton(
-                //         size: 48,
-                //         icon: Icons.arrow_back,
-                //         onPressed: () => Navigator.of(context).pop(),
-                //       ),
-                //     ],
-                //   ),
-                // ),
+                // Botón para retroceder (Back Button)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    children: [
+                      CyberRingButton(
+                        size: 40,
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
 
                 // const SizedBox(height: 10),
 
@@ -384,7 +417,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 10),
 
                 // Carousel Infinito
                 Expanded(
@@ -402,77 +435,23 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
 
                           final isSelected = realIndex == _currentIndex;
 
+                          final theme = _getAvatarTheme(avatar['id'] ?? '');
+
                           return AnimatedScale(
-                            scale: isSelected ? 1.0 : 0.7,
+                            scale: isSelected ? 1.0 : 0.8,
                             duration: const Duration(milliseconds: 300),
-                            child: Opacity(
-                              opacity: isSelected ? 1.0 : 0.5,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // Avatar Image with Hover Effect
-                                  AnimatedBuilder(
-                                    animation: _hoverController,
-                                    builder: (context, child) {
-                                      final double offset = isSelected
-                                          ? Curves.easeInOut.transform(
-                                                  _hoverController.value) *
-                                              15
-                                          : 0;
-                                      return Transform.translate(
-                                        offset: Offset(0, -offset),
-                                        child: child,
-                                      );
-                                    },
-                                    child: Container(
-                                      height: 200,
-                                      width: 200,
-                                      decoration: null,
-                                      child: Image.asset(
-                                        'assets/images/avatars/${avatar['id']}.png',
-                                        fit: BoxFit.contain,
-                                        cacheWidth:
-                                            400, // Constraint memory usage
-                                        errorBuilder: (_, __, ___) =>
-                                            const Icon(
-                                          Icons.person,
-                                          color: Colors.white70,
-                                          size: 100,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 30),
-                                  Text(
-                                    avatar['name']!,
-                                    style: TextStyle(
-                                      fontFamily: 'Orbitron',
-                                      color: isSelected
-                                          ? dGoldMain
-                                          : Colors.white70,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: isSelected ? 26 : 22,
-                                      letterSpacing: 2,
-                                      shadows: const [],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 50),
-                                    child: Text(
-                                      avatar['desc']!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.white54,
-                                        fontSize: 14,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                            child: AnimatedOpacity(
+                              opacity: isSelected ? 1.0 : 0.4,
+                              duration: const Duration(milliseconds: 300),
+                              child: Center(
+                                child: AvatarCard(
+                                  avatarId: avatar['id']!,
+                                  name: avatar['name']!,
+                                  description: avatar['desc']!,
+                                  isSelected: isSelected,
+                                  primaryAccent: theme['primary']!,
+                                  secondaryAccent: theme['secondary']!,
+                                ),
                               ),
                             ),
                           );
@@ -502,7 +481,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
 
                 // Confirm Button (Doble Borde Estilo Premium)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(40, 20, 40, 40),
+                  padding: const EdgeInsets.fromLTRB(40, 10, 40, 20),
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(

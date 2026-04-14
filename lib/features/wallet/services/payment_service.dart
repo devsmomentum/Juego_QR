@@ -18,6 +18,7 @@ class PaymentService {
   /// 4. Returns the payment URL for redirection.
   Future<String?> createPaymentOrder({
     required double amount,
+    required double cloversAmount,
     required String userId,
   }) async {
     try {
@@ -59,7 +60,7 @@ class PaymentService {
           'expires_at': expiresAt,
           'extra_data': {
             'user_id': userId,
-            'clovers_amount': amount,
+            'clovers_amount': cloversAmount,
           }
         },
       );
@@ -123,7 +124,7 @@ class PaymentService {
             'initiated_at': DateTime.now().toIso8601String(),
             'original_url': rawPaymentUrl, 
             'client_device': 'mobile',
-            'clovers_amount': amount,
+            'clovers_amount': cloversAmount,
           }
         });
         

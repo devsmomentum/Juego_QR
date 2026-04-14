@@ -32,6 +32,7 @@ class _AuthMonitorState extends State<AuthMonitor> {
   bool? _wasLoggedIn;
   bool _hasRedirected = false;
   bool _isCheckingStatus = false;
+  bool _isNavigatingToLogin = false; // [NEW] Guard to prevent concurrent navigations
   StreamSubscription<AuthState>? _authSubscription;
   bool _showMask = false; // [FIX] To hide old screen during logout transition
 
@@ -99,22 +100,8 @@ class _AuthMonitorState extends State<AuthMonitor> {
           "AuthMonitor: Logout detectado. Iniciando secuencia de redirección...");
       _hasRedirected = true;
 
-      // [FIX] Activar máscara inmediatamente para ocultar la pantalla anterior
-      setState(() => _showMask = true);
-
-      // [FIX] Pequeño delay para permitir que diálogos cierren limpiamente
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted) {
-          debugPrint("AuthMonitor: Ejecutando navegación al Login ahora.");
-          _navigateToLogin();
-
-          // [FIX] Desactivar máscara después de iniciar la navegación
-          // Usamos addPostFrameCallback para asegurar que la nueva ruta ya se está construyendo
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _showMask = false);
-          });
-        }
-      });
+      // [FIX] Ejecutar navegación unificada
+      _navigateToLogin();
     }
 
     // Si el usuario se loguea, resetear el flag para permitir futuras redirecciones de logout
@@ -201,13 +188,42 @@ class _AuthMonitorState extends State<AuthMonitor> {
   }
 
   void _navigateToLogin() {
+    // [FIX] Protection against redundant/concurrent navigations
+    if (_isNavigatingToLogin) return;
+
     if (rootNavigatorKey.currentState != null) {
+      debugPrint("AuthMonitor: Navigating to Login...");
+      _isNavigatingToLogin = true;
+
+      // [FIX] Activate mask immediately
+      if (mounted) setState(() => _showMask = true);
+
       rootNavigatorKey.currentState!.pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) => const LoginScreen(),
+          settings: const RouteSettings(name: '/login'),
         ),
         (route) => false,
-      );
+      ).then((_) {
+        // Reset flags when navigation is confirmed
+        if (mounted) {
+          setState(() {
+            _isNavigatingToLogin = false;
+            _showMask = false;
+            _hasRedirected = true;
+          });
+        }
+      });
+
+      // Safety timeout to clear mask if navigator gets stuck
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && _showMask) {
+          setState(() {
+            _showMask = false;
+            _isNavigatingToLogin = false;
+          });
+        }
+      });
     }
   }
 

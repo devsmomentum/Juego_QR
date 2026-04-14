@@ -62,6 +62,24 @@ class BettingService {
     }
   }
 
+  /// Obtiene stats agregadas del evento (pote total y cantidad de apuestas).
+  Future<Map<String, int>> getEventBettingStats(String eventId) async {
+    try {
+      final response = await _supabase.rpc(
+        'get_event_betting_stats',
+        params: {'p_event_id': eventId},
+      );
+      final data = Map<String, dynamic>.from(response);
+      return {
+        'totalPot': (data['total_pot'] as num?)?.toInt() ?? 0,
+        'totalBets': (data['total_bets'] as num?)?.toInt() ?? 0,
+      };
+    } catch (e) {
+      debugPrint('BettingService: Error fetching stats via RPC: $e');
+      return {'totalPot': 0, 'totalBets': 0};
+    }
+  }
+
   /// Realtime subscription to bets table to update pot.
   RealtimeChannel subscribeToBets(String eventId, Function() callback) {
     return _supabase
@@ -93,6 +111,21 @@ class BettingService {
     } catch (e) {
       debugPrint('BettingService: Error getting winnings: $e');
       return {'won': false, 'amount': 0};
+    }
+  }
+
+  /// Obtiene el resumen del resultado de apuestas para el usuario.
+  /// Retorna un mapa con payout, pool, ganadores y conteos de tickets.
+  Future<Map<String, dynamic>> getUserBetOutcome(String eventId, String userId) async {
+    try {
+      final response = await _supabase.rpc('get_user_bet_outcome', params: {
+        'p_event_id': eventId,
+        'p_user_id': userId,
+      });
+      return Map<String, dynamic>.from(response);
+    } catch (e) {
+      debugPrint('BettingService: Error getting bet outcome: $e');
+      return {'success': false, 'message': 'Error de conexión: $e'};
     }
   }
 

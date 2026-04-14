@@ -80,7 +80,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -109,7 +109,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
 
   void _handleGiveUp() {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return;
+    if (gameProvider.isPaused) return;
 
     _stopTimer();
     _loseLife("Te has rendido.");
@@ -147,7 +147,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
   void _onTileTap(int index) {
     if (!mounted) return;
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return;
+    if (gameProvider.isPaused) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -167,8 +167,13 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
     });
 
     if (_checkWin('X')) {
+      debugPrint('🏆 TicTacToe: Player X wins! Board: $board');
       _stopTimer();
-      widget.onSuccess();
+      // [FIX] Pequeño delay para que el usuario vea su última jugada ('X')
+      // antes de que inicie la transición/animación de éxito.
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) widget.onSuccess();
+      });
       return;
     }
 
@@ -186,7 +191,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
     if (_isGameOver) return;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) {
+    if (gameProvider.isPaused) {
       // If frozen, retry later
       Future.delayed(const Duration(milliseconds: 500), _computerMove);
       return;
@@ -293,31 +298,17 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
           // GAME CONTENT
           Column(
             children: [
-              // Status Bar
+              // Reduced Status Bar (Only Timer)
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.end, // Timer to the right
                   children: [
-                    // Vidas
-                    Consumer<GameProvider>(builder: (context, game, _) {
-                      return Row(
-                        children: [
-                          const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                          const SizedBox(width: 5),
-                          Text("x${game.lives}",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      );
-                    }),
                     // Timer
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                           color: _secondsRemaining < 10
                               ? AppTheme.dangerRed.withOpacity(0.2)
@@ -330,7 +321,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
                       child: Row(
                         children: [
                           Icon(Icons.timer,
-                              size: 16,
+                              size: 14,
                               color: _secondsRemaining < 10
                                   ? AppTheme.dangerRed
                                   : Colors.white),
@@ -341,6 +332,7 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
                                   color: _secondsRemaining < 10
                                       ? AppTheme.dangerRed
                                       : Colors.white,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -353,10 +345,10 @@ class _TicTacToeMinigameState extends State<TicTacToeMinigame> {
                 "GANA A LA VIEJA (Tic Tac Toe)",
                 style: TextStyle(
                     color: AppTheme.accentGold,
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 5),
 
               Expanded(
                 child: Center(

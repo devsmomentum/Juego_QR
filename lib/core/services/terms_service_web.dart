@@ -5,10 +5,16 @@ import 'terms_service_interface.dart';
 
 class TermsServiceImpl implements TermsService {
   @override
-  Future<void> launchTerms(String baseUrl) async {
+  Future<void> launchTerms(String baseUrl, String anonKey) async {
     try {
-      final url = Uri.parse('$baseUrl/functions/v1/get-terms');
-      final response = await http.get(url);
+      final termsUrl = '$baseUrl/functions/v1/get-terms';
+      final response = await http.get(
+        Uri.parse(termsUrl),
+        headers: {
+          'apikey': anonKey,
+          'Authorization': 'Bearer $anonKey',
+        },
+      );
 
       if (response.statusCode == 200) {
         final blob = html.Blob([response.bodyBytes], 'application/pdf');

@@ -19,6 +19,39 @@ class SponsorService {
     return (response as List).map((json) => Sponsor.fromJson(json)).toList();
   }
 
+  Future<List<String>> getEventSponsorIds(String eventId) async {
+    try {
+      final response = await _supabase
+          .from('event_sponsors')
+          .select('sponsor_id')
+          .eq('event_id', eventId);
+
+      return (response as List)
+          .map((row) => row['sponsor_id'] as String)
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching event sponsors: $e');
+      return [];
+    }
+  }
+
+  Future<void> setEventSponsors(String eventId, List<String> sponsorIds) async {
+    // Clear existing selections first
+    await _supabase.from('event_sponsors').delete().eq('event_id', eventId);
+
+    if (sponsorIds.isEmpty) return;
+
+    final rows = sponsorIds
+        .map((sponsorId) => {
+              'event_id': eventId,
+              'sponsor_id': sponsorId,
+              'is_active': true,
+            })
+        .toList();
+
+    await _supabase.from('event_sponsors').insert(rows);
+  }
+
   Future<Sponsor?> getActiveSponsor() async {
     try {
       final response = await _supabase
@@ -67,6 +100,46 @@ class SponsorService {
     }
   }
 
+  /// Fetches the full pool of active sponsors for an event via RPC.
+  /// Returns sponsors with their computed weights (Oro=5, Plata=3, Bronce=1).
+  Future<List<Sponsor>> getSponsorPoolForEvent(String eventId) async {
+    try {
+      final response = await _supabase
+          .rpc('get_event_sponsor_pool', params: {'p_event_id': eventId});
+
+      if (response == null) return [];
+      return (response as List).map((json) {
+        // RPC returns 'created_at' is not included; provide a default
+        json['created_at'] ??= DateTime.now().toIso8601String();
+        json['is_active'] ??= true;
+        return Sponsor.fromJson(json);
+      }).toList();
+    } catch (e) {
+      debugPrint("Error fetching sponsor pool for event: $e");
+      return [];
+    }
+  }
+
+  /// Records a sponsor analytics event (impression or click).
+  /// Fire-and-forget — errors are logged but never thrown.
+  Future<void> recordSponsorEvent({
+    required String sponsorId,
+    required String type,
+    String? eventId,
+    String? context,
+  }) async {
+    try {
+      await _supabase.rpc('record_sponsor_event', params: {
+        'p_sponsor_id': sponsorId,
+        'p_event_id': eventId,
+        'p_type': type,
+        'p_context': context,
+      });
+    } catch (e) {
+      debugPrint('⚠️ Error recording sponsor event ($type): $e');
+    }
+  }
+
   // --- Modification Methods ---
 
   Future<void> createSponsor({
@@ -87,11 +160,6 @@ class SponsorService {
     String? logoUrl;
     String? bannerUrl;
     String? assetUrl;
-
-    if (isActive) {
-      // Deactivate others if this one is active (optional logic, but usually only one sponsor is active at a time)
-      await _deactivateAllSponsors();
-    }
 
     if (logoFile != null || logoBytes != null) {
       if (logoBytes != null) {
@@ -155,10 +223,6 @@ class SponsorService {
     String? bannerUrl = currentBannerUrl;
     String? assetUrl = currentAssetUrl;
 
-    if (isActive == true) {
-      await _deactivateAllSponsors(excludeId: id);
-    }
-
     if (logoFile != null || logoBytes != null) {
       if (logoBytes != null) {
         logoUrl = await _uploadFile(
@@ -204,18 +268,6 @@ class SponsorService {
   }
 
   // --- Helper Methods ---
-
-  Future<void> _deactivateAllSponsors({String? excludeId}) async {
-    var query = _supabase
-        .from('sponsors')
-        .update({'is_active': false}).eq('is_active', true);
-
-    if (excludeId != null) {
-      query = query.neq('id', excludeId);
-    }
-
-    await query;
-  }
 
   Future<String> _uploadFile(
       {File? file,

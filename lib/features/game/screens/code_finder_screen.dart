@@ -82,6 +82,9 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
   }
 
   void _showCodeFinderTutorial() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_CODE_FINDER') ?? false;
     if (hasSeen) return;
@@ -215,6 +218,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
         builder: (_) => WinnerCelebrationScreen(
           eventId: gameProvider.currentEventId ?? widget.scenario.id,
           playerPosition: position,
@@ -715,7 +719,7 @@ class _CodeFinderScreenState extends State<CodeFinderScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         )
-                      : AppTheme.mainGradient(context),
+                      : AppTheme.darkGradient,
                 ),
               ),
             ),

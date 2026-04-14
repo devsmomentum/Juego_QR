@@ -6,9 +6,13 @@ import 'package:map_hunter/features/game/providers/game_provider.dart';
 import 'package:map_hunter/features/auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
+import '../../../shared/widgets/exit_protection_wrapper.dart';
 import '../widgets/race_track_widget.dart';
 import '../widgets/sponsor_banner.dart'; // NEW
+import '../services/sponsor_rotation_manager.dart';
+import '../../admin/models/sponsor.dart';
 import '../providers/spectator_feed_provider.dart';
+import 'scenarios_screen.dart';
 
 import 'winner_celebration_screen.dart';
 
@@ -24,34 +28,96 @@ class WaitingRoomScreen extends StatefulWidget {
 class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   // Store reference to avoid unsafe lookup in dispose
   GameProvider? _gameProviderRef;
+  bool _isNavigating = false; // Guard: evita doble-navegación
 
   Timer? _pollingTimer;
+  Timer? _bannerTimer;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
+  Sponsor? _currentSponsor;
+  List<Sponsor> _bannerPool = [];
+  int _bannerIndex = 0;
+  final PageController _bannerController = PageController();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initWaitingRoom();
+    });
+    _initBannerRotation();
+  }
+
+  Future<void> _initBannerRotation() async {
+    await _sponsorRotation.loadPool(widget.eventId);
+    if (!mounted) return;
+    _bannerPool = _sponsorRotation.pool.toList();
+    _bannerIndex = 0;
+    if (_bannerPool.isNotEmpty) {
+      setState(() => _currentSponsor = _bannerPool.first);
+    }
+    if (_bannerPool.length <= 1) return;
+    _bannerTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) _setNextSponsor();
+    });
+  }
+
+  void _setNextSponsor() {
+    if (_bannerPool.isEmpty) {
+      if (mounted && _currentSponsor != null) {
+        setState(() => _currentSponsor = null);
+      }
+      return;
+    }
+
+    _bannerIndex = (_bannerIndex + 1) % _bannerPool.length;
+    final next = _bannerPool[_bannerIndex];
+    if (next.id != _currentSponsor?.id) {
+      setState(() => _currentSponsor = next);
+      _bannerController.animateToPage(
+        _bannerIndex,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  Future<void> _initWaitingRoom() async {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    _gameProviderRef = gameProvider;
+
+    // Asegurar que las pistas, eventId y leaderboard estén cargados.
+    // Pueden estar vacíos después de una salida voluntaria + reingreso
+    // donde resetState limpió todo, o si HomeScreen.dispose ejecutó
+    // resetState en un post-frame callback posterior.
+    final needsFetch = gameProvider.totalClues == 0 ||
+        gameProvider.currentEventId != widget.eventId ||
+        gameProvider.leaderboard.isEmpty;
+
+    if (needsFetch) {
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      await gameProvider.fetchClues(
+        eventId: widget.eventId,
+        userId: playerProvider.currentPlayer?.userId,
+      );
+    }
+    if (!mounted) return;
+
+    // Ensure we are fetching updates (requiere _currentEventId válido)
+    gameProvider.startLeaderboardUpdates();
+
+    // Listen for global completion
+    gameProvider.addListener(_onGameProviderChange);
+
+    // Check immediately
+    gameProvider.checkRaceStatus();
+
+    // 🟢 START POLLING: Check race status every 5 seconds
+    // This acts as a fallback if Realtime fails
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
-        final gameProvider = Provider.of<GameProvider>(context, listen: false);
-        _gameProviderRef = gameProvider;
-
-        // Ensure we are fetching updates
-        gameProvider.startLeaderboardUpdates();
-
-        // Listen for global completion
-        gameProvider.addListener(_onGameProviderChange);
-
-        // Check immediately
+        debugPrint("⏳ WaitingRoom: Polling race status...");
         gameProvider.checkRaceStatus();
-
-        // 🟢 START POLLING: Check race status every 5 seconds
-        // This acts as a fallback if Realtime fails
-        _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-          if (mounted) {
-            debugPrint("⏳ WaitingRoom: Polling race status...");
-            gameProvider.checkRaceStatus();
-          }
-        });
       }
     });
   }
@@ -59,6 +125,8 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
     _gameProviderRef?.removeListener(_onGameProviderChange);
     _gameProviderRef?.stopLeaderboardUpdates();
     super.dispose();
@@ -77,6 +145,10 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
   }
 
   void _navigateToWinnerScreen() {
+    if (_isNavigating || !mounted) return;
+    _isNavigating = true;
+    _pollingTimer?.cancel();
+
     // Navigate to WinnerCelebrationScreen
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
@@ -95,6 +167,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
         builder: (_) => WinnerCelebrationScreen(
           eventId: widget.eventId,
           playerPosition: playerPosition,
@@ -116,8 +189,24 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
     );
   }
 
+  void _handleExitCompetition() {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // Marcar como salida voluntaria ANTES de cualquier limpieza.
+    // Esto evita que GameSessionMonitor muestre el mensaje falso
+    // de "expulsado por un administrador".
+    gameProvider.markVoluntaryExit();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ScenariosScreen()),
+      (route) => false,
+    );
+  }
+
   Widget _buildBody(bool isDarkMode) {
-    return Scaffold(
+    return ExitProtectionWrapper(
+      title: '¿Salir de la competencia?',
+      message: 'No se perderá tu progreso.',
+      onExit: _handleExitCompetition,
+      child: Scaffold(
       backgroundColor: AppTheme.dSurface0,
       body: AnimatedCyberBackground(
         child: Stack(
@@ -255,6 +344,32 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
                       ),
                     ),
                   ),
+
+                  if (_bannerPool.isNotEmpty)
+                    SizedBox(
+                      height: 86,
+                      child: PageView.builder(
+                        controller: _bannerController,
+                        itemCount: _bannerPool.length,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final sponsor = _bannerPool[index];
+                          return SponsorBanner(
+                            sponsor: sponsor,
+                            isCompact: true,
+                            onImpression: () =>
+                                _sponsorRotation.trackImpression(
+                              sponsor,
+                              context: 'waiting_room',
+                            ),
+                            onTap: () => _sponsorRotation.trackClick(
+                              sponsor,
+                              context: 'waiting_room',
+                            ),
+                          );
+                        },
+                      ),
+                    ),
 
                   // ── Race Tracker Label ───────────────────────────────
                   Padding(
@@ -480,6 +595,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

@@ -7,6 +7,10 @@ class ExitProtectionWrapper extends StatelessWidget {
   final String title;
   final String message;
   final bool enableProtection;
+  /// Optional custom exit callback. When provided, this is called instead of
+  /// the default `Navigator.pop`. Use it to navigate to a specific screen
+  /// or perform cleanup before leaving.
+  final VoidCallback? onExit;
 
   const ExitProtectionWrapper({
     super.key,
@@ -14,6 +18,7 @@ class ExitProtectionWrapper extends StatelessWidget {
     this.title = "¿Salir del Evento?",
     this.message = "Si sales ahora, podrías perder tu progreso o tu posición en el ranking.",
     this.enableProtection = true,
+    this.onExit,
   });
 
   @override
@@ -125,7 +130,11 @@ class ExitProtectionWrapper extends StatelessWidget {
         );
 
         if (shouldExit == true && context.mounted) {
-          Navigator.pop(context);
+          if (onExit != null) {
+            onExit!();
+          } else {
+            Navigator.pop(context);
+          }
         }
       },
       child: child,

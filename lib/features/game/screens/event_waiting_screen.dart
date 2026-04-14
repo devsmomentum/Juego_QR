@@ -8,9 +8,13 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../admin/services/sponsor_service.dart'; // NEW
 import '../../admin/models/sponsor.dart'; // NEW
 import '../widgets/sponsor_banner.dart'; // NEW
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import '../services/sponsor_rotation_manager.dart'; // Sponsor Pool
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
+import '../providers/game_request_provider.dart';
+import '../providers/event_provider.dart';
+import '../widgets/event_launch_countdown_overlay.dart'; // NEW: 5-second launch overlay
 
 class EventWaitingScreen extends StatefulWidget {
   final GameEvent event;
@@ -26,17 +30,31 @@ class EventWaitingScreen extends StatefulWidget {
 class _EventWaitingScreenState extends State<EventWaitingScreen>
     with SingleTickerProviderStateMixin {
   Timer? _timer;
+  Timer?
+      _statusPollingTimer; // P1: Polling de recuperación como red de seguridad
   Duration? _timeLeft;
-  bool _waitingForAdmin = false; // True when countdown finished but admin hasn't started event
+  bool _waitingForAdmin =
+      false; // True when countdown finished but admin hasn't started event
+  bool _isNavigating =
+      false; // Guard: evita doble-navegación entre Realtime y Polling
+  int _participantCount = 0;
+  int _maxParticipants = 0;
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
 
-
+  // ── Pending online: auto-start + launch overlay state ──────────────────────
+  Timer? _autoStartTimer; // polls player count after countdown hits zero
+  int _playerCount = 0; // current non-spectator enrolled players
+  int _minPlayersToStart = 5; // loaded from config (default 5)
+  bool _isShowingLaunchCountdown =
+      false; // true while the 5-s launch overlay is on
+  // ────────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     _calculateTime();
+    _loadInitialCounts(); // Load initial participant counts
     _timer =
         Timer.periodic(const Duration(seconds: 1), (_) => _calculateTime());
 
@@ -49,32 +67,106 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
-    _loadSponsor();
+    // P0: Suscripción Realtime inmediata — antes de cualquier operación async
+    // (antes estaba dentro de _loadSponsor(), causando una race condition)
+    _setupRealtimeSubscription();
+
+    // P1: Polling de recuperación cada 30s como red de seguridad ante fallos de Realtime para no saturar la BD
+    _statusPollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkEventStatusFromServer();
+    });
+
+    _initBannerRotation();
   }
 
-  Sponsor? _eventSponsor;
+  Timer? _bannerTimer;
+  Sponsor? _currentSponsor;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
+  List<Sponsor> _bannerPool = [];
+  int _bannerIndex = 0;
+  final PageController _bannerController = PageController();
 
-  Future<void> _loadSponsor() async {
-    final service = SponsorService();
-    final sponsor = await service.getSponsorForEvent(widget.event.id);
-    if (mounted && sponsor != null && sponsor.hasSponsoredByBanner) {
-      setState(() {
-        _eventSponsor = sponsor;
-      });
+  Future<void> _initBannerRotation() async {
+    if (!widget.event.sponsorsEnabled) {
+      if (mounted) {
+        setState(() => _currentSponsor = null);
+      }
+      return;
     }
 
-    _setupRealtimeSubscription();
+    await _sponsorRotation.loadPool(widget.event.id);
+    if (!mounted) return;
+
+    _bannerPool = _sponsorRotation.pool
+        .where((s) => s.hasSponsoredByBanner)
+        .toList();
+    _bannerIndex = 0;
+
+    if (_bannerPool.isNotEmpty) {
+      setState(() => _currentSponsor = _bannerPool.first);
+    }
+
+    if (_bannerPool.length <= 1) return;
+    _bannerTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) _setNextSponsor();
+    });
+  }
+
+  void _setNextSponsor() {
+    if (_bannerPool.isEmpty) {
+      if (mounted && _currentSponsor != null) {
+        setState(() => _currentSponsor = null);
+      }
+      return;
+    }
+
+    _bannerIndex = (_bannerIndex + 1) % _bannerPool.length;
+    final next = _bannerPool[_bannerIndex];
+    if (next.id != _currentSponsor?.id) {
+      setState(() => _currentSponsor = next);
+      _bannerController.animateToPage(
+        _bannerIndex,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  Future<void> _loadInitialCounts() async {
+    final requestProvider = Provider.of<GameRequestProvider>(context, listen: false);
+    final eventProvider = Provider.of<EventProvider>(context, listen: false);
+
+    try {
+      final count = await requestProvider.getParticipantCount(widget.event.id);
+      int maxP = widget.event.maxParticipants;
+      
+      try {
+        final event = eventProvider.events.firstWhere((e) => e.id == widget.event.id);
+        maxP = event.maxParticipants;
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _participantCount = count;
+          _maxParticipants = maxP;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading initial counts: $e");
+    }
   }
 
   RealtimeChannel? _eventChannel;
+  RealtimeChannel? _playersChannel;
 
   void _setupRealtimeSubscription() {
     try {
-      debugPrint("🔍 Setting up realtime subscription for event: ${widget.event.id}");
+      debugPrint(
+          "🔍 Setting up realtime subscription for event: ${widget.event.id}");
       _eventChannel = Supabase.instance.client
           .channel('public:events:${widget.event.id}')
           .onPostgresChanges(
-            event: PostgresChangeEvent.update,
+            event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'events',
             filter: PostgresChangeFilter(
@@ -83,17 +175,40 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               value: widget.event.id,
             ),
             callback: (payload) {
+              if (payload.eventType == PostgresChangeEvent.delete) {
+                debugPrint("❌ Event DELETED via Realtime.");
+                _showCancelledDialog();
+                return;
+              }
               debugPrint("🔔 Event update received: ${payload.newRecord}");
               final newStatus = payload.newRecord['status'];
               if (newStatus == 'active') {
-                debugPrint("✅ Event is now ACTIVE! Triggering navigation...");
-                if (mounted) {
-                   _timer?.cancel();
-                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) widget.onTimerFinished();
-                   });
-                }
+                debugPrint(
+                    "✅ Event is now ACTIVE via Realtime! Triggering navigation...");
+                _triggerNavigation();
+              } else if (newStatus == 'cancelled') {
+                debugPrint("❌ Event CANCELLED via Realtime.");
+                _showCancelledDialog();
               }
+            },
+          )
+          .subscribe();
+
+      // Suscripción a game_players para actualizar conteo en tiempo real
+      _playersChannel = Supabase.instance.client
+          .channel('public:game_players:${widget.event.id}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'game_players',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'event_id',
+              value: widget.event.id,
+            ),
+            callback: (payload) {
+              debugPrint('👥 game_players change detected, refreshing count...');
+              _refreshParticipantCount();
             },
           )
           .subscribe();
@@ -102,12 +217,221 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     }
   }
 
+  /// Re-queries player count from DB and updates the UI state.
+  Future<void> _refreshParticipantCount() async {
+    if (!mounted) return;
+    try {
+      final resp = await Supabase.instance.client
+          .from('game_players')
+          .select('id')
+          .eq('event_id', widget.event.id)
+          .not('status', 'in', '(spectator,banned)')
+          .count();
+      if (mounted) {
+        setState(() => _participantCount = resp.count ?? 0);
+      }
+    } catch (e) {
+      debugPrint('❌ _refreshParticipantCount error: $e');
+    }
+  }
+
+  /// Centraliza el trigger de navegación para evitar dobles llamadas
+  /// entre Realtime y Polling (Bug #5 guard).
+  /// For online events: shows the 5-second launch countdown overlay first.
+  void _triggerNavigation() {
+    if (_isNavigating || !mounted) return;
+    _isNavigating = true;
+    _timer?.cancel();
+    _statusPollingTimer?.cancel();
+    _autoStartTimer?.cancel();
+    debugPrint("🚀 EventWaiting: _triggerNavigation() called");
+
+    if (widget.event.type == 'online') {
+      // Show 5-second launch countdown then navigate
+      if (mounted) {
+        setState(() => _isShowingLaunchCountdown = true);
+      }
+      // Navigation happens inside the overlay's onComplete callback (see build)
+    } else {
+      // Presential events: navigate immediately as before
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onTimerFinished();
+      });
+    }
+  }
+
+  /// P1+P3: Consulta el estado del evento directamente al servidor.
+  /// Actúa como red de seguridad cuando Realtime falla, se pierde o llega tarde.
+  Future<void> _checkEventStatusFromServer() async {
+    if (_isNavigating || !mounted) return;
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('status, current_participants, max_participants')
+          .eq('id', widget.event.id)
+          .maybeSingle(); // maybeSingle so a missing row doesn't throw
+      if (response == null) {
+        debugPrint("❌ Polling detected event DELETED.");
+        if (mounted) _showCancelledDialog();
+        return;
+      }
+      final status = response['status'] as String?;
+      final count = (response['current_participants'] as num?)?.toInt() ?? 0;
+      final maxP = (response['max_participants'] as num?)?.toInt() ?? 0;
+
+      // Se apaga el print de polling para no generar ruido en consola ('⏳ Polling event status: $status, participants: $count/$maxP')
+      
+      if (mounted) {
+        setState(() {
+          _participantCount = count;
+          _maxParticipants = maxP;
+        });
+      }
+
+      if ((status == 'active' || status == 'completed') && mounted) {
+        debugPrint(
+            "✅ Polling detected event is now ACTIVE! Triggering navigation...");
+        _triggerNavigation();
+      } else if (status == 'cancelled' && mounted) {
+        debugPrint("❌ Polling detected event CANCELLED.");
+        _showCancelledDialog();
+      }
+    } catch (e) {
+      debugPrint("❌ Error polling event status: $e");
+    }
+  }
+
+  // ── Cancellation dialog ─────────────────────────────────────────────────────
+  bool _cancelDialogShown = false;
+
+  void _showCancelledDialog() {
+    if (_cancelDialogShown || !mounted) return;
+    _cancelDialogShown = true;
+    // Stop all active timers
+    _timer?.cancel();
+    _statusPollingTimer?.cancel();
+    _autoStartTimer?.cancel();
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(Icons.cancel_outlined,
+            color: Colors.redAccent, size: 48),
+        title: const Text(
+          'Evento Cancelado',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Orbitron',
+          ),
+        ),
+        content: Text(
+          'No se inscribieron suficientes jugadores antes de que finalizara el tiempo.\n\n'
+          'Se necesitaban $_minPlayersToStart jugadores y solo se inscribieron $_playerCount.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white70, height: 1.5),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog
+                Navigator.of(context).pop(); // back to scenarios
+              },
+              child: const Text('VOLVER A SALAS',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /// Starts polling player count every 3 s once the countdown hits zero.
+  /// On each tick: updates [_playerCount] and calls [_tryAutoStart].
+  void _startAutoStartPolling() {
+    if (widget.event.type != 'online' || !widget.event.isAutomated) return;
+    _autoStartTimer?.cancel();
+    _tryAutoStart(); // immediate first check
+    _autoStartTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _tryAutoStart();
+    });
+  }
+
+  /// Fetches current player count, updates UI, and attempts to resolve the
+  /// event via the `auto_start_online_event` RPC:
+  ///   - countdown not expired → no-op (future tick will retry)
+  ///   - enough players         → activate (→ launch overlay)
+  ///   - not enough players     → server cancels event (→ cancellation dialog)
+  Future<void> _tryAutoStart() async {
+    if (_isNavigating || !mounted) return;
+    try {
+      // Count current players for display
+      final countResp = await Supabase.instance.client
+          .from('game_players')
+          .select('id')
+          .eq('event_id', widget.event.id)
+          .neq('status', 'spectator')
+          .neq('status', 'banned')
+          .count();
+      final count = countResp.count ?? 0;
+      if (mounted) setState(() => _playerCount = count);
+
+      // Attempt activation via RPC
+      final result = await Supabase.instance.client.rpc(
+        'auto_start_online_event',
+        params: {'p_event_id': widget.event.id},
+      );
+      debugPrint('🎯 auto_start_online_event result: $result');
+
+      if (result is Map) {
+        final minRequired = result['required'];
+        if (minRequired != null && mounted) {
+          setState(() => _minPlayersToStart = (minRequired as num).toInt());
+        }
+
+        if (result['success'] == true && mounted && !_isNavigating) {
+          debugPrint('✅ Event auto-started! Triggering navigation...');
+          _triggerNavigation();
+        } else if (result['cancelled'] == true && mounted) {
+          debugPrint('❌ Event cancelled by server (not enough players).');
+          _autoStartTimer?.cancel();
+          _showCancelledDialog();
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ _tryAutoStart error: $e');
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   void _calculateTime() {
     // PRIORIDAD AL ESTADO: Si el evento ya está activo o completado, omitir cuenta regresiva
     if (widget.event.status == 'active' || widget.event.status == 'completed') {
       _timer?.cancel();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) widget.onTimerFinished();
+      });
+      return;
+    }
+    // Si el evento fue cancelado antes de que el timer calcule, mostrar dialog
+    if (widget.event.status == 'cancelled') {
+      _timer?.cancel();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showCancelledDialog();
       });
       return;
     }
@@ -124,9 +448,9 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
         });
       }
     } else {
-      // Countdown reached zero — BUT we do NOT auto-activate.
-      // The admin must manually start the event via the start_event RPC.
-      // We enter "waiting for admin" mode and keep listening via Realtime.
+      // Countdown reached zero.
+      // For ONLINE events: auto-start when min_players_to_start are enrolled.
+      // For PRESENTIAL events: wait for admin via start_event RPC.
       _timer?.cancel();
       if (mounted) {
         setState(() {
@@ -134,14 +458,23 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
           _waitingForAdmin = true;
         });
       }
-      debugPrint("⏳ Countdown finished for event ${widget.event.id}. Waiting for admin to start.");
+      debugPrint("⏳ Countdown finished for event ${widget.event.id}.");
+      // P3: Verificar estado en servidor al llegar a cero (puede que el admin ya inició)
+      _checkEventStatusFromServer();
+      // Only auto-start for automated online events; manual events wait for admin
+      if (widget.event.isAutomated) _startAutoStartPolling();
     }
   }
 
   @override
   void dispose() {
     _eventChannel?.unsubscribe();
+    _playersChannel?.unsubscribe();
     _timer?.cancel();
+    _statusPollingTimer?.cancel();
+    _autoStartTimer?.cancel();
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -151,16 +484,30 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     final playerProvider = context.watch<PlayerProvider>();
     final isDarkMode = playerProvider.isDarkMode;
 
-    // Determine dynamic content based on admin-wait state
-    final String headerText = _waitingForAdmin ? "CUENTA REGRESIVA FINALIZADA" : "PREPÁRATE";
+    // Determine dynamic content based on state
+    final bool isOnlineEvent = widget.event.type == 'online';
+    // Automated online events auto-start; manual online events require admin
+    final bool isAutomatedOnline = isOnlineEvent && widget.event.isAutomated;
+    final bool isWaitingPlayers = _waitingForAdmin && isAutomatedOnline;
+    final bool isWaitingAdmin = _waitingForAdmin && !isAutomatedOnline;
+
+    final String headerText = _waitingForAdmin
+        ? (isAutomatedOnline ? 'SALA DE ESPERA' : 'CUENTA REGRESIVA FINALIZADA')
+        : 'PREPÁRATE';
     final String titleText = _waitingForAdmin
-        ? "ESPERANDO AL ADMINISTRADOR"
-        : "LA AVENTURA COMIENZA PRONTO";
+        ? (isAutomatedOnline
+            ? 'ESPERANDO JUGADORES...'
+            : 'ESPERANDO AL ADMINISTRADOR')
+        : 'LA AVENTURA COMIENZA PRONTO';
     final String subtitleText = _waitingForAdmin
-        ? "El contador ha terminado.\nEsperando señal del administrador para iniciar el evento..."
-        : "El tesoro aguarda por el más valiente.\nMantente alerta.";
-    final IconData iconData = _waitingForAdmin ? Icons.admin_panel_settings : Icons.hourglass_empty;
-    
+        ? (isAutomatedOnline
+            ? 'Iniciamos cuando lleguen $_minPlayersToStart jugadores\no cuando la sala esté llena.'
+            : 'El contador ha terminado.\nEsperando señal del administrador para iniciar el evento...')
+        : 'El tesoro aguarda por el más valiente.\nManténte alerta.';
+    final IconData iconData = _waitingForAdmin
+        ? (isAutomatedOnline ? Icons.people : Icons.admin_panel_settings)
+        : Icons.hourglass_empty;
+
     // LOGIN CLARO STYLE COLORS
     final Color dGoldMain = const Color(0xFFFECB00);
     final Color lBrandMain = const Color(0xFF5A189A);
@@ -168,10 +515,13 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     final Color lTextSecondary = const Color(0xFF4A4A5A);
 
     final Color primaryAccent = isDarkMode ? AppTheme.accentGold : lBrandMain;
-    final Color secondaryAccent = isDarkMode ? AppTheme.secondaryPink : dGoldMain;
+    final Color secondaryAccent =
+        isDarkMode ? AppTheme.secondaryPink : dGoldMain;
 
-    final Color iconColor = _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
-    final Color headerColor = _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
+    final Color iconColor =
+        _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
+    final Color headerColor =
+        _waitingForAdmin ? Colors.orangeAccent : primaryAccent;
     final Color glowColor = _waitingForAdmin
         ? Colors.orangeAccent.withOpacity(0.2)
         : secondaryAccent.withOpacity(0.2);
@@ -179,10 +529,13 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
         ? Colors.orangeAccent.withOpacity(0.5)
         : primaryAccent.withOpacity(0.5);
 
-    final Color currentCardBg = isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.9);
+    final Color currentCardBg = isDarkMode
+        ? Colors.white.withOpacity(0.05)
+        : Colors.white.withOpacity(0.9);
     final Color currentTitleColor = Colors.white;
     final Color currentSubtitleColor = Colors.white70;
-    final Color currentBorderColor = (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.3);
+    final Color currentBorderColor =
+        (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.3);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -206,7 +559,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2),
             ),
           ),
-          
+
           SafeArea(
             child: Stack(
               children: [
@@ -225,9 +578,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: primaryAccent.withOpacity(0.1),
-                                border: Border.all(
-                                    color: borderColor,
-                                    width: 2),
+                                border:
+                                    Border.all(color: borderColor, width: 2),
                                 boxShadow: [
                                   BoxShadow(
                                     color: glowColor,
@@ -236,8 +588,7 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                   ),
                                 ],
                               ),
-                              child: Icon(iconData,
-                                  size: 60, color: iconColor),
+                              child: Icon(iconData, size: 60, color: iconColor),
                             ),
                           ),
                           const SizedBox(height: 50),
@@ -283,39 +634,54 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                             ClipRRect(
                               borderRadius: BorderRadius.circular(24),
                               child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
                                   padding: const EdgeInsets.all(5),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D0D0F).withOpacity(0.6),
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
                                     borderRadius: BorderRadius.circular(24),
                                     border: Border.all(
-                                        color: Colors.orangeAccent.withOpacity(0.6),
+                                        color: Colors.orangeAccent
+                                            .withOpacity(0.6),
                                         width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.orangeAccent.withOpacity(0.05),
+                                        color: Colors.orangeAccent
+                                            .withOpacity(0.05),
                                         blurRadius: 20,
                                       ),
                                     ],
                                   ),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 30, vertical: 25),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: Colors.orangeAccent.withOpacity(0.2),
+                                        color: Colors.orangeAccent
+                                            .withOpacity(0.2),
                                         width: 1.0,
                                       ),
-                                      color: Colors.orangeAccent.withOpacity(0.02),
+                                      color:
+                                          Colors.orangeAccent.withOpacity(0.02),
                                     ),
                                     child: Column(
                                       children: [
-                                        const Icon(Icons.sync, color: Colors.orangeAccent, size: 32),
+                                        Icon(
+                                          isAutomatedOnline
+                                              ? Icons.people
+                                              : Icons.sync,
+                                          color: Colors.orangeAccent,
+                                          size: 32,
+                                        ),
                                         const SizedBox(height: 12),
-                                        const Text(
-                                          "ESPERANDO INICIO MANUAL",
-                                          style: TextStyle(
+                                        Text(
+                                          isAutomatedOnline
+                                              ? "ESPERANDO JUGADORES"
+                                              : "ESPERANDO INICIO MANUAL",
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w900,
@@ -324,27 +690,81 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                           ),
                                         ),
                                         const SizedBox(height: 8),
-                                        RichText(
-                                          textAlign: TextAlign.center,
-                                          text: const TextSpan(
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                              fontFamily: 'Roboto',
-                                            ),
-                                            children: [
-                                              TextSpan(text: "El administrador debe presionar "),
-                                              TextSpan(
-                                                text: "PLAY",
-                                                style: TextStyle(
-                                                  color: Colors.orangeAccent,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                        if (isAutomatedOnline) ...[
+                                          // Player count progress bar
+                                          RichText(
+                                            textAlign: TextAlign.center,
+                                            text: TextSpan(
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 14,
+                                                fontFamily: 'Orbitron',
                                               ),
-                                            ],
+                                              children: [
+                                                TextSpan(
+                                                  text: '$_playerCount',
+                                                  style: const TextStyle(
+                                                    color: Colors.orangeAccent,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 28,
+                                                  ),
+                                                ),
+                                                TextSpan(
+                                                  text:
+                                                      ' / $_minPlayersToStart',
+                                                  style: const TextStyle(
+                                                    color: Colors.white54,
+                                                    fontSize: 18,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            _playerCount >= _minPlayersToStart
+                                                ? 'Iniciando...'
+                                                : 'jugadores mínimos para comenzar',
+                                            style: const TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ] else ...[
+                                          RichText(
+                                            textAlign: TextAlign.center,
+                                            text: const TextSpan(
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                                fontFamily: 'Roboto',
+                                              ),
+                                              children: [
+                                                TextSpan(
+                                                    text:
+                                                        "El administrador debe presionar "),
+                                                TextSpan(
+                                                  text: "PLAY",
+                                                  style: TextStyle(
+                                                    color: Colors.orangeAccent,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          "Participantes: $_participantCount / $_maxParticipants",
+                                          style: const TextStyle(
+                                            color: Colors.orangeAccent,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Orbitron',
                                           ),
                                         ),
-                                      ],
+                                        ], // closes else branch
+                                      ], // closes Column.children
                                     ),
                                   ),
                                 ),
@@ -355,31 +775,42 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                             ClipRRect(
                               borderRadius: BorderRadius.circular(24),
                               child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Container(
                                   padding: const EdgeInsets.all(5),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D0D0F).withOpacity(0.6),
+                                    color: const Color(0xFF0D0D0F)
+                                        .withOpacity(0.6),
                                     borderRadius: BorderRadius.circular(24),
                                     border: Border.all(
-                                        color: currentBorderColor,
-                                        width: 1.5),
+                                        color: currentBorderColor, width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.05),
+                                        color: (isDarkMode
+                                                ? secondaryAccent
+                                                : primaryAccent)
+                                            .withOpacity(0.05),
                                         blurRadius: 20,
                                       ),
                                     ],
                                   ),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 30, vertical: 25),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.2),
+                                        color: (isDarkMode
+                                                ? secondaryAccent
+                                                : primaryAccent)
+                                            .withOpacity(0.2),
                                         width: 1.0,
                                       ),
-                                      color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.02),
+                                      color: (isDarkMode
+                                              ? secondaryAccent
+                                              : primaryAccent)
+                                          .withOpacity(0.02),
                                     ),
                                     child: Column(
                                       children: [
@@ -397,25 +828,61 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                                         Text(
                                           "${_timeLeft!.inDays}d ${_timeLeft!.inHours % 24}h ${_timeLeft!.inMinutes % 60}m ${_timeLeft!.inSeconds % 60}s",
                                           style: TextStyle(
-                                            color: isDarkMode ? Colors.white : lBrandMain,
+                                            color: isDarkMode
+                                                ? Colors.white
+                                                : lBrandMain,
                                             fontSize: 28,
                                             fontWeight: FontWeight.w900,
                                             fontFamily: 'Orbitron',
-                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures()
+                                            ],
                                           ),
                                         ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          "Participantes: $_participantCount / $_maxParticipants",
+                                          style: TextStyle(
+                                            color: (isDarkMode ? secondaryAccent : primaryAccent).withOpacity(0.8),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Orbitron',
+                                          ),
+                                        ),
+
+                                        
                                       ],
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          
+
                           // Sponsor Banner (Part of flow now)
-                          if (_eventSponsor != null)
+                          if (_bannerPool.isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(top: 20, bottom: 80),
-                              child: SponsorBanner(sponsor: _eventSponsor),
+                              padding:
+                                  const EdgeInsets.only(top: 20, bottom: 80),
+                              child: SizedBox(
+                                height: 90,
+                                child: PageView.builder(
+                                  controller: _bannerController,
+                                  itemCount: _bannerPool.length,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemBuilder: (context, index) {
+                                    final sponsor = _bannerPool[index];
+                                    return SponsorBanner(
+                                      sponsor: sponsor,
+                                      onImpression: () => _sponsorRotation
+                                          .trackImpression(sponsor,
+                                              context: 'event_waiting'),
+                                      onTap: () => _sponsorRotation.trackClick(
+                                          sponsor,
+                                          context: 'event_waiting'),
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                         ],
                       ),
@@ -434,18 +901,23 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                       Consumer<PlayerProvider>(
                         builder: (context, playerProv, _) {
                           final player = playerProv.currentPlayer;
-                          if (player == null || !player.isAdmin) return const SizedBox.shrink();
+                          if (player == null || !player.isAdmin)
+                            return const SizedBox.shrink();
                           return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 40, vertical: 4),
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.orange.shade800,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(color: Colors.orange.shade400, width: 1.5),
+                                  side: BorderSide(
+                                      color: Colors.orange.shade400,
+                                      width: 1.5),
                                 ),
                                 elevation: 0,
                               ),
@@ -455,18 +927,30 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                               },
                               icon: const Icon(Icons.developer_mode, size: 18),
                               label: const Text('DEV: Saltar Espera',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14)),
                             ),
                           );
                         },
                       ),
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text("Volver a Escenarios",
-                            style: TextStyle(
-                                color: isDarkMode
-                                    ? Colors.white54
-                                    : AppTheme.lBrandMain.withOpacity(0.7))),
+                        child: const Text(
+                          "VOLVER A ESCENARIOS",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black,
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              )
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -474,6 +958,15 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
               ],
             ),
           ),
+          // ── 5-second launch countdown: shown when online event goes active ──
+          if (_isShowingLaunchCountdown)
+            Positioned.fill(
+              child: EventLaunchCountdownOverlay(
+                onComplete: () {
+                  if (mounted) widget.onTimerFinished();
+                },
+              ),
+            ),
         ],
       ),
     );

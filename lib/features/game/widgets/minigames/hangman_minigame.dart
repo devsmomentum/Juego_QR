@@ -77,7 +77,10 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
   }
 
   void _initializeGame() {
-    _word = (widget.clue.riddleAnswer?.toUpperCase() ?? "FLUTTER").trim();
+    final String serverWord = widget.clue.riddleAnswer ?? "";
+    _word =
+        (serverWord.trim().isNotEmpty ? serverWord.toUpperCase() : "FLUTTER")
+            .trim();
     _guessedLetters.clear();
     _wrongAttempts = 0;
     _isGameOver = false;
@@ -92,9 +95,7 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
-
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -119,11 +120,29 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
     _timer = null;
   }
 
+  String _normalizeChar(String char) {
+    char = char.toUpperCase();
+    switch (char) {
+      case 'Á':
+        return 'A';
+      case 'É':
+        return 'E';
+      case 'Í':
+        return 'I';
+      case 'Ó':
+        return 'O';
+      case 'Ú':
+        return 'U';
+      case 'Ü':
+        return 'U';
+      default:
+        return char;
+    }
+  }
+
   void _onLetterGuess(String letter) {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return; // Ignore input if frozen
-
-    if (gameProvider.isFrozen) return; // Ignore input if frozen
+    if (gameProvider.isPaused) return; // Ignore input if frozen
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -135,7 +154,16 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
     setState(() {
       _guessedLetters.add(letter);
 
-      if (!_word.contains(letter)) {
+      // Lógica de coincidencia robusta (soporta tildes)
+      bool found = false;
+      for (int i = 0; i < _word.length; i++) {
+        if (_normalizeChar(_word[i]) == letter) {
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
         _wrongAttempts++;
       }
     });
@@ -147,7 +175,8 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
     // Check Win
     bool won = true;
     for (int i = 0; i < _word.length; i++) {
-      if (!_guessedLetters.contains(_word[i]) && _word[i] != ' ') {
+      String char = _word[i];
+      if (char != ' ' && !_guessedLetters.contains(_normalizeChar(char))) {
         won = false;
         break;
       }
@@ -164,20 +193,9 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
     if (_wrongAttempts >= _maxAttempts) {
       _stopTimer();
       _isGameOver = true;
-      // Do not reveal the word so the user can retry without knowing safely
       _loseLife("¡Te han ahorcado!");
     }
   }
-
-  void _handleGiveUp() {
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return; // Ignore input if frozen
-
-    _stopTimer();
-    _loseLife("Te has rendido.");
-  }
-
-  // hangman_minigame.dart
 
   void _loseLife(String reason) async {
     if (!mounted) return;
@@ -190,34 +208,29 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
     final userId = playerProvider.currentPlayer?.userId;
 
     if (userId != null) {
-      if (gameProvider.currentEventId == null) {
-        debugPrint("WARN: Minijuego sin Event ID");
-      }
-
       final newLives = await MinigameLogicHelper.executeLoseLife(context);
 
       if (!mounted) return;
 
       if (newLives <= 0) {
         _showOverlayState(
-            title: "GAME OVER",
+            title: "SISTEMA BLOQUEADO",
             message:
                 "Te has quedado sin vidas. No puedes continuar en este minijuego.",
             retry: false,
             showShop: true);
       } else {
         _showOverlayState(
-            title: "AHORCADO", message: "", retry: true, showShop: false);
+            title: "¡FALLASTE!",
+            message: "$reason\nHas perdido 1 vida.",
+            retry: true,
+            showShop: false);
       }
     }
   }
 
-  // DIALOGS REMOVED
-
   @override
   Widget build(BuildContext context) {
-    // final player = Provider.of<PlayerProvider>(context).currentPlayer; // unused in build
-
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {},
@@ -228,33 +241,17 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
             padding: const EdgeInsets.only(bottom: 20),
             child: Column(
               children: [
-                // Status Bar
+                // Reduced Status Bar
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Vidas
-                      Consumer<GameProvider>(builder: (context, game, _) {
-                        return Row(
-                          children: [
-                            const Icon(Icons.favorite,
-                                color: AppTheme.dangerRed, size: 24),
-                            const SizedBox(width: 5),
-                            Text("x${game.lives}",
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        );
-                      }),
-
                       // Timer
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                             color: _secondsRemaining <= 10
                                 ? AppTheme.dangerRed.withOpacity(0.2)
@@ -267,7 +264,7 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                         child: Row(
                           children: [
                             Icon(Icons.timer,
-                                size: 18,
+                                size: 14,
                                 color: _secondsRemaining <= 10
                                     ? AppTheme.dangerRed
                                     : Colors.white),
@@ -279,16 +276,16 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                                       ? AppTheme.dangerRed
                                       : Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14),
+                                  fontSize: 12),
                             ),
                           ],
                         ),
                       ),
-
+                      const SizedBox(width: 8),
                       // Intentos
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                             color: Colors.white10,
                             borderRadius: BorderRadius.circular(20),
@@ -299,14 +296,14 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                         child: Row(
                           children: [
                             const Icon(Icons.warning_amber_rounded,
-                                size: 18, color: AppTheme.warningOrange),
+                                size: 14, color: AppTheme.warningOrange),
                             const SizedBox(width: 5),
                             Text(
                               "$_wrongAttempts/$_maxAttempts",
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14),
+                                  fontSize: 12),
                             ),
                           ],
                         ),
@@ -315,12 +312,20 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                   ),
                 ),
 
-                const Text(
-                  "AHORCADO",
-                  style: TextStyle(
-                      color: AppTheme.accentGold,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: ShaderMask(
+                    shaderCallback: (bounds) =>
+                        AppTheme.goldGradient.createShader(bounds),
+                    child: const Text(
+                      "AHORCADO",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w900),
+                    ),
+                  ),
                 ),
 
                 // Pista
@@ -361,9 +366,9 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
 
                 // Área de Dibujo y Palabra
                 Container(
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 4), // Minimal vertical margin
-                  padding: const EdgeInsets.all(8), // Minimal padding
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: AppTheme.cardBg.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(16),
@@ -374,15 +379,12 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                       // Dibujo del Ahorcado
                       SizedBox(
                         height: 140,
-                        width:
-                            180, // Explicit width to prevent stretching distortion if parent is wide
+                        width: 180,
                         child: CustomPaint(
                           painter: HangmanPainter(_wrongAttempts),
                         ),
                       ),
-
-                      const SizedBox(height: 10), // Reduced spacing
-
+                      const SizedBox(height: 10),
                       // Palabra Oculta
                       Wrap(
                         alignment: WrapAlignment.center,
@@ -393,25 +395,40 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                             spacing: 1,
                             runSpacing: 4,
                             children: word.split('').map((char) {
-                              final isGuessed = _guessedLetters.contains(char);
+                              final isGuessed = _guessedLetters
+                                  .contains(_normalizeChar(char));
                               return Container(
-                                width: 20, // Smaller width
-                                height: 28, // Smaller height
+                                width: 26,
+                                height: 34,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 1.5),
                                 decoration: BoxDecoration(
-                                  border: Border(
-                                      bottom: BorderSide(
+                                  color: isGuessed
+                                      ? AppTheme.accentGold.withOpacity(0.15)
+                                      : Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
                                     color: isGuessed
                                         ? AppTheme.accentGold
-                                        : Colors.white54,
-                                    width: 2,
-                                  )),
+                                        : Colors.white10,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: isGuessed
+                                      ? [
+                                          BoxShadow(
+                                            color: AppTheme.accentGold
+                                                .withOpacity(0.2),
+                                            blurRadius: 4,
+                                          )
+                                        ]
+                                      : [],
                                 ),
                                 child: Center(
                                   child: Text(
                                     isGuessed ? char : '',
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 16, // Smaller font
+                                      fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -425,71 +442,23 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
                   ),
                 ),
 
-                // Teclado
+                // Teclado QWERTY con Ñ
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      childAspectRatio:
-                          1.15, // Flatter buttons to save vertical space
-                      crossAxisSpacing: 3,
-                      mainAxisSpacing: 3,
-                    ),
-                    itemCount: 26,
-                    itemBuilder: (context, index) {
-                      final letter = String.fromCharCode(65 + index);
-                      final isGuessed = _guessedLetters.contains(letter);
-                      final isCorrect = _word.contains(letter);
-
-                      Color bgColor = Colors.white10;
-                      Color textColor = Colors.white;
-
-                      if (isGuessed) {
-                        if (isCorrect) {
-                          bgColor = AppTheme.successGreen;
-                          textColor = Colors.black;
-                        } else {
-                          bgColor = Colors.black38;
-                          textColor = Colors.grey;
-                        }
-                      }
-
-                      return GestureDetector(
-                        onTap: isGuessed ? null : () => _onLetterGuess(letter),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: bgColor,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: isGuessed
-                                  ? Colors.transparent
-                                  : Colors.white24,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              letter,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 14, // Smaller font
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  child: Column(
+                    children: [
+                      _buildKeyboardRow(
+                          ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P']),
+                      const SizedBox(height: 8),
+                      _buildKeyboardRow(
+                          ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ñ']),
+                      const SizedBox(height: 8),
+                      _buildKeyboardRow(['Z', 'X', 'C', 'V', 'B', 'N', 'M']),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 10),
-
-                // Botón Rendirse eliminado según solicitud
-                const SizedBox(height: 20), // Spacing for bottom safety
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -524,6 +493,79 @@ class _HangmanMinigameState extends State<HangmanMinigame> {
       ),
     );
   }
+
+  Widget _buildKeyboardRow(List<String> letters) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: letters.map((letter) => _buildKey(letter)).toList(),
+    );
+  }
+
+  Widget _buildKey(String letter) {
+    final isGuessed = _guessedLetters.contains(letter);
+
+    bool isCorrect = false;
+    for (int i = 0; i < _word.length; i++) {
+      if (_normalizeChar(_word[i]) == letter) {
+        isCorrect = true;
+        break;
+      }
+    }
+
+    Color bgColor = Colors.white.withOpacity(0.05);
+    Color borderColor = Colors.white.withOpacity(0.15);
+    Color textColor = Colors.white;
+
+    if (isGuessed) {
+      if (isCorrect) {
+        bgColor = AppTheme.successGreen.withOpacity(0.9);
+        borderColor = AppTheme.successGreen;
+        textColor = Colors.black;
+      } else {
+        bgColor = Colors.white10;
+        borderColor = Colors.transparent;
+        textColor = Colors.white24;
+      }
+    }
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2.5),
+        child: GestureDetector(
+          onTap: isGuessed ? null : () => _onLetterGuess(letter),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            height: 48,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: borderColor, width: 1.5),
+              boxShadow: isGuessed
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 4,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+            ),
+            child: Center(
+              child: Text(
+                letter,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class HangmanPainter extends CustomPainter {
@@ -533,82 +575,60 @@ class HangmanPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Paints for different parts
     final gallowsPaint = Paint()
       ..color = Colors.white54
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5.0 // Thicker
+      ..strokeWidth = 5.0
       ..strokeCap = StrokeCap.round;
 
     final bodyPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0 // Thicker
+      ..strokeWidth = 4.0
       ..strokeCap = StrokeCap.round;
 
     final double w = size.width;
     final double h = size.height;
 
-    // 8 Intentos - Dibujo Progresivo
-
-    // 1. Base Suelo (Base)
     if (wrongAttempts >= 1)
       canvas.drawLine(
           Offset(w * 0.15, h * 0.9), Offset(w * 0.85, h * 0.9), gallowsPaint);
-
-    // 2. Poste Vertical (Poste 1)
     if (wrongAttempts >= 2)
       canvas.drawLine(
           Offset(w * 0.25, h * 0.9), Offset(w * 0.25, h * 0.1), gallowsPaint);
-
-    // 3. Poste Horizontal + Soporte (Poste 2)
     if (wrongAttempts >= 3) {
       canvas.drawLine(
           Offset(w * 0.25, h * 0.1), Offset(w * 0.65, h * 0.1), gallowsPaint);
-      canvas.drawLine(Offset(w * 0.25, h * 0.2), Offset(w * 0.4, h * 0.1),
-          gallowsPaint); // Soporte
+      canvas.drawLine(
+          Offset(w * 0.25, h * 0.2), Offset(w * 0.4, h * 0.1), gallowsPaint);
     }
-
-    // 4. Cuerda
-    if (wrongAttempts >= 4) {
+    if (wrongAttempts >= 4)
       canvas.drawLine(
           Offset(w * 0.65, h * 0.1), Offset(w * 0.65, h * 0.2), gallowsPaint);
-    }
-
-    // 5. Cabeza
     if (wrongAttempts >= 5)
       canvas.drawCircle(Offset(w * 0.65, h * 0.3), h * 0.1, bodyPaint);
-
-    // 6. Cuerpo
     if (wrongAttempts >= 6)
       canvas.drawLine(
           Offset(w * 0.65, h * 0.4), Offset(w * 0.65, h * 0.7), bodyPaint);
-
-    // 7. Brazos (Ambos)
     if (wrongAttempts >= 7) {
-      canvas.drawLine(Offset(w * 0.65, h * 0.45), Offset(w * 0.55, h * 0.55),
-          bodyPaint); // Izq
-      canvas.drawLine(Offset(w * 0.65, h * 0.45), Offset(w * 0.75, h * 0.55),
-          bodyPaint); // Der
+      canvas.drawLine(
+          Offset(w * 0.65, h * 0.45), Offset(w * 0.55, h * 0.55), bodyPaint);
+      canvas.drawLine(
+          Offset(w * 0.65, h * 0.45), Offset(w * 0.75, h * 0.55), bodyPaint);
     }
-
-    // 8. Piernas (Ambas) + Ojos (Game Over)
     if (wrongAttempts >= 8) {
-      canvas.drawLine(Offset(w * 0.65, h * 0.7), Offset(w * 0.55, h * 0.85),
-          bodyPaint); // Izq
-      canvas.drawLine(Offset(w * 0.65, h * 0.7), Offset(w * 0.75, h * 0.85),
-          bodyPaint); // Der
-
+      canvas.drawLine(
+          Offset(w * 0.65, h * 0.7), Offset(w * 0.55, h * 0.85), bodyPaint);
+      canvas.drawLine(
+          Offset(w * 0.65, h * 0.7), Offset(w * 0.75, h * 0.85), bodyPaint);
       final eyePaint = Paint()
         ..color = AppTheme.dangerRed
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-
       canvas.drawLine(
           Offset(w * 0.62, h * 0.28), Offset(w * 0.64, h * 0.30), eyePaint);
       canvas.drawLine(
           Offset(w * 0.64, h * 0.28), Offset(w * 0.62, h * 0.30), eyePaint);
-
       canvas.drawLine(
           Offset(w * 0.66, h * 0.28), Offset(w * 0.68, h * 0.30), eyePaint);
       canvas.drawLine(

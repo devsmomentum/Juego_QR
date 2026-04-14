@@ -2,6 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/player.dart';
+import '../../../core/storage/secure_local_storage.dart';
+import '../../../core/services/session_service.dart';
+
+/// Excepción personalizada para errores de autenticación con metadatos.
+class AuthUserException implements Exception {
+  final String message;
+  final bool isUnverified;
+
+  AuthUserException(this.message, {this.isUnverified = false});
+
+  @override
+  String toString() => message;
+}
 
 /// Servicio de autenticación que encapsula la lógica de login, registro y logout.
 ///
@@ -25,46 +38,96 @@ class AuthService {
   /// Lanza una excepción con mensaje legible si falla.
   Future<String> login(String email, String password) async {
     try {
+      debugPrint('AuthService: Iniciando login para $email');
+      
       final response = await _supabase.functions.invoke(
         'auth-service/login',
         body: {'email': email, 'password': password},
         method: HttpMethod.post,
       );
 
-      if (response.status != 200) {
-        final error = response.data['error'] ?? 'Error desconocido';
+      final dynamic data = response.data;
 
-        // 403 = email not verified → clean up any local session state
+      if (response.status != 200) {
+        final error = (data is Map) ? (data['error'] ?? 'Error desconocido') : 'Error del servidor (${response.status})';
+        final bool isUnverified = (data is Map) && data['unverified'] == true;
+
         if (response.status == 403) {
           try {
             await _supabase.auth.signOut();
           } catch (_) {}
         }
-        throw error;
+        
+        if (isUnverified) {
+          throw AuthUserException(_handleAuthError(error), isUnverified: true);
+        }
+        throw _handleAuthError(error);
       }
 
-      final data = response.data;
+      if (data == null) throw 'No se recibió respuesta del servidor';
 
-      if (data['session'] != null) {
-        await _supabase.auth.setSession(data['session']['refresh_token']);
+      // Manejar el caso donde la respuesta no sea un Map directo (ej. si el SDK no decodifica automáticamente)
+      final Map<String, dynamic> payload;
+      if (data is Map) {
+        payload = Map<String, dynamic>.from(data);
+      } else {
+        throw 'Respuesta del servidor inválida: Se esperaba JSON';
+      }
 
-        if (data['user'] != null) {
-          final user = data['user'];
+      if (payload['session'] != null) {
+        final sessionData = payload['session'];
+        
+        // En Supabase 2.x, setSession requiere el refresh_token string
+        final String? refreshToken = sessionData['refresh_token'];
+        if (refreshToken == null) throw 'La sesión no contiene un token de refresco válido';
+        
+        await _supabase.auth.setSession(refreshToken);
+        
+        if (payload['user'] != null) {
+          final user = payload['user'];
 
-          // Verificar si el email ha sido confirmado (redundant safety check)
           if (user['email_confirmed_at'] == null) {
-            await logout(); // Limpiar cualquier sesión parcial
-            throw 'Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.';
+            await logout(); 
+            throw AuthUserException('Tu cuenta aún no está activa. Por favor, verifica tu correo electrónico.', isUnverified: true);
           }
 
-          return user['id'] as String;
+          final userId = user['id'] as String;
+          
+          // SINGLE DEVICE POLICY: Generate session token and update profile BEFORE granting access
+          try {
+            final sessionService = SessionService();
+            final sessionToken = await sessionService.generateAndSaveSessionToken();
+            await _supabase.rpc('set_current_session_id', params: {
+              'p_session_id': sessionToken,
+            });
+          } catch (e) {
+            debugPrint('AuthService: Failed to set current_session_id during login: $e');
+            // Allow login to proceed even if token update fails, or you could throw. Throwing is safer for strict policy.
+            // But we will just log it here for minimum disruption.
+          }
+
+          return userId;
         }
         throw 'No se recibió información del usuario';
       } else {
-        throw 'No se recibió sesión válida';
+        throw 'No se recibió una sesión válida';
       }
     } catch (e) {
+      if (e is AuthUserException) rethrow;
+      
       debugPrint('AuthService: Error logging in: $e');
+
+      // Detect unverified status inside FunctionException details
+      if (e is FunctionException) {
+        final details = e.details;
+        if (details is Map && details['unverified'] == true) {
+          throw AuthUserException(
+            _handleAuthError(details['error'] ?? 'Debes confirmar tu correo para entrar.'),
+            isUnverified: true,
+          );
+        }
+      }
+
       throw _handleAuthError(e);
     }
   }
@@ -87,10 +150,10 @@ class AuthService {
 
       final role = profile['role'] as String?;
 
-      if (role != 'admin') {
+      if (role != 'admin' && role != 'staff') {
         debugPrint('AuthService: Access denied for $email (Role: $role)');
         await logout(); // Limpiar sesión inmediatamente
-        throw 'Acceso denegado: No tienes permisos de administrador.';
+        throw 'Acceso denegado: No tienes permisos suficientes.';
       }
 
       return userId;
@@ -103,6 +166,10 @@ class AuthService {
   }
 
   /// Registra un nuevo usuario con nombre, email y password.
+  ///
+  /// El registro es ATÓMICO: la Edge Function llama a signUp() y el trigger
+  /// `handle_new_user` crea el perfil completo dentro de la misma transacción.
+  /// Si algo falla, se hace rollback automático — nunca quedan usuarios huérfanos.
   ///
   /// Retorna el ID del usuario creado en caso de éxito.
   /// Lanza una excepción con mensaje legible si falla.
@@ -122,40 +189,33 @@ class AuthService {
       );
 
       if (response.status != 200) {
-        final error = response.data['error'] ?? 'Error desconocido';
-        // 409 = user already exists (race condition handled gracefully)
-        // Just rethrow the user-friendly message from the server
+        final data = response.data;
+        final error = (data is Map) ? (data['error'] ?? 'Error desconocido') : 'Error del servidor (${response.status})';
         throw error;
       }
 
       final data = response.data;
 
       if (data['user'] != null) {
-        // Si hay usuario, el registro fue exitoso a nivel de BD.
-        // Si hay sesión, la guardamos. Si no (porque requiere confirmación), seguimos igual.
+        // Si hay sesión, la guardamos (auto-login).
+        // Si no hay sesión (requiere confirmación de email), continuamos igual.
         if (data['session'] != null) {
           await _supabase.auth.setSession(data['session']['refresh_token']);
-        }
-
-        final userId = data['user']['id'] as String;
-
-        // Delay para permitir que la BD sincronice el perfil (Trigger)
-        await Future.delayed(const Duration(seconds: 1));
-
-        // Actualización explícita de datos extra en perfil si tenemos sesión
-        // Si no tenemos sesión (email sin confirmar), esto fallará por RLS, así que lo omitimos o lo intentamos con catch
-        if ((cedula != null || phone != null) && data['session'] != null) {
+          
+          // SINGLE DEVICE POLICY: Create new session token for the newly registered user
+          final userId = data['user']['id'] as String;
           try {
-            await _supabase.from('profiles').update({
-              if (cedula != null) 'cedula': cedula,
-              if (phone != null) 'phone': phone,
-            }).eq('id', userId);
-          } catch (e) {
-            debugPrint('Warning: Could not update extra profile fields: $e');
+            final sessionService = SessionService();
+            final sessionToken = await sessionService.generateAndSaveSessionToken();
+            await _supabase.rpc('set_current_session_id', params: {
+              'p_session_id': sessionToken,
+            });
+          } catch(e) {
+            debugPrint('AuthService: Failed to set current_session_id during register: $e');
           }
         }
 
-        return userId;
+        return data['user']['id'] as String;
       }
       throw 'No se recibió información del usuario';
     } catch (e) {
@@ -177,12 +237,36 @@ class AuthService {
       }
     }
 
-    // 2. Cerrar sesión en Supabase
+    // 2. Limpiar token local PRIMERO — garantiza que el storage quede limpio
+    //    incluso si signOut() falla por red, sesión expirada, etc.
     try {
-      await _supabase.auth.signOut();
+      await SecureLocalStorage().removePersistedSession();
+      await SessionService().clearSessionToken();
+      debugPrint('AuthService: Local tokens cleared.');
     } catch (e) {
-      debugPrint('AuthService: Error force-closing session: $e');
-      // No re-lanzamos para permitir que la App asuma que salió localmente
+      debugPrint('AuthService: Error clearing local token: $e');
+    }
+
+    // 3. Cerrar sesión local (no revoca tokens del servidor para evitar
+    //    invalidar sesiones de otros dispositivos que acaban de loguearse).
+    try {
+      await _supabase.auth.signOut(scope: SignOutScope.local);
+    } catch (e) {
+      debugPrint('AuthService: Error closing local session: $e');
+      // No re-lanzamos — el token local ya fue borrado, la App puede continuar
+    }
+  }
+
+  /// Reenvía el correo de verificación.
+  Future<void> resendVerification(String email) async {
+    try {
+      await _supabase.auth.resend(
+        type: OtpType.signup,
+        email: email.trim(),
+      );
+    } catch (e) {
+      debugPrint('AuthService: Error resending verification: $e');
+      throw _handleAuthError(e);
     }
   }
 
@@ -262,6 +346,10 @@ class AuthService {
 
   /// Convierte errores de autenticación en mensajes legibles para el usuario.
   String _handleAuthError(dynamic e) {
+    if (e is FormatException) {
+      return 'Error de comunicación: El servidor envió una respuesta con formato inválido. (${e.message})';
+    }
+    
     String errorMsg = e.toString().toLowerCase();
 
     if (errorMsg.contains('invalid login credentials') ||
@@ -281,7 +369,7 @@ class AuthService {
       return 'Formato de cédula inválido. Usa V12345678 o E12345678.';
     }
     if (errorMsg.contains('formato de teléfono')) {
-      return 'Formato de teléfono inválido. Usa 04121234567.';
+      return 'Formato de teléfono inválido. Usa formato internacional (+584121234567) o local (04121234567).';
     }
     if (errorMsg.contains('user already registered') ||
         errorMsg.contains('already exists')) {
@@ -290,6 +378,9 @@ class AuthService {
     if (errorMsg.contains('profiles_id_fkey') ||
         errorMsg.contains('foreign key constraint')) {
       return 'Este correo ya está registrado. Intenta iniciar sesión.';
+    }
+    if (errorMsg.contains('database error saving new user')) {
+      return 'No se pudo completar el registro. La cédula o el teléfono ya están en uso por otra cuenta.';
     }
     if (errorMsg.contains('is invalid') && errorMsg.contains('email')) {
       return 'Este correo ya está registrado. Intenta iniciar sesión.';
@@ -326,12 +417,18 @@ class AuthService {
   }
 
   /// Agrega un método de pago vinculado al usuario.
-  Future<void> addPaymentMethod({required String bankCode}) async {
+  Future<void> addPaymentMethod({
+    String? bankCode,
+    String? type,
+    String? identifier,
+  }) async {
     try {
       final response = await _supabase.functions.invoke(
         'auth-service/add-payment-method',
         body: {
-          'bank_code': bankCode,
+          if (bankCode != null) 'bank_code': bankCode,
+          if (type != null) 'type': type,
+          if (identifier != null) 'identifier': identifier,
         },
         method: HttpMethod.post,
       );

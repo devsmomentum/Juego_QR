@@ -85,8 +85,21 @@ class _BettingModalState extends State<BettingModal> {
   Future<void> _placeBets() async {
     if (_selectedRacerIds.isEmpty) return;
 
-    setState(() => _isSubmitting = true);
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final userClovers = playerProvider.currentPlayer?.clovers ?? 0;
+    final totalCost = _selectedRacerIds.length * _ticketPrice;
+
+    if (userClovers < totalCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Saldo insuficiente de tréboles para esta apuesta.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
     final userId = playerProvider.currentPlayer?.userId;
 
     if (userId == null) return;
@@ -102,6 +115,15 @@ class _BettingModalState extends State<BettingModal> {
       
       if (result['success'] == true) {
         _selectedRacerIds.clear();
+        
+        // Use the new balance from RPC if available
+        if (result['new_balance'] != null) {
+          final newBalance = int.tryParse(result['new_balance'].toString());
+          if (newBalance != null) {
+            playerProvider.updateLocalClovers(newBalance);
+          }
+        }
+        
         await _loadData(); // Refresh bets
         
         ScaffoldMessenger.of(context).showSnackBar(
@@ -110,14 +132,19 @@ class _BettingModalState extends State<BettingModal> {
             backgroundColor: Colors.green,
           ),
         );
-        
-        // Refresh player balance (clovers)
-        // Ideally PlayerProvider should listen to profile changes, but we can force fetch if needed.
-        // Assuming Realtime updates handle it or user will see it update eventually.
       } else {
+        String errorMsg = result['message'] ?? 'Falló la apuesta';
+        
+        // Handle specific error codes from secure_clover_payment
+        if (result['error'] == 'INSUFFICIENT_CLOVERS') {
+          errorMsg = 'No tienes suficientes tréboles';
+        } else if (result['error'] == 'INVALID_AMOUNT') {
+          errorMsg = 'Monto de apuesta inválido';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error: ${result['message'] ?? 'Falló la apuesta'}'),
+            content: Text('❌ Error: $errorMsg'),
             backgroundColor: Colors.red,
           ),
         );
@@ -175,13 +202,20 @@ class _BettingModalState extends State<BettingModal> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppTheme.accentGreen),
                   ),
-                  child: Row(
-                    children: [
-                      Text('🎫 ', style: TextStyle(fontSize: 16)),
-                      Text('$_ticketPrice ', style: const TextStyle(color: AppTheme.accentGreen, fontWeight: FontWeight.bold)),
-                      const CoinImage(size: 16),
-                    ],
-                  ),
+                    child: Row(
+                      children: [
+                        Text('🍀 ', style: TextStyle(fontSize: 16)),
+                        Consumer<PlayerProvider>(
+                          builder: (context, player, _) => Text(
+                            '${player.currentPlayer?.clovers ?? 0} ',
+                            style: const TextStyle(color: AppTheme.accentGreen, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        Text('| 🎫 ', style: TextStyle(fontSize: 16, color: Colors.white24)),
+                        Text('$_ticketPrice ', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const CoinImage(size: 16),
+                      ],
+                    ),
                 ),
               ],
             ),
@@ -364,7 +398,22 @@ class _BettingModalState extends State<BettingModal> {
                      child: ElevatedButton(
                        onPressed: (_selectedRacerIds.isEmpty || _isSubmitting) 
                            ? null 
-                           : _placeBets,
+                           : () {
+                               final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+                               final userClovers = playerProvider.currentPlayer?.clovers ?? 0;
+                               final totalCost = _selectedRacerIds.length * _ticketPrice;
+                               
+                               if (userClovers < totalCost) {
+                                 ScaffoldMessenger.of(context).showSnackBar(
+                                   SnackBar(
+                                     content: Text('❌ No tienes suficientes tréboles'),
+                                     backgroundColor: Colors.orange,
+                                   ),
+                                 );
+                                 return;
+                               }
+                               _placeBets();
+                             },
                        style: ElevatedButton.styleFrom(
                          backgroundColor: AppTheme.accentGreen,
                          foregroundColor: Colors.black,

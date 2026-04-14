@@ -36,6 +36,7 @@ class _HolographicPanelsMinigameState extends State<HolographicPanelsMinigame>
   int _score = 0;
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
+  bool _isProcessingSelection = false; // Guard against double-taps
 
   // Current Round Data
   late String _leftEquation;
@@ -90,7 +91,7 @@ class _HolographicPanelsMinigameState extends State<HolographicPanelsMinigame>
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -130,13 +131,15 @@ class _HolographicPanelsMinigameState extends State<HolographicPanelsMinigame>
     }
   }
 
-  void _handleSelection(bool isLeft) {
-    if (_isGameOver) return;
+  Future<void> _handleSelection(bool isLeft) async {
+    if (_isGameOver || _isProcessingSelection) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
+
+    setState(() => _isProcessingSelection = true);
 
     bool correct;
     if (isLeft) {
@@ -148,14 +151,25 @@ class _HolographicPanelsMinigameState extends State<HolographicPanelsMinigame>
     if (correct) {
       setState(() {
         _score++;
-        if (_score >= _targetScore) {
-          _endGame(win: true);
-        } else {
-          _generateRound();
-        }
       });
+
+      if (_score >= _targetScore) {
+        _endGame(win: true);
+      } else {
+        // Small delay so the user sees the correct answer before it changes
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          setState(() {
+            _generateRound();
+            _isProcessingSelection = false;
+          });
+        }
+      }
     } else {
-      _handleMistake();
+      await _handleMistake();
+      if (mounted) {
+        setState(() => _isProcessingSelection = false);
+      }
     }
   }
 

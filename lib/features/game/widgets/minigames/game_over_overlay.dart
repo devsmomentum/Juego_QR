@@ -1,5 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../auth/providers/player_provider.dart';
+import '../buy_coins_with_clovers_modal.dart';
 import '../../../../core/theme/app_theme.dart';
 
 /// Overlay that appears when a minigame ends (win or lose).
@@ -63,74 +66,98 @@ class GameOverOverlay extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Icon
-                      Icon(
-                        isVictory ? Icons.emoji_events_rounded : Icons.warning_amber_rounded,
-                        color: accentColor,
-                        size: 52,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Title
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Icon
+                        Icon(
+                          isVictory ? Icons.emoji_events_rounded : Icons.warning_amber_rounded,
                           color: accentColor,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
+                          size: 52,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Message
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 14,
-                          height: 1.5,
+                        const SizedBox(height: 16),
+  
+                        // Title
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: accentColor,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Retry button
-                      if (onRetry != null)
-                        _buildButton(
-                          label: 'REINTENTAR',
-                          icon: Icons.refresh_rounded,
-                          color: AppTheme.accentGold,
-                          onTap: onRetry!,
-                        ),
-
-                      // Go to shop button
-                      if (onGoToShop != null) ...[
                         const SizedBox(height: 12),
-                        _buildButton(
-                          label: 'IR A LA TIENDA',
-                          icon: Icons.storefront_rounded,
-                          color: AppTheme.accentGold,
-                          onTap: onGoToShop!,
+  
+                        // Message
+                        Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
                         ),
+                        const SizedBox(height: 28),
+  
+                        // Retry button
+                        if (onRetry != null)
+                          _buildButton(
+                            label: 'REINTENTAR',
+                            icon: Icons.refresh_rounded,
+                            color: AppTheme.accentGold,
+                            onTap: onRetry!,
+                          ),
+  
+                        // Go to shop / buy coins button
+                        if (onGoToShop != null) ...[
+                          const SizedBox(height: 12),
+                          Builder(
+                            builder: (btnContext) {
+                              final player = Provider.of<PlayerProvider>(btnContext, listen: true).currentPlayer;
+                              final int coins = player?.coins ?? 0;
+                              
+                              if (coins == 0) {
+                                return _buildButton(
+                                  label: 'COMPRAR MONEDAS',
+                                  icon: Icons.currency_exchange_rounded,
+                                  color: AppTheme.accentGold,
+                                  onTap: () async {
+                                    final bool? success = await BuyCoinsWithCloversModal.show(context);
+                                    if (success == true) {
+                                      // Después de comprar monedas, puede ir a la tienda a comprar vidas
+                                      onGoToShop!(); 
+                                    }
+                                  },
+                                );
+                              }
+                              
+                              return _buildButton(
+                                label: 'IR A LA TIENDA',
+                                icon: Icons.storefront_rounded,
+                                color: AppTheme.accentGold,
+                                onTap: onGoToShop!,
+                              );
+                            }
+                          ),
+                        ],
+  
+                        // Exit button
+                        if (onExit != null) ...[
+                          const SizedBox(height: 12),
+                          _buildButton(
+                            label: 'SALIR',
+                            icon: Icons.exit_to_app_rounded,
+                            color: Colors.white54,
+                            onTap: onExit!,
+                            subtle: true,
+                          ),
+                        ],
                       ],
-
-                      // Exit button
-                      if (onExit != null) ...[
-                        const SizedBox(height: 12),
-                        _buildButton(
-                          label: 'SALIR',
-                          icon: Icons.exit_to_app_rounded,
-                          color: Colors.white54,
-                          onTap: onExit!,
-                          subtle: true,
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),

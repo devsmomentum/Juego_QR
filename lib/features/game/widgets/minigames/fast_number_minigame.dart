@@ -91,9 +91,9 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
     _gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
-      if (gameProvider.isFrozen) return;
+      if (gameProvider.isPaused) return;
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -280,186 +280,227 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
     final gameProvider = Provider.of<GameProvider>(context);
     final player = context.watch<PlayerProvider>().currentPlayer;
 
-    return Stack(
-      children: [
-        Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        final width = constraints.maxWidth;
+        final isSmall = height < 550;
+        final isMedium = height < 700;
+        final isWide = width > 500;
+
+        return Stack(
           children: [
-            const SizedBox(height: 10),
-
-            // STATUS & PROGRESS
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("ESTADO:",
-                          style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 10,
-                              letterSpacing: 1,
-                              decoration: TextDecoration.none)),
-                      Text(
-                          _state == GameState.showing
-                              ? "¡ATENTO AL NÚMERO!"
-                              : _state == GameState.inputting
-                                  ? "INGRESA EL NÚMERO"
-                                  : "PREPARANDO...",
-                          style: TextStyle(
-                              color: _statusColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.none)),
-                    ],
-                  ),
-                  _buildStatusPill(Icons.speed, "CAPTURA VELOZ"),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // FLYING AREA
-            Expanded(
-              flex: 2,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.02),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: ClipRect(
-                  child: Stack(
-                    children: [
-                      Center(
-                          child: Text(
-                              _state == GameState.inputting ? "???" : "",
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.05),
-                                  fontSize: 80,
-                                  fontWeight: FontWeight.bold,
-                                  decoration: TextDecoration.none))),
-                      if (_state == GameState.showing)
-                        SlideTransition(
-                          position: _flyAnimation,
-                          child: Center(
-                            child: Text(
-                              _targetNumber,
-                              style: const TextStyle(
-                                color: AppTheme.accentGold,
-                                fontSize: 80,
-                                fontWeight: FontWeight.w900,
-                                decoration: TextDecoration.none,
-                                shadows: [
-                                  Shadow(
-                                      color: AppTheme.accentGold,
-                                      blurRadius: 20)
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // INPUT AREA
-            Expanded(
-              flex: 3,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(30)),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                ),
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxWidth: isWide ? 600 : double.infinity),
                 child: Column(
                   children: [
-                    // Display current input
-                    Container(
-                      height: 50,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                            color:
-                                _isError ? AppTheme.dangerRed : Colors.white24),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _currentInput.isEmpty ? "----" : _currentInput,
+                    SizedBox(height: (isSmall || isWide) ? 2 : 10),
+                    const Text("CAPTURA EL NÚMERO",
                         style: TextStyle(
-                            color: _isError ? AppTheme.dangerRed : Colors.white,
-                            fontSize: 32,
-                            letterSpacing: 10,
+                            color: AppTheme.accentGold,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.none),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // Keypad
-                    Expanded(
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 2.3,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: 12,
-                        itemBuilder: (context, index) {
-                          if (index == 9)
-                            return _buildKey("C", Colors.white38, _clearInput);
-                          if (index == 10)
-                            return _buildKey(
-                                "0", Colors.white, () => _handleKeyPress("0"));
-                          if (index == 11)
-                            return _buildKey(
-                                "OK", AppTheme.successGreen, _submitInput);
+                            letterSpacing: 1.2)),
+                    SizedBox(height: (isSmall || isWide) ? 5 : 10),
 
-                          String key = (index + 1).toString();
-                          return _buildKey(
-                              key, Colors.white, () => _handleKeyPress(key));
-                        },
+                // STATUS & PROGRESS
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("ESTADO:",
+                              style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                  decoration: TextDecoration.none)),
+                          Text(
+                              _state == GameState.showing
+                                  ? "¡ATENTO AL NÚMERO!"
+                                  : _state == GameState.inputting
+                                      ? "INGRESA EL NÚMERO"
+                                      : "PREPARANDO...",
+                              style: TextStyle(
+                                  color: _statusColor,
+                                  fontSize: (isSmall || isWide) ? 11 : 13,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.none)),
+                        ],
+                      ),
+                      _buildStatusPill(Icons.speed, "CAPTURA VELOZ"),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: (isSmall || isWide) ? 2 : 15),
+
+                // FLYING AREA - Reduced flex to give keypad more room
+                Flexible(
+                  flex: (isSmall || isWide) ? 1 : 2,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: ClipRect(
+                      child: Stack(
+                        children: [
+                          Center(
+                              child: Text(
+                                  _state == GameState.inputting ? "???" : "",
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.05),
+                                      fontSize: (isSmall || isWide) ? 40 : 80,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.none))),
+                          if (_state == GameState.showing)
+                            SlideTransition(
+                              position: _flyAnimation,
+                              child: Center(
+                                child: Text(
+                                  _targetNumber,
+                                  style: TextStyle(
+                                    color: AppTheme.accentGold,
+                                    fontSize: (isSmall || isWide) ? 50 : 80,
+                                    fontWeight: FontWeight.w900,
+                                    decoration: TextDecoration.none,
+                                    shadows: const [
+                                      Shadow(
+                                          color: AppTheme.accentGold,
+                                          blurRadius: 20)
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+
+                SizedBox(height: (isSmall || isWide) ? 4 : 15),
+
+                // INPUT AREA
+                Expanded(
+                  flex: isSmall ? 3 : 4,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: 30, vertical: (isSmall || isWide) ? 4 : 12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(30)),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: isWide ? 500 : double.infinity,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Display current input
+                            Container(
+                              height: (isSmall || isWide) ? 35 : 50,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.black26,
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(
+                                    color: _isError
+                                        ? AppTheme.dangerRed
+                                        : Colors.white24),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                _currentInput.isEmpty ? "----" : _currentInput,
+                                style: TextStyle(
+                                    color: _isError
+                                        ? AppTheme.dangerRed
+                                        : Colors.white,
+                                    fontSize: (isSmall || isWide) ? 20 : 32,
+                                    letterSpacing: isSmall ? 6 : 10,
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.none),
+                              ),
+                            ),
+                            SizedBox(height: (isSmall || isWide) ? 4 : 12),
+                            // Keypad
+                            Expanded(
+                              child: GridView.builder(
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  childAspectRatio: isWide
+                                      ? 3.2
+                                      : (isSmall
+                                          ? 2.5
+                                          : (isMedium ? 2.2 : 2.0)),
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: (isSmall || isWide) ? 4 : 8,
+                                ),
+                                itemCount: 12,
+                                itemBuilder: (context, index) {
+                                  if (index == 9)
+                                    return _buildKey(
+                                        "C", Colors.white38, _clearInput, isSmall);
+                                  if (index == 10)
+                                    return _buildKey("0", Colors.white,
+                                        () => _handleKeyPress("0"), isSmall);
+                                  if (index == 11)
+                                    return _buildKey("OK", AppTheme.successGreen,
+                                        _submitInput, isSmall);
+
+                                  String key = (index + 1).toString();
+                                  return _buildKey(key, Colors.white,
+                                      () => _handleKeyPress(key), isSmall);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
         if (_showOverlay)
-          GameOverOverlay(
-            title: _overlayTitle,
-            message: _overlayMessage,
-            isVictory: _isVictory,
-            onRetry: _canRetry ? _resetGame : null,
-            onGoToShop: _showShopButton
-                ? () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const MallScreen()));
-                    if (mounted) {
-                      setState(() {
-                        _canRetry = true;
-                        _showShopButton = false;
-                      });
-                    }
-                  }
-                : null,
-            onExit: () => Navigator.pop(context),
-          ),
-      ],
+              GameOverOverlay(
+                title: _overlayTitle,
+                message: _overlayMessage,
+                isVictory: _isVictory,
+                onRetry: _canRetry ? _resetGame : null,
+                onGoToShop: _showShopButton
+                    ? () async {
+                        await Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const MallScreen()));
+                        if (mounted) {
+                          setState(() {
+                            _canRetry = true;
+                            _showShopButton = false;
+                          });
+                        }
+                      }
+                    : null,
+                onExit: () => Navigator.pop(context),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -487,7 +528,7 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
     );
   }
 
-  Widget _buildKey(String label, Color color, VoidCallback onTap) {
+  Widget _buildKey(String label, Color color, VoidCallback onTap, bool isSmall) {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
@@ -511,7 +552,7 @@ class _FastNumberMinigameState extends State<FastNumberMinigame>
           label,
           style: TextStyle(
               color: color,
-              fontSize: 22,
+              fontSize: isSmall ? 18 : 22,
               fontWeight: FontWeight.w900,
               letterSpacing: 1,
               decoration: TextDecoration.none),

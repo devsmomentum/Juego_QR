@@ -133,7 +133,7 @@ class LeaderboardCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        player.profession,
+                        player.localizedProfession,
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white70,
@@ -163,25 +163,24 @@ class LeaderboardCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(player.totalXP, (index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 2),
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(colors: _getStampGradient(index)),
-                              boxShadow: [
-                                 BoxShadow(color: _getStampGradient(index)[0].withOpacity(0.5), blurRadius: 4)
-                              ]
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
+                    Wrap(
+                       spacing: 2,
+                       runSpacing: 2,
+                       alignment: WrapAlignment.end,
+                       children: List.generate(player.completedCluesCount, (index) {
+                         return Container(
+                             width: 10,
+                             height: 10,
+                             decoration: BoxDecoration(
+                               shape: BoxShape.circle,
+                               gradient: LinearGradient(colors: _getStampGradient(index)),
+                               boxShadow: [
+                                  BoxShadow(color: _getStampGradient(index)[0].withOpacity(0.5), blurRadius: 4)
+                               ]
+                             ),
+                         );
+                       }),
+                     ),
                   ],
                 ),
               ],

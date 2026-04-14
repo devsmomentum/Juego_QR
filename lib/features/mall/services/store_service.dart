@@ -34,14 +34,15 @@ class StoreService {
         final fileExt = 'jpg'; // Default extension
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
         final filePath = 'store-images/$fileName';
-        
+
         if (imageFile is XFile) {
-            final bytes = await imageFile.readAsBytes();
-             await _supabase.storage
-              .from('events-images')
-              .uploadBinary(filePath, bytes, fileOptions: const FileOptions(upsert: true));
-             
-             imageUrl = _supabase.storage.from('events-images').getPublicUrl(filePath);
+          final bytes = await imageFile.readAsBytes();
+          await _supabase.storage.from('events-images').uploadBinary(
+              filePath, bytes,
+              fileOptions: const FileOptions(upsert: true));
+
+          imageUrl =
+              _supabase.storage.from('events-images').getPublicUrl(filePath);
         }
       }
 
@@ -64,27 +65,26 @@ class StoreService {
       String? imageUrl = store.imageUrl;
 
       if (newImageFile != null) {
-         final fileExt = 'jpg'; 
-         final fileName = '${DateTime.now().millisecondsSinceEpoch}_updated.$fileExt';
-         final filePath = 'store-images/$fileName';
-         
-         if (newImageFile is XFile) {
-             final bytes = await newImageFile.readAsBytes();
-             await _supabase.storage
-              .from('events-images')
-              .uploadBinary(filePath, bytes, fileOptions: const FileOptions(upsert: true));
-              
-             imageUrl = _supabase.storage.from('events-images').getPublicUrl(filePath);
-         }
+        final fileExt = 'jpg';
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_updated.$fileExt';
+        final filePath = 'store-images/$fileName';
+
+        if (newImageFile is XFile) {
+          final bytes = await newImageFile.readAsBytes();
+          await _supabase.storage.from('events-images').uploadBinary(
+              filePath, bytes,
+              fileOptions: const FileOptions(upsert: true));
+
+          imageUrl =
+              _supabase.storage.from('events-images').getPublicUrl(filePath);
+        }
       }
 
       final data = store.toMap();
       data['image_url'] = imageUrl;
 
-      await _supabase
-          .from('mall_stores')
-          .update(data)
-          .eq('id', store.id);
+      await _supabase.from('mall_stores').update(data).eq('id', store.id);
     } catch (e) {
       debugPrint('Error updating store: $e');
       rethrow;

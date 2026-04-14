@@ -3,11 +3,42 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clue.dart';
 import '../models/power_effect.dart';
 import '../../../shared/models/player.dart';
+import '../../../core/security/security_guard.dart';
 
 class GameService {
   final SupabaseClient _supabase;
 
   GameService(this._supabase);
+
+  /// Retorna el header Authorization con un token de usuario válido garantizado.
+  /// Evita el bug del SDK donde _getAccessToken() devuelve null → se usa la anon key
+  /// → Edge Function responde 401 "Invalid JWT" (firma incorrecta para auth.getUser).
+  /// Retorna el header Authorization con un token de usuario válido garantizado.
+  /// Evita el bug del SDK donde _getAccessToken() devuelve null → se usa la anon key
+  /// → Edge Function responde 401 "Invalid JWT" (firma incorrecta para auth.getUser).
+  Future<Map<String, String>> _authHeaders() async {
+    Session? session = _supabase.auth.currentSession;
+    
+    // Explicitly check for expired OR invalid session
+    if (session == null || session.isExpired || session.accessToken.isEmpty) {
+      debugPrint('[GameService] Session invalid/expired – forcing refresh...');
+      try {
+        final result = await _supabase.auth.refreshSession();
+        session = result.session;
+      } catch (e) {
+        debugPrint('[GameService] Refresh error: $e');
+        session = null;
+      }
+    }
+    
+    if (session == null || session.accessToken.isEmpty) {
+      throw const AuthException('Sesión expirada. Por favor, inicia sesión de nuevo.');
+    }
+    
+    return {
+      'Authorization': 'Bearer ${session.accessToken}',
+    };
+  }
 
   /// Obtiene las vidas de un jugador en un evento específico.
   /// Retorna el número de vidas o null si falla.
@@ -18,7 +49,8 @@ class GameService {
           .select('lives')
           .eq('event_id', eventId)
           .eq('user_id', userId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 10));
 
       if (response != null && response['lives'] != null) {
         return response['lives'] as int;
@@ -26,7 +58,7 @@ class GameService {
       return null;
     } catch (e) {
       debugPrint('Error fetching lives: $e');
-      rethrow;
+      return null;
     }
   }
 
@@ -41,7 +73,7 @@ class GameService {
       final response = await _supabase.rpc('lose_life', params: {
         'p_user_id': userId,
         'p_event_id': eventId,
-      }).catchError((e) {
+      }).timeout(const Duration(seconds: 10)).catchError((e) {
         debugPrint(
             '[LIVES_DEBUG] RPC Error caught: $e. Switching to Fallback.');
         return null;
@@ -62,7 +94,8 @@ class GameService {
           .select('lives')
           .eq('user_id', userId)
           .eq('event_id', eventId)
-          .single();
+          .single()
+          .timeout(const Duration(seconds: 10));
 
       final int currentLives = row['lives'] as int;
       final int newLives = currentLives > 0 ? currentLives - 1 : 0;
@@ -72,14 +105,16 @@ class GameService {
           .from('game_players')
           .update({'lives': newLives})
           .eq('user_id', userId)
-          .eq('event_id', eventId);
+          .eq('event_id', eventId)
+          .timeout(const Duration(seconds: 10));
 
       debugPrint('[LIVES_DEBUG] Direct Update Success. New Lives: $newLives');
       return newLives;
     } catch (e) {
       debugPrint(
           '[LIVES_DEBUG] CRITICAL ERROR deleting life (both RPC and Direct failed): $e');
-      rethrow;
+      // No rethrow, try to return something sensible or let provider handle it
+      return 0; 
     }
   }
 
@@ -99,32 +134,35 @@ class GameService {
           .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
           .order('last_active', ascending: true)
-          .limit(50);
+          .limit(100); // Increased from 50: with exactly 50 players the old limit caused unsorted user injection.
 
-      // --- INVISIBILITY FILTER --- 
+      // --- INVISIBILITY FILTER ---
       // Fetch currently invisible players to exclude them from the list
       try {
         final invisiblePlayers = await _supabase
-           .from('active_powers')
-           .select('target_id')
-           .eq('event_id', eventId)
-           .eq('power_slug', 'invisibility')
-           .gt('expires_at', DateTime.now().toUtc().toIso8601String());
-        
-        final Set<String> invisibleIds = invisiblePlayers.map((e) => e['target_id']?.toString() ?? '').toSet();
-        
+            .from('active_powers')
+            .select('target_id')
+            .eq('event_id', eventId)
+            .eq('power_slug', 'invisibility')
+            .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+            .timeout(const Duration(seconds: 5));
+
+        final Set<String> invisibleIds = invisiblePlayers
+            .map((e) => e['target_id']?.toString() ?? '')
+            .toSet();
+
         if (invisibleIds.isNotEmpty) {
-           // Remove invisible players from the main list (unless it's ME checking my own rank?)
-           // Requirement: "demás usuarios pueden verlo... debería de no aparecer"
-           // Usually I should still see MYSELF even if invisible.
-           leaderboardData.removeWhere((p) {
-              final pid = p['game_player_id']?.toString() ?? p['id']?.toString();
-              // Keep myself visible to me
-              final uid = p['user_id']?.toString();
-              if (currentUserId != null && uid == currentUserId) return false;
-              
-              return invisibleIds.contains(pid);
-           });
+          // Remove invisible players from the main list (unless it's ME checking my own rank?)
+          // Requirement: "demás usuarios pueden verlo... debería de no aparecer"
+          // Usually I should still see MYSELF even if invisible.
+          leaderboardData.removeWhere((p) {
+            final pid = p['game_player_id']?.toString() ?? p['id']?.toString();
+            // Keep myself visible to me
+            final uid = p['user_id']?.toString();
+            if (currentUserId != null && uid == currentUserId) return false;
+
+            return invisibleIds.contains(pid);
+          });
         }
       } catch (e) {
         debugPrint('Error filtering invisible players: $e');
@@ -158,7 +196,8 @@ class GameService {
                 leaderboardData.add(myData);
                 debugPrint("👻 Current user added to leaderboard list.");
               } else {
-                 debugPrint("👻 Current user found but is SPECTATOR. Not adding to race view.");
+                debugPrint(
+                    "👻 Current user found but is SPECTATOR. Not adding to race view.");
               }
             } else {
               debugPrint(
@@ -172,7 +211,8 @@ class GameService {
 
       if (leaderboardData.isNotEmpty) {
         debugPrint("📊 Sample Entry: ${leaderboardData.first}");
-        debugPrint("📊 Sample completed_clues_count: ${leaderboardData.first['completed_clues_count']}");
+        debugPrint(
+            "📊 Sample completed_clues_count: ${leaderboardData.first['completed_clues_count']}");
       } else {
         debugPrint("⚠️ getLeaderboard: NO DATA FOUND for event $eventId");
       }
@@ -204,7 +244,8 @@ class GameService {
         // Normalización de IDs obligatoria
         if (json['id'] == null) json['id'] = uid;
         // Map completed_clues_count to all expected keys
-        final int clueCount = json['completed_clues_count'] ?? json['completed_clues'] ?? 0;
+        final int clueCount =
+            json['completed_clues_count'] ?? json['completed_clues'] ?? 0;
         json['total_xp'] = clueCount;
         json['completed_clues'] = clueCount;
         json['completed_clues_count'] = clueCount;
@@ -234,6 +275,7 @@ class GameService {
     try {
       final response = await _supabase.functions.invoke(
         'game-play/get-leaderboard',
+        headers: await _authHeaders(),
         body: {'eventId': eventId},
         method: HttpMethod.post,
       );
@@ -299,22 +341,20 @@ class GameService {
   }
 
   /// Obtiene las pistas de un evento.
+  /// Usa la RPC optimizada get_clues_with_progress para alto rendimiento.
   Future<List<Clue>> getClues(String eventId) async {
     try {
-      final response = await _supabase.functions.invoke(
-        'game-play/get-clues',
-        body: {'eventId': eventId},
-        method: HttpMethod.post,
-      );
+      final response = await _supabase.rpc('get_clues_with_progress', params: {
+        'p_event_id': eventId,
+      }).timeout(const Duration(seconds: 15));
 
-      if (response.status == 200) {
-        final List<dynamic> data = response.data;
-        return data.map((json) => Clue.fromJson(json)).toList();
-      }
-      throw Exception('Failed to fetch clues: ${response.status}');
+      if (response == null) return [];
+
+      final data = response is List ? response : [];
+      return data.map((json) => Clue.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error fetching clues: $e');
-      rethrow;
+      debugPrint('Error fetching clues (RPC): $e');
+      return [];
     }
   }
 
@@ -322,7 +362,9 @@ class GameService {
   Future<void> startGame(String eventId) async {
     try {
       final response = await _supabase.functions.invoke('game-play/start-game',
-          body: {'eventId': eventId}, method: HttpMethod.post);
+          headers: await _authHeaders(),
+          body: {'eventId': eventId},
+          method: HttpMethod.post);
 
       if (response.status != 200) {
         throw Exception('Failed to start game: ${response.status}');
@@ -333,45 +375,99 @@ class GameService {
     }
   }
 
-  /// Completa una pista.
-  /// Retorna un mapa con el resultado, incluyendo si la carrera se completó.
-  Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
+  /// Inicia sesion de minijuego via Edge Function con headers seguros.
+  Future<Map<String, dynamic>?> startMinigameSession({
+    required String clueId,
+    required int minDurationSeconds,
+  }) async {
+    try {
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'start-session',
+        payload: {
+          'clue_id': int.tryParse(clueId) ?? clueId,
+          'min_duration_seconds': minDurationSeconds,
+        },
+      );
+      return response;
+    } on CustomSecurityException catch (e) {
+      debugPrint('[GameService] Security Exception (startSession): $e');
+      return {'success': false, 'error': e.referenceCode == '0xERR-NET-PKT' ? e.message : e.referenceCode};
+    } catch (e) {
+      debugPrint('[GameService] Error startMinigameSession: $e');
+      return {'success': false, 'error': '0xERR-UNKNOWN-CATCH'};
+    }
+  }
+
+  /// Verifica y completa el minijuego via Edge Function.
+  Future<Map<String, dynamic>?> verifyAndCompleteMinigame({
+    required String sessionId,
+    required String answer,
+    String? challengeToken,
+    Map<String, dynamic>? result,
+  }) async {
+    try {
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'verify-session',
+        payload: {
+          'session_id': sessionId,
+          'p_answer': answer,
+          'p_result': result ?? {},
+          if (challengeToken != null) 'challenge_token': challengeToken,
+        },
+      );
+      return response;
+    } on CustomSecurityException catch (e) {
+      debugPrint('[GameService] Security Exception (verifySession): $e');
+      return {'success': false, 'error': e.referenceCode == '0xERR-NET-PKT' ? e.message : e.referenceCode};
+    } catch (e) {
+      debugPrint('[GameService] Error verifyAndCompleteMinigame: $e');
+      return null;
+    }
+  }
+
+  /// Completa una pista via admin RPC (direct access revoked for regular users).
+  /// Only admins can call this path; regular users must use verifyAndCompleteMinigame.
+    Future<Map<String, dynamic>?> completeClue(String clueId, String answer,
       {String? eventId}) async {
     try {
-      final response =
-          await _supabase.functions.invoke('game-play/complete-clue',
-              body: {
-                'clueId': clueId,
-                'answer': answer,
-              },
-              method: HttpMethod.post);
+      debugPrint('[GameService] 📡 RPC admin_complete_clue: clueId=$clueId');
+      final response = await _supabase.rpc('admin_complete_clue', params: {
+        'p_clue_id': int.tryParse(clueId) ?? clueId,
+        'p_answer': answer,
+      }).timeout(const Duration(seconds: 12));
 
-      if (response.status == 200) {
-        final data = response.data as Map<String, dynamic>?;
+      if (response != null && response is Map<String, dynamic>) {
+        final data = response;
+        debugPrint('[GameService] 📥 RPC Response: $data');
+        
+        if (data['success'] == false) {
+          debugPrint('❌ Error completing clue (RPC): ${data['error']}');
+          return null;
+        }
 
         // AUTO-DISTRIBUTE PRIZES IF RACE COMPLETED (ATOMIC RPC)
-        if (data != null && data['raceCompleted'] == true) {
+        if (data['raceCompleted'] == true) {
           debugPrint("🏁 Race Completed (Last Clue). Calling RegisterRPC...");
 
           // Use provided eventId, fallback to response, then null
           final eventIdToUse = eventId ?? data['eventId'];
 
           if (eventIdToUse != null) {
-            final rpcRes = await _registerFinisher(eventIdToUse);
+            final rpcRes = await registerFinisher(eventIdToUse);
             if (rpcRes != null && rpcRes['success'] == true) {
-               // Inject prize/position into response so UI knows
-               final newData = Map<String, dynamic>.from(data);
-               newData['prizeAmount'] = rpcRes['prize'];
-               newData['position'] = rpcRes['position'];
-               // CRITICAL: Ensure this flag is passed up
-               newData['raceCompletedGlobal'] = rpcRes['race_completed'];
-               return newData;
+              // Inject prize/position into response so UI knows
+              final newData = Map<String, dynamic>.from(data);
+              newData['prizeAmount'] = rpcRes['prize'];
+              newData['position'] = rpcRes['position'];
+              // CRITICAL: Ensure this flag is passed up
+              newData['raceCompletedGlobal'] = rpcRes['race_completed'];
+              return newData;
             }
           }
         }
-
         return data;
       }
+      debugPrint('[GameService] ⚠️ RPC returned null or empty response');
       return null;
     } catch (e) {
       debugPrint('Error completing clue: $e');
@@ -380,7 +476,7 @@ class GameService {
   }
 
   /// Registra al finalista en el backend de forma atómica.
-  Future<Map<String, dynamic>?> _registerFinisher(String eventId) async {
+  Future<Map<String, dynamic>?> registerFinisher(String eventId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
@@ -390,7 +486,7 @@ class GameService {
       final response = await _supabase.rpc('register_race_finisher', params: {
         'p_event_id': eventId,
         'p_user_id': userId,
-      });
+      }).timeout(const Duration(seconds: 10));
 
       debugPrint("🏆 RPC Response: $response");
       return response as Map<String, dynamic>;
@@ -400,16 +496,19 @@ class GameService {
     }
   }
 
-  /// Salta una pista.
+  /// Salta una pista via Edge Function (admin-only server-side).
   Future<bool> skipClue(String clueId) async {
     try {
-      final response = await _supabase.functions.invoke('game-play/skip-clue',
-          body: {
-            'clueId': clueId,
-          },
-          method: HttpMethod.post);
-
-      return response.status == 200;
+      final response = await SecurityGuard.invokeSecureAction(
+        action: 'skip-clue',
+        payload: {
+          'clue_id': int.tryParse(clueId) ?? clueId,
+        },
+      );
+      return response?['success'] == true;
+    } on CustomSecurityException catch (e) {
+      debugPrint('Error skipping clue (Security): $e');
+      return false;
     } catch (e) {
       debugPrint('Error skipping clue: $e');
       return false;
@@ -421,6 +520,7 @@ class GameService {
     try {
       final response = await _supabase.functions.invoke(
         'game-play/check-race-status',
+        headers: await _authHeaders(),
         body: {'eventId': eventId},
         method: HttpMethod.post,
       );
@@ -431,6 +531,29 @@ class GameService {
           return data['isCompleted'] ?? false;
         }
       }
+      return false;
+    } on FunctionException catch (fe) {
+      if (fe.status == 401) {
+        debugPrint('[GameService] 401 FunctionException. Forcing session refresh...');
+        try {
+          await _supabase.auth.refreshSession();
+          
+          final retryResponse = await _supabase.functions.invoke(
+            'game-play/check-race-status',
+            headers: await _authHeaders(),
+            body: {'eventId': eventId},
+            method: HttpMethod.post,
+          );
+          
+          if (retryResponse.status == 200) {
+            final data = retryResponse.data as Map<String, dynamic>?;
+            return data?['isCompleted'] ?? false;
+          }
+        } catch (e) {
+          debugPrint('Error during 401 retry: $e');
+        }
+      }
+      debugPrint('FunctionException in checkRaceStatus: ${fe.status} - $fe');
       return false;
     } catch (e) {
       debugPrint('Error checking race status: $e');
@@ -590,6 +713,46 @@ class GameService {
       return [];
     }
   }
+
+  /// Obtiene los datos del minijuego de orden cronológico desde Supabase.
+  Future<List<Map<String, dynamic>>> fetchMinigameChronologicalOrder() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from('minigame_chronological_order')
+          .select('event_name, year, description');
+
+      return response
+          .map((e) => {
+                'eventName': e['event_name'].toString(),
+                'year': e['year'] as int,
+                'description': e['description']?.toString() ?? '',
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('GameService: Error fetching minigame chronological order: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene los datos del minijuego de adivina la película desde Supabase.
+  Future<List<Map<String, dynamic>>> fetchMinigameEmojiMovies() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from('minigame_emoji_movies')
+          .select('emojis, valid_answers');
+
+      return response
+          .map((e) => {
+                'emojis': e['emojis'].toString(),
+                'validAnswers': List<String>.from(e['valid_answers'] as List),
+              })
+          .toList();
+    } catch (e) {
+      debugPrint('GameService: Error fetching minigame emoji movies: $e');
+      return [];
+    }
+  }
+
   /// Obtiene el estado de un game_player específico por su ID.
   /// Retorna el string del estado ('active', 'spectator', etc) o null si no existe.
   Future<String?> getGamePlayerStatus(String gamePlayerId) async {
@@ -619,18 +782,18 @@ class GameService {
           .select('user_id')
           .eq('id', gamePlayerId)
           .maybeSingle();
-      
+
       if (gp == null) return null;
-      
+
       final userId = gp['user_id'];
-      
+
       // 2. Get name from profiles
       final profile = await _supabase
           .from('profiles')
           .select('name')
           .eq('id', userId)
           .maybeSingle();
-          
+
       return profile?['name'] as String?;
     } catch (e) {
       debugPrint('GameService: Error getting player name: $e');

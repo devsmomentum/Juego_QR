@@ -7,12 +7,15 @@ import 'package:supabase_flutter/supabase_flutter.dart'; // Importar Supabase
 import 'dart:ui'; // For Helper -> PointerDeviceKind
 import 'dart:io' show Platform;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'core/services/stripe_service.dart';
 
 // Imports existentes
 import 'features/auth/screens/splash_screen.dart';
 import 'features/game/providers/game_provider.dart';
 import 'features/game/services/penalty_service.dart';
 import 'features/auth/providers/player_provider.dart';
+import 'features/auth/providers/profile_registration_provider.dart';
 import 'features/auth/services/auth_service.dart';
 import 'features/auth/services/inventory_service.dart';
 import 'features/auth/services/power_service.dart';
@@ -54,9 +57,15 @@ import 'features/game/repositories/power_repository_impl.dart';
 import 'features/game/strategies/power_strategy_factory.dart';
 import 'features/game/repositories/game_request_repository.dart';
 import 'features/mall/providers/shop_provider.dart';
+import 'features/game/providers/game_flow_provider.dart';
+import 'core/providers/payment_methods_config_provider.dart';
+import 'features/mall/providers/merchandise_provider.dart';
+import 'features/admin/services/merchandise_service.dart';
 
 import 'core/storage/secure_local_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'core/services/app_config_service.dart'; // NEW
+import 'features/mall/models/power_item.dart'; // NEW
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -146,24 +155,81 @@ Future<void> main() async {
   };
 
   // Cargar variables de entorno
+  debugPrint('📍 [MAIN] Intentando cargar .env...');
   await dotenv.load(fileName: ".env");
+  debugPrint('📍 [MAIN] .env cargado correctamente.');
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL']!;
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY']!;
+  debugPrint('🚀 [DEBUG-V2] CONECTANDO A SUPABASE: $supabaseUrl');
+
+  // --- PROJECT CHANGE GUARD ---
+  // If the project URL changed, we MUST clear the local session to avoid 401 errors.
+  try {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? lastUrl = prefs.getString('last_supabase_url');
+    if (lastUrl != null && lastUrl != supabaseUrl) {
+      debugPrint(
+          '⚠️ [GUARD] Project change detected! Clearing old session data...');
+      await SecureLocalStorage().removePersistedSession();
+      await prefs.clear(); // Clear all prefs for the new project
+    }
+    await prefs.setString('last_supabase_url', supabaseUrl);
+    debugPrint('📍 [MAIN] Guard de proyecto completado.');
+  } catch (e) {
+    debugPrint('⚠️ [GUARD] Failed to run project change guard: $e');
+  }
+
+  // Invalidate cached session if the Supabase project changed (e.g. dev→prod)
+  debugPrint('📍 [MAIN] Limpiando sesión si el proyecto cambió...');
+  await SecureLocalStorage.clearIfProjectChanged(supabaseUrl);
+  debugPrint('📍 [MAIN] Limpieza de sesión completada.');
 
   // Inicializar Supabase
+  debugPrint('📍 [MAIN] Inicializando Supabase...');
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
     authOptions: FlutterAuthClientOptions(
       localStorage: SecureLocalStorage(),
+      authFlowType: AuthFlowType.pkce,
     ),
   );
+  debugPrint('📍 [MAIN] Supabase inicializado.');
+
+  // Load global default power costs
+  try {
+    debugPrint('📍 [MAIN] Cargando costos de poderes...');
+    final appConfigService =
+        AppConfigService(supabaseClient: Supabase.instance.client);
+    final globalPowerCosts = await appConfigService.getPowerDefaultCosts();
+    PowerItem.updateGlobalCosts(globalPowerCosts);
+    debugPrint('🛍️ [DEBUG] Power default costs loaded: $globalPowerCosts');
+  } catch (e) {
+    debugPrint('🛍️ [ERROR] Failed to load power default costs: $e');
+  }
+
+  // Initialize Stripe (Android/iOS only — guard is inside the service)
+  debugPrint('📍 [MAIN] Inicializando Stripe...');
+  await StripeService.init();
+  debugPrint('📍 [MAIN] Stripe inicializado.');
 
   // Initialize OneSignal
-  // Remove this method to stop OneSignal Debugging
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
-    OneSignal.initialize("bbcc3a18-666a-4fa7-855a-4047b56a3e7d");
-    // The promptForPushNotificationsWithUserResponse function will show the iOS or Android push notification prompt. We recommend removing the following code and instead using an In-App Message to prompt for notification permission
-    OneSignal.Notifications.requestPermission(true);
+    final oneSignalAppId = dotenv.env['ONESIGNAL_APP_ID'];
+    if (oneSignalAppId != null && oneSignalAppId.isNotEmpty) {
+      OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+      OneSignal.initialize(oneSignalAppId);
+      OneSignal.Notifications.requestPermission(true);
+
+      // --- AUTO-TAGGING: Distinguir Dev/Prod sin crear dos apps ---
+      final String envTag = kDebugMode ? 'dev' : 'prod';
+      OneSignal.User.addTagWithKey("app_env", envTag);
+      debugPrint('🏷️ OneSignal user tagged as: $envTag');
+    } else {
+      debugPrint(
+          '⚠️ [WARN] ONESIGNAL_APP_ID not found in .env. Push notifications disabled.');
+    }
   }
 
   // 3. La configuración de orientación y UI Overlay es solo para MÓVIL (Android/iOS)
@@ -185,6 +251,7 @@ Future<void> main() async {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
+  debugPrint('🚀 [MAIN] ¡Lanzando aplicación (runApp)!');
   runApp(const MapHunterApp());
 }
 
@@ -249,6 +316,7 @@ class _MapHunterAppState extends State<MapHunterApp>
         ),
 
         // --- Existing Providers ---
+        ChangeNotifierProvider(create: (_) => ProfileRegistrationProvider()),
         ChangeNotifierProvider(create: (context) {
           final supabase = Supabase.instance.client;
           final authService = Provider.of<AuthService>(context,
@@ -327,6 +395,21 @@ class _MapHunterAppState extends State<MapHunterApp>
         ),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AppModeProvider()),
+        ChangeNotifierProvider(create: (_) {
+          final configService =
+              AppConfigService(supabaseClient: Supabase.instance.client);
+          final provider =
+              PaymentMethodsConfigProvider(configService: configService);
+          provider.load();
+          return provider;
+        }),
+        ChangeNotifierProvider(create: (context) {
+          final provider = GameFlowProvider();
+          final authService = Provider.of<AuthService>(context, listen: false);
+          authService.onLogout(() async => provider.resetState());
+          provider.restorePendingAction();
+          return provider;
+        }),
 
         // --- NEW: SRP-Segregated Providers ---
         ChangeNotifierProvider(create: (context) {
@@ -396,6 +479,19 @@ class _MapHunterAppState extends State<MapHunterApp>
 
           return provider;
         }),
+
+        // --- NEW: Merchandise Store Provider ---
+        ChangeNotifierProvider(create: (context) {
+          final supabase = Supabase.instance.client;
+          final authService = Provider.of<AuthService>(context, listen: false);
+          final service = MerchandiseService(supabase);
+          final provider = MerchandiseProvider(service);
+
+          // Register cleanup for logout
+          authService.onLogout(() async => provider.resetState());
+
+          return provider;
+        }),
       ],
       // [FIX] Use Selector instead of Consumer to only rebuild MaterialApp
       // when isDarkMode changes. This prevents the entire widget tree
@@ -430,7 +526,8 @@ class _MapHunterAppState extends State<MapHunterApp>
                   child: AuthMonitor(
                     child: ConnectivityMonitor(
                       child: GameSessionMonitor(
-                        child: SabotageOverlay(child: child ?? const SizedBox()),
+                        child:
+                            SabotageOverlay(child: child ?? const SizedBox()),
                       ),
                     ),
                   ),

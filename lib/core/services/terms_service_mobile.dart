@@ -4,22 +4,28 @@ import 'terms_service_interface.dart';
 
 class TermsServiceImpl implements TermsService {
   @override
-  Future<void> launchTerms(String baseUrl) async {
+  Future<void> launchTerms(String baseUrl, String anonKey) async {
     try {
+      // Use the Edge Function as a secure proxy to hide the Storage URL
       final termsUrl = '$baseUrl/functions/v1/get-terms';
 
-      // Descargamos los bytes del PDF de forma privada
-      final response = await http.get(Uri.parse(termsUrl));
+      // Download bytes privately via the proxy function with auth headers
+      final response = await http.get(
+        Uri.parse(termsUrl),
+        headers: {
+          'apikey': anonKey,
+          'Authorization': 'Bearer $anonKey',
+        },
+      );
 
       if (response.statusCode == 200) {
-        // Usamos el paquete 'printing' para mostrar el PDF en un visor nativo
-        // Esto NO abre el navegador y NO muestra ninguna URL al usuario.
+        // Use printing package to show PDF in native viewer
         await Printing.layoutPdf(
           onLayout: (_) => response.bodyBytes,
           name: 'Terminos_y_Condiciones_Maphunter.pdf',
         );
       } else {
-        throw Exception('Falló la descarga del PDF: ${response.statusCode}');
+        throw Exception('Falló la descarga del PDF del storage: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Error al abrir términos en móvil: $e');

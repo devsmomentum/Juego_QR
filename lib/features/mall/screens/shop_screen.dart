@@ -75,11 +75,18 @@ class _ShopScreenState extends State<ShopScreen> {
       final bool isPower = item.type != PowerType.utility && item.id != 'extra_life';
       final int totalCost = item.cost * quantity;
 
-      // Validar monedas totales
-      if ((playerProvider.currentPlayer?.coins ?? 0) < totalCost) {
+      // Validar monedas totales (Jugador) o Tréboles (Espectador)
+      final bool isSpectator = playerProvider.currentPlayer?.role == 'spectator';
+      final int userBalance = isSpectator 
+          ? (playerProvider.currentPlayer?.clovers ?? 0)
+          : (playerProvider.currentPlayer?.coins ?? 0);
+
+      if (userBalance < totalCost) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No tienes suficientes monedas para esta cantidad'),
+          SnackBar(
+            content: Text(isSpectator 
+              ? 'No tienes suficientes tréboles para esta cantidad' 
+              : 'No tienes suficientes monedas para esta cantidad'),
             backgroundColor: AppTheme.dangerRed,
           ),
         );
@@ -135,6 +142,20 @@ class _ShopScreenState extends State<ShopScreen> {
       }
     } catch (e) {
       debugPrint('Error purchasing item: $e');
+      if (mounted) {
+        String errorMsg = e.toString();
+        // Clean up common error prefixes if any
+        if (errorMsg.contains('Exception:')) {
+          errorMsg = errorMsg.split('Exception:').last.trim();
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $errorMsg'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

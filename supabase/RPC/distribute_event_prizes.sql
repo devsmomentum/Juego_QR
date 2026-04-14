@@ -1,9 +1,8 @@
 -- =============================================================
--- Migration: Fix distribute_event_prizes logic
+-- Migration: Fix distribute_event_prizes logic with Treasury Commission
 -- Purpose: 
 -- 1. Always assign final_placement and winner_id, even if pot is 0.
--- 2. Allow register_race_finisher to call it without admin privileges
---    when the race is actually finished, but prevent premature calls.
+-- 2. Deposit 30% commission to tesoreria@maphunter.com automatically.
 -- =============================================================
 
 CREATE OR REPLACE FUNCTION distribute_event_prizes(p_event_id UUID)
@@ -16,6 +15,7 @@ DECLARE
   v_participant_count INT;
   v_completed_count INT;
   v_distributable_pot NUMERIC;
+  v_commission_amount NUMERIC;
   v_total_collected NUMERIC;
   v_winners RECORD;
   v_prize_amount NUMERIC;
@@ -23,6 +23,7 @@ DECLARE
   v_rank INT;
   v_distribution_results JSONB[] := ARRAY[]::JSONB[];
   v_shares NUMERIC[];
+  v_treasury_user_id UUID;
 BEGIN
   -- 1. Lock Event & Get Details
   SELECT * INTO v_event_record FROM events WHERE id = p_event_id FOR UPDATE;
@@ -68,14 +69,14 @@ BEGIN
     END IF;
   END IF;
 
-  -- 5. Finalize Event (ALWAYS, even if pot is 0)
+  -- 5. Finalize Event
   UPDATE events 
   SET status = 'completed', 
       completed_at = NOW(),
       winner_id = (SELECT user_id FROM game_players WHERE event_id = p_event_id AND status != 'spectator' ORDER BY completed_clues_count DESC, finish_time ASC LIMIT 1)
   WHERE id = p_event_id;
 
-  -- 6. Assign final_placement to ALL non-spectator participants (ALWAYS)
+  -- 6. Assign final_placement to ALL non-spectator participants
   UPDATE game_players gp
   SET final_placement = ranked.pos
   FROM (
@@ -89,15 +90,36 @@ BEGIN
   ) AS ranked
   WHERE gp.id = ranked.id;
 
-  -- 7. Calculate Pot
+  -- 7. Calculate Pot and Commission
   v_total_collected := COALESCE(v_event_record.pot, 0);
-  v_distributable_pot := v_total_collected * 0.70;
+  v_distributable_pot := floor(v_total_collected * 0.70);
+  v_commission_amount := v_total_collected - v_distributable_pot;
 
-  IF v_distributable_pot <= 0 THEN
-      RETURN json_build_object('success', true, 'message', 'Evento finalizado sin premios (Bote 0)', 'pot', 0);
+  -- 7.1. Handle Treasury Commission (30%)
+  IF v_commission_amount > 0 THEN
+      -- Find treasury user by email
+      SELECT id INTO v_treasury_user_id FROM profiles WHERE email = 'tesoreria@maphunter.com' LIMIT 1;
+      
+      IF v_treasury_user_id IS NOT NULL THEN
+          -- Update Treasury Balance
+          UPDATE profiles SET clovers = COALESCE(clovers, 0) + v_commission_amount WHERE id = v_treasury_user_id;
+          
+          -- Log to Ledger
+          INSERT INTO public.wallet_ledger (user_id, amount, description, metadata)
+          VALUES (
+            v_treasury_user_id,
+            v_commission_amount,
+            'Comisión Plataforma (30%): ' || v_event_record.title,
+            jsonb_build_object('type', 'commission', 'event_id', p_event_id, 'pot_total', v_total_collected)
+          );
+      END IF;
   END IF;
 
-  -- 8. Select Winners (Top N) and distribute prizes
+  IF v_distributable_pot <= 0 THEN
+      RETURN json_build_object('success', true, 'message', 'Evento finalizado. Comisión cobrada, sin fondos para premios.', 'pot', v_total_collected, 'commission', v_commission_amount);
+  END IF;
+
+  -- 8. Select Winners (Top N) and distribute prizes (70%)
   v_rank := 0;
   
   FOR v_winners IN 
@@ -149,6 +171,7 @@ BEGIN
     'success', true, 
     'pot_total', v_total_collected,
     'distributable_pot', v_distributable_pot,
+    'commission', v_commission_amount,
     'winners_count', v_rank,
     'results', v_distribution_results
   );

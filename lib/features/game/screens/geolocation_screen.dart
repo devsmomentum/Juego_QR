@@ -414,7 +414,18 @@ class _GeolocationScreenState extends State<GeolocationScreen>
               // Sponsor Banner
               Consumer<GameProvider>(
                 builder: (context, game, _) {
-                  return SponsorBanner(sponsor: game.currentSponsor);
+                  final sponsor = game.currentSponsor;
+                  return SponsorBanner(
+                    sponsor: sponsor,
+                    onImpression: sponsor != null
+                        ? () => game.sponsorRotation
+                            .trackImpression(sponsor, context: 'geolocation')
+                        : null,
+                    onTap: sponsor != null
+                        ? () => game.sponsorRotation
+                            .trackClick(sponsor, context: 'geolocation')
+                        : null,
+                  );
                 },
               ),
               const SizedBox(height: 10),

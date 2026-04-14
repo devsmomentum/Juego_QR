@@ -6,32 +6,31 @@ class AppTheme {
   static const Color dGoldLight = Color(0xFFFFF176);
   static const Color dGoldDark = Color(0xFFFBC02D);
   static const Color dGoldMuted = Color(0xFFB8860B);
-  
+
   static const Color dBrandMain = Color(0xFF7B2CBF);
   static const Color dBrandLight = Color(0xFFA29BFE);
   static const Color dBrandDark = Color(0xFF4834D4);
   static const Color dBrandDeep = Color(0xFF150826);
-  
+
   static const Color dSurface0 = Color(0xFF0D0D0F); // Background absolute
   static const Color dSurface1 = Color(0xFF1A1A1D); // Cards
   static const Color dSurface2 = Color(0xFF2D3436); // Modals/Overlays
-  static const Color dSurface3 = Color(0xFF3D4461); // Elevated
   static const Color dBorder = Color(0xFF3D3D4D);
-  
-  // --- LIGHT PALETTE (Crystal Clarity) ---
-  static const Color lGoldAction = Color(0xFFFFD700);
-  static const Color lGoldText = Color(0xFFB8860B);
-  static const Color lGoldSurface = Color(0xFFFFFDE7);
-  
-  static const Color lBrandMain = Color(0xFF5A189A);
-  static const Color lBrandSurface = Color(0xFFE9D5FF);
-  static const Color lBrandDeep = Color(0xFF3C096C);
-  
-  static const Color lSurface0 = Color(0xFFF2F2F7); // Background absolute
+
+  // --- LIGHT PALETTE (Premium White & Gold) ---
+  static const Color lGoldAction = Color(0xFFD4AF37); // Metallic Gold
+  static const Color lGoldText = Color(0xFF9C7A14); // Darker Gold for text contrast
+  static const Color lGoldSurface = Color(0xFFFFFDF0);
+
+  static const Color lBrandMain = Color(0xFFC5BA30); // Lighter brand gold
+  static const Color lBrandSurface = Color(0xFFFDFCF2);
+  static const Color lBrandDeep = Color(0xFF8E7D14);
+
+  static const Color lSurface0 = Color(0xFFF8F9FA); // Background absolute
   static const Color lSurface1 = Color(0xFFFFFFFF); // Cards
-  static const Color lSurfaceAlt = Color(0xFFD1D1DB); // Secondary fields
-  static const Color lBorder = Color(0xFFD1D1DB);
-  
+  static const Color lSurfaceAlt = Color(0xFFF1F1F7); // Secondary fields
+  static const Color lBorder = Color(0xFFE0E0E0);
+
   // legacy aliases for backward compatibility
   static const Color accentGold = dGoldMain;
   static const Color darkBg = dSurface0;
@@ -42,7 +41,7 @@ class AppTheme {
   static const Color secondaryPink = Color(0xFFD42AB3);
   static const Color warningOrange = Color(0xFFFF9F43);
   static const Color neonGreen = Color(0xFF00D9A3);
-  
+
   // Aliases for compatibility
   static const Color surfaceDark = dSurface1;
   static const Color accentGreen = neonGreen;
@@ -66,9 +65,16 @@ class AppTheme {
   );
 
   static LinearGradient mainGradient(BuildContext context) {
-    // Always dark gradient — UI is always dark-styled
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    if (isDark) {
+      return const LinearGradient(
+        colors: [dSurface0, dSurface1],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      );
+    }
     return const LinearGradient(
-      colors: [dSurface0, dSurface1],
+      colors: [lSurface0, lSurface1],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     );
@@ -78,12 +84,14 @@ class AppTheme {
   static ThemeData get lightTheme => _buildTheme(Brightness.light);
 
   static ThemeData _buildTheme(Brightness brightness) {
-    // UI is always dark-styled — brightness only affects system overlays
-    const Color bg = dSurface0;
-    const Color surface = dSurface1;
-    const Color primary = dBrandMain;
-    const Color textColor = Colors.white;
-    final Color textSec = Colors.white70;
+    final bool isDark = brightness == Brightness.dark;
+
+    final Color bg = isDark ? dSurface0 : lSurface0;
+    final Color surface = isDark ? dSurface1 : lSurface1;
+    final Color primary = isDark ? dBrandMain : lBrandMain;
+    final Color textColor = isDark ? Colors.white : Colors.black;
+    final Color textSec = isDark ? Colors.white70 : Colors.black87;
+    final Color borderColor = isDark ? dBorder : lBorder;
 
     return ThemeData(
       brightness: brightness,
@@ -92,33 +100,35 @@ class AppTheme {
       colorScheme: ColorScheme(
         brightness: brightness,
         primary: primary,
-        secondary: dGoldMain,
+        secondary: isDark ? dGoldMain : lGoldAction,
         surface: surface,
-        background: bg,
         error: dangerRed,
-        onPrimary: Colors.white,
-        onSecondary: Colors.black,
+        onPrimary: isDark ? Colors.white : Colors.black,
+        onSecondary: Colors.black, // Gold backgrounds need black text
         onSurface: textColor,
-        onBackground: textColor,
         onError: Colors.white,
       ),
       textTheme: TextTheme(
-        displayLarge: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
-        displayMedium: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textColor),
-        bodyLarge: TextStyle(fontSize: 16, color: textSec),
+        displayLarge: TextStyle(
+            fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
+        displayMedium: TextStyle(
+            fontSize: 28, fontWeight: FontWeight.bold, color: textColor),
+        bodyLarge: TextStyle(fontSize: 16, color: textColor),
         bodyMedium: TextStyle(fontSize: 14, color: textSec),
-        labelLarge: const TextStyle(fontWeight: FontWeight.bold),
+        labelLarge: TextStyle(fontWeight: FontWeight.bold, color: textColor),
       ),
       cardTheme: CardThemeData(
         color: surface,
-        elevation: 0,
+        elevation: isDark ? 0 : 2,
+        shadowColor: Colors.black12,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          foregroundColor: isDark ? Colors.white : Colors.black,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         ),
       ),
@@ -126,9 +136,53 @@ class AppTheme {
         filled: true,
         fillColor: surface,
         hintStyle: TextStyle(color: textColor.withOpacity(0.4), fontSize: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: dBorder)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: primary, width: 2)),
+        labelStyle: TextStyle(color: textColor.withOpacity(0.7), fontSize: 14),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide:
+                isDark ? BorderSide.none : BorderSide(color: borderColor)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: borderColor)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: primary, width: 2)),
+      ),
+    );
+  }
+
+  static InputDecoration inputDecoration({
+    required BuildContext context,
+    String? label,
+    String? hint,
+    IconData? icon,
+  }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color textColor = isDark ? Colors.white : Colors.black;
+    final Color borderColor = isDark ? dBorder : lBorder;
+    final Color primary = isDark ? dBrandMain : lBrandMain;
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Icon(icon, color: isDark ? dGoldMain : lGoldAction)
+          : null,
+      labelStyle: TextStyle(color: textColor.withOpacity(0.6), fontSize: 14),
+      hintStyle: TextStyle(color: textColor.withOpacity(0.3), fontSize: 14),
+      filled: true,
+      fillColor: Theme.of(context).cardTheme.color,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: borderColor.withOpacity(0.5)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: borderColor.withOpacity(0.5)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: primary, width: 2),
       ),
     );
   }

@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:map_hunter/features/admin/services/admin_service.dart';
 import '../../game/models/event.dart';
 import '../../game/models/clue.dart';
@@ -26,6 +29,15 @@ import '../widgets/clue_form_dialog.dart';
 import '../../mall/models/mall_store.dart';
 import '../widgets/competition_financials_widget.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../widgets/location_picker_dialog.dart';
+import '../widgets/competition_detail/details_tab.dart';
+import '../widgets/competition_detail/participants_tab.dart';
+import '../widgets/competition_detail/clues_tab.dart';
+import '../widgets/competition_detail/stores_tab.dart';
+import '../widgets/competition_detail/safe_reset_confirm_dialog.dart';
+import '../widgets/competition_detail/reset_summary_dialog.dart';
+import '../services/sponsor_service.dart';
+import '../models/sponsor.dart';
 
 class CompetitionDetailScreen extends StatefulWidget {
   final GameEvent event;
@@ -47,10 +59,23 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: Colors.black26,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      labelStyle: const TextStyle(color: Colors.white70),
-      prefixIcon: icon != null ? Icon(icon, color: Colors.white54) : null,
+      fillColor: Theme.of(context).cardTheme.color,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppTheme.lGoldAction),
+      ),
+      labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6)),
+      prefixIcon: icon != null ? Icon(icon, color: AppTheme.lGoldAction) : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
@@ -76,6 +101,14 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   late int _maxParticipants;
   late int _entryFee; // NEW: State for price
   late DateTime _selectedDate;
+  late String _eventType; // NEW
+  late int _configuredWinners; // NEW
+  late int _betTicketPrice; // NEW
+  bool _sponsorsEnabled = false;
+  bool _sponsorsSelective = false;
+  List<Sponsor> _availableSponsors = [];
+  final List<String> _selectedSponsorIds = [];
+  Map<String, int> _spectatorPrices = {}; // NEW
 
   XFile? _selectedImage;
   bool _isLoading = false;
@@ -83,13 +116,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   int _pot = 0; // State for pot
   List<Map<String, dynamic>> _leaderboardData = [];
 
-  // Search state for participants tab
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce;
   Map<String, String> _playerStatuses =
       {}; // Cache para estados locales de baneo
   RealtimeChannel? _gamePlayersChannel; // Channel for realtime updates
+  Future<List<Clue>>? _cluesFuture; // Cached future to prevent FutureBuilder flickering
 
   Future<void> _fetchPlayerStatuses([AdminService? adminService]) async {
     debugPrint(
@@ -115,10 +145,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
   Future<void> _fetchLeaderboard() async {
     try {
-      // 1. Fetch ranking from game_players (ordered by clues DESC, then arrival ASC)
+      // Fetch ranking from game_players with profile data via PostgREST join
       final playersData = await Supabase.instance.client
           .from('game_players')
-          .select('user_id, completed_clues:completed_clues_count, last_active, coins, lives')
+          .select(
+              'user_id, completed_clues:completed_clues_count, last_active, coins, lives, profiles(name, email, avatar_id)')
           .eq('event_id', widget.event.id)
           .neq('status', 'spectator')
           .order('completed_clues_count', ascending: false)
@@ -129,24 +160,18 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         return;
       }
 
-      // 2. Fetch profile data for these users
-      final userIds = playersData.map((e) => e['user_id'] as String).toList();
-      final profilesData = await Supabase.instance.client
-          .from('profiles')
-          .select('id, name, avatar_id')
-          .inFilter('id', userIds);
-
-      final Map<String, dynamic> profilesMap = {
-        for (var p in profilesData) p['id']: p
-      };
-
-      // 3. Combine data
-      final enrichedData = playersData.map((p) {
-        final profile = profilesMap[p['user_id']] ?? {};
+      // Flatten joined profile data into each row
+      final enrichedData = (playersData as List).map((p) {
+        final profile = p['profiles'];
         return {
-          ...p,
-          'name': profile['name'] ?? 'Usuario',
-          'avatar_id': profile['avatar_id'],
+          'user_id': p['user_id'],
+          'completed_clues': p['completed_clues'],
+          'last_active': p['last_active'],
+          'coins': p['coins'],
+          'lives': p['lives'],
+          'name': (profile is Map ? profile['name'] : null) ?? 'Usuario',
+          'email': profile is Map ? profile['email'] : null,
+          'avatar_id': profile is Map ? profile['avatar_id'] : null,
         };
       }).toList();
 
@@ -198,8 +223,16 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     _pin = widget.event.pin;
     _maxParticipants = widget.event.maxParticipants;
     _entryFee = widget.event.entryFee; // NEW: Init
-    _selectedDate = widget.event.date;
+    _selectedDate = widget.event.date.toLocal();
     _pot = widget.event.pot; // Init pot
+    _eventType = widget.event.type; // NEW
+    _configuredWinners = widget.event.configuredWinners; // NEW
+    _betTicketPrice = widget.event.betTicketPrice; // NEW
+    _sponsorsEnabled = widget.event.sponsorsEnabled;
+    _sponsorsSelective = widget.event.sponsorsSelective;
+    _spectatorPrices = Map<String, int>.from(widget.event.spectatorConfig.map(
+      (k, v) => MapEntry(k, (v as num).toInt()),
+    )); // NEW
 
     // Load requests for this event
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -212,9 +245,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
       Provider.of<StoreProvider>(context, listen: false)
           .fetchStores(widget.event.id);
       // Cargar pistas
-      Provider.of<EventProvider>(context, listen: false)
+      _cluesFuture = Provider.of<EventProvider>(context, listen: false)
           .fetchCluesForEvent(widget.event.id);
       _fetchPlayerStatuses(); // Cargar estados locales
+
+      _loadSponsorOptions();
 
       // Capture AdminService before subscription to avoid context issues
       final adminService = Provider.of<AdminService>(context, listen: false);
@@ -268,6 +303,27 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     });
   }
 
+  Future<void> _loadSponsorOptions() async {
+    try {
+      final sponsorService = SponsorService();
+      final sponsors = await sponsorService.getSponsors();
+      final activeSponsors = sponsors.where((s) => s.isActive).toList();
+      final selectedIds =
+          await sponsorService.getEventSponsorIds(widget.event.id);
+
+      if (mounted) {
+        setState(() {
+          _availableSponsors = activeSponsors;
+          _selectedSponsorIds
+            ..clear()
+            ..addAll(selectedIds);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading sponsor options: $e');
+    }
+  }
+
   Future<void> _checkPrizeStatus([AdminService? service]) async {
     try {
       final adminService =
@@ -286,268 +342,24 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   void dispose() {
     _tabController.dispose();
     _locationController.dispose();
-    _searchController.dispose();
-    _debounce?.cancel();
     _gamePlayersChannel?.unsubscribe(); // Unsubscribe from realtime channel
     super.dispose();
   }
 
   Future<void> _selectLocationOnMap() async {
-    // Obtener ubicación actual para centrar el mapa
-    Position? position;
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint('Servicios de ubicación deshabilitados.');
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.whileInUse ||
-          permission == LocationPermission.always) {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.best,
-          timeLimit: const Duration(seconds: 15),
-        );
-      }
-    } catch (e) {
-      debugPrint("Error obteniendo ubicación: $e");
-    }
-
-    // Si ya tenemos una ubicación guardada, usarla como inicial
-    final latlng.LatLng initial = (_latitude != 0 &&
-            _longitude != 0) // Check if valid (assuming 0 is invalid/default)
-        ? latlng.LatLng(_latitude, _longitude)
-        : (position != null
-            ? latlng.LatLng(position.latitude, position.longitude)
-            : const latlng.LatLng(10.4806, -66.9036));
-
-    latlng.LatLng? picked;
-    String? address;
-    latlng.LatLng temp = initial;
-    final MapController mapController = MapController();
-    final TextEditingController searchController = TextEditingController();
-    Timer? debounce;
-    List<dynamic> suggestions = [];
-
-    await showDialog(
+    final latlng.LatLng? picked = await showDialog<latlng.LatLng>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            Future<void> searchLocation() async {
-              final query = searchController.text;
-              if (query.isEmpty) {
-                setStateDialog(() => suggestions = []);
-                return;
-              }
-
-              final apiKey = 'pk.45e576837f12504a63c6d1893820f1cf';
-              final url = Uri.parse(
-                  'https://us1.locationiq.com/v1/search.php?key=$apiKey&q=$query&format=json&limit=5&countrycodes=ve');
-
-              try {
-                final response = await http.get(url);
-                if (response.statusCode == 200) {
-                  final data = json.decode(response.body);
-                  if (data is List) {
-                    setStateDialog(() {
-                      suggestions = data;
-                    });
-                  }
-                }
-              } catch (e) {
-                debugPrint('Error searching: $e');
-              }
-            }
-
-            void selectSuggestion(dynamic suggestion) {
-              final lat = double.parse(suggestion['lat']);
-              final lon = double.parse(suggestion['lon']);
-              final display = suggestion['display_name'];
-              final newPos = latlng.LatLng(lat, lon);
-
-              setStateDialog(() {
-                temp = newPos;
-                suggestions = [];
-                searchController.text = display;
-              });
-              mapController.move(newPos, 15);
-              FocusScope.of(context).unfocus();
-            }
-
-            return AlertDialog(
-              backgroundColor: AppTheme.cardBg,
-              contentPadding: const EdgeInsets.all(15),
-              content: SizedBox(
-                width: 350,
-                height: 450,
-                child: Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: TextField(
-                        controller: searchController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar dirección...',
-                          hintStyle: const TextStyle(color: Colors.white54),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 15, vertical: 12),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.search, color: Colors.white),
-                            onPressed: searchLocation,
-                          ),
-                        ),
-                        onChanged: (value) {
-                          if (debounce?.isActive ?? false) debounce!.cancel();
-                          debounce =
-                              Timer(const Duration(milliseconds: 400), () {
-                            searchLocation();
-                          });
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          children: [
-                            FlutterMap(
-                              mapController: mapController,
-                              options: MapOptions(
-                                initialCenter: initial,
-                                initialZoom: 14,
-                                cameraConstraint: CameraConstraint.contain(
-                                  bounds: LatLngBounds(
-                                    const latlng.LatLng(0.5, -73.5),
-                                    const latlng.LatLng(12.5, -59.5),
-                                  ),
-                                ),
-                                minZoom: 5,
-                                onTap: (tapPos, latLng) {
-                                  setStateDialog(() {
-                                    temp = latLng;
-                                    suggestions = [];
-                                  });
-                                },
-                              ),
-                              children: [
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-                                  subdomains: const ['a', 'b', 'c'],
-                                ),
-                                MarkerLayer(
-                                  markers: [
-                                    Marker(
-                                      width: 40,
-                                      height: 40,
-                                      point: temp,
-                                      child: const Icon(Icons.location_on,
-                                          color: Colors.red, size: 40),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (suggestions.isNotEmpty)
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                height: 200,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1E1E1E),
-                                    borderRadius: const BorderRadius.vertical(
-                                        bottom: Radius.circular(8)),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.5),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 5),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ListView.separated(
-                                    padding: EdgeInsets.zero,
-                                    itemCount: suggestions.length,
-                                    separatorBuilder: (_, __) => const Divider(
-                                        height: 1, color: Colors.white10),
-                                    itemBuilder: (context, index) {
-                                      final item = suggestions[index];
-                                      return ListTile(
-                                        dense: true,
-                                        title: Text(
-                                          item['display_name'] ?? '',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 13),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        onTap: () => selectSuggestion(item),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            Positioned(
-                              bottom: 10,
-                              left: 0,
-                              right: 0,
-                              child: Center(
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    if (temp.latitude < 0.5 ||
-                                        temp.latitude > 12.5 ||
-                                        temp.longitude < -73.5 ||
-                                        temp.longitude > -59.5) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              '⚠️ Por favor selecciona una ubicación dentro de Venezuela'),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    picked = temp;
-                                    Navigator.of(context).pop();
-                                  },
-                                  child:
-                                      const Text('Seleccionar esta ubicación'),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => LocationPickerDialog(
+        initialLatitude: _latitude,
+        initialLongitude: _longitude,
+      ),
     );
 
     if (picked != null) {
+      String address = 'Ubicación seleccionada';
       final apiKey = 'pk.45e576837f12504a63c6d1893820f1cf';
       final url = Uri.parse(
-          'https://us1.locationiq.com/v1/reverse.php?key=$apiKey&lat=${picked!.latitude}&lon=${picked!.longitude}&format=json');
+          'https://us1.locationiq.com/v1/reverse.php?key=$apiKey&lat=${picked.latitude}&lon=${picked.longitude}&format=json');
       try {
         final response = await http.get(url);
         if (response.statusCode == 200) {
@@ -555,21 +367,17 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           if (mounted) {
             address = data['display_name'] ?? 'Ubicación seleccionada';
           }
-        } else {
-          address = 'Ubicación seleccionada';
         }
       } catch (_) {
-        address = 'Ubicación seleccionada';
+        // Fallback
       }
 
       if (mounted) {
         setState(() {
-          _latitude = picked!.latitude;
-          _longitude = picked!.longitude;
-          if (address != null) {
-            _locationName = address!;
-            _locationController.text = _locationName;
-          }
+          _latitude = picked.latitude;
+          _longitude = picked.longitude;
+          _locationName = address;
+          _locationController.text = _locationName;
         });
       }
     }
@@ -598,13 +406,119 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     }
   }
 
+  Future<void> _generateAllQRsPdf() async {
+    setState(() => _isLoading = true);
+    try {
+      final doc = pw.Document();
+
+      // Load fonts
+      final fontBold = await PdfGoogleFonts.nunitoBold();
+      final fontItalic = await PdfGoogleFonts.nunitoItalic();
+
+      // Add page helper
+      void addQRPage(String data, String title, String label, String? hint) {
+        doc.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4,
+            build: (pw.Context context) {
+              return pw.Center(
+                child: pw.Column(
+                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      title,
+                      style: pw.TextStyle(
+                        font: fontBold,
+                        fontSize: 28,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 20),
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.qrCode(),
+                      data: data,
+                      width: 400,
+                      height: 400,
+                    ),
+                    pw.SizedBox(height: 20),
+                    if (label.isNotEmpty)
+                      pw.Text(
+                        label,
+                        style: pw.TextStyle(
+                          font: fontBold,
+                          fontSize: 22,
+                        ),
+                      ),
+                    if (hint != null && hint.isNotEmpty) ...[
+                      pw.SizedBox(height: 20),
+                      pw.Text(
+                        hint,
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          font: fontItalic,
+                          fontSize: 18,
+                          fontStyle: pw.FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
+
+      // 1. Event Access QR
+      if (_pin.length == 6) {
+        addQRPage("EVENT:${widget.event.id}:$_pin", "QR de Acceso al Evento",
+            "", "Escanea este código para entrar");
+      }
+
+      // 2. Clues QRs
+      final eventProvider = Provider.of<EventProvider>(context, listen: false);
+      final clues = await eventProvider.fetchCluesForEvent(widget.event.id);
+      for (var clue in clues) {
+        addQRPage("CLUE:${widget.event.id}:${clue.id}", clue.title,
+            "Pista: ${clue.puzzleType.label}", clue.hint);
+      }
+
+      // 3. Stores QRs
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+      final stores = storeProvider.stores;
+      for (var store in stores) {
+        if (store.qrCodeData.isNotEmpty) {
+          addQRPage(store.qrCodeData, "QR de Tienda", store.name,
+              "Escanea para entrar");
+        }
+      }
+
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename:
+            'todos_qr_evento_${_pin.isNotEmpty ? _pin : widget.event.id}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al generar PDF: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _saveChanges() async {
     // Validación de estado: solo se permite guardar si el evento está en 'pending'
     if (widget.event.status != 'pending') {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⛔ No se puede editar: el evento ya no está en estado pendiente.'),
+            content: Text(
+                '⛔ No se puede editar: el evento ya no está en estado pendiente.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -618,25 +532,31 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     setState(() => _isLoading = true);
 
     try {
-      final updatedEvent = GameEvent(
-        id: widget.event.id,
+      final updatedEvent = widget.event.copyWith(
         title: _title,
         description: _description,
-        locationName: _locationName,
-        latitude: _latitude,
-        longitude: _longitude,
-        date: _selectedDate,
-        createdByAdminId: widget.event.createdByAdminId,
-        imageUrl: widget.event
-            .imageUrl, // Will be updated by provider if _selectedImage is not null
         clue: _clue,
         maxParticipants: _maxParticipants,
         pin: _pin,
-        entryFee: _entryFee, // NEW: Save
+        entryFee: _entryFee,
+        type: _eventType,
+        configuredWinners: _configuredWinners,
+        betTicketPrice: _betTicketPrice,
+        sponsorsEnabled: _sponsorsEnabled,
+        sponsorsSelective: _sponsorsSelective,
+        spectatorConfig: _spectatorPrices,
       );
 
       await Provider.of<EventProvider>(context, listen: false)
           .updateEvent(updatedEvent, _selectedImage);
+
+      if (_sponsorsEnabled && _sponsorsSelective) {
+        final sponsorService = SponsorService();
+        await sponsorService.setEventSponsors(
+          widget.event.id,
+          _selectedSponsorIds,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -658,7 +578,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     return await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (ctx) => _SafeResetConfirmDialog(
+          builder: (ctx) => SafeResetConfirmDialog(
             eventTitle: widget.event.title,
           ),
         ) ??
@@ -667,88 +587,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
   /// Shows a post-reset summary dialog with integrity verification
   void _showResetSummary(Map<String, dynamic> result) {
-    final summary = result['summary'] as Map<String, dynamic>? ?? {};
-    final cluesPreserved = result['clues_preserved'] ?? 0;
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Row(
-          children: [
-            Icon(Icons.verified_user, color: Colors.greenAccent, size: 28),
-            SizedBox(width: 8),
-            Text("Reinicio Seguro Completado",
-                style: TextStyle(color: Colors.white, fontSize: 16)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Integrity verification
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.shield, color: Colors.greenAccent, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      "$cluesPreserved pistas intactas e íntegras",
-                      style: const TextStyle(
-                        color: Colors.greenAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text("Datos eliminados:",
-                  style: TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              _summaryRow("Jugadores expulsados", summary['players_removed']),
-              _summaryRow("Solicitudes limpiadas", summary['requests_removed']),
-              _summaryRow("Progreso de pistas", summary['progress_cleared']),
-              _summaryRow("Poderes limpiados", summary['powers_cleared']),
-              _summaryRow("Transacciones", summary['transactions_cleared']),
-              _summaryRow("Logs de combate", summary['combat_logs_cleared']),
-              _summaryRow("Apuestas", summary['bets_cleared']),
-              _summaryRow("Premios", summary['prizes_cleared']),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryPurple),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Entendido", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      builder: (ctx) => ResetSummaryDialog(result: result),
     );
   }
 
-  Widget _summaryRow(String label, dynamic count) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
-          Text("${count ?? 0}",
-              style: const TextStyle(color: Colors.orangeAccent, fontSize: 13)),
-        ],
-      ),
-    );
-  }
+
 
   // --- Pot Logic ---
 
@@ -761,6 +606,66 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
   // Use the local state pot
   int get _currentPot => _pot;
+
+  Future<void> _approveAll(List<GameRequest> pending) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text("¿Aceptar a todos?",
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
+        content: Text(
+            "Se aprobarán las ${pending.length} solicitudes pendientes de manera instantánea. ¿Estás seguro?",
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.lGoldAction),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const FittedBox(
+              child: Text("ACEPTAR TODOS",
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    final provider = Provider.of<GameRequestProvider>(context, listen: false);
+
+    int successCount = 0;
+    int errorCount = 0;
+
+    for (var req in pending) {
+      try {
+        final result = await provider.approveRequest(req.id);
+        if (result['success'] == true) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (e) {
+        errorCount++;
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $successCount solicitudes aprobadas' +
+              (errorCount > 0 ? '. ❌ $errorCount fallaron.' : '')),
+          backgroundColor: errorCount > 0 ? Colors.orange : Colors.green,
+        ),
+      );
+      _loadData(); // Actualizar datos
+    }
+  }
 
   void _loadData() {
     setState(() {});
@@ -776,9 +681,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Finalizar y Premiar',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Finalizar y Premiar',
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -788,7 +693,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                 Text(
                   'Pote Acumulado: $_currentPot ',
                   style: const TextStyle(
-                      color: AppTheme.accentGold,
+                      color: AppTheme.lGoldAction,
                       fontSize: 18,
                       fontWeight: FontWeight.bold),
                 ),
@@ -796,9 +701,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Se distribuirá el 70% de lo recaudado entre los 3 primeros lugares del ranking actual.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
             ),
             const SizedBox(height: 10),
             const Text(
@@ -815,10 +720,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           ),
           ElevatedButton(
             style:
-                ElevatedButton.styleFrom(backgroundColor: AppTheme.accentGold),
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.lGoldAction),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('DISTRIBUIR PREMIOS',
-                style: TextStyle(color: Colors.black)),
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -837,9 +742,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
           await showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: AppTheme.cardBg,
-              title: const Text('🎉 ¡Premios Entregados!',
-                  style: TextStyle(color: Colors.white)),
+              backgroundColor: Theme.of(context).cardTheme.color,
+              title: Text('🎉 ¡Premios Entregados!',
+                  style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -849,7 +754,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                       children: [
                         Text('Pote Total: ${result['pot']} ',
                             style: const TextStyle(
-                                color: AppTheme.accentGold,
+                                color: AppTheme.lGoldAction,
                                 fontWeight: FontWeight.bold)),
                         const CoinImage(size: 16),
                       ],
@@ -866,13 +771,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                               child: Text('${r['place']}'),
                             ),
                             title: Text('${r['user']}',
-                                style: const TextStyle(color: Colors.white)),
+                                style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text('+${r['amount']} ',
-                                    style:
-                                        const TextStyle(color: Colors.greenAccent)),
+                                    style: const TextStyle(
+                                        color: Colors.greenAccent)),
                                 const CoinImage(size: 14),
                               ],
                             ),
@@ -914,29 +819,50 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.darkBg,
+        backgroundColor: Theme.of(context).cardTheme.color,
+        elevation: 0,
+        iconTheme: IconThemeData(color: Theme.of(context).textTheme.displayLarge?.color),
         title: Text(
           widget.event.title,
+          style: TextStyle(
+            color: Theme.of(context).textTheme.displayLarge?.color,
+            fontWeight: FontWeight.w900,
+          ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
         actions: [
+          if (widget.event.type != 'online')
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf, color: Colors.blue),
+              tooltip: "Generar y Guardar Todos los QRs",
+              onPressed: () {
+                if (_pin.length == 6) {
+                  _generateAllQRsPdf();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Guarda el PIN primero')),
+                  );
+                }
+              },
+            ),
           if (widget.event.status == 'pending')
             IconButton(
               icon: const Icon(Icons.play_arrow_rounded,
-                  color: Colors.greenAccent, size: 30),
+                  color: Colors.green, size: 30),
               tooltip: "Iniciar Evento (Admin)",
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    backgroundColor: AppTheme.cardBg,
-                    title: const Text("¿Iniciar Evento Ahora?",
-                        style: TextStyle(color: Colors.white)),
-                    content: const Text(
+                    backgroundColor: Theme.of(context).cardTheme.color,
+                    title: Text("¿Iniciar Evento Ahora?",
+                        style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
+                    content: Text(
                       "El evento pasará a estado 'active' inmediatamente. Esta acción es exclusiva del administrador y no puede revertirse automáticamente.",
-                      style: TextStyle(color: Colors.white70),
+                      style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
                     ),
                     actions: [
                       TextButton(
@@ -945,7 +871,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green),
+                            backgroundColor: AppTheme.lGoldAction),
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text("INICIAR",
                             style: TextStyle(color: Colors.white)),
@@ -990,7 +916,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               },
             ),
           IconButton(
-            icon: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
+            icon: const Icon(Icons.restart_alt, color: Colors.orange),
             tooltip: "Reiniciar Competencia",
             onPressed: () async {
               final confirmed = await _showConfirmDialog();
@@ -1030,7 +956,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: Icon(Icons.refresh_rounded, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5)),
             onPressed: () {
               setState(() {});
               Provider.of<GameRequestProvider>(context, listen: false)
@@ -1041,7 +967,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppTheme.primaryPurple,
+          labelColor: AppTheme.lGoldAction,
+          unselectedLabelColor: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4),
+          indicatorColor: AppTheme.lGoldAction,
+          indicatorWeight: 3,
           tabs: const [
             Tab(text: "Detalles"),
             Tab(text: "Participantes"),
@@ -1052,7 +981,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -1080,7 +1009,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
 
     if (_tabController.index == 2) {
       return FloatingActionButton(
-        backgroundColor: AppTheme.primaryPurple,
+        backgroundColor: AppTheme.lGoldAction,
         onPressed: () async {
           final result = await showDialog(
             context: context,
@@ -1090,15 +1019,15 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
               eventLongitude: widget.event.longitude,
             ),
           );
-          if (result == true) setState(() {});
+          if (result == true) _refreshClues();
         },
-        child: const Icon(Icons.add, color: Colors.white),
+        child: const Icon(Icons.add_rounded, color: Colors.white),
       );
     } else if (_tabController.index == 3) {
       return FloatingActionButton(
-        backgroundColor: AppTheme.accentGold,
+        backgroundColor: AppTheme.lGoldAction,
         onPressed: () => _showAddStoreDialog(),
-        child: const Icon(Icons.store, color: Colors.white),
+        child: const Icon(Icons.store_rounded, color: Colors.white),
       );
     }
     return null;
@@ -1107,649 +1036,110 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   Widget _buildDetailsTab() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
-    final inputDecoration = InputDecoration(
-      filled: true,
-      fillColor: AppTheme.cardBg,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-      ),
-      labelStyle: const TextStyle(color: Colors.white70),
-    );
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image Section
-            GestureDetector(
-              onTap: _isEventActive ? null : _pickImage,
-              child: Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(16),
-                  image: _selectedImage != null
-                      ? DecorationImage(
-                          image: NetworkImage(_selectedImage!
-                              .path), // For web/network usually needs specific handling but works for XFile path on mobile often or bytes
-                          fit: BoxFit.cover,
-                        )
-                      : (widget.event.imageUrl.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(widget.event.imageUrl),
-                              fit: BoxFit.cover,
-                            )
-                          : null),
-                ),
-                child: _selectedImage == null && widget.event.imageUrl.isEmpty
-                    ? const Icon(Icons.add_a_photo,
-                        size: 50, color: Colors.white54)
-                    : null,
-              ),
-            ),
-            if (_selectedImage != null)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text("Nueva imagen seleccionada (guardar para aplicar)",
-                    style: TextStyle(color: Colors.greenAccent)),
-              ),
-            const SizedBox(height: 20),
-
-            // --- POT DISPLAY ---
-            if (_entryFee > 0)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.accentGold.withOpacity(0.2),
-                      AppTheme.accentGold.withOpacity(0.05)
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: AppTheme.accentGold.withOpacity(0.5)),
-                ),
-                child: Column(
-                  children: [
-                    const Text('POTE ACUMULADO',
-                        style: TextStyle(
-                            color: AppTheme.accentGold,
-                            fontSize: 12,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('${_currentPot.toStringAsFixed(0)} ',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900)),
-                        const CoinImage(size: 28),
-                      ],
-                    ),
-                    Text('Total Acumulado en Base de Datos',
-                        style: const TextStyle(
-                            color: Colors.white38, fontSize: 12)),
-                  ],
-                ),
-              ),
-
-            // Fields
-            TextFormField(
-              initialValue: _title,
-              readOnly: _isEventActive,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white70 : Colors.white),
-              decoration: inputDecoration.copyWith(labelText: 'Título'),
-              validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              onSaved: (v) => _title = v!,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              initialValue: _description,
-              readOnly: _isEventActive,
-              maxLines: 3,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white70 : Colors.white),
-              decoration: inputDecoration.copyWith(labelText: 'Descripción'),
-              validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              onSaved: (v) => _description = v!,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _pin,
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white70 : Colors.white),
-                    decoration:
-                        inputDecoration.copyWith(labelText: 'PIN (6 dígitos)'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
-                    ],
-                    validator: (v) =>
-                        v!.length != 6 ? 'Debe tener 6 dígitos' : null,
-                    onSaved: (v) => _pin = v!,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  height: 56,
-                  width: 56,
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentGold.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.qr_code, color: AppTheme.accentGold),
-                    tooltip: "Ver QR del Evento",
-                    onPressed: () {
-                      if (_pin.length == 6) {
-                        final qrData = "EVENT:${widget.event.id}:$_pin";
-                        _showQRDialog(qrData, "QR de Acceso", "PIN: $_pin");
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Guarda el PIN primero')),
-                        );
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _maxParticipants.toString(),
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white70 : Colors.white),
-                    decoration:
-                        inputDecoration.copyWith(labelText: 'Max. Jugadores'),
-                    keyboardType: TextInputType.number,
-                    onSaved: (v) => _maxParticipants = int.parse(v!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // NEW: Entry Fee Field
-            TextFormField(
-              initialValue: _entryFee == 0 ? '' : _entryFee.toString(),
-              readOnly: _isEventActive,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white70 : Colors.white),
-              decoration: inputDecoration.copyWith(
-                labelText: 'Precio Entrada (Tréboles)',
-                suffix: const CoinImage(size: 16),
-                helperText: 'Deja vacío o 0 para GRATIS',
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onSaved: (v) =>
-                  _entryFee = (v == null || v.isEmpty) ? 0 : int.parse(v),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              initialValue: _clue,
-              readOnly: _isEventActive,
-              style: TextStyle(
-                  color: _isEventActive ? Colors.white70 : Colors.white),
-              decoration: inputDecoration.copyWith(
-                  labelText: 'Pista de Victoria / Final'),
-              onSaved: (v) => _clue = v!,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _locationController,
-                    readOnly: _isEventActive,
-                    style: TextStyle(
-                        color: _isEventActive ? Colors.white70 : Colors.white),
-                    decoration: inputDecoration.copyWith(
-                        labelText: 'Nombre de Ubicación'),
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                    onSaved: (v) => _locationName = v!,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (!_isEventActive)
-                  Container(
-                    height: 56,
-                    width: 56,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryPurple.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppTheme.primaryPurple.withOpacity(0.5)),
-                    ),
-                    child: IconButton(
-                      icon:
-                          const Icon(Icons.map, color: AppTheme.primaryPurple),
-                      tooltip: "Seleccionar en Mapa",
-                      onPressed: _selectLocationOnMap,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // --- DATE & TIME PICKER ---
-            InkWell(
-              onTap: _isEventActive
-                  ? null
-                  : () async {
-                      // 1. Pick Date
-                      final pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime(2030),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.dark(
-                                primary: AppTheme.primaryPurple,
-                                onPrimary: Colors.white,
-                                surface: AppTheme.cardBg,
-                                onSurface: Colors.white,
-                              ),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-
-                      if (pickedDate != null) {
-                        // 2. Pick Time (if date was picked)
-                        if (!context.mounted) return;
-                        final pickedTime = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(_selectedDate),
-                          builder: (context, child) {
-                            return Theme(
-                              data: Theme.of(context).copyWith(
-                                timePickerTheme: TimePickerThemeData(
-                                  backgroundColor: AppTheme.cardBg,
-                                  hourMinuteTextColor: Colors.white,
-                                  dayPeriodTextColor: Colors.white,
-                                  dialHandColor: AppTheme.primaryPurple,
-                                  dialBackgroundColor: AppTheme.darkBg,
-                                  entryModeIconColor: AppTheme.accentGold,
-                                ),
-                                colorScheme: const ColorScheme.dark(
-                                  primary: AppTheme.primaryPurple,
-                                  onPrimary: Colors.white,
-                                  surface: AppTheme.cardBg,
-                                  onSurface: Colors.white,
-                                ),
-                              ),
-                              child: child!,
-                            );
-                          },
-                        );
-
-                        if (pickedTime != null) {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              pickedDate.year,
-                              pickedDate.month,
-                              pickedDate.day,
-                              pickedTime.hour,
-                              pickedTime.minute,
-                            );
-                          });
-                        }
-                      }
-                    },
-              child: InputDecorator(
-                decoration: _buildInputDecoration('Fecha y Hora del Evento',
-                    icon: Icons.access_time),
-                child: Text(
-                  "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}   ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}",
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _isEventActive ? null : _saveChanges,
-                icon: Icon(_isEventActive ? Icons.lock : Icons.save),
-                label: Text(_isEventActive
-                    ? "Evento No Editable (${widget.event.status == 'active' ? 'En Curso' : widget.event.status == 'completed' ? 'Completado' : 'Bloqueado'})"
-                    : "Guardar Cambios"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _isEventActive ? Colors.grey : AppTheme.primaryPurple,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
+    return DetailsTab(
+      event: widget.event,
+      formKey: _formKey,
+      isEventActive: _isEventActive,
+      sponsorsEnabled: _sponsorsEnabled,
+      sponsorsSelective: _sponsorsSelective,
+      availableSponsors: _availableSponsors,
+      selectedSponsorIds: _selectedSponsorIds,
+      title: _title,
+      description: _description,
+      pin: _pin,
+      clue: _clue,
+      locationName: _locationName,
+      maxParticipants: _maxParticipants,
+      entryFee: _entryFee,
+      betTicketPrice: _betTicketPrice,
+      configuredWinners: _configuredWinners,
+      selectedDate: _selectedDate,
+      locationController: _locationController,
+      onSponsorsEnabledChanged: (value) {
+        setState(() {
+          _sponsorsEnabled = value;
+          if (!value) {
+            _sponsorsSelective = false;
+          }
+        });
+      },
+      onSponsorsSelectiveChanged: (value) =>
+          setState(() => _sponsorsSelective = value),
+      onSponsorSelectionChanged: (sponsorId, selected) {
+        setState(() {
+          if (selected) {
+            if (!_selectedSponsorIds.contains(sponsorId)) {
+              _selectedSponsorIds.add(sponsorId);
+            }
+          } else {
+            _selectedSponsorIds.remove(sponsorId);
+          }
+        });
+      },
+      onWinnersChanged: (value) => setState(() => _configuredWinners = value),
+      onDateChanged: (value) => setState(() => _selectedDate = value),
+      onSelectLocation: _selectLocationOnMap,
+      onShowQR: () {
+        if (_pin.length == 6) {
+          final qrData = "EVENT:${widget.event.id}:$_pin";
+          _showQRDialog(qrData, "QR de Acceso", "PIN: $_pin");
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Guarda el PIN primero')),
+          );
+        }
+      },
+      onGenerateAllQRs: () {
+        if (_pin.length == 6) {
+          _generateAllQRsPdf();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Guarda el PIN primero')),
+          );
+        }
+      },
+      onShowGlobalPrices: (isSpectator) =>
+          _showGlobalPricesDialog(isSpectatorMode: isSpectator),
+      onSave: _saveChanges,
+      onTitleSaved: (v) => _title = v,
+      onDescriptionSaved: (v) => _description = v,
+      onPinSaved: (v) => _pin = v,
+      onMaxParticipantsSaved: (v) => _maxParticipants = v,
+      onEntryFeeSaved: (v) => _entryFee = v,
+      onBetTicketPriceSaved: (v) => _betTicketPrice = v,
+      onClueSaved: (v) => _clue = v,
+      onLocationNameSaved: (v) => _locationName = v,
     );
   }
 
+
+
+
+
   Widget _buildParticipantsTab() {
-    return Consumer<GameRequestProvider>(
-      builder: (context, provider, _) {
-        // Obtenemos el proveedor de jugadores para verificar estados
-        final playerProvider = Provider.of<PlayerProvider>(context);
-
-        // ✅ DEBUG: Log total requests en el provider
-        debugPrint(
-            '[PARTICIPANTS_TAB] 📊 Total requests in provider: ${provider.requests.length}');
-        debugPrint(
-            '[PARTICIPANTS_TAB] 🎯 Current event ID: "${widget.event.id}" (Type: ${widget.event.id.runtimeType})');
-
-        // ✅ ROBUST FILTER: Usar toString() para comparación segura
-        final allRequests = provider.requests.where((r) {
-          final match = r.eventId.toString() == widget.event.id.toString();
-          if (!match && provider.requests.indexOf(r) < 3) {
-            // Log primeros 3 para no saturar
-            debugPrint(
-                '[PARTICIPANTS_TAB] 🔍 Comparing: r.eventId="${r.eventId}" (${r.eventId.runtimeType}) vs widget.event.id="${widget.event.id}" => Match: $match');
-          }
-          return match;
-        }).toList();
-
-        debugPrint(
-            '[PARTICIPANTS_TAB] ✅ Filtered requests for this event: ${allRequests.length}');
-
-        var approved = allRequests.where((r) => r.isApproved).toList();
-        var pending = allRequests.where((r) => r.isPending).toList();
-
-        debugPrint(
-            '[PARTICIPANTS_TAB] 📋 Approved: ${approved.length}, Pending: ${pending.length}');
-
-        // --- SEARCH FILTER ---
-        if (_searchQuery.isNotEmpty) {
-          final query = _searchQuery.toLowerCase();
-          pending = pending
-              .where((r) =>
-                  (r.playerName?.toLowerCase().contains(query) ?? false) ||
-                  (r.playerEmail?.toLowerCase().contains(query) ?? false))
-              .toList();
-          approved = approved
-              .where((r) =>
-                  (r.playerName?.toLowerCase().contains(query) ?? false) ||
-                  (r.playerEmail?.toLowerCase().contains(query) ?? false))
-              .toList();
-        }
-
-        if (allRequests.isEmpty) {
-          debugPrint(
-              '[PARTICIPANTS_TAB] ⚠️ No requests for this event - showing empty state');
-          return const Center(
-              child: Text("No hay participantes ni solicitudes.",
-                  style: TextStyle(color: Colors.white54)));
-        }
-
-        // --- SORT LOGIC FIX ---
-        // 0. Identify banned/suspended players (USING LOCAL STATUS NOW)
-        final bannedIds = _playerStatuses.entries
-            .where((e) => e.value == 'banned' || e.value == 'suspended')
-            .map((e) => e.key)
-            .toSet();
-
-        // 1. Build a 'virtual' leaderboard excluding banned players for ranking calculation
-        final activeLeaderboard = _leaderboardData.where((entry) {
-          final userId = entry['user_id'];
-          return !bannedIds.contains(userId);
-        }).toList();
-
-        // 2. Convert to List explicitly to avoid map type issues
-        final sortedApproved = approved.toList();
-
-        // 3. Sort: Non-banned first (ordered by rank), then undefined/banned at bottom
-        sortedApproved.sort((a, b) {
-          final isBannedA = bannedIds.contains(a.playerId);
-          final isBannedB = bannedIds.contains(b.playerId);
-
-          // Banned users go to bottom
-          if (isBannedA && !isBannedB) return 1;
-          if (!isBannedA && isBannedB) return -1;
-          if (isBannedA && isBannedB)
-            return 0; // Keep relative order among banned
-
-          // Both active: compare using rank in activeLeaderboard
-          final indexA =
-              activeLeaderboard.indexWhere((l) => l['user_id'] == a.playerId);
-          final indexB =
-              activeLeaderboard.indexWhere((l) => l['user_id'] == b.playerId);
-
-          // If not in leaderboard, put at bottom of active users
-          final rankA = indexA == -1 ? 9999 : indexA;
-          final rankB = indexB == -1 ? 9999 : indexB;
-
-          return rankA.compareTo(rankB);
-        });
-
-        return ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // --- SEARCH FIELD ---
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Buscar por nombre o email...',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.white54),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                onChanged: (value) {
-                  if (_debounce?.isActive ?? false) _debounce!.cancel();
-                  _debounce = Timer(const Duration(milliseconds: 300), () {
-                    setState(() => _searchQuery = value);
-                  });
-                },
-              ),
-            ),
-
-            if (pending.isNotEmpty) ...[
-              const Text("Solicitudes Pendientes",
-                  style: TextStyle(
-                      color: AppTheme.secondaryPink,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              ...pending.map((req) => RequestTile(
-                    request: req,
-                    currentStatus:
-                        _playerStatuses[req.playerId], // Pass local status
-                    onBanToggled: () =>
-                        _fetchPlayerStatuses(), // Refresh on ban/unban
-                  )),
-              const SizedBox(height: 20),
-            ],
-
-            const Text("Participantes Inscritos (Ranking)",
-                style: TextStyle(
-                    color: Colors.greenAccent,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            if (sortedApproved.isEmpty)
-              Text(
-                  _searchQuery.isNotEmpty
-                      ? "No se encontraron resultados."
-                      : "Nadie inscrito aún.",
-                  style: const TextStyle(color: Colors.white30))
-            else
-              // 4. Map safely to Widgets
-              ...sortedApproved.map((req) {
-                final isBanned = bannedIds.contains(req.playerId);
-
-                // Get rank from activeLeaderboard ONLY if not banned
-                final index = !isBanned
-                    ? activeLeaderboard
-                        .indexWhere((l) => l['user_id'] == req.playerId)
-                    : -1;
-
-                // Progress comes from raw data (still useful to see even if banned)
-                final rawIndex = _leaderboardData
-                    .indexWhere((l) => l['user_id'] == req.playerId);
-                final progress = rawIndex != -1
-                    ? _leaderboardData[rawIndex]['completed_clues'] as int
-                    : 0;
-
-                // Get coins and lives from leaderboard data
-                final playerCoins = rawIndex != -1
-                    ? (_leaderboardData[rawIndex]['coins'] as num?)?.toInt()
-                    : null;
-                final playerLives = rawIndex != -1
-                    ? (_leaderboardData[rawIndex]['lives'] as num?)?.toInt()
-                    : null;
-
-                return RequestTile(
-                  request: req,
-                  isReadOnly: true,
-                  rank: index != -1
-                      ? index + 1
-                      : null, // Pass null rank if banned or unranked
-                  progress: progress,
-                  currentStatus: _playerStatuses[req.playerId], // Local status
-                  onBanToggled: () =>
-                      _fetchPlayerStatuses(), // Refresh on ban/unban
-                  coins: playerCoins,
-                  lives: playerLives,
-                  eventId: widget.event.id,
-                  onStatsUpdated: () => _fetchLeaderboard(),
-                );
-              }).toList(),
-          ],
-        );
-      },
+    return ParticipantsTab(
+      event: widget.event,
+      leaderboardData: _leaderboardData,
+      playerStatuses: _playerStatuses,
+      onFetchPlayerStatuses: _fetchPlayerStatuses,
+      onFetchLeaderboard: _fetchLeaderboard,
+      onApproveAll: _approveAll,
     );
+  }
+
+  void _refreshClues() {
+    setState(() {
+      _cluesFuture = Provider.of<EventProvider>(context, listen: false)
+          .fetchCluesForEvent(widget.event.id);
+    });
   }
 
   Widget _buildCluesTab() {
-    return FutureBuilder<List<Clue>>(
-      future: Provider.of<EventProvider>(context, listen: false)
-          .fetchCluesForEvent(widget.event.id),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
-              child: Text("No hay pistas configuradas para este evento.",
-                  style: TextStyle(color: Colors.white54)));
-        }
-
-        final clues = snapshot.data!;
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: clues.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final clue = clues[index];
-            return Card(
-              color: AppTheme.cardBg,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppTheme.primaryPurple.withOpacity(0.2),
-                  child: Text("${index + 1}",
-                      style: const TextStyle(
-                          color: AppTheme.primaryPurple,
-                          fontWeight: FontWeight.bold)),
-                ),
-                title: Text(clue.title,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Text("${clue.typeName} - ${clue.puzzleType.label}",
-                    style: const TextStyle(color: Colors.white70)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon:
-                          const Icon(Icons.qr_code, color: AppTheme.accentGold),
-                      tooltip: "Ver QR",
-                      onPressed: () {
-                        final qrData = "CLUE:${widget.event.id}:${clue.id}";
-                        _showQRDialog(qrData, clue.title,
-                            "Pista: ${clue.puzzleType.label}",
-                            hint: clue.hint);
-                      },
-                    ),
-                    if (!_isEventActive)
-                      IconButton(
-                        icon:
-                            const Icon(Icons.edit, color: AppTheme.accentGold),
-                        onPressed: () async {
-                          final result = await showDialog(
-                            context: context,
-                            builder: (_) => ClueFormDialog(
-                              clue: clue,
-                              eventId: widget.event.id,
-                              eventLatitude: widget.event.latitude,
-                              eventLongitude: widget.event.longitude,
-                            ),
-                          );
-                          if (result == true) setState(() {});
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+    return CluesTab(
+      event: widget.event,
+      cluesFuture: _cluesFuture,
+      onRefresh: _refreshClues,
+      onShowQR: _showQRDialog,
     );
   }
 
@@ -1759,12 +1149,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("¿Reiniciar Competencia?",
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text("¿Reiniciar Competencia?",
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
+        content: Text(
           "Esto expulsará a todos los participantes actuales, eliminará su progreso y bloqueará las pistas nuevamente. Esta acción no se puede deshacer.",
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
         ),
         actions: [
           TextButton(
@@ -1815,129 +1205,52 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 
   Widget _buildStoresTab() {
-    return Consumer<StoreProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final stores = provider.stores;
-
-        if (stores.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.store_mall_directory,
-                    size: 80, color: Colors.white24),
-                const SizedBox(height: 16),
-                const Text("No hay tiendas registradas",
-                    style: TextStyle(color: Colors.white54)),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddStoreDialog(),
-                  icon: const Icon(Icons.add),
-                  label: const Text("Agregar Tienda"),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentGold),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: stores.length,
-          itemBuilder: (context, index) {
-            final store = stores[index];
-            return Card(
-              color: AppTheme.cardBg,
-              margin: const EdgeInsets.only(bottom: 16),
-              child: ListTile(
-                leading: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(8),
-                    image: (store.imageUrl.isNotEmpty &&
-                            store.imageUrl.startsWith('http'))
-                        ? DecorationImage(
-                            image: NetworkImage(store.imageUrl),
-                            fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: (store.imageUrl.isEmpty ||
-                          !store.imageUrl.startsWith('http'))
-                      ? const Icon(Icons.store, color: Colors.white54)
-                      : null,
-                ),
-                title: Text(store.name,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(store.description,
-                        style: const TextStyle(color: Colors.white70),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: store.products
-                          .map((p) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black26,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.white12),
-                                ),
-                                child: Text(
-                                  "${p.icon} ${p.name} (\$${p.cost})",
-                                  style: const TextStyle(
-                                      color: Colors.greenAccent, fontSize: 11),
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                ),
-                isThreeLine: true,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                        icon: const Icon(Icons.qr_code, color: Colors.white),
-                        tooltip: "Ver QR",
-                        onPressed: () => _showQRDialog(
-                              store.qrCodeData,
-                              "QR de Tienda",
-                              store.name,
-                              hint: "Escanear para entrar",
-                            )),
-                    if (!_isEventActive) ...[
-                      IconButton(
-                        icon:
-                            const Icon(Icons.edit, color: AppTheme.accentGold),
-                        onPressed: () => _showAddStoreDialog(store: store),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _confirmDeleteStore(store),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+    return StoresTab(
+      event: widget.event,
+      isEventActive: _isEventActive,
+      onShowAddStoreDialog: (store) => _showAddStoreDialog(store: store),
+      onConfirmDeleteStore: _confirmDeleteStore,
+      onShowQR: _showQRDialog,
     );
+  }
+
+  void _showGlobalPricesDialog({bool isSpectatorMode = false}) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StoreEditDialog(
+        eventId: widget.event.id,
+        initialPrices: isSpectatorMode ? _spectatorPrices : widget.event.storePrices,
+        isGlobalMode: true,
+        isSpectator: isSpectatorMode,
+      ),
+    );
+
+    if (result != null && result.containsKey('customPrices')) {
+      try {
+        final prices = Map<String, int>.from(result['customPrices']);
+        
+        if (isSpectatorMode) {
+          await context
+              .read<EventProvider>()
+              .updateEventSpectatorConfig(widget.event.id, prices);
+          setState(() {
+            _spectatorPrices = prices;
+          });
+        } else {
+          await context
+              .read<EventProvider>()
+              .updateEventStorePrices(widget.event.id, prices);
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ Precios ${isSpectatorMode ? 'de espectador' : 'globales'} actualizados')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e')),
+        );
+      }
+    }
   }
 
   void _showAddStoreDialog({MallStore? store}) async {
@@ -1972,11 +1285,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text("Confirmar Eliminación",
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        surfaceTintColor: Colors.transparent,
+        title: Text("Confirmar Eliminación",
+            style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
         content: Text("¿Estás seguro de eliminar a ${store.name}?",
-            style: const TextStyle(color: Colors.white70)),
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
@@ -2007,171 +1321,4 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen>
   }
 }
 
-/// A two-step confirmation dialog that prevents accidental resets.
-/// The admin must type "REINICIAR" to unlock the confirm button.
-class _SafeResetConfirmDialog extends StatefulWidget {
-  final String eventTitle;
 
-  const _SafeResetConfirmDialog({required this.eventTitle});
-
-  @override
-  State<_SafeResetConfirmDialog> createState() =>
-      _SafeResetConfirmDialogState();
-}
-
-class _SafeResetConfirmDialogState extends State<_SafeResetConfirmDialog> {
-  final _controller = TextEditingController();
-  bool _canConfirm = false;
-
-  static const _confirmWord = 'REINICIAR';
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppTheme.cardBg,
-      title: const Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 28),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text("Reinicio Seguro",
-                style: TextStyle(color: Colors.white, fontSize: 18)),
-          ),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Evento: "${widget.eventTitle}"',
-              style: const TextStyle(
-                  color: AppTheme.accentGold, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            // What WILL be deleted
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("SE ELIMINARÁ:",
-                      style: TextStyle(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                  SizedBox(height: 6),
-                  Text("• Inscripciones de jugadores",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text("• Progreso de pistas de todos los usuarios",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text("• Poderes, transacciones y combates",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text("• Apuestas y distribuciones de premios",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text("• Solicitudes de ingreso",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // What will NOT be deleted
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("SE PRESERVARÁ:",
-                      style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                  SizedBox(height: 6),
-                  Text("• Todas las pistas y sus ubicaciones",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text("• Configuración del evento",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text("• Tiendas del centro comercial",
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Confirmation input
-            const Text(
-              'Escribe REINICIAR para confirmar:',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _controller,
-              style: const TextStyle(color: Colors.white, letterSpacing: 2),
-              decoration: InputDecoration(
-                hintText: _confirmWord,
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: _canConfirm ? Colors.greenAccent : Colors.white24,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: _canConfirm ? Colors.greenAccent : Colors.white24,
-                  ),
-                ),
-              ),
-              textCapitalization: TextCapitalization.characters,
-              onChanged: (value) {
-                setState(() {
-                  _canConfirm = value.trim().toUpperCase() == _confirmWord;
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancelar"),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _canConfirm ? Colors.red : Colors.grey[800],
-          ),
-          onPressed: _canConfirm ? () => Navigator.pop(context, true) : null,
-          child: Text(
-            _canConfirm ? "REINICIAR EVENTO" : "Escribe REINICIAR...",
-            style: TextStyle(
-              color: _canConfirm ? Colors.white : Colors.white38,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

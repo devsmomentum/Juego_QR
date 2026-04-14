@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/transaction_item.dart';
 import '../../../shared/widgets/coin_image.dart';
 
@@ -9,12 +10,14 @@ class TransactionCard extends StatelessWidget {
   final TransactionItem item;
   final VoidCallback? onResumePayment;
   final VoidCallback? onCancelOrder;
+  final VoidCallback? onValidateMpay;
 
   const TransactionCard({
     super.key,
     required this.item,
     this.onResumePayment,
     this.onCancelOrder,
+    this.onValidateMpay,
   });
 
   @override
@@ -36,6 +39,11 @@ class TransactionCard extends StatelessWidget {
        case 'pending':
          statusText = 'Pendiente';
          icon = Icons.access_time_rounded;
+         break;
+       case 'cancelled':
+       case 'canceled':
+         statusText = 'Cancelado';
+         icon = Icons.block_rounded;
          break;
        case 'failed':
        case 'error':
@@ -64,7 +72,9 @@ class TransactionCard extends StatelessWidget {
     final lowerDesc = displayDescription.toLowerCase();
     
     // --- Specific descriptions from wallet_ledger (highest priority) ---
-    if (lowerDesc.contains('comisión por ataque')) {
+    if (item.ledgerType == 'runner_bet_commission') {
+      displayDescription = 'COMISION POR APUESTAS A TU VICTORIA';
+    } else if (lowerDesc.contains('comisión por ataque')) {
       displayDescription = 'COMISIÓN POR ATAQUE';
     } else if (lowerDesc.contains('premio') || lowerDesc.contains('podio') || lowerDesc.contains('prize')) {
       displayDescription = 'PREMIO OBTENIDO';
@@ -96,11 +106,17 @@ class TransactionCard extends StatelessWidget {
       if (displayDescription.isEmpty) displayDescription = 'TRANSACCIÓN';
     }
 
+    final showFiatAmount = item.fiatAmount != null &&
+      item.fiatAmount! > 0 &&
+      (item.type == 'deposit' ||
+        item.type == 'withdrawal' ||
+        item.type == 'purchase_order');
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.white.withOpacity(0.05), // Subtle cyber glass
+      color: Colors.white.withOpacity(0.05), // Always subtle cyber glass
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -147,26 +163,16 @@ class TransactionCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Clover Amount (Primary)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${item.isCredit ? '+' : ''}${item.amount.toInt()} ',
-                          style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            color: item.isCredit ? AppTheme.successGreen : AppTheme.dangerRed, 
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const CoinImage(size: 14),
-                      ],
+                    Text(
+                      '${item.isCredit ? "+" : "-"}${item.amount.toStringAsFixed(1)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                        fontFamily: 'Orbitron',
+                      ),
                     ),
-                    // Fiat Amount (Secondary)
-                    if (item.fiatAmount != null && 
-                        item.fiatAmount! > 0 && 
-                        ['completed', 'success', 'paid'].contains(item.status.toLowerCase()))
+                    if (showFiatAmount)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
@@ -203,11 +209,27 @@ class TransactionCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (item.canResumePayment || item.canCancel) ...[
+            if (item.canResumePayment || item.canValidateMpay || item.canCancel || item.hasInvoice) ...[
               const Divider(height: 24, color: Colors.white10),
               Row(
                 children: [
-                   if (item.canResumePayment)
+                   if (item.canValidateMpay)
+                     Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: onValidateMpay,
+                        icon: const Icon(Icons.phone_android, size: 18),
+                        label: const Text('Completar Pago'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentGold,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    )
+                   else if (item.canResumePayment)
                      Expanded(
                       child: ElevatedButton.icon(
                         onPressed: onResumePayment,
@@ -223,11 +245,9 @@ class TransactionCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    
-                    if (item.canResumePayment && item.canCancel)
-                      const SizedBox(width: 8),
-
-                    if (item.canCancel)
+                    if (item.canCancel) ...[
+                      if (item.canResumePayment || item.canValidateMpay)
+                        const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: onCancelOrder,
@@ -243,6 +263,33 @@ class TransactionCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                    ],
+                    
+                    if (item.hasInvoice) ...[
+                      if (item.canResumePayment || item.canValidateMpay || item.canCancel)
+                        const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final url = Uri.parse(item.invoiceUrl!);
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                          label: const Text('Ver Factura'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent.withOpacity(0.2),
+                            foregroundColor: Colors.blueAccent,
+                            side: BorderSide(color: Colors.blueAccent.withOpacity(0.5)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
                 ],
               ),
             ],

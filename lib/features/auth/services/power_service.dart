@@ -122,4 +122,31 @@ class PowerService {
       return {};
     }
   }
+
+  /// Obtiene los precios de la tienda (mall_stores) para un evento.
+  /// Retorna un mapa de itemId -> cost.
+  Future<Map<String, int>> getStorePrices(String eventId) async {
+    try {
+      final response = await _supabase
+          .from('mall_stores')
+          .select('products')
+          .eq('event_id', eventId)
+          .maybeSingle();
+
+      if (response != null && response['products'] != null) {
+        final List<dynamic> products = response['products'];
+        final Map<String, int> prices = {};
+        for (var p in products) {
+          if (p is Map && p.containsKey('id') && p.containsKey('cost')) {
+            prices[p['id'].toString()] = (p['cost'] as num).toInt();
+          }
+        }
+        return prices;
+      }
+      return {};
+    } catch (e) {
+      debugPrint('PowerService: Error fetching store prices: $e');
+      return {};
+    }
+  }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../utils/country_helper.dart';
 import '../../utils/minigame_logic_helper.dart';
 import '../../models/clue.dart';
 import '../../../auth/providers/player_provider.dart';
@@ -78,6 +79,43 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     {'code': 'cl', 'name': 'Chile'},
     {'code': 'pe', 'name': 'Perú'},
     {'code': 'uy', 'name': 'Uruguay'},
+    {'code': 'ma', 'name': 'Marruecos'},
+    {'code': 'ng', 'name': 'Nigeria'},
+    {'code': 'sn', 'name': 'Senegal'},
+    {'code': 'et', 'name': 'Etiopía'},
+    {'code': 'gh', 'name': 'Ghana'},
+    {'code': 'dz', 'name': 'Argelia'},
+    {'code': 'tn', 'name': 'Túnez'},
+    {'code': 'sa', 'name': 'Arabia Saudita'},
+    {'code': 'ae', 'name': 'EAU'},
+    {'code': 'il', 'name': 'Israel'},
+    {'code': 'jo', 'name': 'Jordania'},
+    {'code': 'lb', 'name': 'Líbano'},
+    {'code': 'pk', 'name': 'Pakistán'},
+    {'code': 'bd', 'name': 'Bangladesh'},
+    {'code': 'lk', 'name': 'Sri Lanka'},
+    {'code': 'np', 'name': 'Nepal'},
+    {'code': 'mn', 'name': 'Mongolia'},
+    {'code': 'uz', 'name': 'Uzbekistán'},
+    {'code': 'ge', 'name': 'Georgia'},
+    {'code': 'hr', 'name': 'Croacia'},
+    {'code': 'rs', 'name': 'Serbia'},
+    {'code': 'ro', 'name': 'Rumanía'},
+    {'code': 'hu', 'name': 'Hungría'},
+    {'code': 'cz', 'name': 'República Checa'},
+    {'code': 'ie', 'name': 'Irlanda'},
+    {'code': 'nz', 'name': 'Nueva Zelanda'},
+    {'code': 'bo', 'name': 'Bolivia'},
+    {'code': 'ec', 'name': 'Ecuador'},
+    {'code': 'py', 'name': 'Paraguay'},
+    {'code': 'cr', 'name': 'Costa Rica'},
+    {'code': 'pa', 'name': 'Panamá'},
+    {'code': 'cu', 'name': 'Cuba'},
+    {'code': 'jm', 'name': 'Jamaica'},
+    {'code': 'is', 'name': 'Islandia'},
+    {'code': 'at', 'name': 'Austria'},
+    {'code': 'sk', 'name': 'Eslovaquia'},
+    {'code': 'bg', 'name': 'Bulgaria'},
   ];
 
   @override
@@ -99,7 +137,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -140,8 +178,6 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     if (_isGameOver) return;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
-    if (gameProvider.isFrozen) return; // Ignore input if frozen
-
     if (gameProvider.isFrozen) return; // Ignore input if frozen
 
     // [FIX] Prevent interaction if offline
@@ -238,8 +274,6 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     }
   }
 
-  // Old dialog methods removed in favor of _showOverlayState
-
   List<String> _generateOptions() {
     if (_currentOptions != null) return _currentOptions!;
 
@@ -247,7 +281,7 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     final random = Random();
     final options = <String>{correctAnswer};
 
-    while (options.length < 4) {
+    while (options.length < 4 && options.length < _allCountries.length) {
       final randomCountry =
           _allCountries[random.nextInt(_allCountries.length)]['name']!;
       options.add(randomCountry);
@@ -262,20 +296,15 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
     setState(() {
       _isGameOver = true;
     });
-    // For victory, we might still want to call onSuccess directly,
-    // or show a victory overlay first. Use logic helper's standard if preferred,
-    // but here we just follow previous logic:
     widget.onSuccess();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 2. Implementación del Bloqueo de INTERFAZ (UI Hardening)
     return PopScope(
       canPop: false, // Prevent back button
       onPopInvoked: (didPop) {
         if (didPop) return;
-        // Optional: Show toast "Completa o sal del juego usando los botones"
       },
       child: Stack(
         children: [
@@ -373,36 +402,77 @@ class _FlagsMinigameState extends State<FlagsMinigame> {
                               blurRadius: 10,
                               offset: const Offset(0, 5))
                         ],
-                        image: DecorationImage(
-                          fit: BoxFit.cover,
-                          image: NetworkImage(
-                              "https://flagcdn.com/w640/${_shuffledQuestions[_currentQuestionIndex]['code']}.png"),
-                        ),
+                      ),
+                      child: Builder(
+                        builder: (context) {
+                          final country =
+                              _shuffledQuestions[_currentQuestionIndex];
+                          final code = country['code']!;
+                          final name = country['name']!;
+
+                          return Image.network(
+                            "https://flagcdn.com/w640/$code.png",
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              // FALLBACK 1: Buscar Emoji en CountryHelper
+                              final emoji = CountryHelper.getEmoji(name);
+                              if (emoji != null) {
+                                return Center(
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 80),
+                                  ),
+                                );
+                              }
+
+                              // FALLBACK 2: Siglas
+                              return Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  child: Text(
+                                    code.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 40,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ),
 
                   const SizedBox(height: 40),
 
                   // Opciones
-                  if (!_showOverlay) // Hide options if overlay is ON to prevent interaction (AbsorbPointer handles it, but cleaner UI)
+                  if (!_showOverlay) // Hide options if overlay is ON
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      spacing: 8,
+                      runSpacing: 8,
                       alignment: WrapAlignment.center,
                       children: _generateOptions().map((option) {
-                        return ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryPurple,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 30, vertical: 15),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: () => _handleOptionSelected(option),
-                          child: Text(
-                            option,
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.white),
+                        return SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.44,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryPurple,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => _handleOptionSelected(option),
+                            child: Text(
+                              option,
+                              style: const TextStyle(
+                                  fontSize: 14, color: Colors.white),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         );
                       }).toList(),

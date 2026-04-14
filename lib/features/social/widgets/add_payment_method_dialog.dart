@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../auth/services/auth_service.dart';
+import '../../auth/models/country_code.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+
+enum PaymentMethodType { pagoMovil, paypal }
 
 class AddPaymentMethodDialog extends StatefulWidget {
   const AddPaymentMethodDialog({super.key});
@@ -15,7 +18,9 @@ class AddPaymentMethodDialog extends StatefulWidget {
 
 class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
   final _formKey = GlobalKey<FormState>();
+  PaymentMethodType _selectedType = PaymentMethodType.pagoMovil;
   String? _selectedBankCode;
+  final _paypalEmailController = TextEditingController();
   bool _isLoading = false;
 
   final List<Map<String, String>> _banks = [
@@ -35,7 +40,7 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
     {'code': '0163', 'name': 'Banco del Tesoro'},
     {'code': '0166', 'name': 'Banco Agrícola de Venezuela'},
     {'code': '0168', 'name': 'Bancrecer'},
-    {'code': '0169', 'name': 'Mi Banco'},
+    {'code': '0169', 'name': 'R4'},
     {'code': '0171', 'name': 'Banco Activo'},
     {'code': '0172', 'name': 'Bancamiga'},
     {'code': '0174', 'name': 'Banplus'},
@@ -47,13 +52,14 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
 
   @override
   void dispose() {
+    _paypalEmailController.dispose();
     super.dispose();
   }
 
   Future<void> _saveMethod() async {
     if (!_formKey.currentState!.validate()) return;
     
-    if (_selectedBankCode == null) {
+    if (_selectedType == PaymentMethodType.pagoMovil && _selectedBankCode == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor selecciona un banco')),
       );
@@ -64,7 +70,18 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
 
     try {
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      await playerProvider.addPaymentMethod(bankCode: _selectedBankCode!);
+      
+      if (_selectedType == PaymentMethodType.pagoMovil) {
+        await playerProvider.addPaymentMethod(
+          bankCode: _selectedBankCode!,
+          type: 'pago_movil',
+        );
+      } else {
+        await playerProvider.addPaymentMethod(
+          identifier: _paypalEmailController.text.trim(),
+          type: 'paypal',
+        );
+      }
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -94,7 +111,7 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
     final playerProvider = Provider.of<PlayerProvider>(context);
     final player = playerProvider.currentPlayer;
     final dni = player?.cedula ?? 'No definido';
-    final phone = player?.phone ?? 'No definido';
+    final phone = CountryCode.formatForDisplay(player?.phone);
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -128,12 +145,20 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
                         shape: BoxShape.circle,
                         border: Border.all(color: AppTheme.accentGold.withOpacity(0.3)),
                       ),
-                      child: const Icon(Icons.account_balance_rounded, color: AppTheme.accentGold, size: 20),
+                      child: Icon(
+                        _selectedType == PaymentMethodType.pagoMovil 
+                          ? Icons.account_balance_rounded 
+                          : Icons.account_balance_wallet_rounded, 
+                        color: AppTheme.accentGold, 
+                        size: 20
+                      ),
                     ),
                     const SizedBox(width: 15),
-                    const Text(
-                      'AÑADIR PAGO MÓVIL',
-                      style: TextStyle(
+                    Text(
+                      _selectedType == PaymentMethodType.pagoMovil 
+                        ? 'AÑADIR PAGO MÓVIL' 
+                        : 'AÑADIR PAYPAL',
+                      style: const TextStyle(
                         color: Colors.white, 
                         fontWeight: FontWeight.bold, 
                         fontSize: 15,
@@ -144,56 +169,111 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
                   ],
                 ),
                 const SizedBox(height: 24),
+                
+                // --- Selector de Tipo ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTypeTab(
+                        'PAGO MÓVIL', 
+                        PaymentMethodType.pagoMovil,
+                        Icons.phone_android,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildTypeTab(
+                        'PAYPAL', 
+                        PaymentMethodType.paypal,
+                        Icons.email_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                
                 Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Se vincularán estos datos para tus retiros:',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildInfoRow(Icons.badge, 'CÉDULA', dni, true),
-                      const SizedBox(height: 12),
-                      _buildInfoRow(Icons.phone_android, 'TELÉFONO', phone, true),
-                      const SizedBox(height: 24),
-                      DropdownButtonFormField<String>(
-                        dropdownColor: const Color(0xFF1C1C1E),
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                        hint: const Text(
-                          'Selecciona tu banco',
-                          style: TextStyle(color: Colors.white60, fontSize: 14),
+                      if (_selectedType == PaymentMethodType.pagoMovil) ...[
+                        const Text(
+                          'Se vincularán estos datos para tus retiros:',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
-                        decoration: _inputDecoration('Banco Emisor', true),
-                        value: _selectedBankCode,
-                        isExpanded: true,
-                        menuMaxHeight: 300,
-                        selectedItemBuilder: (BuildContext context) {
-                          return _banks.map<Widget>((bank) {
-                            return Text(
-                              '${bank['code']} - ${bank['name']}',
-                              style: const TextStyle(color: Colors.white),
-                              overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 20),
+                        _buildInfoRow(Icons.badge, 'CÉDULA', dni, true),
+                        const SizedBox(height: 12),
+                        _buildInfoRow(Icons.phone_android, 'TELÉFONO', phone, true),
+                        const SizedBox(height: 24),
+                        DropdownButtonFormField<String>(
+                          dropdownColor: const Color(0xFF1C1C1E),
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          hint: const Text(
+                            'Selecciona tu banco',
+                            style: TextStyle(color: Colors.white60, fontSize: 14),
+                          ),
+                          decoration: _inputDecoration('Banco Emisor', true),
+                          value: _selectedBankCode,
+                          isExpanded: true,
+                          menuMaxHeight: 300,
+                          selectedItemBuilder: (BuildContext context) {
+                            return _banks.map<Widget>((bank) {
+                              return Text(
+                                '${bank['code']} - ${bank['name']}',
+                                style: const TextStyle(color: Colors.white),
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            }).toList();
+                          },
+                          items: _banks.map((bank) {
+                            return DropdownMenuItem(
+                              value: bank['code'],
+                              child: Text(
+                                '${bank['code']} - ${bank['name']}',
+                                style: const TextStyle(color: Colors.white),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             );
-                          }).toList();
-                        },
-                        items: _banks.map((bank) {
-                          return DropdownMenuItem(
-                            value: bank['code'],
-                            child: Text(
-                              '${bank['code']} - ${bank['name']}',
-                              style: const TextStyle(color: Colors.white),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) => setState(() => _selectedBankCode = val),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return 'Requerido';
-                          return null;
-                        },
-                      ),
+                          }).toList(),
+                          onChanged: (val) => setState(() => _selectedBankCode = val),
+                          validator: (value) {
+                            if (_selectedType == PaymentMethodType.pagoMovil && (value == null || value.isEmpty)) return 'Requerido';
+                            return null;
+                          },
+                        ),
+                      ] else ...[
+                        const Text(
+                          'Ingresa el correo electrónico de tu cuenta PayPal:',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(height: 20),
+                        TextFormField(
+                          controller: _paypalEmailController,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: _inputDecoration('Correo de PayPal', true).copyWith(
+                            prefixIcon: const Icon(Icons.email_outlined, color: Colors.white38, size: 20),
+                          ),
+                          validator: (value) {
+                            if (_selectedType == PaymentMethodType.paypal) {
+                              if (value == null || value.isEmpty) return 'El correo es obligatorio';
+                              if (!value.contains('@') || !value.contains('.')) return 'Email inválido';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            'Asegúrate de que sea tu correo principal de PayPal para evitar retrasos.',
+                            style: TextStyle(color: Colors.white38, fontSize: 11, fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -233,6 +313,41 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeTab(String label, PaymentMethodType type, IconData icon) {
+    final isSelected = _selectedType == type;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedType = type),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.accentGold.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppTheme.accentGold.withOpacity(0.5) : Colors.white12,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon, 
+              color: isSelected ? AppTheme.accentGold : Colors.white38, 
+              size: 18
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white38,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
         ),
       ),
     );

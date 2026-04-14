@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/clue.dart';
 import '../../providers/game_provider.dart';
@@ -86,7 +87,7 @@ class _PrimeNetworkMinigameState extends State<PrimeNetworkMinigame> {
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -163,8 +164,10 @@ class _PrimeNetworkMinigameState extends State<PrimeNetworkMinigame> {
     _primesToFind = primesGenerated;
   }
 
+  bool _hasTriggeredSuccess = false;
+
   void _handleNodeTap(Node node) {
-    if (_isGameOver || node.isSecured) return;
+    if (_isGameOver || node.isSecured || _hasTriggeredSuccess) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
@@ -172,14 +175,17 @@ class _PrimeNetworkMinigameState extends State<PrimeNetworkMinigame> {
     if (!connectivity.isOnline) return;
 
     if (node.isPrime) {
+      HapticFeedback.mediumImpact();
       setState(() {
         node.isSecured = true;
         _primesFound++;
         if (_primesFound >= _primesToFind) {
+          _primesFound = _primesToFind; // Clamp just in case
           _endGame(win: true);
         }
       });
     } else {
+      HapticFeedback.heavyImpact();
       _handleMistake();
     }
   }
@@ -209,25 +215,37 @@ class _PrimeNetworkMinigameState extends State<PrimeNetworkMinigame> {
     }
   }
 
-  void _endGame({required bool win, String? reason, int? lives}) {
+  void _endGame({required bool win, String? reason, int? lives}) async {
+    if (_isGameOver && !win) return; // Allow winning even if already flagged (but logic prevents it)
+    
     _gameTimer?.cancel();
-    setState(() {
-      _isGameOver = true;
-    });
-
+    
     if (win) {
-      widget.onSuccess();
-    } else {
-      final currentLives = lives ??
-          Provider.of<PlayerProvider>(context, listen: false)
-              .currentPlayer
-              ?.lives ??
-          0;
-
+      if (_hasTriggeredSuccess) return;
+      _hasTriggeredSuccess = true;
+      
       setState(() {
+        _isGameOver = true;
+      });
+
+      // Breve delay para que el usuario vea que el último nodo se puso verde
+      await Future.delayed(const Duration(milliseconds: 400));
+      
+      if (mounted) {
+        widget.onSuccess();
+      }
+    } else {
+      setState(() {
+        _isGameOver = true;
         _showOverlay = true;
         _overlayTitle = "GAME OVER";
         _overlayMessage = reason ?? "Perdiste";
+        
+        final currentLives = lives ??
+            Provider.of<PlayerProvider>(context, listen: false)
+                .currentPlayer
+                ?.lives ??
+            0;
         _canRetry = currentLives > 0;
         _showShopButton = true;
       });
@@ -316,30 +334,41 @@ class _PrimeNetworkMinigameState extends State<PrimeNetworkMinigame> {
           top: 16,
           left: 0,
           right: 0,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text("Primos asegurados: $_primesFound / $_primesToFind",
-                    style: const TextStyle(color: Colors.white)),
+              const Text("TOCA SOLO LOS NÚMEROS PRIMOS",
+                  style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1)),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text("Cifras: $_primesFound / $_primesToFind",
+                        style: const TextStyle(color: Colors.white)),
+                  ),
+                  const SizedBox(width: 20),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text("Tiempo: $_secondsRemaining",
+                        style: const TextStyle(color: Colors.white)),
+                  )
+                ],
               ),
-              const SizedBox(width: 20),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text("Tiempo: $_secondsRemaining",
-                    style: const TextStyle(color: Colors.white)),
-              )
             ],
           ),
         ),

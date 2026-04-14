@@ -7,7 +7,9 @@ import '../../../shared/interfaces/i_resettable.dart';
 import '../services/game_service.dart';
 import '../../admin/models/sponsor.dart';
 import '../../admin/services/sponsor_service.dart';
+import '../services/sponsor_rotation_manager.dart';
 import '../models/power_effect.dart';
+import '../../../core/services/leaderboard_debouncer.dart';
 
 // ============================================================
 // GATEKEEPER: User Event Status Types
@@ -98,16 +100,27 @@ class GameProvider extends ChangeNotifier implements IResettable {
   bool _isPowerActionLoading =
       false; // Guards against double-clicks during power execution
   bool _isFrozen = false; // Estado de congelamiento para minijuegos
+  bool _isModalActive = false; // Estado de pausa por modal (ej. rendirse)
   String? _currentUserId; // Check current user ID for leaderboard fetching
+
+  /// Flag que indica que el jugador abandonó la competencia voluntariamente.
+  /// Evita que GameSessionMonitor interprete la limpieza de estado como
+  /// una expulsión por parte de un administrador.
+  bool _voluntaryExit = false;
+  bool get isVoluntaryExit => _voluntaryExit;
 
   // Minigame Data from Supabase
   List<Map<String, String>> _minigameCapitals = [];
   List<Map<String, dynamic>> _minigameTFStatements = [];
+  List<Map<String, dynamic>> _minigameChronologicalEvents = [];
+  List<Map<String, dynamic>> _minigameEmojiMovies = [];
   bool _isMinigameDataLoading = false;
 
-  // New: Current Sponsor
+  // New: Sponsor Pool & Rotation
   Sponsor? _currentSponsor;
   Sponsor? get currentSponsor => _currentSponsor;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
+  SponsorRotationManager get sponsorRotation => _sponsorRotation;
 
   List<PowerEffect> get activePowerEffects => _activePowerEffects;
   bool get isPowerActionLoading => _isPowerActionLoading;
@@ -115,12 +128,28 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   List<Map<String, String>> get minigameCapitals => _minigameCapitals;
   List<Map<String, dynamic>> get minigameTFStatements => _minigameTFStatements;
+  List<Map<String, dynamic>> get minigameChronologicalEvents =>
+      _minigameChronologicalEvents;
+  List<Map<String, dynamic>> get minigameEmojiMovies => _minigameEmojiMovies;
   bool get isMinigameDataLoading => _isMinigameDataLoading;
+
+  /// Indica si el juego debe estar en pausa (por congelamiento o modal activo)
+  bool get isPaused => _isFrozen || _isModalActive;
+
+  bool get isModalActive => _isModalActive;
 
   /// Sets the frozen state (called by PowerEffectProvider)
   void setFrozen(bool value) {
     if (_isFrozen != value) {
       _isFrozen = value;
+      notifyListeners();
+    }
+  }
+
+  /// Indica si hay un modal activo que debe pausar el juego
+  void setModalActive(bool value) {
+    if (_isModalActive != value) {
+      _isModalActive = value;
       notifyListeners();
     }
   }
@@ -146,7 +175,16 @@ class GameProvider extends ChangeNotifier implements IResettable {
   // Timer y Realtime para el ranking
   Timer? _leaderboardTimer;
   RealtimeChannel? _raceStatusChannel;
+  String? _subscribedRaceEventId; // Fix: evita re-subscribe en cada fetchClues silent
   RealtimeChannel? _livesSubscription; // Suscripción a vidas globales
+
+  /// Debouncer para el leaderboard: evita reconstrucciones excesivas cuando
+  /// múltiples jugadores completan pistas simultáneamente.
+  /// Con 50 jugadores activos, sin esto se dispararían 50+ notifyListeners()/seg.
+  final LeaderboardDebouncer _leaderboardDebouncer = LeaderboardDebouncer(
+    interval: const Duration(milliseconds: 2000),
+    maxWait: const Duration(milliseconds: 5000),
+  );
 
   List<Clue> get clues => _clues;
   List<Player> get leaderboard => _leaderboard;
@@ -169,6 +207,28 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   bool get hasCompletedAllClues =>
       totalClues > 0 && completedClues == totalClues;
+
+  /// Marca una salida voluntaria del jugador. Debe llamarse ANTES de
+  /// cualquier resetState/clearGameContext para que GameSessionMonitor
+  /// no muestre el mensaje de "expulsado por admin".
+  void markVoluntaryExit() {
+    _voluntaryExit = true;
+  }
+
+  /// Ensures the current event context is set without forcing a full reset.
+  /// This is used to enable global overlays (e.g., powers) before clues load.
+  void ensureEventContext(String eventId) {
+    if (eventId.isEmpty) return;
+    if (_currentEventId == eventId) return;
+    _currentEventId = eventId;
+    notifyListeners();
+  }
+
+  /// Limpia la bandera de salida voluntaria. Se llama desde
+  /// GameSessionMonitor después de procesar la transición.
+  void clearVoluntaryExit() {
+    _voluntaryExit = false;
+  }
 
   GameProvider({required GameService gameService}) : _gameService = gameService;
 
@@ -193,9 +253,13 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _isFrozen = false;
     _minigameCapitals = [];
     _minigameTFStatements = [];
+    _minigameChronologicalEvents = [];
+    _minigameEmojiMovies = [];
     _isMinigameDataLoading = false;
     _currentSponsor = null;
+    _sponsorRotation.reset();
     _currentUserId = null;
+    _subscribedRaceEventId = null; // Fix: resetear tracking
 
     stopLeaderboardUpdates();
     stopLivesSubscription();
@@ -215,11 +279,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
       final lives = await _gameService.fetchLives(_currentEventId!, userId);
 
       if (lives != null) {
-        _lives = lives;
+        if (_lives != lives) {
+          _lives = lives;
+          notifyListeners();
+        }
       } else {
-        _lives = 3;
+        // Fallback for null (standard lives)
+        if (_lives != 3) {
+          _lives = 3;
+          notifyListeners();
+        }
       }
-      notifyListeners();
     } catch (e) {
       debugPrint('Error fetching lives: $e');
     }
@@ -228,6 +298,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   // Sync lives manually (e.g. from PlayerProvider purchase)
   void syncLives(int newLives) {
     if (_lives != newLives) {
+      debugPrint('[LIVES_SYNC] 🔩 Manual sync requested: $_lives -> $newLives');
       _lives = newLives;
       notifyListeners();
     }
@@ -288,15 +359,20 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   // --- GESTIÓN DEL RANKING EN TIEMPO REAL ---
 
-  /// Inicia el polling periódico del Leaderboard (cada 5 segundos).
+  /// Inicia el polling periódico del Leaderboard (heartbeat de fallback: cada 30 segundos).
   ///
-  /// Llama a `fetchLeaderboard` inicialmente y luego lo programa.
-  /// Útil para mantener la tabla de posiciones actualizada sin Realtime excesivo.
+  /// OPTIMIZACIÓN: El intervalo principal de actualización ahora corre por
+  /// [subscribeToRaceStatus] + [_leaderboardDebouncer] (event-driven, 2s debounce).
+  /// Este timer es solo un "heartbeat" de reconciliación para cubrir casos edge:
+  /// - Reconexión tras pérdida de WebSocket
+  /// - Eventos que llegaron durante desconexión temporal
   void startLeaderboardUpdates() {
     fetchLeaderboard();
     stopLeaderboardUpdates();
 
-    _leaderboardTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    // 30s en lugar de 5s: Realtime + debounce maneja las actualizaciones reactivas.
+    // Este timer solo es fallback de resync.
+    _leaderboardTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_currentEventId != null) {
         _fetchLeaderboardInternal(silent: true);
       }
@@ -310,6 +386,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
     _leaderboardTimer = null;
     _raceStatusChannel?.unsubscribe();
     _raceStatusChannel = null;
+    _subscribedRaceEventId = null; // Fix: resetear tracking para siguiente suscripción
+    _leaderboardDebouncer
+        .flush(); // Ejecutar cualquier update pendiente antes de parar
   }
 
   /// Detiene la suscripción Realtime de vidas.
@@ -323,15 +402,30 @@ class GameProvider extends ChangeNotifier implements IResettable {
   void subscribeToRaceStatus() {
     if (_currentEventId == null) return;
 
+    // Fix: evitar unsubscribe/resubscribe en cada fetchClues(silent:true) para el mismo evento.
+    // La race condition anterior: cada pista completada llamaba fetchClues(silent:true) → aquí →
+    // desuscribía el canal brevemente → si el evento se completaba en esa ventana, se perdía.
+    if (_raceStatusChannel != null && _subscribedRaceEventId == _currentEventId) {
+      debugPrint('[Race] ✅ Canal ya activo para $_currentEventId — omitiendo re-suscripción');
+      return;
+    }
+
     _raceStatusChannel?.unsubscribe();
+    _subscribedRaceEventId = _currentEventId;
 
     _raceStatusChannel = _gameService.subscribeToRaceStatus(
         _currentEventId!, totalClues, (completed, source) {
       _setRaceCompleted(completed, source);
     }, onProgressUpdate: () {
       debugPrint(
-          '🏎️ RACE UPDATE: Realtime progress detected, refreshing leaderboard...');
-      _fetchLeaderboardInternal(silent: true);
+          '🏎️ RACE UPDATE: Realtime progress detected, scheduling debounced leaderboard refresh...');
+      // OPTIMIZACIÓN: Debounce de 2s para evitar 50+ fetches/segundo en ráfagas.
+      // Si hay actividad continua, maxWait=5s garantiza que no parezca congelado.
+      _leaderboardDebouncer.schedule(() {
+        debugPrint(
+            '📊 LeaderboardDebouncer: flush → _fetchLeaderboardInternal');
+        _fetchLeaderboardInternal(silent: true);
+      });
     });
   }
 
@@ -367,89 +461,45 @@ class GameProvider extends ChangeNotifier implements IResettable {
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'game_players',
-          // ⚡ SIN FILTRO: Recibimos TODOS los updates de game_players
-          // La validación se hace manualmente en el callback
+          // ✅ FILTRO SERVER-SIDE: Requiere REPLICA IDENTITY FULL en game_players
+          // (aplicado en migración 20260303100000_realtime_performance_optimizations.sql).
+          // Con 50 jugadores, esto reduce de 50×enviados/todos a 1×solo-el-mío.
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: normalizedUserId,
+          ),
           callback: (payload) {
             final record = payload.newRecord;
             final timestamp = DateTime.now().toIso8601String();
 
-            // 🔥 AUDITORÍA COMPLETA: Log de entrada del evento
             debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             debugPrint('[LIVES_SYNC] 🔥 REALTIME EVENT RECEIVED @ $timestamp');
 
-            // Extraer y normalizar IDs entrantes
-            final incomingUserIdRaw = record['user_id'];
+            // Con filtro server-side, el event_id aún requiere validación
+            // porque la columna user_id no garantiza pertenecer a este evento.
             final incomingEventIdRaw = record['event_id'];
             final incomingLivesRaw = record['lives'];
 
-            // Log de tipos para debugging
-            debugPrint('[LIVES_SYNC]   📦 Raw Data Types:');
-            debugPrint(
-                '[LIVES_SYNC]      user_id: ${incomingUserIdRaw.runtimeType} = $incomingUserIdRaw');
-            debugPrint(
-                '[LIVES_SYNC]      event_id: ${incomingEventIdRaw.runtimeType} = $incomingEventIdRaw');
-            debugPrint(
-                '[LIVES_SYNC]      lives: ${incomingLivesRaw.runtimeType} = $incomingLivesRaw');
-
-            // Normalizar IDs entrantes (manejar UUID objects y Strings)
-            final String incomingUserId =
-                incomingUserIdRaw?.toString().trim() ?? '';
             final String incomingEventId =
                 incomingEventIdRaw?.toString().trim() ?? '';
-
-            // Comparación con IDs esperados
-            debugPrint('[LIVES_SYNC]   🎯 ID Comparison:');
-            debugPrint(
-                '[LIVES_SYNC]      Expected user_id: "$normalizedUserId"');
-            debugPrint('[LIVES_SYNC]      Incoming user_id: "$incomingUserId"');
-            debugPrint(
-                '[LIVES_SYNC]      User Match: ${incomingUserId == normalizedUserId}');
-            debugPrint(
-                '[LIVES_SYNC]      Expected event_id: "$normalizedEventId"');
-            debugPrint(
-                '[LIVES_SYNC]      Incoming event_id: "$incomingEventId"');
-            debugPrint(
-                '[LIVES_SYNC]      Event Match: ${incomingEventId == normalizedEventId}');
-
-            // Filtrado robusto: Solo procesar si ambos IDs coinciden
-            final bool userMatches = incomingUserId == normalizedUserId;
             final bool eventMatches = incomingEventId == normalizedEventId;
 
-            if (userMatches && eventMatches) {
-              // ✅ MATCH: Este evento es para nuestro usuario
+            if (eventMatches) {
               final int newLives = incomingLivesRaw as int;
-              debugPrint('[LIVES_SYNC] ✅ MATCH CONFIRMED - Processing update');
-              debugPrint('[LIVES_SYNC]   Old lives: $_lives');
-              debugPrint('[LIVES_SYNC]   New lives: $newLives');
+              debugPrint(
+                  '[LIVES_SYNC] ✅ Match - Updating lives: $_lives → $newLives');
 
-              // Solo actualizar si el valor cambió
               if (_lives != newLives) {
-                final int oldLives = _lives;
                 _lives = newLives;
-
-                debugPrint(
-                    '[LIVES_SYNC]   📢 Lives changed: $oldLives → $newLives');
-                debugPrint('[LIVES_SYNC]   🔔 Calling notifyListeners()...');
-
-                notifyListeners(); // 📢 Esto despierta a la UI
-
-                debugPrint(
-                    '[LIVES_SYNC]   ✅ notifyListeners() completed @ ${DateTime.now().toIso8601String()}');
-                debugPrint(
-                    '[LIVES_SYNC]   💡 UI should rebuild NOW with new value: $newLives');
+                notifyListeners();
+                debugPrint('[LIVES_SYNC] 🔔 notifyListeners() called');
               } else {
                 debugPrint(
-                    '[LIVES_SYNC]   ⚠️ Value unchanged ($newLives), skipping notification');
+                    '[LIVES_SYNC] ⚠️ Value unchanged ($newLives), skipping');
               }
             } else {
-              // ⚠️ NO MATCH: Evento filtrado
-              debugPrint('[LIVES_SYNC] ⚠️ EVENT FILTERED OUT');
-              if (!userMatches) {
-                debugPrint('[LIVES_SYNC]   ❌ User ID mismatch');
-              }
-              if (!eventMatches) {
-                debugPrint('[LIVES_SYNC]   ❌ Event ID mismatch');
-              }
+              debugPrint('[LIVES_SYNC] ⚠️ Event ID mismatch - filtered out');
             }
 
             debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -538,41 +588,59 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
       final fetchedClues = await _gameService.getClues(idToUse);
 
+      if (silent) {
+        // [FIX] Proteger el estado 'isCompleted' optimista contra respuestas del servidor stale.
+        // Si localmente ya la tenemos como completada, no desmarcarla en un fetch silencioso.
+        for (var newClue in fetchedClues) {
+          final oldClue = _clues.firstWhere((c) => c.id == newClue.id,
+              orElse: () => newClue);
+          if (oldClue.isCompleted && !newClue.isCompleted) {
+            debugPrint(
+                '[FETCH_CLUES] 🛡️ Protecting optimistic completion for clue ${newClue.id}');
+            newClue.isCompleted = true;
+          }
+        }
+      }
       _clues = fetchedClues;
       _hintActive = false;
       _activeHintText = null;
 
-      final index = _clues.indexWhere((c) => !c.isCompleted && !c.isLocked);
-      _currentClueIndex = (index != -1) ? index : _clues.length;
-    } catch (e) {
-      _errorMessage = 'Error fetching clues: $e';
-    } finally {
+      // [FIX] Sincronización Estricta de Índice
+      // El servidor determina el índice basándose en qué pistas tienen is_completed = true
+      final serverIndex = _clues.indexWhere((c) => !c.isCompleted);
+      final newIndex = (serverIndex != -1) ? serverIndex : _clues.length;
+
+      // [ROBUSTNESS]: Solo actualizamos el índice si avanzamos. 
+      // Si el servidor envía datos 'viejos' (stale) que dicen que no hemos terminado una pista 
+      // que YA marcamos como completada localmente (y confirmada), ignoramos el rollback.
+      if (!silent || newIndex >= _currentClueIndex) {
+        debugPrint(
+            '[FETCH_CLUES] 🧭 Updating index strictly: $_currentClueIndex -> $newIndex (silent: $silent)');
+        _currentClueIndex = newIndex;
+      } else {
+        debugPrint(
+            '[FETCH_CLUES] ⚠️ Stale state prevention: Server says index $newIndex but local is $_currentClueIndex. Keeping current progress.');
+      }
+
       // ⚡ CRÍTICO: Suscribirse o actualizar suscripción una vez que totalClues es real
       subscribeToRaceStatus();
 
-      // Fetch Sponsor if not loaded (and eventId is valid)
+      // Fetch Sponsor pool if not loaded (and eventId is valid)
       if (idToUse != null && _currentSponsor == null) {
         try {
-          // We use a small service instance here or inject usage
-          final sponsorService = SponsorService();
-          final sponsor = await sponsorService.getSponsorForEvent(idToUse);
-          if (sponsor != null) {
-            _currentSponsor = sponsor;
+          await _sponsorRotation.loadPool(idToUse);
+          _currentSponsor = _sponsorRotation.selectSponsor();
+          if (_currentSponsor != null) {
             debugPrint(
-                '✅ GameProvider: Loaded Sponsor: ${sponsor.name} (${sponsor.planType})');
-          } else {
-            _currentSponsor =
-                await sponsorService.getActiveSponsor(); // Fallback
-            if (_currentSponsor != null) {
-              debugPrint(
-                  '✅ GameProvider: Loaded Global Sponsor (Fallback): ${_currentSponsor!.name}');
-            }
+                '✅ GameProvider: Selected Sponsor from pool: ${_currentSponsor!.name} (${_currentSponsor!.planType}, weight=${_currentSponsor!.weight})');
           }
         } catch (e) {
-          debugPrint('⚠️ Error fetching sponsor in GameProvider: $e');
+          debugPrint('⚠️ Error fetching sponsor pool in GameProvider: $e');
         }
       }
-
+    } catch (e) {
+      _errorMessage = 'Error fetching clues: $e';
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -598,6 +666,24 @@ class GameProvider extends ChangeNotifier implements IResettable {
     }
   }
 
+  /// Selects a new sponsor from the pool via weighted random rotation.
+  /// Call this each time a new banner display is needed.
+  Sponsor? rotateSponsor() {
+    _currentSponsor = _sponsorRotation.selectSponsor();
+    notifyListeners();
+    return _currentSponsor;
+  }
+
+  Future<Map<String, dynamic>?> startMinigameSession({
+    required String clueId,
+    required int minDurationSeconds,
+  }) async {
+    return _gameService.startMinigameSession(
+      clueId: clueId,
+      minDurationSeconds: minDurationSeconds,
+    );
+  }
+
   void unlockClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
@@ -610,6 +696,9 @@ class GameProvider extends ChangeNotifier implements IResettable {
   void completeLocalClue(String clueId) {
     final index = _clues.indexWhere((c) => c.id == clueId);
     if (index != -1) {
+      // Solo marcar la pista específica por ID como completada.
+      // No se toca is_locked de ninguna otra pista: el servidor es la fuente
+      // de verdad para el desbloqueo (via submit_clue_answer → user_clue_progress).
       _clues[index].isCompleted = true;
       _hintActive = false;
       _activeHintText = null;
@@ -654,58 +743,122 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   /// Completa una pista y retorna los datos del servidor incluyendo coins_earned.
   /// Retorna null si falla, o un Map con success, raceCompleted, coins_earned.
-  Future<Map<String, dynamic>?> completeCurrentClue(String answer,
-      {String? clueId}) async {
+  ///
+  /// [clueId] DEBE pasarse siempre que esté disponible para evitar race conditions
+  /// con _currentClueIndex (puede cambiar por fetchClues concurrentes).
+    Future<Map<String, dynamic>?> completeCurrentClue(String answer,
+      {String? clueId, String? sessionId, String? challengeToken, Map<String, dynamic>? result}) async {
     String targetId;
 
     if (clueId != null) {
       targetId = clueId;
     } else {
-      if (_currentClueIndex >= _clues.length) return null;
+      if (_currentClueIndex >= _clues.length) {
+        debugPrint('⚠️ completeCurrentClue: _currentClueIndex ($_currentClueIndex) >= _clues.length (${_clues.length})');
+        return null;
+      }
       targetId = _clues[_currentClueIndex].id;
     }
 
     // --- ACTUALIZACIÓN OPTIMISTA ---
-    int localIndex = _clues.indexWhere((c) => c.id == targetId);
+    // FIX: Solo marcar la pista identificada por ID como completada.
+    // NO se desbloquea la siguiente pista en el cliente: el servidor es la
+    // única fuente de verdad para is_locked (via submit_clue_answer que escribe
+    // en user_clue_progress). El fetchClues(silent:true) posterior sincroniza
+    // el estado real desde el servidor de forma atómica.
+    final int localIndex = _clues.indexWhere((c) => c.id == targetId);
+    final int prevClueIndex = _currentClueIndex;
+    bool didOptimisticUpdate = false;
+
     if (localIndex != -1) {
+      debugPrint('[COMPLETE_CLUE] 🟢 Optimistic Update: Marking clue $localIndex (${targetId}) as completed');
       _clues[localIndex].isCompleted = true;
+      didOptimisticUpdate = true;
+      
       if (localIndex + 1 < _clues.length) {
+        debugPrint('[COMPLETE_CLUE] ➡️ Advancing currentClueIndex: $_currentClueIndex -> ${localIndex + 1}');
         _currentClueIndex = localIndex + 1;
+      } else {
+        debugPrint('[COMPLETE_CLUE] 🏁 Last clue reached or index at bounds');
       }
       notifyListeners();
+    } else {
+      debugPrint('[COMPLETE_CLUE] ⚠️ localIndex not found for id: $targetId');
     }
 
     try {
-      final data = await _gameService.completeClue(targetId, answer,
-          eventId: _currentEventId);
+      final data = sessionId != null
+          ? await _gameService.verifyAndCompleteMinigame(
+              sessionId: sessionId,
+              answer: answer,
+              challengeToken: challengeToken,
+              result: result,
+            )
+          : await _gameService.completeClue(targetId, answer,
+              eventId: _currentEventId);
 
-      if (data != null) {
-        // Success
-        // Success
-        // CRITICAL FIX: Only treat as Globally Completed if backend says so (raceCompletedGlobal)
-        // 'raceCompleted' in previous logic might have meant "User Finished".
-        // We rely on 'raceCompletedGlobal' which comes from the RPC.
+      // [FIX] Strict security: accept true (RPC Edge Function) or null + no error (legacy completeClue)
+      final isSuccess = data != null && 
+          (data['success'] == true || (data['success'] == null && !data.containsKey('error')));
+
+      if (isSuccess) {
         if (data['raceCompletedGlobal'] == true) {
           debugPrint("🏆 GLOBAL Race Completed confirmed by RPC!");
           _setRaceCompleted(true, 'Clue Completion (RPC)');
+        } else if (data['raceCompleted'] == true && data['raceCompletedGlobal'] != true) {
+          // Defense-in-depth: Edge Function should have called register_race_finisher
+          // server-side, but if it didn't propagate raceCompletedGlobal, try client-side.
+          debugPrint("🏁 raceCompleted=true but raceCompletedGlobal missing. Client-side fallback...");
+          final fallbackEventId = data['eventId']?.toString() ?? _currentEventId;
+          if (fallbackEventId != null) {
+            final rpcRes = await _gameService.registerFinisher(fallbackEventId);
+            if (rpcRes != null && rpcRes['success'] == true) {
+              data['raceCompletedGlobal'] = rpcRes['race_completed'];
+              data['prizeAmount'] = rpcRes['prize'];
+              data['position'] = rpcRes['position'];
+              if (rpcRes['race_completed'] == true) {
+                _setRaceCompleted(true, 'Clue Completion (Client Fallback)');
+              }
+            }
+          }
         } else {
           debugPrint(
               "👤 User finished clues, but Race is NOT globally finished yet.");
-          // Ensure we DO NOT set _isRaceCompleted = true here.
-          // The user should go to Waiting Room.
         }
 
-        await fetchClues(silent: true);
-        fetchLeaderboard();
+        // Fire-and-forget: confirmar estado desde el servidor con un respiro para el commit DB
+        // Aumentado a 800ms para asegurar que el trigger de unlock en DB haya terminado
+        Future.delayed(const Duration(milliseconds: 800), () async {
+          await fetchClues(silent: true);
+          // Retry if next clue is still locked but we know we advanced
+          if (_currentClueIndex < _clues.length && _clues[_currentClueIndex].isLocked) {
+             debugPrint("🔄 Next clue still locked, retrying fetch...");
+             await Future.delayed(const Duration(milliseconds: 1000));
+             await fetchClues(silent: true);
+          }
+        });
+        unawaited(fetchLeaderboard());
         return data;
-      } else {
-        return null;
       }
+
+      // RPC falló o devolvió un error: revertir estado optimista para reintentar
+      debugPrint('⚠️ completeCurrentClue: RPC failed, reverting optimistic state');
+      if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
+        _clues[localIndex].isCompleted = false;
+        _currentClueIndex = prevClueIndex;
+        notifyListeners();
+      }
+      unawaited(fetchClues(silent: true));
+      return data;
     } catch (e) {
       debugPrint('Error completing clue: $e');
-      // En caso de error de red, aún retornamos éxito local
-      // ya que la actualización optimista ya se hizo
-      return {'success': true, 'coins_earned': 0, 'error': e.toString()};
+      if (didOptimisticUpdate && localIndex != -1 && localIndex < _clues.length) {
+        _clues[localIndex].isCompleted = false;
+        _currentClueIndex = prevClueIndex;
+        notifyListeners();
+      }
+      unawaited(fetchClues(silent: true));
+      return null;
     }
   }
 
@@ -857,7 +1010,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
       debugPrint('GameProvider: Error initializing game: $e');
       return false;
     } finally {
-      _isLoading = false;
+  _isLoading = false;
       notifyListeners();
     }
   }
@@ -874,8 +1027,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
 
   /// Carga los datos de los minijuegos desde Supabase si no han sido cargados.
   Future<void> loadMinigameData() async {
-    if (_minigameCapitals.isNotEmpty && _minigameTFStatements.isNotEmpty)
-      return;
+    if (_isMinigameDataLoading) return;
 
     _isMinigameDataLoading = true;
     notifyListeners();
@@ -884,14 +1036,17 @@ class GameProvider extends ChangeNotifier implements IResettable {
       final results = await Future.wait([
         _gameService.fetchMinigameCapitals(),
         _gameService.fetchMinigameTrueFalse(),
+        _gameService.fetchMinigameChronologicalOrder(),
+        _gameService.fetchMinigameEmojiMovies(),
       ]);
 
-      _minigameCapitals = results[0] as List<Map<String, String>>;
-      final tfRaw = results[1] as List<Map<String, dynamic>>;
-      _minigameTFStatements = tfRaw;
+      _minigameCapitals = (results[0] as List).map((e) => Map<String, String>.from(e as Map)).toList();
+      _minigameTFStatements = (results[1] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      _minigameChronologicalEvents = (results[2] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      _minigameEmojiMovies = (results[3] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
       debugPrint(
-          'GameProvider: Loaded ${_minigameCapitals.length} capitals and ${_minigameTFStatements.length} TF statements.');
+          'GameProvider: Loaded ${_minigameCapitals.length} capitals, ${_minigameTFStatements.length} TF statements, ${_minigameChronologicalEvents.length} chrono events, and ${_minigameEmojiMovies.length} movie events.');
     } catch (e) {
       debugPrint('GameProvider: Error loading minigame data: $e');
     } finally {
@@ -904,6 +1059,7 @@ class GameProvider extends ChangeNotifier implements IResettable {
   void dispose() {
     stopLeaderboardUpdates();
     stopLivesSubscription();
+    _leaderboardDebouncer.dispose();
     super.dispose();
   }
 }

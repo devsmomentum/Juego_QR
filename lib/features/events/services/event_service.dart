@@ -66,7 +66,8 @@ class EventService {
                 event.spectatorConfig, // NEW: Persist spectator prices
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
-            'sponsor_id': event.sponsorId, // NEW
+            'sponsors_enabled': event.sponsorsEnabled,
+            'sponsors_selective': event.sponsorsSelective,
           })
           .select()
           .single();
@@ -168,7 +169,8 @@ class EventService {
                 event.spectatorConfig, // NEW: Persist spectator prices
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
-            'sponsor_id': event.sponsorId, // NEW
+            'sponsors_enabled': event.sponsorsEnabled,
+            'sponsors_selective': event.sponsorsSelective,
           })
           .eq('id', event.id)
           .select()
@@ -209,7 +211,32 @@ class EventService {
     }
   }
 
-  // Actualizar status del evento (for non-activation state changes like 'completed')
+  // Update ONLY store prices
+  Future<void> updateEventStorePrices(
+      String eventId, Map<String, int> prices) async {
+    try {
+      await _supabase
+          .from('events')
+          .update({'store_prices': prices}).eq('id', eventId);
+    } catch (e) {
+      debugPrint('Error updating store prices: $e');
+      rethrow;
+    }
+  }
+
+  // Update ONLY spectator config
+  Future<void> updateEventSpectatorConfig(
+      String eventId, Map<String, dynamic> config) async {
+    try {
+      await _supabase
+          .from('events')
+          .update({'spectator_config': config}).eq('id', eventId);
+    } catch (e) {
+      debugPrint('Error updating spectator config: $e');
+      rethrow;
+    }
+  }
+
   Future<void> updateEventStatus(String eventId, String status) async {
     try {
       await _supabase
@@ -248,9 +275,8 @@ class EventService {
         query = query.eq('type', type);
       }
 
-      // Default sort: Newest first (Descending Date)
-      // This ensures "Finished" events and active ones are ordered by creation/start date
-      final response = await query.order('date', ascending: false);
+      // Default sort (Requested): Newest by Creation Date first
+      final response = await query.order('created_at', ascending: false);
       final List<dynamic> eventsData = response as List;
 
       // 2. Fetch participant counts for these events
@@ -291,28 +317,36 @@ class EventService {
       title: data['title'] as String,
       description: (data['description'] ?? '') as String,
       locationName: (data['location_name'] ?? '') as String,
-      latitude: (data['latitude'] is double)
-          ? data['latitude']
-          : (double.tryParse(data['latitude'].toString()) ?? 0.0),
-      longitude: (data['longitude'] is double)
-          ? data['longitude']
-          : (double.tryParse(data['longitude'].toString()) ?? 0.0),
+      latitude: (data['latitude'] is num)
+          ? (data['latitude'] as num).toDouble()
+          : 0.0,
+      longitude: (data['longitude'] is num)
+          ? (data['longitude'] as num).toDouble()
+          : 0.0,
       date: DateTime.parse(data['date'] as String),
       createdByAdminId: (data['created_by_admin_id'] ?? '') as String,
       imageUrl: (data['image_url'] ?? '') as String,
-      clue: (data['clue'] ?? '¡Pista desbloqueada!') as String,
+      clue: (data['clue'] ?? '') as String,
       maxParticipants: (data['max_participants'] ?? 0) as int,
       pin: (data['pin'] ?? '') as String,
-      status:
-          (data['status'] ?? 'pending') as String, // FIX: Map status from DB
+      status: (data['status'] ?? 'pending') as String,
       winnerId: data['winner_id'] as String?,
       type: data['type'] ?? 'on_site',
-      entryFee: (data['entry_fee'] as num?)?.toInt() ??
-          0, // NEW: Read persistence fix
+      entryFee: (data['entry_fee'] as num?)?.toInt() ?? 0,
       currentParticipants: (data['current_participants'] as num?)?.toInt() ?? 0,
       configuredWinners: (data['configured_winners'] as num?)?.toInt() ?? 3,
-      pot: (data['pot'] as num?)?.toInt() ?? 0, // FIX: Map pot from DB
-      sponsorId: data['sponsor_id'] as String?, // NEW
+      pot: (data['pot'] as num?)?.toInt() ?? 0,
+      spectatorConfig: data['spectator_config'] != null
+          ? Map<String, dynamic>.from(data['spectator_config'])
+          : {},
+      betTicketPrice: (data['bet_ticket_price'] as num?)?.toInt() ?? 100,
+      sponsorsEnabled: (data['sponsors_enabled'] as bool?) ?? false,
+        sponsorsSelective: (data['sponsors_selective'] as bool?) ?? false,
+      storePrices: data['store_prices'] != null
+          ? Map<String, int>.from(
+              data['store_prices'].map((k, v) => MapEntry(k, v as int)))
+          : {},
+      isAutomated: (data['is_automated'] as bool?) ?? false,
     );
   }
 
@@ -343,14 +377,9 @@ class EventService {
           .from('clues')
           .update({
             'title': clue.title,
-            'puzzle_type': (clue is OnlineClue)
-                ? (clue as OnlineClue).puzzleType.toString().split('.').last
-                : null,
-            'riddle_question': (clue is OnlineClue)
-                ? (clue as OnlineClue).riddleQuestion
-                : null,
-            'riddle_answer':
-                (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
+            'puzzle_type': clue.puzzleType.toString().split('.').last,
+            'riddle_question': clue.riddleQuestion,
+            'riddle_answer': clue.riddleAnswer,
             'xp_reward': clue.xpReward,
             'latitude': clue.latitude,
             'longitude': clue.longitude,
@@ -389,13 +418,9 @@ class EventService {
         'title': clue.title,
         'hint': clue.hint,
         'type': clue.type.toString().split('.').last,
-        'puzzle_type': (clue is OnlineClue)
-            ? (clue as OnlineClue).puzzleType.toString().split('.').last
-            : null,
-        'riddle_question':
-            (clue is OnlineClue) ? (clue as OnlineClue).riddleQuestion : null,
-        'riddle_answer':
-            (clue is OnlineClue) ? (clue as OnlineClue).riddleAnswer : null,
+        'puzzle_type': clue.puzzleType.toString().split('.').last,
+        'riddle_question': clue.riddleQuestion,
+        'riddle_answer': clue.riddleAnswer,
         'xp_reward': clue.xpReward,
         'sequence_index': clue.sequenceIndex > 0
             ? clue.sequenceIndex

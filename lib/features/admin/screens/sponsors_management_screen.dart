@@ -42,20 +42,23 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
   }
 
   Future<void> _deleteSponsor(Sponsor sponsor) async {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Eliminar Patrocinador',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: cardColor,
+        title: Text('Eliminar Patrocinador',
+            style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
         content: Text(
           '¿Estás seguro de que deseas eliminar a "${sponsor.name}"?\n\nEsta acción no se puede deshacer.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: textColor?.withOpacity(0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar', style: TextStyle(color: textColor?.withOpacity(0.6))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -89,29 +92,30 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.darkGradient,
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const SponsorDetailScreen(),
+            ),
+          );
+          _loadSponsors();
+        },
+        backgroundColor: AppTheme.lGoldAction,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text("Nuevo Patrocinador",
+            style: TextStyle(fontWeight: FontWeight.bold)),
       ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SponsorDetailScreen(),
-              ),
-            );
-            _loadSponsors();
-          },
-          backgroundColor: AppTheme.accentGold,
-          icon: const Icon(Icons.add, color: Colors.black),
-          label: const Text("Nuevo Patrocinador",
-              style:
-                  TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        ),
-        body: Column(
+      body: Container(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
@@ -119,19 +123,19 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Expanded(
+                   Expanded(
                     child: Text(
                       "Gestionar Patrocinadores",
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: textColor,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    icon: const Icon(Icons.refresh, color: AppTheme.lGoldAction),
                     onPressed: _isLoading ? null : _loadSponsors,
                   ),
                 ],
@@ -139,7 +143,7 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator(color: AppTheme.lGoldAction))
                   : _sponsors.isEmpty
                       ? Center(
                           child: Column(
@@ -147,12 +151,12 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
                             children: [
                               Icon(Icons.business_center_outlined,
                                   size: 64,
-                                  color: Colors.white.withOpacity(0.3)),
+                                  color: textColor?.withOpacity(0.2)),
                               const SizedBox(height: 16),
-                              const Text(
+                              Text(
                                 "No hay patrocinadores registrados",
                                 style: TextStyle(
-                                    color: Colors.white70, fontSize: 18),
+                                    color: textColor?.withOpacity(0.5), fontSize: 18),
                               ),
                             ],
                           ),
@@ -175,6 +179,10 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
   }
 
   Widget _buildSponsorCard(Sponsor sponsor) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final primaryColor = Theme.of(context).primaryColor;
+    final cardColor = Theme.of(context).cardTheme.color;
+
     Color planColor;
     switch (sponsor.planType.toLowerCase()) {
       case 'oro':
@@ -191,101 +199,116 @@ class _SponsorsManagementScreenState extends State<SponsorsManagementScreen> {
     }
 
     return Card(
-      elevation: 4,
-      color: AppTheme.cardBg,
+      elevation: 2,
+      color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
             color: sponsor.isActive
-                ? AppTheme.accentGold.withOpacity(0.3)
-                : Colors.transparent),
+                ? AppTheme.lGoldAction.withOpacity(0.3)
+                : Theme.of(context).dividerColor.withOpacity(0.05)),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: Colors.black26,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white10),
-            image: sponsor.logoUrl != null
-                ? DecorationImage(
-                    image: NetworkImage(sponsor.logoUrl!), fit: BoxFit.cover)
-                : null,
-          ),
-          child: sponsor.logoUrl == null
-              ? const Icon(Icons.image_not_supported, color: Colors.white24)
-              : null,
-        ),
-        title: Row(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Logo
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Theme.of(context).dividerColor.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
+                image: sponsor.logoUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(sponsor.logoUrl!), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: sponsor.logoUrl == null
+                  ? Icon(Icons.business, color: textColor?.withOpacity(0.25))
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            // Info
             Expanded(
-              child: Text(
-                sponsor.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            if (sponsor.isActive)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.successGreen),
-                ),
-                child: const Text("ACTIVO",
-                    style: TextStyle(
-                        color: AppTheme.successGreen,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
-              ),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: planColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: planColor),
-                ),
-                child: Text(
-                  sponsor.planType.toUpperCase(),
-                  style: TextStyle(
-                      color: planColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit, color: AppTheme.accentGold),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SponsorDetailScreen(sponsor: sponsor),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          sponsor.name,
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (sponsor.isActive) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successGreen.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text("ACTIVO",
+                              style: TextStyle(
+                                  color: AppTheme.successGreen,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ]
+                    ],
                   ),
-                );
-                _loadSponsors();
-              },
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: planColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: planColor.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      sponsor.planType.toUpperCase(),
+                      style: TextStyle(
+                          color: planColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              onPressed: () => _deleteSponsor(sponsor),
+            // Actions
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  iconSize: 20,
+                  icon: const Icon(Icons.edit, color: AppTheme.lGoldAction),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SponsorDetailScreen(sponsor: sponsor),
+                      ),
+                    );
+                    _loadSponsors();
+                  },
+                ),
+                IconButton(
+                  iconSize: 20,
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  onPressed: () => _deleteSponsor(sponsor),
+                ),
+              ],
             ),
           ],
         ),

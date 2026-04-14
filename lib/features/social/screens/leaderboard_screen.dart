@@ -173,10 +173,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.emoji_events,
-                      color: Colors.white,
-                      size: 32,
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.emoji_events,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -228,19 +232,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             // Rest of the leaderboard
             if (displayLeaderboard.isNotEmpty)
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: displayLeaderboard.length,
-                itemBuilder: (context, index) {
-                  final player = displayLeaderboard[index];
-                  return LeaderboardCard(
-                    player: player,
-                    rank: index + 1,
-                    isTopThree: index < 3,
-                  );
-                },
+              child: RefreshIndicator(
+                onRefresh: () => gameProvider.fetchLeaderboard(),
+                color: AppTheme.accentGold,
+                backgroundColor: currentSurface,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: displayLeaderboard.length,
+                  itemBuilder: (context, index) {
+                    final player = displayLeaderboard[index];
+                    return LeaderboardCard(
+                      player: player,
+                      rank: index + 1,
+                      isTopThree: index < 3,
+                    );
+                  },
                 ),
               ),
+            ),
             ],
           ),
         ),

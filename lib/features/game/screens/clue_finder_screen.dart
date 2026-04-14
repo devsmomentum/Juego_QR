@@ -38,6 +38,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
   // Race-end listener
   GameProvider? _gameProviderRef;
   bool _isNavigatingToWinner = false;
+  Timer? _raceStatusPollingTimer;
 
   // Animations
   late AnimationController _pulseController;
@@ -69,13 +70,31 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
       _gameProviderRef!.addListener(_onGameProviderChange);
       // Immediate check in case the race already ended
       _onGameProviderChange();
+
+      // Independent polling: ensures we detect event end even if Realtime misses it
+      _raceStatusPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!mounted || _isNavigatingToWinner) return;
+        _gameProviderRef?.checkRaceStatus();
+      });
     });
   }
 
   void _showClueScannerTutorial() async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_CLUE_SCANNER') ?? false;
     if (hasSeen) return;
+
+    // Evitar mostrar si está congelado
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (gameProvider.isFrozen) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _showClueScannerTutorial();
+      });
+      return;
+    }
 
     final steps =
         MasterTutorialContent.getStepsForSection('CLUE_SCANNER', context);
@@ -220,6 +239,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
 
   @override
   void dispose() {
+    _raceStatusPollingTimer?.cancel();
     _gameProviderRef?.removeListener(_onGameProviderChange);
     _positionStreamSubscription?.cancel();
     _pulseController.dispose();
@@ -256,6 +276,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
+        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
         builder: (_) => WinnerCelebrationScreen(
           eventId: gameProvider.currentEventId ?? '',
           playerPosition: position,
@@ -268,23 +289,20 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
 
   // --- LOGIC ---
 
-  void _handleScannedCode(String scannedCode) {
-    // Expected format: Simple ID match or specific prefix
-    // For now, we trust the scanner returned something useful.
-    // If the clue has a specific QR code string, we match it.
-    // If not, we assume ANY valid scan of the clue ID works.
-
+  void _handleScannedCode(String scannedCode) async {
+    // Expected format: Simple ID match, specific prefix, or station token (hex)
+    
     bool isValid = false;
 
     // DEV: Simulated scan bypasses validation
     if (scannedCode == "DEV_SKIP_CODE") {
       isValid = true;
     }
-    // 1. Check if it matches clue ID explicitly
+    // Legacy: Check if it matches clue ID explicitly
     else if (scannedCode.contains(widget.clue.id)) {
       isValid = true;
     }
-    // 2. Check if it matches the stored expected QR code (if any)
+    // Legacy: Check if it matches the stored expected QR code (if any)
     else if (widget.clue.qrCode != null && widget.clue.qrCode!.isNotEmpty) {
       if (scannedCode == widget.clue.qrCode) isValid = true;
     }
@@ -564,7 +582,7 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         )
-                      : AppTheme.mainGradient(context),
+                      : AppTheme.darkGradient,
                 ),
               ),
             ),
@@ -737,6 +755,51 @@ class _ClueFinderScreenState extends State<ClueFinderScreen>
                                     ],
                                   ),
                                 ),
+                                if (_temperatureStatus == "CONGELADO")
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 80, left: 30, right: 30),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.4),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.cyanAccent.withOpacity(0.3),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.cyanAccent.withOpacity(0.05),
+                                            blurRadius: 10,
+                                          )
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.cyanAccent.withOpacity(0.8)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Expanded(
+                                            child: Text(
+                                              "Buscando señal GPS... Esto puede tardar unos segundos dependiendo de tu ubicación.",
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 // NEW: Proximity Help Button for users with GPS issues
                                 if (!showInput)
                                   Padding(

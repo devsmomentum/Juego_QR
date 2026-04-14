@@ -12,7 +12,8 @@ import '../../mall/providers/store_provider.dart';
 import '../../mall/models/mall_store.dart';
 import '../services/event_domain_service.dart';
 import '../../mall/models/power_item.dart'; // NEW
-import '../models/sponsor.dart';
+import '../../../core/services/app_config_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/sponsor_service.dart';
 
 class EventCreationProvider extends ChangeNotifier {
@@ -31,8 +32,9 @@ class EventCreationProvider extends ChangeNotifier {
   String _eventType = 'on_site'; // 'on_site' or 'online'
   int _configuredWinners = 3; // Default 3 winners
   int _betTicketPrice = 100; // NEW: Default betting price
-  String? _sponsorId; // Linked Sponsor ID
-  List<Sponsor> _sponsors = []; // Available sponsors cache
+  bool _sponsorsEnabled = false; // Pool-based sponsor rotation flag
+  bool _sponsorsSelective = false; // Only selected sponsors for this event
+  final List<String> _selectedSponsorIds = [];
 
   // Imágenes
   XFile? _selectedImage;
@@ -47,6 +49,9 @@ class EventCreationProvider extends ChangeNotifier {
 
   // Spectator Prices (All Modes)
   Map<String, int> _spectatorPrices = {};
+
+  // Player Store Prices (Online Mode)
+  Map<String, int> _playerPrices = {};
 
   // Control
   bool _isLoading = false;
@@ -72,12 +77,14 @@ class EventCreationProvider extends ChangeNotifier {
   int get currentClueIndex => _currentClueIndex;
   List<Map<String, dynamic>> get pendingStores => _pendingStores;
   Map<String, int> get spectatorPrices => _spectatorPrices;
+  Map<String, int> get playerPrices => _playerPrices;
   bool get isLoading => _isLoading;
   String get eventId => _eventId;
   bool get isFormValid => _isFormValid;
   String get eventType => _eventType;
-  String? get sponsorId => _sponsorId;
-  List<Sponsor> get sponsors => _sponsors;
+  bool get sponsorsEnabled => _sponsorsEnabled;
+  bool get sponsorsSelective => _sponsorsSelective;
+  List<String> get selectedSponsorIds => List.unmodifiable(_selectedSponsorIds);
 
   // --- Initializers ---
 
@@ -99,32 +106,99 @@ class EventCreationProvider extends ChangeNotifier {
       _eventType = event.type;
       _configuredWinners = event.configuredWinners;
       _betTicketPrice = event.betTicketPrice; // NEW
-      _sponsorId = event.sponsorId; // NEW
+      _sponsorsEnabled = event.sponsorsEnabled;
+      _sponsorsSelective = event.sponsorsSelective;
       // Note: Image and Clues are not fully loaded here in original code either
     } else {
       resetForm();
+      // Try to load automation defaults for new events
+      loadAutomationDefaults();
     }
     checkFormValidity();
-    // Start loading sponsors if not loaded
-    if (_sponsors.isEmpty) loadSponsors();
   }
 
   // --- Sponsor Logic ---
 
-  Future<void> loadSponsors() async {
-    try {
-      final service = SponsorService();
-      _sponsors = await service.getSponsors();
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Error loading sponsors: $e");
+  void setSponsorsEnabled(bool value) {
+    _sponsorsEnabled = value;
+    if (!value) {
+      _sponsorsSelective = false;
     }
+    notifyListeners();
   }
 
-  void setSponsorId(String? id) {
-    _sponsorId = id;
-    checkFormValidity();
+  void setSponsorsSelective(bool value) {
+    if (!_sponsorsEnabled) return;
+    _sponsorsSelective = value;
     notifyListeners();
+  }
+
+  void setSelectedSponsorIds(List<String> sponsorIds) {
+    _selectedSponsorIds
+      ..clear()
+      ..addAll(sponsorIds);
+    notifyListeners();
+  }
+
+  void toggleSponsorSelection(String sponsorId, bool selected) {
+    if (selected) {
+      if (!_selectedSponsorIds.contains(sponsorId)) {
+        _selectedSponsorIds.add(sponsorId);
+      }
+    } else {
+      _selectedSponsorIds.remove(sponsorId);
+    }
+    notifyListeners();
+  }
+
+  /// Loads default values from the Online Automation Dashboard (AppConfigService).
+  Future<void> loadAutomationDefaults() async {
+    try {
+      final configService =
+          AppConfigService(supabaseClient: Supabase.instance.client);
+      final settings = await configService.getAutoEventSettings();
+
+      if (settings.isNotEmpty) {
+        // Only override if we are in Online mode or just started
+        if (_eventType == 'online' || _title.isEmpty) {
+          if (settings['max_players'] != null) {
+            _maxParticipants = int.tryParse(settings['max_players'].toString()) ??
+                _maxParticipants;
+          }
+          if (settings['max_fee'] != null) {
+            _entryFee =
+                int.tryParse(settings['max_fee'].toString()) ?? _entryFee;
+          }
+
+          // Load Player Prices (Store)
+          if (settings['player_prices'] != null &&
+              settings['player_prices'] is Map) {
+            final prices = settings['player_prices'] as Map<String, dynamic>;
+            prices.forEach((key, value) {
+              _playerPrices[key] = int.tryParse(value.toString()) ??
+                  _playerPrices[key] ??
+                  0;
+            });
+          }
+
+          // Load Spectator Prices
+          if (settings['spectator_prices'] != null &&
+              settings['spectator_prices'] is Map) {
+            final prices = settings['spectator_prices'] as Map<String, dynamic>;
+            prices.forEach((key, value) {
+              _spectatorPrices[key] = int.tryParse(value.toString()) ??
+                  _spectatorPrices[key] ??
+                  0;
+            });
+          }
+
+          notifyListeners();
+          checkFormValidity();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading automation defaults: $e");
+    }
   }
 
   void resetForm() {
@@ -140,7 +214,9 @@ class EventCreationProvider extends ChangeNotifier {
     _selectedDate = DateTime.now();
     _configuredWinners = 3;
     _betTicketPrice = 100; // Reset
-    _sponsorId = null;
+    _sponsorsEnabled = false;
+    _sponsorsSelective = false;
+    _selectedSponsorIds.clear();
     _selectedImage = null;
     _numberOfClues = 0;
     _clueForms = [];
@@ -157,15 +233,23 @@ class EventCreationProvider extends ChangeNotifier {
       _spectatorPrices[item.id] = item.cost;
     }
 
+    // Initialize default player (store) prices
+    _playerPrices = {};
+    for (var item in PowerItem.getShopItems()) {
+      _playerPrices[item.id] = item.cost;
+    }
+
     notifyListeners();
-    // Ensure sponsors are loaded for new forms too
-    if (_sponsors.isEmpty) loadSponsors();
   }
 
   // --- Setters & Logic ---
 
   void setEventType(String value) {
+    final oldType = _eventType;
     _eventType = value;
+    if (value == 'online' && oldType != 'online') {
+      loadAutomationDefaults();
+    }
     checkFormValidity();
     notifyListeners();
   }
@@ -221,6 +305,7 @@ class EventCreationProvider extends ChangeNotifier {
     if (value > 20) value = 20;
     if (value < 0) value = 0;
     _numberOfClues = value;
+    checkFormValidity(); // Update validity if they set it back to 0
     notifyListeners();
   }
 
@@ -360,6 +445,7 @@ class EventCreationProvider extends ChangeNotifier {
     } else {
       _clueForms = [];
     }
+    checkFormValidity(); // Trigger validity update when forms are generated
     notifyListeners();
   }
 
@@ -441,7 +527,15 @@ class EventCreationProvider extends ChangeNotifier {
   void setSpectatorPrice(String powerId, int price) {
     if (price < 0) return;
     _spectatorPrices[powerId] = price;
-    notifyListeners();
+    // No notifyListeners() — TextFormField manages its own display.
+    // The map is updated synchronously and read at submit time.
+  }
+
+  // --- Player Store Prices Logic ---
+  void setPlayerPrice(String powerId, int price) {
+    if (price < 0) return;
+    _playerPrices[powerId] = price;
+    // No notifyListeners() — same reason as above.
   }
 
   // --- Validation ---
@@ -461,6 +555,9 @@ class EventCreationProvider extends ChangeNotifier {
       if (_pin.length != 6) isValid = false;
       if (_latitude == null || _longitude == null) isValid = false;
     }
+
+    // CRITICAL: At least one minigame/clue required
+    if (_clueForms.isEmpty || _numberOfClues <= 0) isValid = false;
 
     // Validate key fields for all modes
     if (_entryFee == null) isValid = false;
@@ -486,7 +583,11 @@ class EventCreationProvider extends ChangeNotifier {
     // Final check
     checkFormValidity();
     if (!_isFormValid) {
-      onError("Faltan campos por completar");
+      if (_clueForms.isEmpty || _numberOfClues <= 0) {
+        onError("Debes agregar al menos un minijuego/pista");
+      } else {
+        onError("Faltan campos por completar");
+      }
       return false;
     }
 
@@ -514,7 +615,8 @@ class EventCreationProvider extends ChangeNotifier {
         configuredWinners: _configuredWinners,
         spectatorConfig: _spectatorPrices,
         betTicketPrice: _betTicketPrice, // NEW
-        sponsorId: _sponsorId, // NEW
+        sponsorsEnabled: _sponsorsEnabled,
+        sponsorsSelective: _sponsorsSelective,
       );
 
       // Update PIN state for UI feedback (domain service may have auto-generated it)
@@ -525,6 +627,15 @@ class EventCreationProvider extends ChangeNotifier {
       // 1. Create Event
       createdEventId =
           await eventProvider.createEvent(newEvent, _selectedImage);
+
+      // 1.1 Create event_sponsors when selective
+      if (createdEventId != null && _sponsorsEnabled && _sponsorsSelective) {
+        final sponsorService = SponsorService();
+        await sponsorService.setEventSponsors(
+          createdEventId,
+          _selectedSponsorIds,
+        );
+      }
 
       // 2. Create Clues
       if (createdEventId != null && _clueForms.isNotEmpty) {
@@ -539,14 +650,11 @@ class EventCreationProvider extends ChangeNotifier {
       // 3. Create Stores
       if (createdEventId != null) {
         if (_eventType == 'online') {
-          // Default Online Store via Domain Service
-          // Default Online Store via Domain Service
+          // Default Online Store via Domain Service – use configured player prices
           try {
             final defaultStore = EventDomainService.createDefaultOnlineStore(
               createdEventId,
-              // customPrices: _spectatorPrices, // OLD: Used to set store prices directly
-              // NEW: Store keeps default prices for Players. Spectators use spectator_config override.
-              customPrices: null,
+              customPrices: _playerPrices.isNotEmpty ? _playerPrices : null,
             );
             // We pass null for imageFile as we don't have one selected
             await storeProvider.createStore(defaultStore, null);

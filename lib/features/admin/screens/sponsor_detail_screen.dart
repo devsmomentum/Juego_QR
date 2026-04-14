@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../game/widgets/sponsor_banner.dart';
 import '../models/sponsor.dart';
 import '../services/sponsor_service.dart';
 
@@ -181,23 +182,38 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppTheme.darkGradient,
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: Theme.of(context).dividerColor.withOpacity(0.05),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
       ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppTheme.lGoldAction, width: 2),
+      ),
+      labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7)),
+      hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
+    );
+
+    return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          title: Text(
-            widget.sponsor == null
-                ? "Nuevo Patrocinador"
-                : "Editar Patrocinador",
-            style: const TextStyle(color: Colors.white),
-          ),
-          iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        elevation: 0,
+        title: Text(
+          widget.sponsor == null
+              ? "Nuevo Patrocinador"
+              : "Editar Patrocinador",
+          style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color),
         ),
+        iconTheme: IconThemeData(color: Theme.of(context).textTheme.bodyMedium?.color),
+      ),
         body: _isSaving
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
@@ -212,11 +228,11 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _nameController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color),
+                        decoration: inputDecoration.copyWith(
                           labelText: "Nombre de la Marca/Patrocinador",
                           hintText: "Ej. Coca-Cola, Nike...",
-                          prefixIcon: Icon(Icons.abc, color: Colors.white60),
+                          prefixIcon: Icon(Icons.abc, color: Theme.of(context).textTheme.bodyMedium?.color),
                         ),
                         validator: (value) => value == null || value.isEmpty
                             ? 'Por favor ingresa un nombre'
@@ -226,12 +242,12 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
 
                       DropdownButtonFormField<String>(
                         value: _selectedPlan,
-                        dropdownColor: AppTheme.dSurface2,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
+                        dropdownColor: Theme.of(context).cardTheme.color,
+                        style: TextStyle(color: Theme.of(context).textTheme.displayLarge?.color),
+                        decoration: inputDecoration.copyWith(
                           labelText: "Plan",
                           prefixIcon:
-                              Icon(Icons.star, color: AppTheme.accentGold),
+                              Icon(Icons.star, color: AppTheme.lGoldAction),
                         ),
                         items: const [
                           DropdownMenuItem(
@@ -252,14 +268,14 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                           Switch(
                             value: _isActive,
                             onChanged: (val) => setState(() => _isActive = val),
-                            activeColor: AppTheme.successGreen,
+                            activeColor: AppTheme.lGoldAction,
                           ),
                           const SizedBox(width: 8),
                           Text(
                             _isActive
                                 ? "Activo (Visible en el juego)"
                                 : "Inactivo",
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
                           ),
                         ],
                       ),
@@ -269,9 +285,9 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                       // --- Images ---
                       _buildSectionTitle("Imágenes y Assets"),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         "Sube las imágenes correspondientes para personalizar la experiencia.",
-                        style: TextStyle(color: Colors.white60, fontSize: 13),
+                        style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 13),
                       ),
                       const SizedBox(height: 24),
 
@@ -282,6 +298,7 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                         file: _logoFile,
                         bytes: _logoBytes,
                         currentUrl: widget.sponsor?.logoUrl,
+                        context: context,
                       ),
                       const SizedBox(height: 24),
 
@@ -291,6 +308,19 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                         type: 'banner',
                         file: _bannerFile,
                         bytes: _bannerBytes,
+                        currentUrl: widget.sponsor?.bannerUrl,
+                        context: context,
+                      ),
+                      const SizedBox(height: 12),
+
+                      _buildFormatGuidelines(),
+                      const SizedBox(height: 16),
+
+                      _buildBannerPreview(
+                        context: context,
+                        name: _nameController.text.trim(),
+                        bytes: _bannerBytes,
+                        file: _bannerFile,
                         currentUrl: widget.sponsor?.bannerUrl,
                       ),
                       const SizedBox(height: 32),
@@ -345,6 +375,7 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                         file: _assetFile,
                         bytes: _assetBytes,
                         currentUrl: widget.sponsor?.minigameAssetUrl,
+                        context: context,
                       ),
 
                       const SizedBox(height: 48),
@@ -357,8 +388,8 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                           icon: const Icon(Icons.save),
                           label: const Text("GUARDAR PATROCINADOR"),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.accentGold,
-                            foregroundColor: Colors.black,
+                            backgroundColor: AppTheme.lGoldAction,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             textStyle: const TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.bold),
@@ -370,7 +401,6 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                   ),
                 ),
               ),
-      ),
     );
   }
 
@@ -380,13 +410,13 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: AppTheme.accentGold,
+          style: TextStyle(
+            color: AppTheme.lGoldAction,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const Divider(color: Colors.white24),
+        Divider(color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ],
     );
   }
@@ -398,15 +428,16 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
     XFile? file,
     Uint8List? bytes,
     String? currentUrl,
+    required BuildContext context,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: Theme.of(context).textTheme.displayLarge?.color, fontWeight: FontWeight.bold)),
         Text(description,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 12)),
         const SizedBox(height: 12),
         InkWell(
           onTap: () => _pickImage(type),
@@ -415,10 +446,10 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
             height: 150,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.black26,
+              color: Theme.of(context).dividerColor.withOpacity(0.02),
               borderRadius: BorderRadius.circular(12),
               border:
-                  Border.all(color: Colors.white24, style: BorderStyle.solid),
+                  Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1), style: BorderStyle.solid),
             ),
             child: bytes != null
                 ? ClipRRect(
@@ -441,17 +472,149 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.add_photo_alternate,
-                                  color: Colors.white54, size: 40),
+                              Icon(Icons.add_photo_alternate,
+                                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.3), size: 40),
                               const SizedBox(height: 8),
                               Text("Toca para subir imagen",
                                   style: TextStyle(
-                                      color: Colors.white.withOpacity(0.5))),
+                                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5))),
                             ],
                           ),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildFormatGuidelines() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.lGoldAction.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            "FORMATOS RECOMENDADOS",
+            style: TextStyle(
+              color: AppTheme.lGoldAction,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              letterSpacing: 1.1,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Banner: 1200x260 px (ratio 4.6:1), PNG o WebP sin compresion agresiva.",
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          SizedBox(height: 4),
+          Text(
+            "Logo: 512x512 px, PNG con fondo transparente para mejor legibilidad.",
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          SizedBox(height: 4),
+          Text(
+            "Minijuego: PNG 64x64 px transparente (obligatorio).",
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBannerPreview({
+    required BuildContext context,
+    required String name,
+    Uint8List? bytes,
+    XFile? file,
+    String? currentUrl,
+  }) {
+    final textColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final ImageProvider? previewProvider = _buildPreviewImageProvider(
+      bytes: bytes,
+      file: file,
+      currentUrl: currentUrl,
+    );
+
+    if (previewProvider == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Vista previa del banner",
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 86,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+              color: Theme.of(context).cardTheme.color,
+            ),
+            child: Text(
+              "Sube un banner para ver la previsualizacion",
+              style: TextStyle(color: textColor?.withOpacity(0.6), fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final previewSponsor = (widget.sponsor ?? Sponsor(
+      id: 'preview',
+      name: name.isEmpty ? 'Marca' : name,
+      planType: 'oro',
+      isActive: true,
+      createdAt: DateTime.now(),
+    )).copyWith(
+      name: name.isEmpty ? 'Marca' : name,
+      bannerUrl: null,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Vista previa del banner",
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SponsorBanner(
+          sponsor: previewSponsor,
+          bannerImageOverride: previewProvider,
+        ),
+      ],
+    );
+  }
+
+  ImageProvider? _buildPreviewImageProvider({
+    Uint8List? bytes,
+    XFile? file,
+    String? currentUrl,
+  }) {
+    if (bytes != null) return MemoryImage(bytes);
+    if (file != null) {
+      if (kIsWeb) {
+        return NetworkImage(file.path);
+      }
+      return FileImage(File(file.path));
+    }
+    if (currentUrl != null && currentUrl.isNotEmpty) {
+      return NetworkImage(currentUrl);
+    }
+    return null;
   }
 }

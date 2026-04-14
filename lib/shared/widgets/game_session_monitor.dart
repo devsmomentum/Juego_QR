@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../features/auth/providers/player_provider.dart';
 import '../../features/game/providers/game_provider.dart';
+import '../../features/game/providers/event_provider.dart';
 import '../utils/global_keys.dart';
 import '../../features/game/screens/scenarios_screen.dart';
 import '../models/player.dart';
@@ -62,15 +63,44 @@ class _GameSessionMonitorState extends State<GameSessionMonitor> {
       debugPrint("   - Curr GP ID: null");
       debugPrint("   - Current Playing Event: $currentPlayingEventId");
       debugPrint("   - Race Completed: ${gameProvider.isRaceCompleted}");
+      debugPrint("   - Voluntary Exit: ${gameProvider.isVoluntaryExit}");
 
+      // VOLUNTARY EXIT: The player chose to leave via the exit dialog.
+      // Do NOT show the "admin kicked you" message.
+      if (gameProvider.isVoluntaryExit) {
+        debugPrint(
+            "🕒 GameSessionMonitor: ✅ Voluntary exit detected. Skipping kick.");
+        gameProvider.clearVoluntaryExit();
       // GRACE PERIOD: If the race is completed, this is a legitimate transition
       // (game_players.status changed to 'completed'), NOT a session loss.
       // Do NOT kick the player — let the race completion flow handle navigation.
-      if (gameProvider.isRaceCompleted) {
+      } else if (gameProvider.isRaceCompleted) {
         debugPrint(
             "🕒 GameSessionMonitor: ⚠️ GP ID disappeared but race is COMPLETED. Ignoring (transition grace).");
       } else if (currentPlayingEventId != null) {
-        shouldKick = true;
+        if (!gameProvider.isGameActive) {
+          debugPrint(
+              "🕒 GameSessionMonitor: 🕒 Delaying session verification. Pending event might have been deleted.");
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            if (!mounted) return;
+            // Evaluamos si el evento ha sido eliminado por cancelación automática
+            // después de darle margen a Realtime para actualizar la lista.
+            final eventExists = context
+                .read<EventProvider>()
+                .events
+                .any((e) => e.id == currentPlayingEventId);
+            if (!eventExists) {
+              debugPrint(
+                  "🕒 GameSessionMonitor: ⚠️ Evento cancelado/eliminado. Ignorando kick automático para mantener el diálogo de cancelación.");
+            } else {
+              debugPrint(
+                  "🕒 GameSessionMonitor: ⚡ Iniciando expulsión diferida. El admin eliminó manualmente la inscripción.");
+              _handleGameReset(isBanned);
+            }
+          });
+        } else {
+          shouldKick = true;
+        }
       }
     }
 

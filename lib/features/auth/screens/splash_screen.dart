@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/player_provider.dart';
+import '../../admin/screens/dashboard-screen.dart';
+import '../../game/providers/connectivity_provider.dart';
+import '../../game/screens/game_mode_selector_screen.dart';
 import 'login_screen.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/version_check_service.dart';
+import '../../../shared/widgets/maintenance_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -53,13 +61,100 @@ class _SplashScreenState extends State<SplashScreen>
     // Cambiar frases cada 800ms
     _cyclePhrases();
 
-    // Navegar después de 4 segundos
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) {
+    // Navegar después de un breve delay para mostrar la marca
+    Future.delayed(const Duration(seconds: 4), () async {
+      if (!mounted) return;
+
+      final supabase = Supabase.instance.client;
+      final session = supabase.auth.currentSession;
+
+      if (session == null) {
+        // No hay sesión -> Login
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
+      } else {
+        // Hay sesión -> Intentar restaurar perfil y navegar
+        try {
+          final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+          
+          // 1. Asegurar que el perfil esté cargado
+          if (!playerProvider.isLoggedIn) {
+            await playerProvider.restoreSession(session.user.id);
+          }
+
+          if (!mounted) return;
+
+          final player = playerProvider.currentPlayer;
+          if (player == null) {
+            // Error recuperando perfil -> Login
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+            return;
+          }
+
+          // 2. Iniciar servicios necesarios
+          if (!mounted) return;
+          context.read<ConnectivityProvider>().startMonitoring();
+
+          // 2.5 Check maintenance mode
+          final versionService = VersionCheckService(Supabase.instance.client);
+          final versionStatus = await versionService.checkVersion();
+          if (!mounted) return;
+
+          if (versionStatus.maintenanceMode) {
+            if (player.hasAdminAccess) {
+              final shouldContinue = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => MaintenanceScreen(
+                    isAdmin: true,
+                    onContinueAsAdmin: () => Navigator.of(context).pop(true),
+                  ),
+                ),
+              );
+              if (!mounted) return;
+              if (shouldContinue != true) return;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+              );
+              return;
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MaintenanceScreen(isAdmin: false),
+                ),
+              );
+              return;
+            }
+          }
+
+          // 3. Resolver destino (Lógica similar a LoginScreen)
+          if (player.hasAdminAccess) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const DashboardScreen()),
+            );
+          } else {
+            // Para jugadores normales, vamos al selector de modo
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
+            );
+          }
+        } catch (e) {
+          debugPrint('SplashScreen: Error auto-logging: $e');
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          }
+        }
       }
     });
   }

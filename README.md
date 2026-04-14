@@ -65,4 +65,21 @@ lib/
 
 ---
 
+## 🔐 Seguridad - IP Hash Salt
+
+El sistema de anti-cheat usa un hash de IP (`ip_hash`) en el backend para bloquear abusos sin almacenar la IP real.
+Para proteger la privacidad, el hash se calcula con un salt secreto.
+
+**Variable requerida (Edge Functions):**
+- `IP_HASH_SALT`: cadena secreta usada para calcular `sha256(salt:ip)`.
+
+**Beneficios:**
+- Evita exponer la IP real en la base de datos.
+- Dificulta la reconstruccion de IPs si se filtra la DB.
+- Mantiene la capacidad de bloqueo por IP (anti-bot/multi-cuenta).
+
+**Nota:** Si cambias el `IP_HASH_SALT`, los hashes previos dejan de coincidir.
+
+---
+
 **¡Que comience la aventura! 🏆🎮**

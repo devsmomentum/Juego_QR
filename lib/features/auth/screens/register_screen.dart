@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
+import '../providers/profile_registration_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../../core/utils/error_handler.dart';
@@ -11,9 +12,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/widgets/loading_overlay.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
+import '../../admin/screens/dashboard-screen.dart';
+import '../../game/providers/connectivity_provider.dart';
+import '../../game/screens/game_mode_selector_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import '../../../core/services/terms_service.dart';
+import '../widgets/phone_input_field.dart';
 
 // RE-FORCE CLEAN VERSION - NO _isDarkMode
 class RegisterScreen extends StatefulWidget {
@@ -32,27 +37,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _cedulaController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  // Selectores para cédula y teléfono
+  // Selector para cédula
   String _selectedNationalityType = 'V'; // V o E
-  String _selectedPhonePrefix = '0412'; // Prefijo por defecto
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _acceptedTerms = false;
   bool _isRegistering = false;
 
-  // Opciones de nacionalidad
-  final List<String> _nationalityTypes = ['V', 'E'];
-
-  // Prefijos de operadoras venezolanas
-  final List<String> _phonePrefixes = [
-    '0412',
-    '0414',
-    '0424',
-    '0416',
-    '0426',
-    '0422'
-  ];
+  // Opciones de nacionalidad: V (Venezolano), E (Extranjero), P (Pasaporte/Internacional)
+  final List<String> _nationalityTypes = ['V', 'E', 'P'];
 
   // Lista básica de palabras prohibidas (se puede expandir)
   final List<String> _bannedWords = [
@@ -161,13 +155,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final cedulaToSend =
           '$_selectedNationalityType${_cedulaController.text.trim()}'
               .toUpperCase();
-      final phoneToSend =
-          _phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      final phoneProvider =
+          Provider.of<ProfileRegistrationProvider>(context, listen: false);
+      final phoneToSend = phoneProvider.formattedPhone ?? '';
       final emailToSend = _emailController.text.trim().toLowerCase();
       final nameToSend = _nameController.text.trim();
 
       debugPrint(
-          'REGISTER PAYLOAD: Cedula: $cedulaToSend, Phone: $phoneToSend, Email: $emailToSend');
+          'REGISTER PAYLOAD: Cedula: $cedulaToSend, Phone(E.164): $phoneToSend, Email: $emailToSend');
 
       await playerProvider.register(
         nameToSend,
@@ -214,12 +209,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Redirigir al Login tras un breve delay
-      await Future.delayed(const Duration(milliseconds: 1500));
+      // REGISTRATION SUCCESSFUL: Redirect always to Login wait for email
+      await Future.delayed(const Duration(milliseconds: 2500));
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
+      // Ensure logout if a session was auto-created (so they must login/verify)
+      if (playerProvider.isLoggedIn) {
+        await playerProvider.logout();
+      }
+
+      // Always return to LoginScreen to fulfill the "verification flow"
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
@@ -255,10 +257,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final baseUrl =
           dotenv.env['SUPABASE_URL']?.replaceAll(RegExp(r'/$'), '') ?? '';
+      final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
       // Usamos el servicio centralizado que maneja el enmascaramiento (Blob URLs)
       final termsService = getTermsService();
-      await termsService.launchTerms(baseUrl);
+      await termsService.launchTerms(baseUrl, anonKey);
     } catch (e) {
       debugPrint('Error al abrir términos: $e');
     }
@@ -325,39 +328,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
-      child: Scaffold(
-        backgroundColor: currentSurface0,
-        resizeToAvoidBottomInset: true,
-        body: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: isDarkMode
-                    ? Opacity(
-                        opacity: 0.7,
-                        child: Image.asset(
-                          'assets/images/hero.png',
+      child: Stack(
+        children: [
+          // 1. FIXED BACKGROUND
+          Positioned.fill(
+            child: Container(
+              color: dSurface0,
+              child: isDarkMode
+                  ? Image.asset(
+                      'assets/images/hero.png',
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      color: Colors.black.withOpacity(0.3),
+                      colorBlendMode: BlendMode.darken,
+                    )
+                  : Stack(
+                      children: [
+                        Image.asset(
+                          'assets/images/loginclaro.png',
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
+                          width: double.infinity,
+                          height: double.infinity,
                         ),
-                      )
-                    : Stack(
-                        children: [
-                          Image.asset(
-                            'assets/images/loginclaro.png',
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            width: double.infinity,
-                            height: double.infinity,
-                          ),
-                          Container(
-                            color: Colors.black.withOpacity(0.2),
-                          ),
-                        ],
-                      ),
-              ),
-              SafeArea(
+                        Container(color: Colors.black.withOpacity(0.2)),
+                      ],
+                    ),
+            ),
+          ),
+
+          // 2. TRANSPARENT SCAFFOLD
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            resizeToAvoidBottomInset: true,
+            body: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: SafeArea(
                 child: Column(
                   children: [
                     Padding(
@@ -393,6 +399,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Expanded(
                       child: Center(
                         child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24.0, vertical: 10.0),
                           child: Form(
@@ -471,22 +478,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                             color: Colors.white),
                                         keyboardType: TextInputType.number,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter
-                                              .digitsOnly,
-                                          LengthLimitingTextInputFormatter(9),
+                                           FilteringTextInputFormatter
+                                               .allow(RegExp(r'[0-9]')),
+                                           LengthLimitingTextInputFormatter(15),
                                         ],
                                         decoration: const InputDecoration(
-                                          labelText: 'CÉDULA/PASAPORTE',
+                                          labelText: 'CÉDULA / PASAPORTE',
                                           prefixIcon:
                                               Icon(Icons.badge_outlined),
                                           hintText: '12345678',
                                         ),
                                         validator: (value) {
-                                          if (value == null || value.isEmpty)
-                                            return 'Ingresa tu cédula';
-                                          if (value.length < 6)
-                                            return 'Mínimo 6 dígitos';
-                                          return null;
+                                           if (value == null || value.isEmpty)
+                                             return 'Ingresa tu identificación';
+                                           if (value.length < 5)
+                                             return 'Mínimo 5 caracteres';
+                                           return null;
                                         },
                                       ),
                                     ),
@@ -494,32 +501,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 const SizedBox(height: 16),
 
-                                // Teléfono
-                                TextFormField(
+                                // Teléfono con selector de código de país
+                                GamePhoneInputField(
                                   controller: _phoneController,
-                                  style: const TextStyle(color: Colors.white),
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(11),
-                                  ],
-                                  decoration: const InputDecoration(
-                                    labelText: 'TELÉFONO',
-                                    prefixIcon:
-                                        Icon(Icons.phone_android_outlined),
-                                    hintText: '04121234567',
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty)
-                                      return 'Ingresa tu teléfono';
-                                    if (value.length < 11)
-                                      return 'Ingresa el número completo (11 dígitos)';
-                                    final prefixRegex =
-                                        RegExp(r'^04(12|14|24|16|26|22)');
-                                    if (!prefixRegex.hasMatch(value))
-                                      return 'Prefijo inválido (ej: 0412...)';
-                                    return null;
-                                  },
                                 ),
                                 const SizedBox(height: 16),
 
@@ -530,17 +514,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   inputFormatters: [
                                     LengthLimitingTextInputFormatter(50),
                                     FilteringTextInputFormatter.allow(
-                                        RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]')),
+                                        RegExp(r'[a-zA-ZñÑáéíóúÁÉÍÓÚ0-9\s]')),
                                   ],
                                   decoration: const InputDecoration(
                                     labelText: 'NOMBRE COMPLETO',
                                     prefixIcon: Icon(Icons.person_outline),
                                   ),
                                   validator: (value) {
-                                    if (value == null || value.isEmpty)
+                                    if (value == null || value.trim().isEmpty) {
                                       return 'Ingresa tu nombre';
-                                    if (!value.trim().contains(' '))
+                                    }
+                                    if (!value.trim().contains(' ')) {
                                       return 'Ingresa Nombre y Apellido';
+                                    }
                                     final lowerName = value.toLowerCase();
                                     for (final word in _bannedWords) {
                                       if (lowerName.contains(word))
@@ -722,7 +708,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 // Términos y condiciones
                                 Theme(
                                   data: ThemeData(
-                                    unselectedWidgetColor: Colors.white30,
+                                    checkboxTheme: CheckboxThemeData(
+                                      side: const BorderSide(color: Colors.white, width: 2),
+                                    ),
                                   ),
                                   child: CheckboxListTile(
                                     contentPadding: EdgeInsets.zero,
@@ -835,9 +823,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

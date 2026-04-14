@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:map_hunter/features/game/models/event.dart';
 import 'package:provider/provider.dart';
 import 'package:map_hunter/features/auth/providers/player_provider.dart';
 import 'package:map_hunter/core/theme/app_theme.dart';
 import 'package:map_hunter/features/game/screens/clues_screen.dart';
 import 'package:map_hunter/features/game/screens/event_waiting_screen.dart';
+import 'package:map_hunter/features/game/screens/waiting_room_screen.dart';
 import 'package:map_hunter/features/game/providers/event_provider.dart';
 import 'package:map_hunter/features/game/providers/game_provider.dart';
+import '../../game/screens/winner_celebration_screen.dart';
 import '../../game/providers/spectator_feed_provider.dart'; // NEW
 import '../../game/screens/live_feed_screen.dart'; // NEW
 import '../../social/screens/inventory_screen.dart';
@@ -33,14 +37,46 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   late List<Widget> _screens;
+  GameEvent? _cachedEvent;
 
   // Debug logic
   bool _forceGameStart = false;
+
+  /// Indica que HomeScreen redirigió a WaitingRoom sin que el usuario
+  /// saliera del evento. En este caso, dispose NO debe limpiar el estado
+  /// del juego, porque la sesión sigue activa.
+  bool _redirectedToWaitingRoom = false;
+
+  /// Guard: evita doble-navegación al podio desde múltiples fuentes
+  /// (Realtime, polling, EventProvider rebuild).
+  bool _isNavigatingToPodium = false;
+
+  /// Polling de reconciliación: red de seguridad si Realtime falla o
+  /// la pestaña del navegador estuvo inactiva (Web lifecycle).
+  Timer? _raceCompletionPollingTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      // ── EARLY REDIRECT: Si el jugador ya completó todas las pistas y la carrera
+      // aún no terminó, ir directamente a WaitingRoom para evitar mostrar
+      // la vista de la carrera por un instante.
+      final gameProvider =
+          Provider.of<GameProvider>(context, listen: false);
+        gameProvider.ensureEventContext(widget.eventId);
+      if (gameProvider.hasCompletedAllClues && !gameProvider.isRaceCompleted) {
+        _redirectedToWaitingRoom = true;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => WaitingRoomScreen(eventId: widget.eventId),
+          ),
+        );
+        return;
+      }
+
       final playerProvider =
           Provider.of<PlayerProvider>(context, listen: false);
       final effectProvider =
@@ -53,6 +89,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Sincronizar contexto del evento actual
       playerProvider.setCurrentEventContext(widget.eventId);
+
+      // P2: Suscribir EventProvider a cambios Realtime del evento
+      // Esto permite que HomeScreen.build() reaccione automáticamente
+      // cuando el admin activa el evento, sin depender únicamente de EventWaitingScreen
+      final eventProvider = Provider.of<EventProvider>(context, listen: false);
+      eventProvider.subscribeToEventUpdates(widget.eventId);
+
+      // ── CENTRALIZADO: Listener de fin de carrera en HomeScreen ──
+      // Garantiza navegación al Podio sin importar qué tab esté activo
+      // (CluesScreen, InventoryScreen, LeaderboardScreen).
+      gameProvider.addListener(_onRaceCompletedCheck);
+
+      // Polling de reconciliación cada 10s: cubre el caso donde
+      // Web pierde el WebSocket al cambiar de pestaña y Realtime no entrega.
+      _raceCompletionPollingTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _pollRaceStatus(),
+      );
 
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     });
@@ -73,9 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
       // Placeholder mientras redirige
-      _screens = [
-        const Scaffold(body: Center(child: LoadingIndicator()))
-      ];
+      _screens = [const Scaffold(body: Center(child: LoadingIndicator()))];
     } else {
       _screens = [
         CluesScreen(eventId: widget.eventId),
@@ -88,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Cache provider to avoid context usage in dispose
   late GameProvider _gameProviderRef;
   late PlayerProvider _playerProviderRef;
+  late EventProvider _eventProviderRef; // P2: para unsubscribe en dispose
 
   @override
   void didChangeDependencies() {
@@ -95,27 +148,38 @@ class _HomeScreenState extends State<HomeScreen> {
     // Guardamos la referencia segura mientras el widget está activo
     _gameProviderRef = Provider.of<GameProvider>(context, listen: false);
     _playerProviderRef = Provider.of<PlayerProvider>(context, listen: false);
+    _eventProviderRef = Provider.of<EventProvider>(context, listen: false);
   }
 
   bool _isTutorialShowing = false;
 
   void _checkAndShowTutorial({bool force = false}) async {
     if (_isTutorialShowing) return;
-    
+
     String section;
     switch (_currentIndex) {
-      case 0: section = 'CLUES'; break;
-      case 1: section = 'INVENTORY'; break;
-      case 2: section = 'RANKING'; break;
-      default: return;
+      case 0:
+        section = 'CLUES';
+        break;
+      case 1:
+        section = 'INVENTORY';
+        break;
+      case 2:
+        section = 'RANKING';
+        break;
+      default:
+        return;
     }
+
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!force && !playerProvider.isNewlyRegistered) return;
 
     final prefs = await SharedPreferences.getInstance();
     final String tutorialKey = 'has_seen_tutorial_$section';
     final hasSeen = prefs.getBool(tutorialKey) ?? false;
 
     if (!force && hasSeen) return;
-    
+
     final steps = MasterTutorialContent.getStepsForSection(section, context);
     if (steps.isEmpty) return;
 
@@ -138,18 +202,84 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // ── CENTRALIZADO: Listener que reacciona a GameProvider.isRaceCompleted ──
+  void _onRaceCompletedCheck() {
+    if (_isNavigatingToPodium || !mounted) return;
+    if (_gameProviderRef.isRaceCompleted) {
+      debugPrint('🏆 HomeScreen: Race completed detected via GameProvider listener');
+      _navigateToPodium();
+    }
+  }
+
+  /// Polling de reconciliación: consulta al servidor si la carrera terminó.
+  /// Cubre el edge case donde Web pierde Realtime al estar en background.
+  void _pollRaceStatus() {
+    if (_isNavigatingToPodium || !mounted) return;
+    _gameProviderRef.checkRaceStatus();
+    // Si checkRaceStatus() detecta completed, _setRaceCompleted dispara
+    // notifyListeners() → _onRaceCompletedCheck() se encarga de navegar.
+  }
+
+  /// Navegación centralizada al Podio. Único punto de salida para evitar
+  /// doble-navegación entre Realtime, polling y EventProvider rebuild.
+  void _navigateToPodium() {
+    if (_isNavigatingToPodium || !mounted) return;
+    _isNavigatingToPodium = true;
+    _raceCompletionPollingTimer?.cancel();
+    _gameProviderRef.removeListener(_onRaceCompletedCheck);
+
+    debugPrint('🏆 HomeScreen: Navigating to Podio...');
+
+    final playerProvider = _playerProviderRef;
+    final gameProvider = _gameProviderRef;
+
+    final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
+    final leaderboard = gameProvider.leaderboard;
+    int position = 0;
+    if (leaderboard.isNotEmpty) {
+      final index = leaderboard.indexWhere((p) => p.id == currentPlayerId);
+      position = index >= 0 ? index + 1 : leaderboard.length + 1;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
+          builder: (_) => WinnerCelebrationScreen(
+            eventId: widget.eventId,
+            playerPosition: position,
+            totalCluesCompleted: gameProvider.completedClues,
+            prizeWon: gameProvider.currentPrizeWon,
+          ),
+        ),
+        (route) => false,
+      );
+    });
+  }
+
   // Removed _showWelcomeTutorial as it is no longer required in Home/Mode selection
-  
+
   @override
   void dispose() {
-    // Usamos la referencia guardada, no el context
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _gameProviderRef.resetState();
-      _playerProviderRef
-          .clearGameContext(); // ⚡ CRITICAL: Stops SabotageOverlay
+    _raceCompletionPollingTimer?.cancel();
+    _gameProviderRef.removeListener(_onRaceCompletedCheck);
+    // Si redirigimos a WaitingRoom, la sesión de juego sigue activa.
+    // NO debemos limpiar el estado del GameProvider.
+    if (!_redirectedToWaitingRoom && !_isNavigatingToPodium) {
+      // Usamos la referencia guardada, no el context
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _gameProviderRef.resetState();
+        _playerProviderRef
+            .clearGameContext(); // ⚡ CRITICAL: Stops SabotageOverlay
+        _eventProviderRef.unsubscribeFromEventUpdates(); // P2: cleanup Realtime
+        debugPrint(
+            "HomeScreen disposed: Game Set Reset & Player Context Cleared");
+      });
+    } else {
       debugPrint(
-          "HomeScreen disposed: Game Set Reset & Player Context Cleared");
-    });
+          "HomeScreen disposed: Skipped reset (redirected to WaitingRoom or Podium)");
+    }
     // SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // REMOVED: Conflicts with Logout transition
     super.dispose();
   }
@@ -165,7 +295,8 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 40),
         child: Container(
-          padding: const EdgeInsets.all(4), // Espacio para el efecto de doble borde
+          padding:
+              const EdgeInsets.all(4), // Espacio para el efecto de doble borde
           decoration: BoxDecoration(
             color: currentRed.withOpacity(0.2),
             borderRadius: BorderRadius.circular(28),
@@ -223,7 +354,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () => Navigator.pop(ctx),
                         child: const Text(
                           'CANCELAR',
-                          style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.white54,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -264,30 +397,50 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDarkMode = Provider.of<PlayerProvider>(context).isDarkMode;
 
     try {
-      final event =
+      final currentEvent =
           eventProvider.events.firstWhere((e) => e.id == widget.eventId);
-
-      // Only show waiting screen if event is pending (NOT yet activated by admin)
-      // The event transitions to 'active' ONLY when an admin calls start_event RPC
-      if (event.status == 'pending' && !_forceGameStart) {
-        return EventWaitingScreen(
-          event: event,
-          onTimerFinished: () {
-            // Admin activated the event via Realtime subscription
-            // (No auto-activation by timer — admin is the sole source of truth)
-            debugPrint("✅ Event ${event.id} activated by admin. Navigating to game.");
-            setState(() {
-              _forceGameStart = true;
-            });
-          },
-        );
-      }
+      _cachedEvent = currentEvent;
     } catch (_) {
-      // Fallback
+      // Fallback: If event is deleted, we use the last cached version to allow
+      // the EventWaitingScreen to display the "Event Cancelled" dialog gracefully.
     }
 
+    final event = _cachedEvent;
+
+    // ── COMPLETED → Podio: Si EventProvider entrega status=completed, navegar ──
+    // Esto cubre el caso donde GameProvider.isRaceCompleted aún no se actualizó
+    // (ej. subscribeToRaceStatus no estaba activo o Realtime se perdió).
+    if (event != null && event.isCompleted && !_isNavigatingToPodium) {
+      // Asegurar que GameProvider también lo sepa (idempotente)
+      final gp = Provider.of<GameProvider>(context, listen: false);
+      if (!gp.isRaceCompleted) {
+        debugPrint('🏆 HomeScreen.build: EventProvider says completed but GameProvider disagrees. Syncing...');
+        // Disparar checkRaceStatus para que se sincronice y notifique
+        gp.checkRaceStatus();
+      }
+      _navigateToPodium();
+    }
+
+    // Only show waiting screen if event is pending (NOT yet activated by admin)
+    // The event transitions to 'active' ONLY when an admin calls start_event RPC
+    if (event != null && event.status == 'pending' && !_forceGameStart) {
+      return EventWaitingScreen(
+        event: event,
+        onTimerFinished: () {
+          // Admin activated the event via Realtime subscription
+          // (No auto-activation by timer — admin is the sole source of truth)
+          debugPrint(
+              "✅ Event ${event.id} activated by admin. Navigating to game.");
+          setState(() {
+            _forceGameStart = true;
+          });
+        },
+      );
+    }
+    // The try block was handled above.
+
     final isSpectator = player?.role == 'spectator';
-    
+
     // Trigger tutorial for the current section
     if (!isSpectator) {
       _checkAndShowTutorial();
@@ -301,82 +454,86 @@ class _HomeScreenState extends State<HomeScreen> {
         statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        extendBody: true, // Allow body to show behind rounded corners of bottom nav
+        extendBody:
+            true, // Allow body to show behind rounded corners of bottom nav
         backgroundColor: Colors.transparent,
         body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              // Calculate index of the "Exit" item
-              final exitIndex = isSpectator ? 4 : 3;
-              
-              if (index == exitIndex) {
-                 _showExitDialog();
-                 return;
-              }
-
-              if (player == null || (!player.isFrozen && !player.isBlinded)) {
-                setState(() {
-                  _currentIndex = index;
-                });
-                // When tab changes, we might want to show tutorial again if it's the first time for that tab
-                _checkAndShowTutorial(force: false);
-              }
-            },
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: const Color(0xFF151517), // Match logout modal background
-            selectedItemColor: AppTheme.secondaryPink,
-            unselectedItemColor: Colors.white54,
-            showUnselectedLabels: true,
-            elevation: 0,
-            items: [
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.map),
-                activeIcon: Icon(Icons.map, size: 28),
-                label: 'Pistas',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                    isSpectator ? Icons.rss_feed : Icons.inventory_2_outlined),
-                activeIcon: Icon(
-                    isSpectator ? Icons.rss_feed : Icons.inventory_2,
-                    size: 28),
-                label: isSpectator ? 'En Vivo' : 'Inventario',
-              ),
-              if (isSpectator)
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.flash_on),
-                  activeIcon: Icon(Icons.flash_on, size: 28),
-                  label: 'Sabotajes',
-                ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.leaderboard_outlined),
-                activeIcon: Icon(Icons.leaderboard, size: 28),
-                label: 'Ranking',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.sensor_door_outlined),
-                activeIcon: Icon(Icons.sensor_door, color: AppTheme.dangerRed),
-                label: 'Salir',
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                // Calculate index of the "Exit" item
+                final exitIndex = isSpectator ? 4 : 3;
+
+                if (index == exitIndex) {
+                  _showExitDialog();
+                  return;
+                }
+
+                if (player == null || (!player.isFrozen && !player.isBlinded)) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                  // When tab changes, we might want to show tutorial again if it's the first time for that tab
+                  _checkAndShowTutorial(force: false);
+                }
+              },
+              type: BottomNavigationBarType.fixed,
+              backgroundColor:
+                  const Color(0xFF151517), // Match logout modal background
+              selectedItemColor: AppTheme.secondaryPink,
+              unselectedItemColor: Colors.white54,
+              showUnselectedLabels: true,
+              elevation: 0,
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.map),
+                  activeIcon: Icon(Icons.map, size: 28),
+                  label: 'Pistas',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(isSpectator
+                      ? Icons.rss_feed
+                      : Icons.inventory_2_outlined),
+                  activeIcon: Icon(
+                      isSpectator ? Icons.rss_feed : Icons.inventory_2,
+                      size: 28),
+                  label: isSpectator ? 'En Vivo' : 'Inventario',
+                ),
+                if (isSpectator)
+                  const BottomNavigationBarItem(
+                    icon: Icon(Icons.flash_on),
+                    activeIcon: Icon(Icons.flash_on, size: 28),
+                    label: 'Sabotajes',
+                  ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.leaderboard_outlined),
+                  activeIcon: Icon(Icons.leaderboard, size: 28),
+                  label: 'Ranking',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.sensor_door_outlined),
+                  activeIcon:
+                      Icon(Icons.sensor_door, color: AppTheme.dangerRed),
+                  label: 'Salir',
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
 
     if (isSpectator) {
       content = ChangeNotifierProvider(

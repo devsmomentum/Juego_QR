@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/payment_methods_config.dart';
 
 /// Service for managing global app configuration stored in app_config table.
 ///
@@ -74,14 +75,11 @@ class AppConfigService {
     try {
       final userId = _supabase.auth.currentUser?.id;
 
-      await _supabase
-          .from('app_config')
-          .update({
-            'value': rate,
-            'updated_at': DateTime.now().toIso8601String(),
-            'updated_by': userId?.toString(),
-          })
-          .eq('key', 'bcv_exchange_rate');
+      await _supabase.from('app_config').update({
+        'value': rate,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId?.toString(),
+      }).eq('key', 'bcv_exchange_rate');
 
       debugPrint('[AppConfigService] Exchange rate updated to $rate');
       return true;
@@ -124,14 +122,11 @@ class AppConfigService {
     try {
       final userId = _supabase.auth.currentUser?.id;
 
-      await _supabase
-          .from('app_config')
-          .update({
-            'value': fee,
-            'updated_at': DateTime.now().toIso8601String(),
-            'updated_by': userId?.toString(),
-          })
-          .eq('key', 'gateway_fee_percentage');
+      await _supabase.from('app_config').update({
+        'value': fee,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId?.toString(),
+      }).eq('key', 'gateway_fee_percentage');
 
       debugPrint('[AppConfigService] Gateway fee updated to $fee%');
       return true;
@@ -166,7 +161,7 @@ class AppConfigService {
         'value': value,
         'updated_at': DateTime.now().toIso8601String(),
         'updated_by': userId,
-      });
+      }, onConflict: 'key');
       return true;
     } catch (e) {
       debugPrint('[AppConfigService] Error updating config $key: $e');
@@ -192,6 +187,8 @@ class AppConfigService {
         'min_fee': 0,
         'max_fee': 100,
         'fee_step': 5,
+        'pending_wait_minutes': 5,
+        'min_players_to_start': 5,
       };
     }
   }
@@ -206,6 +203,385 @@ class AppConfigService {
     } catch (e) {
       debugPrint(
           '[AppConfigService] Error calling update_auto_event_settings: $e');
+      return false;
+    }
+  }
+
+  /// Returns true if the recharge (top-up) flow is currently enabled.
+  /// Defaults to true (enabled) on any error so users are never hard-blocked
+  /// by a network issue — only an explicit false from the DB disables it.
+  Future<bool> isRechargeEnabled() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'recharge_enabled')
+          .maybeSingle();
+
+      if (response == null || response['value'] == null) return true;
+      final value = response['value'];
+      if (value is bool) return value;
+      if (value is String) return value.toLowerCase() != 'false';
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching recharge_enabled: $e');
+      return true;
+    }
+  }
+
+  /// Enables or disables the recharge flow for all users.
+  /// Only admins can call this (enforced by RLS).
+  Future<bool> setRechargeEnabled(bool enabled) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'recharge_enabled',
+        'value': enabled,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] recharge_enabled set to $enabled');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating recharge_enabled: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // POWER DEFAULT COSTS
+  // ---------------------------------------------------------------------------
+
+  /// Reads the default power costs from app_config.
+  Future<Map<String, int>> getPowerDefaultCosts() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'power_default_costs')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        final map = response['value'] as Map<String, dynamic>;
+        return map.map((key, value) => MapEntry(key, (value as num).toInt()));
+      }
+      return {};
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching power_default_costs: $e');
+      return {};
+    }
+  }
+
+  /// Saves the default power costs to app_config.
+  Future<bool> updatePowerDefaultCosts(Map<String, int> costs) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'power_default_costs',
+        'value': costs,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] power_default_costs updated: $costs');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating power_default_costs: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MINIGAME MIN DURATIONS
+  // ---------------------------------------------------------------------------
+
+  /// Reads the min duration (seconds) per minigame difficulty.
+  /// Falls back to defaults if missing or invalid.
+  Future<Map<String, int>> getMinigameMinDurationsByDifficulty() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'minigame_min_duration_by_difficulty')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        return _coerceMinigameDurationMap(
+          Map<String, dynamic>.from(response['value'] as Map),
+        );
+      }
+
+      return _defaultMinigameMinDurations();
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error fetching minigame_min_duration_by_difficulty: $e',
+      );
+      return _defaultMinigameMinDurations();
+    }
+  }
+
+  /// Reads the flag that enables/disables minigame min-duration checks.
+  /// Defaults to true if missing or invalid.
+  Future<bool> getMinigameMinDurationEnabled() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'minigame_min_duration_enabled')
+          .maybeSingle();
+
+      if (response != null && response['value'] != null) {
+        final value = response['value'];
+        if (value is bool) return value;
+        if (value is String) return value.toLowerCase() == 'true';
+        if (value is num) return value != 0;
+      }
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error fetching minigame_min_duration_enabled: $e',
+      );
+      return true;
+    }
+  }
+
+  /// Updates the flag that enables/disables minigame min-duration checks.
+  Future<bool> updateMinigameMinDurationEnabled(bool enabled) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'minigame_min_duration_enabled',
+        'value': enabled,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint(
+        '[AppConfigService] minigame_min_duration_enabled updated: $enabled',
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error updating minigame_min_duration_enabled: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Saves the min duration (seconds) per minigame difficulty.
+  Future<bool> updateMinigameMinDurationsByDifficulty(
+    Map<String, int> durations,
+  ) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'minigame_min_duration_by_difficulty',
+        'value': durations,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint(
+        '[AppConfigService] minigame_min_duration_by_difficulty updated: $durations',
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[AppConfigService] Error updating minigame_min_duration_by_difficulty: $e',
+      );
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // VERSION CONFIGURATION
+  // ---------------------------------------------------------------------------
+
+  /// Reads the full version_configuration object from app_config.
+  /// Returns a map with: latest_version, min_supported_version,
+  /// maintenance_mode, apk_download_url.
+  Future<Map<String, dynamic>> getVersionConfig() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'version_configuration')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        return Map<String, dynamic>.from(response['value'] as Map);
+      }
+      return _defaultVersionConfig();
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching version_configuration: $e');
+      return _defaultVersionConfig();
+    }
+  }
+
+  /// Saves the full version_configuration object to app_config.
+  Future<bool> updateVersionConfig(Map<String, dynamic> config) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'version_configuration',
+        'value': config,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] version_configuration updated: $config');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating version_configuration: $e');
+      return false;
+    }
+  }
+
+  Map<String, dynamic> _defaultVersionConfig() => {
+        'latest_version': '1.0.5',
+        'min_supported_version': '1.0.5',
+        'maintenance_mode': false,
+        'apk_download_url': '',
+        'android_store_url': '',
+        'ios_store_url': '',
+      };
+
+  Map<String, int> _defaultMinigameMinDurations() => {
+        'easy': 4,
+        'medium': 8,
+        'hard': 12,
+      };
+
+  Map<String, int> _coerceMinigameDurationMap(Map<String, dynamic> map) {
+    int parseInt(dynamic value, int fallback) {
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? fallback;
+      return fallback;
+    }
+
+    final defaults = _defaultMinigameMinDurations();
+    return {
+      'easy': parseInt(map['easy'], defaults['easy'] ?? 4),
+      'medium': parseInt(map['medium'], defaults['medium'] ?? 8),
+      'hard': parseInt(map['hard'], defaults['hard'] ?? 12),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // PAGO MÓVIL RECIPIENT
+  // ---------------------------------------------------------------------------
+
+  /// Reads the Pago Móvil recipient configuration.
+  /// Returns a map with: banco, cedula, telefono.
+  Future<Map<String, String>> getPagoMovilRecipient() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'pago_movil_recipient')
+          .maybeSingle();
+
+      if (response != null && response['value'] is Map) {
+        final map = Map<String, dynamic>.from(response['value'] as Map);
+        return map.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+      }
+      return {'banco': '', 'cedula': '', 'telefono': ''};
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching pago_movil_recipient: $e');
+      return {'banco': '', 'cedula': '', 'telefono': ''};
+    }
+  }
+
+  /// Saves the Pago Móvil recipient configuration.
+  Future<bool> updatePagoMovilRecipient(Map<String, String> data) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'pago_movil_recipient',
+        'value': data,
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] pago_movil_recipient updated: $data');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating pago_movil_recipient: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PAYMENT METHODS STATUS
+  // ---------------------------------------------------------------------------
+
+  /// Reads payment method status config (purchase/withdrawal maps).
+  /// Returns all disabled on any error.
+  Future<PaymentMethodsConfig> getPaymentMethodsStatus() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'payment_methods_status')
+          .maybeSingle();
+
+      return PaymentMethodsConfig.fromJson(response?['value']);
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching payment_methods_status: $e');
+      return PaymentMethodsConfig.fallbackAllDisabled();
+    }
+  }
+
+  /// Updates payment method status config.
+  Future<bool> updatePaymentMethodsStatus(PaymentMethodsConfig config) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      await _supabase.from('app_config').upsert({
+        'key': 'payment_methods_status',
+        'value': config.toJson(),
+        'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': userId,
+      }, onConflict: 'key');
+      debugPrint('[AppConfigService] payment_methods_status updated');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error updating payment_methods_status: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MERCHANDISE STORE TOGGLE
+  // ---------------------------------------------------------------------------
+
+  /// Returns true if the merchandise store (Tienda) tab is enabled.
+  /// Defaults to false (hidden) on any error — store stays hidden until
+  /// an admin explicitly enables it.
+  Future<bool> isMerchandiseStoreEnabled() async {
+    try {
+      final response = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'merchandise_store_enabled')
+          .maybeSingle();
+
+      if (response == null || response['value'] == null) return false;
+      final value = response['value'];
+      if (value is bool) return value;
+      if (value is String) return value.toLowerCase() == 'true';
+      return false;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error fetching merchandise_store_enabled: $e');
+      return false;
+    }
+  }
+
+  /// Toggles the merchandise store visibility via a secure RPC.
+  /// The RPC validates that the caller is an admin before applying changes.
+  Future<bool> setMerchandiseStoreEnabled(bool enabled) async {
+    try {
+      await _supabase.rpc('toggle_merchandise_store', params: {
+        'p_enabled': enabled,
+      });
+      debugPrint('[AppConfigService] merchandise_store_enabled set to $enabled');
+      return true;
+    } catch (e) {
+      debugPrint('[AppConfigService] Error toggling merchandise store: $e');
       return false;
     }
   }

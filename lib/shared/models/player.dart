@@ -22,6 +22,7 @@ class Player implements ITargetable {
   DateTime? frozenUntil;
   DateTime? lastCompletionTime; // [FIX] Para desempate en ranking
   List<String>? eventsCompleted;
+  int wonEventsCount;
   int lives;
   int clovers; // New currency - tréboles
   final String? cedula;
@@ -29,6 +30,9 @@ class Player implements ITargetable {
   final String? documentType; // Added for Payment Profile
   final bool isProtected; // SHIELD CONSISTENCY FIX
   final bool emailVerified; // Whether email has been verified
+  final String? stripeCustomerId; // Stripe Customer ID for saved cards
+  final String? stripeConnectId; // Stripe Connect Account ID
+  final bool stripeOnboardingCompleted; // Whether onboarding is finished
   Map<String, dynamic> stats;
   final DateTime? createdAt;
 
@@ -49,6 +53,7 @@ class Player implements ITargetable {
     this.frozenUntil,
     this.lastCompletionTime,
     this.eventsCompleted,
+    this.wonEventsCount = 0,
     this.lives = 3,
     this.clovers = 0,
     Map<String, dynamic>? stats,
@@ -61,6 +66,9 @@ class Player implements ITargetable {
     this.createdAt,
     this.isProtected = false,
     this.emailVerified = true,
+    this.stripeCustomerId,
+    this.stripeConnectId,
+    this.stripeOnboardingCompleted = false,
   })  : _avatarUrl = avatarUrl ?? '',
         inventory = inventory ?? [],
         stats = stats ??
@@ -164,6 +172,7 @@ class Player implements ITargetable {
       gamePlayerId: json['player_id'] ?? json['game_player_id'],
       avatarId: avatarId,
       clovers: json['clovers'] ?? 0,
+      wonEventsCount: json['won_events_count'] ?? 0,
       documentType: docTypeVal,
       // Map 'dni' (int) from DB to 'cedula' (String) in model if 'cedula' is null
       cedula: dniVal,
@@ -171,6 +180,9 @@ class Player implements ITargetable {
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
       isProtected: json['is_protected'] ?? false,
       emailVerified: json['email_verified'] ?? true,
+      stripeCustomerId: json['stripe_customer_id'],
+      stripeConnectId: json['stripe_connect_id'],
+      stripeOnboardingCompleted: json['stripe_onboarding_completed'] ?? false,
     );
   }
 
@@ -204,6 +216,12 @@ class Player implements ITargetable {
 
   /// True only for 'admin' role.
   bool get isAdmin => role == 'admin';
+
+  /// True for 'staff' role.
+  bool get isStaff => role == 'staff';
+
+  /// True for any role that can access the Admin Dashboard.
+  bool get hasAdminAccess => isAdmin || isStaff;
 
   // --- Status Getters ---
 
@@ -267,6 +285,24 @@ class Player implements ITargetable {
       profession = 'Balanced';
     }
   }
+
+  /// Returns the profession name in Spanish for UI display.
+  String get localizedProfession {
+    switch (profession.toLowerCase()) {
+      case 'novice':
+        return 'Novato';
+      case 'speedrunner':
+        return 'Velocista';
+      case 'warrior':
+        return 'Guerrero';
+      case 'strategist':
+        return 'Estratega';
+      case 'balanced':
+        return 'Equilibrado / Versátil';
+      default:
+        return profession;
+    }
+  }
   
   // --- ITargetable Implementation ---
   
@@ -304,6 +340,7 @@ class Player implements ITargetable {
     DateTime? frozenUntil,
     DateTime? lastCompletionTime,
     List<String>? eventsCompleted,
+    int? wonEventsCount,
     int? lives,
     int? clovers,
     Map<String, dynamic>? stats,
@@ -316,6 +353,9 @@ class Player implements ITargetable {
     DateTime? createdAt,
     bool? isProtected,
     bool? emailVerified,
+    String? stripeCustomerId,
+    String? stripeConnectId,
+    bool? stripeOnboardingCompleted,
   }) {
     return Player(
       userId: userId ?? this.userId,
@@ -334,6 +374,7 @@ class Player implements ITargetable {
       frozenUntil: frozenUntil ?? this.frozenUntil,
       lastCompletionTime: lastCompletionTime ?? this.lastCompletionTime,
       eventsCompleted: eventsCompleted ?? this.eventsCompleted,
+      wonEventsCount: wonEventsCount ?? this.wonEventsCount,
       lives: lives ?? this.lives,
       clovers: clovers ?? this.clovers,
       stats: stats ?? this.stats,
@@ -346,6 +387,9 @@ class Player implements ITargetable {
       createdAt: createdAt ?? this.createdAt,
       isProtected: isProtected ?? this.isProtected,
       emailVerified: emailVerified ?? this.emailVerified,
+      stripeCustomerId: stripeCustomerId ?? this.stripeCustomerId,
+      stripeConnectId: stripeConnectId ?? this.stripeConnectId,
+      stripeOnboardingCompleted: stripeOnboardingCompleted ?? this.stripeOnboardingCompleted,
     );
   }
 }

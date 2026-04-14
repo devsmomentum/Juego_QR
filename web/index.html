@@ -31,8 +31,30 @@
 
   <title>MapHunter</title>
   <link rel="manifest" href="manifest.json">
+  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+  function intentarAbrirApp() {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    if (isAndroid) {
+      // Fallback: si la app no está instalada, redirige a la página de descarga
+      const fallbackUrl = "https://prueba.maphunter.online/";
+
+      // Intent:
+      // - Si la app está instalada: la abre apuntando al dominio actual
+      // - Si NO está instalada: redirige a la página de descarga del APK
+      const host = window.location.hostname;
+      const intentUrl = `intent://${host}#Intent;scheme=https;package=com.map.hunter;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
+
+      window.location.href = intentUrl;
+    }
+  }
+
+  // Se ejecuta automáticamente al cargar la página de juego
+  // window.onload = intentarAbrirApp; 
+</script>
 </body>
 </html>

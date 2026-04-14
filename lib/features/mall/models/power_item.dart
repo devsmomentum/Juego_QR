@@ -90,92 +90,155 @@ class PowerItem {
   }
 
   // ESTA ES LA LISTA MAESTRA QUE DEBE COINCIDIR CON LA BASE DE DATOS
+  static Map<String, int> _dbCosts = {};
+
+  static void updateGlobalCosts(Map<String, int> costs) {
+    _dbCosts = costs;
+  }
+
   static List<PowerItem> getShopItems() {
+    int getCost(String id, int defaultCost) {
+      return _dbCosts[id] ?? _dbCosts[id.trim().toLowerCase()] ?? defaultCost;
+    }
+
     return [
       // Catálogo oficial (6 poderes) alineado con Supabase
-      const PowerItem(
+      PowerItem(
         id: 'black_screen',
         name: 'Pantalla Negra',
         description: 'Ciega al rival por 25s',
         type: PowerType.blind,
-        cost: 75, // Tier 2: Blur/Black Screen
+        cost: getCost('black_screen', 75), // Tier 2: Blur/Black Screen
         icon: '🕶️',
         color: Colors.black87,
         durationMinutes: 0,
       ),
 
-      const PowerItem(
+      PowerItem(
         id: 'blur_screen',
         name: 'Pantalla Borrosa',
-        description: 'Aplica un efecto borroso sobre la pantalla de todos los rivales.',
+        description:
+            'Aplica un efecto borroso sobre la pantalla de todos los rivales.',
         type: PowerType.blur,
-        cost: 75, // Tier 2: Blur/Black Screen
+        cost: getCost('blur_screen', 300), // Default 300 or DB override
         icon: '🌫️',
         color: Colors.blueGrey,
         durationMinutes: 0,
       ),
 
-      const PowerItem(
+      PowerItem(
         id: 'extra_life',
         name: 'Vida',
         description: 'Recupera una vida perdida',
         type: PowerType.buff,
-        cost: 40, // Tier 1: Extra Life
+        cost: getCost('extra_life', 40), // Tier 1: Extra Life
         icon: '❤️',
         color: Colors.red,
         durationMinutes: 0,
       ),
 
-      const PowerItem(
+      PowerItem(
         id: 'return',
         name: 'Devolución',
         description: 'Devuelve el ataque al origen',
         type: PowerType.buff, // CAMBIADO: De utility a buff
-        cost: 90,
+        cost: getCost('return', 90),
         icon: '↩️',
         color: Colors.purple,
         durationMinutes: 0,
       ),
-      const PowerItem(
+      PowerItem(
         id: 'freeze',
         name: 'Congelar',
         description: 'Congela al rival por 30s',
         type: PowerType.freeze,
-        cost: 120, // Tier 3: Freeze/Life Steal
+        cost: getCost('freeze', 120), // Tier 3: Freeze/Life Steal
         icon: '❄️',
         color: Colors.cyan,
         durationMinutes: 1,
       ),
-      const PowerItem(
+      PowerItem(
         id: 'shield',
         name: 'Escudo',
         description: 'Bloquea sabotajes por 120s',
         type: PowerType.shield,
-        cost: 40, // Tier 1: Shield/Invisibility
+        cost: getCost('shield', 40), // Tier 1: Shield/Invisibility
         icon: '🛡️',
         color: Colors.indigo,
         durationMinutes: 2,
       ),
-      const PowerItem(
+      PowerItem(
         id: 'life_steal',
         name: 'Robo de Vida',
         description: 'Roba una vida a un rival',
         type: PowerType.lifeSteal,
-        cost: 120, // Tier 3: Freeze/Life Steal
+        cost: getCost('life_steal', 120), // Tier 3: Freeze/Life Steal
         icon: '🧛',
         color: Colors.redAccent,
         durationMinutes: 0,
       ),
-      const PowerItem(
+      PowerItem(
         id: 'invisibility',
         name: 'Invisibilidad',
         description: 'Te vuelve invisible por 45s',
         type: PowerType.stealth,
-        cost: 40, // Tier 1: Shield/Invisibility
+        cost: getCost('invisibility', 40), // Tier 1: Shield/Invisibility
         icon: '👻',
         color: Colors.grey,
         durationMinutes: 0,
       ),
     ];
+  }
+
+  /// Busca un item por su ID/Slug de forma robusta y con normalización.
+  static PowerItem fromId(String id, {List<PowerItem>? customItems}) {
+    final List<PowerItem> catalog = customItems ?? getShopItems();
+    final String normalized = id.trim().toLowerCase();
+
+    // 1. Intento por ID exacto (ignoring case/trim)
+    for (var item in catalog) {
+      if (item.id.trim().toLowerCase() == normalized) return item;
+    }
+
+    // 2. Mapeo de sinónimos comunes (Para IDs de DB viejos o inconsistentes)
+    if (normalized.contains('shield')) {
+      return catalog.firstWhere((p) => p.id == 'shield',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('life') || normalized.contains('vida')) {
+      return catalog.firstWhere((p) => p.id == 'extra_life',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('black') || normalized.contains('negra')) {
+      return catalog.firstWhere((p) => p.id == 'black_screen',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('blur') || normalized.contains('borros')) {
+      return catalog.firstWhere((p) => p.id == 'blur_screen',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('freeze') || normalized.contains('hielo')) {
+      return catalog.firstWhere((p) => p.id == 'freeze',
+          orElse: () => _unknownFallback(id));
+    }
+    if (normalized.contains('return') || normalized.contains('devolu')) {
+      return catalog.firstWhere((p) => p.id == 'return',
+          orElse: () => _unknownFallback(id));
+    }
+
+    // 3. Fallback final
+    return _unknownFallback(id);
+  }
+
+  static PowerItem _unknownFallback(String id) {
+    return PowerItem(
+      id: id,
+      name: 'Poder Misterioso',
+      description: 'Consultando registro...',
+      type: PowerType.buff,
+      cost: 0,
+      icon: '⚡',
+      color: Colors.grey,
+    );
   }
 }

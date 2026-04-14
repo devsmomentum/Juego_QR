@@ -5,13 +5,13 @@ import '../providers/game_provider.dart';
 import '../../auth/providers/player_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/clue.dart';
+import 'dart:async';
 import '../widgets/race_track_widget.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
 import '../../../shared/models/player.dart'; // Import Player model
 import '../providers/connectivity_provider.dart';
-import '../../mall/models/power_item.dart';
-import '../widgets/effects/blur_effect.dart';
-import '../providers/power_interfaces.dart';
+import 'package:flutter/foundation.dart' show kDebugMode; // NEW IMPORT
+
 // --- Imports de Minijuegos Existentes ---
 import '../widgets/minigames/sliding_puzzle_minigame.dart';
 import '../widgets/minigames/tic_tac_toe_minigame.dart';
@@ -25,16 +25,11 @@ import '../widgets/minigames/flags_minigame.dart';
 import '../widgets/minigames/minesweeper_minigame.dart';
 import '../widgets/minigames/snake_minigame.dart';
 import '../widgets/minigames/block_fill_minigame.dart';
-import '../widgets/minigames/code_breaker_widget.dart';
-import '../widgets/minigames/image_trivia_widget.dart';
-import '../widgets/minigames/word_scramble_widget.dart';
-import '../widgets/minigames/charge_shaker_minigame.dart';
 import '../widgets/minigames/emoji_movie_minigame.dart';
 import '../widgets/minigames/virus_tap_minigame.dart';
 import '../widgets/minigames/drone_dodge_minigame.dart';
 import '../widgets/minigames/memory_sequence_minigame.dart';
 import '../widgets/minigames/drink_mixer_minigame.dart';
-import '../widgets/minigames/library_sort_minigame.dart';
 import '../widgets/minigames/fast_number_minigame.dart'; // NEW IMPORT
 import '../widgets/minigames/bag_shuffle_minigame.dart'; // NEW IMPORT
 import '../widgets/minigames/holographic_panels_minigame.dart';
@@ -44,8 +39,8 @@ import '../widgets/minigames/percentage_calculation_minigame.dart';
 import '../widgets/minigames/chronological_order_minigame.dart';
 import '../widgets/minigames/capital_cities_minigame.dart';
 import '../widgets/minigames/true_false_minigame.dart';
-import '../widgets/minigames/match_three_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
+import '../widgets/quick_power_shop.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
 
@@ -64,11 +59,20 @@ import '../widgets/no_lives_widget.dart';
 import 'waiting_room_screen.dart'; // NEW IMPORT
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
+import '../providers/game_flow_provider.dart';
+import '../../../core/services/app_config_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/practice_mode_resolver.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
+  final bool isPractice;
 
-  const PuzzleScreen({super.key, required this.clue});
+  const PuzzleScreen({
+    super.key,
+    required this.clue,
+    this.isPractice = false,
+  });
 
   @override
   State<PuzzleScreen> createState() => _PuzzleScreenState();
@@ -79,11 +83,32 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   bool _legalExit = false;
   bool _isNavigatingToWinner = false; // Flag to prevent double navigation
   bool _showBriefing = false; // Deshabilitado como se solicitó
+  Timer?
+      _raceStatusPollingTimer; // Fallback: polling de recuperación si Realtime falla
 
   // Safe Provider Access
   late GameProvider _gameProvider;
   late ConnectivityProvider _connectivityProvider;
   bool _isActive = true;
+  bool _isSuccessFlowActive = false; // Prevents double success/navigation
+  String? _minigameSessionId;
+  String? _challengeToken;
+  DateTime? _minigameStartLocal;
+  bool _sessionReady = false;
+  late AppConfigService _configService;
+  bool _minDurationConfigLoaded = false;
+  Map<String, int> _minDurationByDifficulty = _minDurationDefaults;
+  bool _minDurationEnabled = true;
+
+  static const Map<String, int> _minDurationDefaults = {
+    'easy': 4,
+    'medium': 8,
+    'hard': 12,
+  };
+  static const String _minigameCooldownKey =
+      'minigame_cooldown_until_ms';
+  static const int _minCooldownSeconds = 5;
+  static const int _maxCooldownSeconds = 30;
 
   @override
   void initState() {
@@ -92,13 +117,26 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     _gameProvider = Provider.of<GameProvider>(context, listen: false);
     _connectivityProvider =
         Provider.of<ConnectivityProvider>(context, listen: false);
+    _configService =
+      AppConfigService(supabaseClient: Supabase.instance.client);
 
     // Penalty logic removed
 
-    // Verificar vidas al iniciar
+    // Verificar vidas al iniciar (Solo si NO es práctica)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkLives();
-      _checkBanStatus(); // Check ban on entry
+      if (!widget.isPractice) {
+        _checkLives();
+        _checkBanStatus(); // Check ban on entry
+      }
+
+      if (widget.isPractice) {
+        setState(() {
+          _sessionReady = true;
+          _minigameStartLocal = DateTime.now();
+        });
+      } else {
+        _startMinigameSession();
+      }
 
       // --- SYNC PLAYER PROVIDER WITH CURRENT EVENT ---
       // Fix for issue where PlayerProvider loads "latest" (potentially banned) event
@@ -129,7 +167,13 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       // Verificación inicial inmediata: ¿La carrera ya terminó?
       _checkRaceCompletion();
 
-      // MOVED: _checkGlobalLivesGameOver monitoring is now started inside _checkLives
+      // Polling de recuperación: si Realtime pierde el evento de finalización
+      // (p.ej. durante la breve ventana de re-suscripción del canal), esto lo detecta.
+      _raceStatusPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!_isActive || !mounted || _isNavigatingToWinner) return;
+        gp.checkRaceStatus().then((_) => _checkRaceCompletion());
+      });
+
       // to avoid race conditions during initialization.
 
       // MOVED: Tutorial trigger
@@ -137,14 +181,177 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     });
   }
 
+  int _minDurationSecondsForClue(Clue clue) {
+    if (!_minDurationEnabled) return 0;
+    switch (clue.effectivePuzzleType.difficulty) {
+      case MinigameDifficulty.easy:
+        return _minDurationByDifficulty['easy'] ??
+            _minDurationDefaults['easy']!;
+      case MinigameDifficulty.medium:
+        return _minDurationByDifficulty['medium'] ??
+            _minDurationDefaults['medium']!;
+      case MinigameDifficulty.hard:
+        return _minDurationByDifficulty['hard'] ??
+            _minDurationDefaults['hard']!;
+    }
+    return 8;
+  }
+
+  Future<void> _loadMinigameMinDurationConfig() async {
+    final results = await Future.wait([
+      _configService.getMinigameMinDurationEnabled(),
+      _configService.getMinigameMinDurationsByDifficulty(),
+    ]);
+    final enabled = results[0] as bool;
+    final config = results[1] as Map<String, int>;
+    if (!mounted) return;
+    setState(() {
+      _minDurationEnabled = enabled;
+      _minDurationByDifficulty = config;
+      _minDurationConfigLoaded = true;
+    });
+  }
+
+  int _localElapsedMs() {
+    if (_minigameStartLocal == null) return 0;
+    return DateTime.now().difference(_minigameStartLocal!).inMilliseconds;
+  }
+
+  Future<void> _startMinigameSession() async {
+    if (!mounted) return;
+
+    final player = context.read<PlayerProvider>().currentPlayer;
+    if (player?.role == 'spectator') return;
+
+    if (widget.clue.id.startsWith('demo_') || widget.isPractice) {
+      if (mounted) setState(() => _sessionReady = true);
+      return;
+    }
+
+    if (!_minDurationConfigLoaded) {
+      await _loadMinigameMinDurationConfig();
+    }
+
+    final gameProvider = context.read<GameProvider>();
+    final minDuration = _minDurationSecondsForClue(widget.clue);
+
+    final payload = await gameProvider.startMinigameSession(
+      clueId: widget.clue.id,
+      minDurationSeconds: minDuration,
+    );
+
+    if (!mounted) return;
+    
+    final sessionId = payload?['session_id'] as String?;
+    final challengeToken = payload?['challenge_token'] as String?;
+    final isBlocked = payload?['error'] == 'BLOCKED';
+    final serverError = payload?['error'];
+
+    if (sessionId == null) {
+      setState(() => _isActive = false);
+      
+      if (isBlocked) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Cuenta Bloqueada',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              if (player?.role == 'admin')
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await Supabase.instance.client.rpc('test_remove_my_ban');
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      if (mounted) Navigator.of(context).pop();
+                    } catch (e) {
+                      debugPrint('Error removiendo ban: $e');
+                    }
+                  },
+                  child: const Text('REMOVER BAN (ADMIN)', style: TextStyle(color: Colors.white)),
+                ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: const Text('ENTENDIDO', style: TextStyle(color: AppTheme.dangerRed)),
+              ),
+            ],
+          ),
+        );
+      } else {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            title: const Text('Error del Servidor', style: TextStyle(color: AppTheme.dangerRed)),
+            content: Text('No pudimos iniciar el minijuego. Código: $serverError', style: const TextStyle(color: Colors.white70)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: const Text('ENTENDIDO', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _minigameSessionId = sessionId;
+      _challengeToken = challengeToken;
+      _minigameStartLocal = DateTime.now();
+      _sessionReady = true;
+    });
+  }
+
   void _showMinigameTutorial() async {
-    final player =
-        Provider.of<PlayerProvider>(context, listen: false).currentPlayer;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final player = playerProvider.currentPlayer;
+    
+    // 1. Solo para usuarios nuevos
+    if (!playerProvider.isNewlyRegistered) return;
+    
+    // 2. No para espectadores
     if (player?.role == 'spectator') return;
 
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_tutorial_PUZZLE') ?? false;
     if (hasSeen) return;
+
+    // 3. No mostrar si está congelado (evitar que aparezca 'detrás' del overlay de congelado)
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    if (gameProvider.isFrozen) {
+      // Re-intentar en un momento si sigue siendo relevante
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _showMinigameTutorial();
+      });
+      return;
+    }
+
+    // Add a transition delay before showing the tutorial
+    await Future.delayed(const Duration(milliseconds: 500)); // Transition delay
 
     final steps = MasterTutorialContent.getStepsForSection('PUZZLE', context);
     if (steps.isEmpty) return;
@@ -199,19 +406,32 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void _checkRaceCompletion() async {
-    if (!mounted || !_isActive || _isNavigatingToWinner) return;
+    if (!mounted || !_isActive) return;
 
     final gameProvider = _gameProvider;
-    // For PlayerProvider, we still need context or also cache it?
-    // Usually PlayerProvider is less volatile, but to be safe we check active first.
-    // Since we returned if !_isActive, access to context should be 'safer',
-    // but caching is best. For now we rely on _isActive check.
     if (!context.mounted) return;
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-    // Si la carrera terminó (alguien ganó) y yo no he terminado todo
-    if (gameProvider.isRaceCompleted && !gameProvider.hasCompletedAllClues) {
-      _isNavigatingToWinner = true; // Set flag
+    // Navegar al podio si la carrera terminó Y el jugador NO está listo para ser
+    // llevado a Winner por su propia lógica (ya habría salido a WaitingRoom).
+    // NOTA: la condición original era `!hasCompletedAllClues`, pero eso bloqueaba
+    // la navegación cuando el último clue quedó marcado optimistamente como completado
+    // antes de que llegara el evento Realtime de finalización de carrera.
+    // Fix: navegamos si isRaceCompleted, SALVO que el player ya esté en tránsito
+    // (guard _isNavigatingToWinner evita doble navegación).
+    if (gameProvider.isRaceCompleted) {
+      if (_isNavigatingToWinner && !gameProvider.hasCompletedAllClues) {
+        // Only block if we are navigating specifically due to local victory (last clue),
+        // but the race isn't globally completed OR if the race IS completed, 
+        // we should let it through to refresh the view to WinnerCelebrationScreen.
+        // Actually, the simplest fix is to allow it to pass if isRaceCompleted.
+      }
+      
+      // Check if we are ALREADY on the Winner screen (to avoid double push)
+      final currentRouteName = ModalRoute.of(context)?.settings.name;
+      if (currentRouteName == 'WinnerCelebrationScreen') return;
+      
+      _isNavigatingToWinner = true;
       _finishLegally(); // Quitamos penalización
 
       final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
@@ -236,6 +456,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
+          settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
           builder: (_) => WinnerCelebrationScreen(
             eventId: gameProvider.currentEventId ?? '',
             playerPosition: position,
@@ -297,9 +518,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   Future<void> _checkLives() async {
-    // Usamos listen: false para obtener el estado MÁS RECIENTE, no suscribirnos
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    // ⚡ SYNC FIX: Force refresh PlayerProvider's current profile from server 
+    // to ensure purchase from Mall is reflected.
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (playerProvider.currentPlayer != null) {
+      await playerProvider.refreshProfile(eventId: _gameProvider.currentEventId);
+    }
+
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
 
     // 1. Verificación preliminar con source-of-truth visual (PlayerProvider)
     if (playerProvider.currentPlayer != null &&
@@ -354,6 +580,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
     // Limpiar listener de fin de carrera usando la referencia CACHEADA
     try {
+      _raceStatusPollingTimer?.cancel();
       _gameProvider.removeListener(_checkRaceCompletion);
     } catch (_) {}
 
@@ -369,9 +596,58 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   // Helper para marcar salida legal (Ganar o Rendirse)
   Future<void> _finishLegally() async {
-    setState(() => _legalExit = true);
-    // await _penaltyService.markGameFinishedLegally(); // Removed
+    if (!mounted) return;
+    setState(() {
+      _legalExit = true;
+      _isNavigatingToWinner = true; // Lock background navigation to let victory flow play
+    });
   }
+
+  void _handleSuccess(Clue clue) {
+    if (_isSuccessFlowActive || !mounted) return;
+    setState(() => _isSuccessFlowActive = true);
+
+    if (widget.isPractice) {
+      debugPrint('[Practice] 🏆 Minigame completed successfully!');
+      _showSuccessDialog(context, clue, isPractice: true);
+      return;
+    }
+
+    final result = {
+      'puzzle_type': clue.effectivePuzzleType.toString(),
+      'client_elapsed_ms': _localElapsedMs(),
+      'client_started_at': _minigameStartLocal?.toUtc().toIso8601String(),
+      'client_finished_at': DateTime.now().toUtc().toIso8601String(),
+      'session_ready': _sessionReady,
+    };
+    _showSuccessDialog(
+      context,
+      clue,
+      sessionId: _minigameSessionId,
+      challengeToken: _challengeToken,
+      resultPayload: result,
+      onValidationSuccess: _finishLegally,
+      onValidationFailure: _resetSuccessFlow,
+      onForceExit: _handleTooFastExit,
+    );
+  }
+
+  void _resetSuccessFlow() {
+    if (!mounted) return;
+    setState(() => _isSuccessFlowActive = false);
+  }
+
+  void _handleTooFastExit() {
+    if (!mounted) return;
+    setState(() {
+      _isSuccessFlowActive = false;
+      _minigameSessionId = null;
+      _challengeToken = null;
+      _minigameStartLocal = null;
+      _sessionReady = false;
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -380,8 +656,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     final isSpectator = player?.role == 'spectator';
 
     // --- STATUS OVERLAYS (Handled Globally) ---
-    if (isSpectator) {
-      // Spectators bypass lives check but see read-only UI
+    if (isSpectator || widget.isPractice) {
+      // Spectators and Practice mode bypass lives check
     } else {
       // 2. Si el PlayerProvider (Visual) dice que NO tenemos vidas, bloqueamos INMEDIATAMENTE.
       //    Ya no confiamos ciegamente en el servidor si la UI local dice 0.
@@ -400,13 +676,15 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       }
 
       if ((gameProvider.lives <= 0 || forcedBlock)) {
-        // Si las vidas son 0, bloqueamos SIEMPRE, a menos que ya estemos navegando (legalExit)
-        // Pero si legalExit es true, probablemente ya deberíamos haber salido.
-        // El problema era que _legalExit bloqueaba la visualización del NoLivesWidget.
         return const NoLivesWidget();
       }
     }
 
+    // [FIX] REMOVED the auto-pop LoadingIndicator guard.
+    // This was causing a race condition: optimistic update would trigger this guard,
+    // which would Navigator.pop() the SUCCESS DIALOG that was just opening,
+    // leaving the user stuck in a black screen.
+    // Instead, we just trust the minigame UI or the onSuccess dialog to handle navigation.
     Widget gameWidget;
     // Cast seguro solicitado
     final onlineClue =
@@ -414,146 +692,173 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     // Nota: Si pasamos PhysicalClue, usará el fallback de los getters virtuales.
 
     // Pasamos _finishLegally a TODOS los hijos para que avisen antes de cerrar o ganar
-    switch (onlineClue.puzzleType) {
+    switch (onlineClue.effectivePuzzleType) {
       case PuzzleType.slidingPuzzle:
         gameWidget =
-            SlidingPuzzleWrapper(clue: widget.clue, onFinish: _finishLegally);
+            SlidingPuzzleWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.ticTacToe:
         gameWidget =
-            TicTacToeWrapper(clue: widget.clue, onFinish: _finishLegally);
+            TicTacToeWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.hangman:
         gameWidget =
-            HangmanWrapper(clue: widget.clue, onFinish: _finishLegally);
+            HangmanWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.tetris:
-        gameWidget = TetrisWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget = TetrisWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.findDifference:
         gameWidget =
-            FindDifferenceWrapper(clue: widget.clue, onFinish: _finishLegally);
+            FindDifferenceWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.flags:
-        gameWidget = FlagsWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget = FlagsWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.minesweeper:
         gameWidget =
-            MinesweeperWrapper(clue: widget.clue, onFinish: _finishLegally);
+            MinesweeperWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.snake:
-        gameWidget = SnakeWrapper(clue: widget.clue, onFinish: _finishLegally);
+        gameWidget = SnakeWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.blockFill:
         gameWidget =
-            BlockFillWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.codeBreaker:
-        gameWidget =
-            CodeBreakerWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.imageTrivia:
-        gameWidget =
-            ImageTriviaWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.wordScramble:
-        gameWidget =
-            WordScrambleWrapper(clue: widget.clue, onFinish: _finishLegally);
+            BlockFillWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.memorySequence:
         gameWidget =
-            MemorySequenceWrapper(clue: widget.clue, onFinish: _finishLegally);
+            MemorySequenceWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.drinkMixer:
         gameWidget =
-            DrinkMixerWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.librarySort:
-        gameWidget =
-            LibrarySortWrapper(clue: widget.clue, onFinish: _finishLegally);
+            DrinkMixerWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.fastNumber:
         gameWidget =
-            FastNumberWrapper(clue: widget.clue, onFinish: _finishLegally);
+            FastNumberWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.bagShuffle:
         gameWidget =
-            BagShuffleWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.chargeShaker:
-        gameWidget =
-            ChargeShakerWrapper(clue: widget.clue, onFinish: _finishLegally);
+            BagShuffleWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.emojiMovie:
         gameWidget =
-            EmojiMovieWrapper(clue: widget.clue, onFinish: _finishLegally);
+            EmojiMovieWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.virusTap:
         gameWidget =
-            VirusTapWrapper(clue: widget.clue, onFinish: _finishLegally);
+            VirusTapWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.droneDodge:
         gameWidget =
-            DroneDodgeWrapper(clue: widget.clue, onFinish: _finishLegally);
+            DroneDodgeWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.holographicPanels:
         gameWidget = HolographicPanelsWrapper(
-            clue: widget.clue, onFinish: _finishLegally);
+            clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.missingOperator:
         gameWidget =
-            MissingOperatorWrapper(clue: widget.clue, onFinish: _finishLegally);
+            MissingOperatorWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.primeNetwork:
         gameWidget =
-            PrimeNetworkWrapper(clue: widget.clue, onFinish: _finishLegally);
+            PrimeNetworkWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.percentageCalculation:
         gameWidget = PercentageCalculationWrapper(
-            clue: widget.clue, onFinish: _finishLegally);
+            clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.chronologicalOrder:
         gameWidget = ChronologicalOrderWrapper(
-            clue: widget.clue, onFinish: _finishLegally);
+            clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.capitalCities:
         gameWidget =
-            CapitalCitiesWrapper(clue: widget.clue, onFinish: _finishLegally);
+            CapitalCitiesWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       case PuzzleType.trueFalse:
         gameWidget =
-            TrueFalseWrapper(clue: widget.clue, onFinish: _finishLegally);
-        break;
-      case PuzzleType.matchThree:
-        gameWidget =
-            MatchThreeWrapper(clue: widget.clue, onFinish: _finishLegally);
+            TrueFalseWrapper(clue: widget.clue, onSuccess: _handleSuccess);
         break;
       default:
         gameWidget = const Center(child: Text("Minijuego no implementado"));
     }
 
     // WRAPPER DE SEGURIDAD: Evitar salir sin penalización
-    return PopScope(
-      canPop: _legalExit || isSpectator,
-      onPopInvoked: (didPop) async {
-        if (didPop || _legalExit || isSpectator) return;
-
-        // Si intenta salir con Back, mostramos el diálogo de rendición (que cobra vida)
-        showSkipDialog(context, _finishLegally);
-      },
-      child: Stack(
-        children: [
-          IgnorePointer(
-            ignoring: isSpectator, // Bloquea interacción con el juego
-            child: gameWidget,
-          ),
-          if (isSpectator)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.1), // Sutil oscurecimiento
+    return PracticeModeResolver(
+      isPractice: widget.isPractice,
+      child: PopScope(
+        canPop: _legalExit || isSpectator || widget.isPractice,
+        onPopInvoked: (didPop) async {
+          if (didPop || _legalExit || isSpectator || widget.isPractice) return;
+  
+          // Si intenta salir con Back, mostramos el diálogo de rendición (que cobra vida)
+          showSkipDialog(context, _finishLegally);
+        },
+        child: Material(
+          type: MaterialType.transparency,
+          child: Stack(
+            children: [
+              IgnorePointer(
+                ignoring: isSpectator, // Bloquea interacción con el juego
+                child: gameWidget,
               ),
+              if (isSpectator)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withOpacity(0.1), // Sutil oscurecimiento
+                  ),
+                ),
+              if (widget.isPractice)
+                _buildPracticeBanner(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPracticeBanner() {
+    return Positioned(
+      top: 100,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.accentGold.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.accentGold.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                )
+              ],
             ),
-        ],
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.terminal, color: Colors.black, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  "MODO ENTRENAMIENTO",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -641,8 +946,24 @@ void showClueSelector(BuildContext context, Clue currentClue) {
   );
 }
 
-/// Diálogo de rendición actualizado para manejar la salida legal
+Future<void> _setMinigameCooldownUntilMs(int seconds) async {
+  const minSeconds = 5;
+  const maxSeconds = 30;
+  const key = 'minigame_cooldown_until_ms';
+  final prefs = await SharedPreferences.getInstance();
+  final clampedSeconds = seconds.clamp(minSeconds, maxSeconds);
+  final until =
+      DateTime.now().millisecondsSinceEpoch + (clampedSeconds * 1000);
+  await prefs.setInt(key, until);
+}
+
+/// Diálogo de rendición: quita 1 vida y reinicia el minijuego in-place.
+/// Ya NO cierra la PuzzleScreen — el jugador puede seguir intentando.
+/// Solo sale al mapa si se queda sin vidas.
 void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
+  final provider = Provider.of<GameProvider>(context, listen: false);
+  provider.setModalActive(true);
+
   showDialog(
     context: context,
     builder: (dialogContext) => Dialog(
@@ -709,7 +1030,10 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () {
+                        provider.setModalActive(false);
+                        Navigator.pop(dialogContext);
+                      },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -740,6 +1064,7 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                         }
 
                         // 2. Cerrar diálogo
+                        provider.setModalActive(false);
                         Navigator.pop(dialogContext);
 
                         // 3. Cerrar pantalla actual (PuzzleScreen)
@@ -758,13 +1083,80 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
                           await MinigameLogicHelper.executeLoseLife(context);
                         }
 
-                        // 5. Feedback
+                        // 5. Feedback Premium
                         messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Te has rendido (-1 Vida). Puedes volver a intentarlo cuando estés listo.'),
-                            backgroundColor: AppTheme.warningOrange,
-                            duration: Duration(seconds: 3),
+                          SnackBar(
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Colors.transparent,
+                            elevation: 0,
+                            content: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppTheme.warningOrange,
+                                    AppTheme.warningOrange.withOpacity(0.8),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.2),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.favorite_rounded,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  const Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'MISIÓN CANCELADA',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Has perdido una vida (-1 ❤️). Reinténtalo cuando estés listo.',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            duration: const Duration(seconds: 4),
                           ),
                         );
                       },
@@ -799,63 +1191,526 @@ void showSkipDialog(BuildContext context, VoidCallback? onLegalExit) {
 
 // --- LOGICA DE VICTORIA COMPARTIDA ---
 
-void _showSuccessDialog(BuildContext context, Clue clue) async {
+void _showSuccessDialog(
+  BuildContext context,
+  Clue clue, {
+  String? sessionId,
+  String? challengeToken,
+  Map<String, dynamic>? resultPayload,
+  VoidCallback? onValidationSuccess,
+  VoidCallback? onValidationFailure,
+  VoidCallback? onForceExit,
+  bool isPractice = false,
+}) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+  final gameFlowProvider = Provider.of<GameFlowProvider>(context, listen: false);
 
-  // [FIX] Capturar Navigator ANTES de cualquier operación async
-  // Esto garantiza que podamos navegar incluso si el context padre cambia
+  // [FIX] Capturar Navigator y ruta del PuzzleScreen ANTES de cualquier operación async
   final navigator = Navigator.of(context);
-  final rootOverlay = Overlay.of(context);
-  final scaffoldMessenger = ScaffoldMessenger.of(context);
+  final puzzleRoute = ModalRoute.of(context); // Para removeRoute confiable en onMapReturn
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => const Center(
-      child: LoadingIndicator(),
-    ),
-  );
+  debugPrint('🎉 SUCCESS FLOW STARTED for ${clue.id}');
 
+  // ── DESACOPLADO DEL RPC ──────────────────────────────────────────────────
+  Future<Map<String, dynamic>?> clueCompletionFuture;
+
+  if (clue.id.startsWith('demo_') || clue.id.startsWith('practice_') || isPractice) {
+    gameProvider.completeLocalClue(clue.id);
+    clueCompletionFuture = Future.value({'success': true, 'coins_earned': 0});
+  } else if (sessionId == null) {
+    debugPrint('⚠️ _showSuccessDialog: No session ID for minigame, fallback to connection error');
+    clueCompletionFuture = Future.value({'success': false, 'error': 'BLOCKED'});
+  } else {
+    debugPrint('--- COMPLETING CLUE (background): ${clue.id} ---');
+    clueCompletionFuture = gameProvider.completeCurrentClue(
+      clue.riddleAnswer ?? "WIN",
+      clueId: clue.id,
+      sessionId: sessionId,
+      challengeToken: challengeToken,
+      result: resultPayload,
+    );
+  }
+
+  // También lanzar el refresh de perfil en paralelo (no necesita el RPC aún)
+  Future<void>? profileRefreshFuture;
+  if (playerProvider.currentPlayer != null) {
+    profileRefreshFuture = playerProvider.refreshProfile();
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  if (!navigator.mounted) return;
+
+  // 1. Validar resultado ANTES de mostrar la animación del trébol
   Map<String, dynamic>? result;
   int coinsEarned = 0;
+  bool validationOpen = false; // Initialize false, only open if NOT practice
+  
+  if (!clue.id.startsWith('practice_') && !isPractice) {
+    validationOpen = true;
+    unawaited(
+      showGeneralDialog(
+        context: navigator.context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withOpacity(0.9),
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (dialogContext, _, __) => const Scaffold(
+          backgroundColor: Colors.black,
+          body: LoadingIndicator(
+            message: 'Validando resultado...',
+            fontSize: 16,
+          ),
+        ),
+      ).whenComplete(() => validationOpen = false),
+    );
+  }
 
   try {
-    if (clue.id.startsWith('demo_')) {
-      gameProvider.completeLocalClue(clue.id);
-      result = {'success': true}; // Demo mode fallback
-    } else {
-      debugPrint('--- COMPLETING CLUE: ${clue.id} (XP: ${clue.xpReward}) ---');
-      result =
-          await gameProvider.completeCurrentClue(clue.riddleAnswer ?? "WIN");
-      coinsEarned = result?['coins_earned'] ?? 0;
-      debugPrint(
-          '--- CLUE COMPLETION RESULT: ${result != null}, Coins Earned: $coinsEarned ---');
-    }
+    // FIX: Increased from 6s to 15s. The full chain (Edge Function → verify_and_complete_minigame
+    // → submit_clue_answer → potentially register_race_finisher) can exceed 6s on slow mobile networks.
+    result = await clueCompletionFuture.timeout(const Duration(seconds: 15));
+    coinsEarned = result?['coins_earned'] ?? 0;
+    debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
   } catch (e) {
-    debugPrint("Error completando pista: $e");
+    debugPrint("Error completando pista (background/timeout): $e");
     result = null;
   }
 
-  // [FIX] Cerrar spinner usando navigator capturado
-  if (navigator.mounted) {
-    navigator.pop();
+  if (validationOpen && navigator.mounted) {
+    try {
+      Navigator.of(navigator.context, rootNavigator: true).pop();
+    } catch (_) {}
   }
 
-  if (result != null) {
-    // coinsEarned se muestra en el SuccessCelebrationDialog (no SnackBar)
-
-    if (playerProvider.currentPlayer != null) {
-      debugPrint('--- REFRESHING PROFILE START ---');
-      await playerProvider.refreshProfile();
-      debugPrint(
-          '--- REFRESHING PROFILE END. New Coins: ${playerProvider.currentPlayer?.coins} ---');
+  if (result == null) {
+    onValidationFailure?.call();
+    if (navigator.mounted) {
+      await showDialog<void>(
+        context: navigator.context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+          ),
+          title: const Text(
+            'Error de conexion',
+            style: TextStyle(
+              color: AppTheme.dangerRed,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'No se pudo validar el resultado. Debes reintentar el minijuego.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'ENTENDIDO',
+                style: TextStyle(
+                  color: AppTheme.dangerRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
-    // Check if race was completed or if player completed all clues
+    onForceExit?.call();
+    if (navigator.mounted && puzzleRoute != null) {
+      try {
+        navigator.removeRoute(puzzleRoute);
+      } catch (_) {
+        if (navigator.mounted) navigator.maybePop();
+      }
+    } else if (navigator.mounted) {
+      navigator.maybePop();
+    }
+    return;
+  }
+
+  // --- PRACTICE MODE EARLY EXIT REMOVED TO USE UNIFIED CLOVER FLOW ---
+
+  if (result['success'] == false) {
+    onValidationFailure?.call();
+    final errorCode = result['error']?.toString();
+    if (navigator.mounted) {
+      if (errorCode == 'TOO_FAST_WARNING' || errorCode == 'TOO_FAST') {
+        final elapsed = (result['elapsed_seconds'] as num?)?.toInt() ?? 0;
+        final minSeconds = (result['min_duration_seconds'] as num?)?.toInt() ?? 0;
+        final remaining = (minSeconds - elapsed).clamp(5, 30);
+        await _setMinigameCooldownUntilMs(remaining);
+
+        if (navigator.mounted) {
+          await showDialog<void>(
+            context: navigator.context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1D),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Colors.orange, width: 1.5),
+              ),
+              title: const Text(
+                'Actividad Sospechosa',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: const Text(
+                'Se ha detectado algo sospechoso, que no lo vuelva a intentar o será baneado permanentemente.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                if (playerProvider.currentPlayer?.role == 'admin')
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await Supabase.instance.client.rpc('test_remove_my_ban');
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      } catch (e) {
+                        debugPrint('Error removiendo ban: $e');
+                      }
+                    },
+                    child: const Text('REMOVER BANS / FLAGS (ADMIN)', style: TextStyle(color: Colors.white)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ENTENDIDO',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        onForceExit?.call();
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (navigator.mounted && puzzleRoute != null) {
+            try {
+              navigator.removeRoute(puzzleRoute);
+            } catch (_) {
+              if (navigator.mounted) navigator.maybePop();
+            }
+          } else if (navigator.mounted) {
+            navigator.maybePop();
+          }
+        });
+      } else if (errorCode == 'TOO_FAST_BANNED') {
+        if (navigator.mounted) {
+          await showDialog<void>(
+            context: navigator.context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1D),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+              ),
+              title: const Text(
+                'Baneado Permanentemente',
+                style: TextStyle(
+                  color: AppTheme.dangerRed,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: const Text(
+                'Has sido baneado permanentemente del sistema por actividad sospechosa reiterada. Esta es una medida definitiva.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                if (playerProvider.currentPlayer?.role == 'admin')
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await Supabase.instance.client.rpc('test_remove_my_ban');
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                      } catch (e) {
+                        debugPrint('Error removiendo ban: $e');
+                      }
+                    },
+                    child: const Text('REMOVER BANS / FLAGS (ADMIN)', style: TextStyle(color: Colors.white)),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ENTENDIDO',
+                    style: TextStyle(color: AppTheme.dangerRed, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Sign out and kick to scenarios if NOT admin (admin removes ban via button and stays)
+        if (playerProvider.currentPlayer?.role != 'admin') {
+          try {
+            await Supabase.instance.client.auth.signOut();
+          } catch (e) {
+            debugPrint('[BAN] signOut error: $e');
+          }
+          if (navigator.mounted) {
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => ScenariosScreen()),
+              (route) => false,
+            );
+          }
+        } else {
+          // Admin stays — just pop the puzzle screen
+          onForceExit?.call();
+          Future.delayed(const Duration(milliseconds: 150), () {
+            if (navigator.mounted && puzzleRoute != null) {
+              try {
+                navigator.removeRoute(puzzleRoute);
+              } catch (_) {
+                if (navigator.mounted) navigator.maybePop();
+              }
+            } else if (navigator.mounted) {
+              navigator.maybePop();
+            }
+          });
+        }
+
+      } else if (errorCode == 'BLOCKED') {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Cuenta Bloqueada Temporalmente',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Su cuenta ha sido bloqueada por 5 minutos debido a actividad sospechosa. No podrás participar en minijuegos durante este tiempo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else if (errorCode == 'SESSION_EXPIRED' || errorCode == '0xERR-992A-4B') {
+        // FIX: Map opaque server error code 0xERR-992A-4B (session expired on server)
+        // to the same user-friendly SESSION_EXPIRED dialog.
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Sesion expirada',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Tu sesion expiro. Debes reintentar el minijuego.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      } else if (errorCode == 'CHALLENGE_MISMATCH' || errorCode == '0xERR-CHALLENGE' || errorCode == '0xERR-HMAC') {
+        // FIX: Map challenge/HMAC errors to a specific, helpful dialog.
+        // This can happen if the user's network context changed significantly.
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.orange.shade700, width: 1.5),
+            ),
+            title: Text(
+              'Conexion inestable',
+              style: TextStyle(
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Tu conexion cambio durante el minijuego. Asegurate de tener una conexion estable e intentalo de nuevo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(
+                  'REINTENTAR',
+                  style: TextStyle(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      } else {
+        // Generic fallback for truly unknown errors
+        debugPrint('⚠️ Unmapped validation error code: $errorCode (full result: $result)');
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppTheme.dangerRed, width: 1.5),
+            ),
+            title: const Text(
+              'Validacion fallida',
+              style: TextStyle(
+                color: AppTheme.dangerRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'No se pudo validar el resultado. Debes reintentar el minijuego.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text(
+                  'ENTENDIDO',
+                  style: TextStyle(
+                    color: AppTheme.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
+      }
+    }
+    return;
+  }
+
+  // 2. Mostrar la Animación del Trébol Dorado
+  onValidationSuccess?.call();
+  bool sealCompleted = false;
+  try {
+    await showGeneralDialog(
+      context: navigator.context,
+      barrierDismissible: false,
+      barrierColor: Colors.black,
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (dialogContext, _, __) => Scaffold(
+        backgroundColor: Colors.black,
+        body: TimeStampAnimation(
+          index: ((clue.sequenceIndex - 1) % 9) + 1,
+          onComplete: () {
+            if (!sealCompleted && dialogContext.mounted) {
+              sealCompleted = true;
+              final sealRoute = ModalRoute.of(dialogContext);
+              if (sealRoute != null) {
+                try {
+                  Navigator.of(dialogContext).removeRoute(sealRoute);
+                } catch (_) {
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                }
+              } else {
+                Navigator.pop(dialogContext);
+              }
+            }
+          },
+        ),
+      ),
+    );
+  } catch (e) {
+    debugPrint('Error showing TimeStampAnimation: $e');
+  }
+
+  // Esperar que el refreshProfile termine (si aún no lo hizo)
+  if (profileRefreshFuture != null) {
+    try {
+      await profileRefreshFuture;
+    } catch (e) {
+      debugPrint('WARN: Profile refresh failed: $e');
+    }
+  }
+
+  if (!navigator.mounted) return;
+
+  // 3. Manejar fin de carrera o navegación a sala de espera
+  if (result != null) {
     if (gameProvider.isRaceCompleted || gameProvider.hasCompletedAllClues) {
-      // Get player position
-      int playerPosition = 0; // Default 0
+      int playerPosition = 0;
       final currentPlayerId = playerProvider.currentPlayer?.id ?? '';
 
       if (gameProvider.leaderboard.isNotEmpty) {
@@ -864,16 +1719,11 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
         playerPosition =
             index >= 0 ? index + 1 : gameProvider.leaderboard.length + 1;
       } else {
-        playerPosition = 999; // Safe default
+        playerPosition = 999;
       }
 
-      // 🏆 LOGIC UPDATE: WAITING ROOM vs WINNER SCREEN
-      // If the race is NOT globally completed yet (still active), but user finished -> Waiting Room
-      // If the race IS globally completed -> Winner Screen
-
       if (!gameProvider.isRaceCompleted && gameProvider.hasCompletedAllClues) {
-        debugPrint(
-            "🏆 User finished, but Race is still ACTIVE -> Going to Waiting Room");
+        debugPrint("🏆 User finished, Race still ACTIVE → Waiting Room");
         if (navigator.mounted) {
           navigator.pushReplacement(
             MaterialPageRoute(
@@ -886,10 +1736,10 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
         return;
       }
 
-      // Navigate to winner celebration screen if race IS completed
       if (navigator.mounted) {
         navigator.pushAndRemoveUntil(
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
             builder: (_) => WinnerCelebrationScreen(
               eventId: gameProvider.currentEventId ?? '',
               playerPosition: playerPosition,
@@ -901,53 +1751,26 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
       }
       return;
     }
-  } else {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Error al guardar el progreso. Verifica tu conexión.'),
-            backgroundColor: AppTheme.dangerRed),
-      );
-    }
-    return;
   }
 
-  // [FIX] Verificar navigator en vez de context para robustez
-  if (!navigator.mounted) {
-    debugPrint('WARN: Navigator not mounted before TimeStampAnimation');
-    return;
-  }
+  if (!navigator.mounted) return;
 
-  // 1. Mostrar la Animación del Trébol Dorado
-  // [FIX] Usar Completer para asegurar que onComplete se ejecute una sola vez
-  bool sealCompleted = false;
-  try {
-    await showGeneralDialog(
-      context: navigator.context, // Usar navigator.context, no context raw
-      barrierDismissible: false,
-      pageBuilder: (dialogContext, _, __) => Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.85),
-        body: TimeStampAnimation(
-          index: ((clue.sequenceIndex - 1) % 9) + 1,
-          onComplete: () {
-            if (!sealCompleted && dialogContext.mounted) {
-              sealCompleted = true;
-              Navigator.pop(dialogContext);
-            }
-          },
-        ),
-      ),
-    );
-  } catch (e) {
-    debugPrint('Error showing TimeStampAnimation: $e');
-  }
+  // 4. Registrar intención de celebración en GameFlowProvider
+  gameFlowProvider.recordClueCompletion(PendingCelebration(
+    clueId: clue.id,
+    clueSequenceIndex: clue.sequenceIndex,
+    coinsEarned: coinsEarned,
+  ));
 
-  // [FIX] ELIMINADO: Early return por context.mounted
-  // El diálogo de celebración DEBE mostrarse siempre después del sello
-  // Usamos navigator capturado en vez de context
+  // [FIX] Siempre mostrar el diálogo de celebración, sin importar si hay un
+  // poder bloqueante activo. El diálogo se empuja como ruta por ENCIMA de la
+  // _BlockingPageRoute, así que es visible e interactuable. Esto elimina las
+  // race conditions donde la celebración diferida nunca se mostraba porque
+  // _isBlockingActive y _isPowerBlocking quedaban desincronizados.
 
-  // 2. Determinar si hay siguiente pista
+  // 5. Mostrar el panel de celebración "¡Pista Completada!"
+  gameFlowProvider.markCelebrationShowing();
+
   final clues = gameProvider.clues;
   final currentIdx = clues.indexWhere((c) => c.id == clue.id);
   Clue? nextClue;
@@ -955,30 +1778,35 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
     nextClue = clues[currentIdx + 1];
   }
   final showNextStep = nextClue != null;
-  // Obtener el hint (ubicación) de la siguiente pista para mostrarlo al jugador
-  final String? nextClueHint = nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null;
-
-  // 3. Mostrar el panel de celebración - OBLIGATORIO después del sello
-  // [FIX] Usar navigator capturado para garantizar visualización
-  if (!navigator.mounted) {
-    debugPrint('WARN: Navigator not mounted for SuccessCelebrationDialog');
-    return;
-  }
+  final String? nextClueHint =
+      nextClue?.hint.isNotEmpty == true ? nextClue!.hint : null;
 
   await showDialog(
     context: navigator.context,
     barrierDismissible: false,
+    barrierColor: Colors.black.withOpacity(0.85), // [FIX] Darker barrier to prevent bleed-through
     builder: (dialogContext) => SuccessCelebrationDialog(
       clue: clue,
       showNextStep: showNextStep,
       totalClues: clues.length,
-      coinsEarned: coinsEarned, // Valor dinámico del servidor
-      nextClueHint: nextClueHint, // Ubicación de la siguiente pista
+      coinsEarned: coinsEarned,
+      nextClueHint: nextClueHint,
+      isPractice: isPractice || clue.id.startsWith('practice_'),
       onMapReturn: () {
+        gameFlowProvider.consumePendingCelebration();
         Navigator.of(dialogContext).pop();
         Future.delayed(const Duration(milliseconds: 100), () {
-          if (navigator.mounted) {
-            navigator.pop();
+          if (navigator.mounted && puzzleRoute != null) {
+            // [FIX] Usar removeRoute para sacar el PuzzleScreen específicamente,
+            // sin importar si hay una _BlockingPageRoute encima (el SabotageOverlay
+            // la limpiará cuando el poder expire).
+            try {
+              navigator.removeRoute(puzzleRoute);
+            } catch (_) {
+              if (navigator.mounted) navigator.maybePop();
+            }
+          } else if (navigator.mounted) {
+            navigator.maybePop();
           }
         });
       },
@@ -990,386 +1818,247 @@ void _showSuccessDialog(BuildContext context, Clue clue) async {
 
 class SlidingPuzzleWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const SlidingPuzzleWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {}, // No-op, handled by onSuccess
       SlidingPuzzleMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class TicTacToeWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const TicTacToeWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       TicTacToeMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class HangmanWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const HangmanWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const HangmanWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       HangmanMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class TetrisWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const TetrisWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const TetrisWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       TetrisMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class FlagsWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const FlagsWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const FlagsWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       FlagsMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class MinesweeperWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const MinesweeperWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       MinesweeperMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class SnakeWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
-  const SnakeWrapper({super.key, required this.clue, required this.onFinish});
+  final Function(Clue) onSuccess;
+  const SnakeWrapper({super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       SnakeMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class BlockFillWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const BlockFillWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       BlockFillMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 // Para FindDifference, asumo que existe un wrapper similar o debes crearlo si no existe en el archivo original
 class FindDifferenceWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const FindDifferenceWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       FindDifferenceMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class CodeBreakerWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const CodeBreakerWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      CodeBreakerWidget(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class ImageTriviaWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const ImageTriviaWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      ImageTriviaWidget(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class WordScrambleWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const WordScrambleWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      WordScrambleWidget(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          onSuccess: () => onSuccess(clue)));
 }
 
 class MemorySequenceWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const MemorySequenceWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       MemorySequenceMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class DrinkMixerWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const DrinkMixerWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       DrinkMixerMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class LibrarySortWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const LibrarySortWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      LibrarySortMinigame(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class FastNumberWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const FastNumberWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       FastNumberMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class BagShuffleWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const BagShuffleWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       BagShuffleMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
-}
-
-class ChargeShakerWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const ChargeShakerWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      ChargeShakerMinigame(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class EmojiMovieWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const EmojiMovieWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       EmojiMovieMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class VirusTapWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const VirusTapWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       VirusTapMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 class DroneDodgeWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const DroneDodgeWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       DroneDodgeMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
+          onSuccess: () => onSuccess(clue)));
 }
 
 // --- SCAFFOLD COMPARTIDO ACTUALIZADO (Soporta onFinish para Rendición Legal) ---
 
 String _getMinigameInstruction(Clue clue) {
-  switch (clue.puzzleType) {
+  switch (clue.effectivePuzzleType) {
     case PuzzleType.slidingPuzzle:
       return "Ordena los números (1 al 8)";
     case PuzzleType.ticTacToe:
@@ -1388,24 +2077,17 @@ String _getMinigameInstruction(Clue clue) {
       return "Maneja la culebrita";
     case PuzzleType.blockFill:
       return "Rellena los bloques";
-    case PuzzleType.codeBreaker:
-      return "Descifra el código";
-    case PuzzleType.imageTrivia:
-      return "Adivina la imagen";
-    case PuzzleType.wordScramble:
-      return "Ordena las letras";
+
     case PuzzleType.memorySequence:
       return "Recuerda la secuencia";
     case PuzzleType.drinkMixer:
       return "Iguala el cóctel";
-    case PuzzleType.librarySort:
-      return "Ordena por tonalidad";
+
     case PuzzleType.fastNumber:
       return "Captura el número";
     case PuzzleType.bagShuffle:
       return "Sigue la bolsa";
-    case PuzzleType.chargeShaker:
-      return "¡Agita para cargar!";
+
     case PuzzleType.emojiMovie:
       return "Adivina la película";
     case PuzzleType.virusTap:
@@ -1426,8 +2108,6 @@ String _getMinigameInstruction(Clue clue) {
       return "Selecciona la capital";
     case PuzzleType.trueFalse:
       return "Verdadero o Falso";
-    case PuzzleType.matchThree:
-      return "Combina 3 iguales";
     default:
       // Si es un tipo estándar, verificamos por el título o descripción
       if (clue.riddleQuestion?.contains("código") ?? false)
@@ -1443,14 +2123,11 @@ Widget _buildMinigameScaffold(
     {bool isScrollable = false}) {
   final player = Provider.of<PlayerProvider>(context).currentPlayer;
 
-  // Envolvemos el minijuego en el countdown
   final instruction = _getMinigameInstruction(clue);
-  final wrappedChild = MinigameCountdownOverlay(
-    instruction: instruction,
-    child: child,
-  );
-
   final isDarkMode = Provider.of<PlayerProvider>(context).isDarkMode;
+
+  // StatefulBuilder to manage quick shop toggle within top-level function
+  bool showQuickShop = false;
 
   return SabotageOverlay(
     child: Scaffold(
@@ -1472,154 +2149,217 @@ Widget _buildMinigameScaffold(
               color: Colors.black.withOpacity(isDarkMode ? 0.5 : 0.3),
             ),
           ),
-          // Content
-          SafeArea(
-            child: Consumer<GameProvider>(
-              builder: (context, game, _) {
-                return Stack(
-                  children: [
-                    Column(
-                      children: [
-                        // AppBar Personalizado
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          child: Row(
-                            children: [
-                              if (player?.role == 'spectator')
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_back,
-                                      color: Colors.white),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                              const Spacer(),
-                              if (player?.role != 'spectator') ...[
-                                // INDICADOR DE VIDAS CON ANIMACIÓN
-                                const ShieldBadge(), // NEW SHIELD WIDGET
-                                AnimatedLivesWidget(),
-                                const SizedBox(width: 10),
+          // Content wrapped in Countdown
+          MinigameCountdownOverlay(
+            instruction: instruction,
+            child: SafeArea(
+              left: clue.effectivePuzzleType != PuzzleType.droneDodge,
+              right: clue.effectivePuzzleType != PuzzleType.droneDodge,
+              child: Consumer<GameProvider>(
+                builder: (context, game, _) {
+                  return StatefulBuilder(
+                    builder: (context, setScaffoldState) {
+                  return Stack(
+                    children: [
+                      Column(
+                        children: [
+                          // AppBar Personalizado
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical:
+                                    MediaQuery.of(context).size.height < 700
+                                        ? 4
+                                        : 8),
+                            child: Row(
+                              children: [
+                                if (player?.role == 'spectator')
+                                  IconButton(
+                                    icon: const Icon(Icons.arrow_back,
+                                        color: Colors.white),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                const Spacer(),
+                                if (player?.role != 'spectator') ...[
+                                  // INDICADOR DE VIDAS CON ANIMACIÓN
+                                  const ShieldBadge(), // NEW SHIELD WIDGET
+                                  AnimatedLivesWidget(),
+                                  const SizedBox(width: 10),
 
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.accentGold.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(15),
-                                    border:
-                                        Border.all(color: AppTheme.accentGold),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppTheme.accentGold.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(15),
+                                      border: Border.all(
+                                          color: AppTheme.accentGold),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.star,
+                                            color: AppTheme.accentGold,
+                                            size: 12),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '+${clue.xpReward} XP',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.star,
-                                          color: AppTheme.accentGold, size: 12),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '+${clue.xpReward} XP',
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10),
+                                  const SizedBox(width: 4),
+                                  // BOTÓN TIENDA RÁPIDA
+                                  GestureDetector(
+                                    onTap: () => setScaffoldState(() => showQuickShop = !showQuickShop),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: showQuickShop
+                                            ? AppTheme.accentGold.withOpacity(0.3)
+                                            : AppTheme.accentGold.withOpacity(0.15),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppTheme.accentGold.withOpacity(showQuickShop ? 0.8 : 0.4),
+                                        ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.flag,
-                                      color: AppTheme.dangerRed, size: 28),
-                                  tooltip: 'Rendirse',
-                                  onPressed: () =>
-                                      showSkipDialog(context, onFinish),
-                                ),
-                              ] else
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border:
-                                        Border.all(color: Colors.blueAccent),
-                                  ),
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.visibility,
-                                          color: Colors.blueAccent, size: 14),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'MODO ESPECTADOR',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold),
+                                      child: Icon(
+                                        Icons.storefront_rounded,
+                                        color: showQuickShop ? AppTheme.accentGold : Colors.white70,
+                                        size: 20,
                                       ),
-                                    ],
+                                    ),
                                   ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: const Icon(Icons.flag,
+                                        color: AppTheme.dangerRed, size: 28),
+                                    tooltip: 'Rendirse',
+                                    onPressed: () =>
+                                        showSkipDialog(context, onFinish),
+                                  ),
+                                ] else
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border:
+                                          Border.all(color: Colors.blueAccent),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        Icon(Icons.visibility,
+                                            color: Colors.blueAccent, size: 14),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'MODO ESPECTADOR',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          // Mapa de Progreso
+                          Builder(
+                            builder: (context) {
+                              final screenHeight =
+                                  MediaQuery.of(context).size.height;
+                              // Threshold increased to 800 to cover more "tall but cramped" devices like Samsung S8/S9
+                              final isSmallOrMediumScreen = screenHeight < 800;
+
+                              // Force compact for complex minigames OR if the screen is not very tall
+                              final forceCompact = isSmallOrMediumScreen ||
+                                  (clue.effectivePuzzleType ==
+                                          PuzzleType.slidingPuzzle ||
+                                      clue.effectivePuzzleType == PuzzleType.ticTacToe ||
+                                      clue.effectivePuzzleType == PuzzleType.tetris ||
+                                      clue.effectivePuzzleType == PuzzleType.hangman ||
+                                      clue.effectivePuzzleType == PuzzleType.fastNumber ||
+                                      clue.effectivePuzzleType == PuzzleType.capitalCities ||
+                                      clue.effectivePuzzleType == PuzzleType.emojiMovie ||
+                                      clue.effectivePuzzleType == PuzzleType.trueFalse ||
+                                      clue.effectivePuzzleType == PuzzleType.chronologicalOrder);
+
+                              // Horizontal padding only if NOT a full-screen precision game like Dodge
+                              final hPadding =
+                                  (clue.effectivePuzzleType == PuzzleType.droneDodge)
+                                      ? 0.0
+                                      : (isSmallOrMediumScreen ? 8.0 : 16.0);
+
+                              return Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: hPadding,
+                                    vertical: isSmallOrMediumScreen ? 2 : 4),
+                                child: RaceTrackWidget(
+                                  leaderboard: game.leaderboard,
+                                  currentPlayerId: player?.userId ?? '',
+                                  totalClues: game.clues.length,
+                                  // Pass null to remove redundant small button; the top flag and bottom buttons are enough
+                                  onSurrender: null,
+                                  compact: forceCompact,
                                 ),
-                            ],
+                              );
+                            },
+                          ),
+
+                          SizedBox(
+                              height: MediaQuery.of(context).size.height < 800
+                                  ? 0
+                                  : 4),
+
+                          Expanded(
+                            child: IgnorePointer(
+                              ignoring: player != null && player.isFrozen,
+                              child: isScrollable
+                                  ? LayoutBuilder(
+                                      builder: (context, constraints) {
+                                      return SingleChildScrollView(
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                              minHeight: constraints.maxHeight),
+                                          child: Center(child: child),
+                                        ),
+                                      );
+                                    })
+                                  : child, // Usamos el hijo directamente, el countdown envuelve todo
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // QUICK POWER SHOP OVERLAY (above race tracker)
+                      if (showQuickShop && player?.role != 'spectator')
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: QuickPowerShop(
+                            onClose: () => setScaffoldState(() => showQuickShop = false),
                           ),
                         ),
 
-                        // Mapa de Progreso
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          child: RaceTrackWidget(
-                            leaderboard: game.leaderboard,
-                            currentPlayerId: player?.userId ?? '',
-                            totalClues: game.clues.length,
-                            onSurrender: () =>
-                                showSkipDialog(context, onFinish),
-                            compact: clue.puzzleType == PuzzleType.tetris ||
-                                clue.puzzleType == PuzzleType.hangman ||
-                                clue.puzzleType == PuzzleType.fastNumber,
-                          ),
-                        ),
+                      // NOTE: Blur effect is handled globally by SabotageOverlay
 
-                        const SizedBox(height: 10),
-
-                        Expanded(
-                          child: IgnorePointer(
-                            ignoring: player != null && player.isFrozen,
-                            child: isScrollable
-                                ? LayoutBuilder(
-                                    builder: (context, constraints) {
-                                    return SingleChildScrollView(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                            minHeight: constraints.maxHeight),
-                                        child: Center(child: wrappedChild),
-                                      ),
-                                    );
-                                  })
-                                : wrappedChild, // Usamos el hijo con countdown
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // EFECTO BLUR (Inyectado aquí)
-                    // EFECTO BLUR (Inyectado aquí)
-                    if (context
-                        .watch<PowerEffectReader>()
-                        .isPowerActive(PowerType.blur))
-                      Builder(builder: (context) {
-                        final expiry = context
-                            .read<PowerEffectReader>()
-                            .getPowerExpirationByType(PowerType.blur);
-                        if (expiry != null) {
-                          return Positioned.fill(
-                            child: BlurScreenEffect(expiresAt: expiry),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      }),
-
-                    // Efecto Visual de Daño (Flash Rojo) al perder vida
-                    LossFlashOverlay(lives: game.lives),
-                  ],
-                );
-              },
+                      // Efecto Visual de Daño (Flash Rojo) al perder vida
+                      LossFlashOverlay(lives: game.lives),
+                    ],
+                  );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -1632,151 +2372,112 @@ Widget _buildMinigameScaffold(
 
 class HolographicPanelsWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const HolographicPanelsWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       HolographicPanelsMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          onSuccess: () => onSuccess(clue)),
+      isScrollable: false);
 }
 
 class MissingOperatorWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const MissingOperatorWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       MissingOperatorMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          onSuccess: () => onSuccess(clue)),
+      isScrollable: false);
 }
 
 class PrimeNetworkWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const PrimeNetworkWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       PrimeNetworkMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
-      isScrollable: true);
+          onSuccess: () => onSuccess(clue)),
+      isScrollable: false);
 }
 
 class PercentageCalculationWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const PercentageCalculationWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       PercentageCalculationMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class ChronologicalOrderWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const ChronologicalOrderWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       ChronologicalOrderMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class CapitalCitiesWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const CapitalCitiesWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       CapitalCitiesMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
 }
 
 class TrueFalseWrapper extends StatelessWidget {
   final Clue clue;
-  final VoidCallback onFinish;
+  final Function(Clue) onSuccess;
   const TrueFalseWrapper(
-      {super.key, required this.clue, required this.onFinish});
+      {super.key, required this.clue, required this.onSuccess});
   @override
   Widget build(BuildContext context) => _buildMinigameScaffold(
       context,
       clue,
-      onFinish,
+      () {},
       TrueFalseMinigame(
           clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }),
+          onSuccess: () => onSuccess(clue)),
       isScrollable: true);
-}
-
-class MatchThreeWrapper extends StatelessWidget {
-  final Clue clue;
-  final VoidCallback onFinish;
-  const MatchThreeWrapper(
-      {super.key, required this.clue, required this.onFinish});
-  @override
-  Widget build(BuildContext context) => _buildMinigameScaffold(
-      context,
-      clue,
-      onFinish,
-      MatchThreeMinigame(
-          clue: clue,
-          onSuccess: () {
-            onFinish();
-            _showSuccessDialog(context, clue);
-          }));
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import '../../models/clue.dart';
 import '../../providers/game_provider.dart';
 import '../../providers/connectivity_provider.dart';
@@ -36,6 +37,7 @@ class _PercentageCalculationMinigameState
   int _score = 0;
   int _secondsRemaining = _gameDurationSeconds;
   bool _isGameOver = false;
+  bool _isProcessingSelection = false; // Guard against double-taps
 
   // Round Data
   late int _baseNumber;
@@ -80,7 +82,7 @@ class _PercentageCalculationMinigameState
         final gameProvider = Provider.of<GameProvider>(context, listen: false);
         final connectivityByProvider =
             Provider.of<ConnectivityProvider>(context, listen: false);
-        if (!connectivityByProvider.isOnline || gameProvider.isFrozen) {
+        if (!connectivityByProvider.isOnline || gameProvider.isPaused) {
           return; // Skip tick
         }
 
@@ -95,62 +97,112 @@ class _PercentageCalculationMinigameState
 
   void _generateRound() {
     // Generate clear percentages: 10, 20, 25, 50
-    List<int> percents = [10, 20, 25, 50];
+    final List<int> percents = [10, 20, 25, 50];
     _percentage = percents[_random.nextInt(percents.length)];
 
-    // Generate accurate base numbers (multiples of 10 or 100)
+    // Generate accurate base numbers (multiples of 10 or 4)
     if (_percentage == 25) {
-      _baseNumber = (_random.nextInt(20) + 1) * 4; // Ensure divisible by 4
+      _baseNumber = (_random.nextInt(25) + 1) * 4; // 4, 8, ..., 100
     } else {
-      _baseNumber = (_random.nextInt(40) + 1) * 10;
+      _baseNumber = (_random.nextInt(40) + 1) * 10; // 10, 20, ..., 400
     }
 
+    // Exact integer calculation (guaranteed by constraints above)
     _correctAnswer = (_baseNumber * _percentage) ~/ 100;
 
-    // Generate distractors
-    Set<int> distractorSet = {_correctAnswer};
-    while (distractorSet.length < 4) {
-      // Logic for distractors: slightly off, or calculating wrong %
+    debugPrint(
+        '[PERCENT_MINIGAME] Round: $_percentage% of $_baseNumber = $_correctAnswer');
+
+    // Generate distractors using a Set to ensure uniqueness
+    final Set<int> distractorSet = {_correctAnswer};
+
+    // 1. Try adding values calculating wrong percentages of the same base
+    for (int p in percents) {
+      if (p != _percentage) {
+        int val = (_baseNumber * p) ~/ 100;
+        if (val > 0 && val != _correctAnswer) {
+          distractorSet.add(val);
+        }
+      }
+    }
+
+    // 2. Add random variants until we have 4 options
+    int attempts = 0;
+    while (distractorSet.length < 4 && attempts < 100) {
+      attempts++;
       int type = _random.nextInt(3);
       int val;
+
       if (type == 0) {
-        // Close value
-        val = _correctAnswer + (_random.nextInt(10) - 5) * 2;
+        // Small offset (±1, ±2, ±3)
+        val = _correctAnswer +
+            (_random.nextBool() ? 1 : -1) * (_random.nextInt(3) + 1);
       } else if (type == 1) {
-        // Wrong percentage logic (e.g. 10% instead of 20%)
-        int wrongP = percents[_random.nextInt(percents.length)];
-        val = (_baseNumber * wrongP) ~/ 100;
+        // Large offset (±10)
+        val = _correctAnswer + (_random.nextBool() ? 10 : -10);
       } else {
-        // Random
-        val = _random.nextInt(_baseNumber);
+        // Random value within a reasonable range
+        val = _random.nextInt(_baseNumber + 5);
       }
 
-      if (val > 0) distractorSet.add(val);
+      if (val > 0 && val != _correctAnswer) {
+        distractorSet.add(val);
+      }
+    }
+
+    // 3. Absolute fallback: if we still don't have 4 options, force sequential distractors
+    int offset = 1;
+    while (distractorSet.length < 4) {
+      int val = _correctAnswer + offset;
+      distractorSet.add(val);
+      offset++;
     }
 
     _options = distractorSet.toList();
-    _options.shuffle();
+    _options.shuffle(_random);
+
+    // 4. Final safety check: ensure the correct answer is definitely in the options
+    if (!_options.contains(_correctAnswer)) {
+      debugPrint('[PERCENT_MINIGAME] ⚠️ ERROR: Correct answer was missing!');
+      _options[0] = _correctAnswer;
+      _options.shuffle(_random);
+    }
+
+    debugPrint('[PERCENT_MINIGAME] Options: $_options');
   }
 
-  void _handleSelection(int selected) {
-    if (_isGameOver) return;
+  Future<void> _handleSelection(int selected) async {
+    if (_isGameOver || _isProcessingSelection) return;
 
     // [FIX] Prevent interaction if offline
     final connectivity =
         Provider.of<ConnectivityProvider>(context, listen: false);
     if (!connectivity.isOnline) return;
 
+    setState(() => _isProcessingSelection = true);
+
     if (selected == _correctAnswer) {
       setState(() {
         _score++;
-        if (_score >= _targetScore) {
-          _endGame(win: true);
-        } else {
-          _generateRound();
-        }
       });
+
+      if (_score >= _targetScore) {
+        _endGame(win: true);
+      } else {
+        // Small delay for feedback and to prevent immediate next-round taps
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          setState(() {
+            _generateRound();
+            _isProcessingSelection = false;
+          });
+        }
+      }
     } else {
-      _handleMistake();
+      await _handleMistake();
+      if (mounted) {
+        setState(() => _isProcessingSelection = false);
+      }
     }
   }
 
@@ -215,140 +267,48 @@ class _PercentageCalculationMinigameState
     super.dispose();
   }
 
+  int? _selectedIdx; // Feedback on which index was tapped
+  bool? _wasCorrect; // Feedback if the tap was correct
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        Container(
+          // [FIX] Removed outer horizontal padding to prevent double-padding (parent adds 16px)
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.start, // [FIX] Align to start for scrollability
             children: [
-              const SizedBox(height: 10), // Reduced top padding
+              const SizedBox(height: 12),
 
-              // 1. Top Bar (Compact)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Text("Tiempo: $_secondsRemaining",
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 16)),
-                  Text("Progreso: $_score/$_targetScore",
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 16)),
-                ],
-              ),
+              // 1. Header: Info and Progress (More compact)
+              _buildTopBar(),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              const SizedBox(height: 20),
-              Center(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                      color: Colors.indigo.shade900,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.indigo.withOpacity(0.5),
-                            blurRadius: 20)
-                      ]),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "$_percentage%",
-                          style: const TextStyle(
-                              fontSize: 50,
-                              color: Colors.amberAccent,
-                              fontWeight: FontWeight.bold),
-                        ),
-                        const Text("DE",
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 16)),
-                        Text(
-                          "$_baseNumber",
-                          style: const TextStyle(
-                              fontSize: 40,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
+              // 2. Question Card: Premium Glassmorphism (Compact)
+              _buildQuestionCard(),
+
+              const SizedBox(height: 16),
+
+              // 3. Instructions (Mini)
+              const Text(
+                "ELIGE EL RESULTADO",
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+
+              // 4. Options Grid (More compact)
+              _buildOptionsGrid(),
 
               const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20.0),
-                child: Center(
-                  child: SizedBox(
-                    height: 250, // Fixed height for options grid
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      // Exact calculation to fit GridView in available space
-                      // Height = 2 * itemHeight + 1 * mainAxisSpacing (15)
-                      double availableHeight = constraints.maxHeight;
-                      double rows = 2;
-                      double mainAxisSpacing = 15;
-                      // Calculate item height to fit exactly:
-                      double itemHeight =
-                          (availableHeight - (rows - 1) * mainAxisSpacing) /
-                              rows;
-
-                      // Width = 2 * itemWidth + 1 * crossAxisSpacing (15)
-                      double availableWidth = constraints.maxWidth;
-                      double crossAxisSpacing = 15;
-                      double itemWidth =
-                          (availableWidth - (2 - 1) * crossAxisSpacing) / 2;
-
-                      // Protect against negative or zero values
-                      if (itemHeight <= 0 || itemWidth <= 0)
-                        return const SizedBox.shrink();
-
-                      double childAspectRatio = itemWidth / itemHeight;
-
-                      return GridView.count(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 15,
-                        mainAxisSpacing: 15,
-                        childAspectRatio: childAspectRatio,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: _options.map((opt) {
-                          return GestureDetector(
-                            onTap: () => _handleSelection(opt),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: Colors.white10,
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(color: Colors.white24)),
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    "$opt",
-                                    style: const TextStyle(
-                                        fontSize: 28,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    }),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -374,4 +334,253 @@ class _PercentageCalculationMinigameState
       ],
     );
   }
+
+  Widget _buildTopBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildInfoItem(
+            icon: Icons.timer_rounded,
+            value: "$_secondsRemaining",
+            label: "TIEMPO",
+            color: _secondsRemaining < 10 ? AppTheme.dangerRed : AppTheme.accentGold,
+          ),
+          Container(height: 20, width: 1, color: Colors.white12),
+          _buildInfoItem(
+            icon: Icons.bolt_rounded,
+            value: "$_score/$_targetScore",
+            label: "PROGRESO",
+            color: AppTheme.successGreen,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoItem({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white30,
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4834D4).withOpacity(0.2),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF150826).withAlpha(240), // Deep Indigo/Navy
+                const Color(0xFF4834D4).withAlpha(220), // Dark Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white12, width: 1.2),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            children: [
+              Text(
+                "¿CUÁNTO ES EL?",
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              // [FIX] Using AutoSizeText for better responsive fitting without clipping
+              SizedBox(
+                height: 70,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    AutoSizeText(
+                      "$_percentage",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 54,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      maxLines: 1,
+                    ),
+                    const Text(
+                      "%",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  "DE",
+                  style: TextStyle(
+                    color: Colors.white24,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4.0,
+                  ),
+                ),
+              ),
+              AutoSizeText(
+                "$_baseNumber",
+                style: const TextStyle(
+                  color: AppTheme.accentGold,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Orbitron',
+                ),
+                maxLines: 1,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildOptionsGrid() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        // [FIX] More flexible ratio for narrow devices to prevent cramped buttons
+        childAspectRatio: MediaQuery.of(context).size.width < 360 ? 1.5 : 1.8,
+      ),
+      itemCount: _options.length,
+      itemBuilder: (context, index) {
+        final opt = _options[index];
+        final isSelected = _selectedIdx == index;
+
+        // Improved visibility for better contrast against background
+        Color cardColor = Colors.black.withOpacity(0.5); // Darker, more solid background
+        Color borderColor = Colors.white.withOpacity(0.25); // More visible border
+        Color textColor = Colors.white;
+
+        if (isSelected && _wasCorrect != null) {
+          cardColor = _wasCorrect!
+              ? AppTheme.successGreen.withOpacity(0.3)
+              : AppTheme.dangerRed.withOpacity(0.3);
+          borderColor = _wasCorrect! ? AppTheme.successGreen : AppTheme.dangerRed;
+          textColor = _wasCorrect! ? AppTheme.successGreen : AppTheme.dangerRed;
+        }
+
+        return RepaintBoundary(
+          child: GestureDetector(
+            onTap: () async {
+              if (_isGameOver || _isProcessingSelection) return;
+              setState(() {
+                _selectedIdx = index;
+                _wasCorrect = (opt == _correctAnswer);
+              });
+              await _handleSelection(opt);
+              if (mounted) {
+                setState(() {
+                  _selectedIdx = null;
+                  _wasCorrect = null;
+                });
+              }
+            },
+            child: AnimatedScale(
+              scale: isSelected ? 0.94 : 1.0,
+              duration: const Duration(milliseconds: 100),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor, width: 1.5),
+                  boxShadow: isSelected && _wasCorrect == true
+                      ? [
+                          BoxShadow(
+                            color: AppTheme.successGreen.withOpacity(0.2),
+                            blurRadius: 10,
+                          )
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: FittedBox(
+                    child: Text(
+                      "$opt",
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
+
+

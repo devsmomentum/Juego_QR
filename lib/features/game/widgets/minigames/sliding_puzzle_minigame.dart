@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../../../../core/theme/app_theme.dart';
 import 'game_over_overlay.dart';
 import 'cyber_surrender_button.dart';
 import '../../../mall/screens/mall_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class SlidingPuzzleMinigame extends StatefulWidget {
   final Clue clue;
@@ -27,14 +29,15 @@ class SlidingPuzzleMinigame extends StatefulWidget {
   State<SlidingPuzzleMinigame> createState() => _SlidingPuzzleMinigameState();
 }
 
-class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
+class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame>
+    with WidgetsBindingObserver {
   // Configuración
   final int gridSize = 3;
   late List<int> tiles;
 
   // Estado del juego
   late Timer _timer;
-  int _secondsRemaining = 120; // 2 minutos
+  int _secondsRemaining = 150; // 2.5 minutos
   bool _isGameOver = false;
 
   // Overlay State
@@ -44,11 +47,16 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   bool _canRetry = false;
   bool _showShopButton = false;
 
+  // Audio State
+  late AudioPlayer _audioPlayer;
+  bool _isMusicPlaying = false;
+
   void _showOverlayState(
       {required String title,
       required String message,
       bool retry = false,
       bool showShop = false}) {
+    _stopMusic(); // Stop music when overlay shows (game paused/ended)
     setState(() {
       _showOverlay = true;
       _overlayTitle = title;
@@ -61,8 +69,49 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    _audioPlayer.setVolume(0.5);
+
     _initializePuzzle();
     _startTimer();
+    _playMusic();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _audioPlayer.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_isMusicPlaying && !_isGameOver && !_showOverlay) {
+        _audioPlayer.resume();
+      }
+    }
+  }
+
+  Future<void> _playMusic() async {
+    if (_isMusicPlaying) return;
+    try {
+      await _audioPlayer.play(AssetSource(
+          'audio/easy-arcade-hartzmann-main-version-28392-02-32.mp3'));
+      if (mounted) {
+        setState(() => _isMusicPlaying = true);
+      }
+    } catch (e) {
+      debugPrint("Error playing sliding puzzle music: $e");
+    }
+  }
+
+  Future<void> _stopMusic() async {
+    try {
+      await _audioPlayer.stop();
+      if (mounted) {
+        setState(() => _isMusicPlaying = false);
+      }
+    } catch (e) {
+      debugPrint("Error stopping sliding puzzle music: $e");
+    }
   }
 
   void _initializePuzzle() {
@@ -80,15 +129,35 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
         gridSize * gridSize, (index) => (index + 1) % (gridSize * gridSize));
     tiles[gridSize * gridSize - 1] = 0; // El último es el vacío
 
-    // Hacer 50 movimientos aleatorios válidos
+    // Hacer movimientos más complejos para mezclar, evitando deshacer el movimiento anterior
     int emptyIndex = tiles.indexOf(0);
-    for (int i = 0; i < 50; i++) {
+    int previousIndex = -1;
+    final random = Random();
+
+    for (int i = 0; i < 1180; i++) {
       final neighbors = _getNeighbors(emptyIndex);
-      final randomNeighbor =
-          neighbors[DateTime.now().microsecond % neighbors.length];
+
+      // Evitar volver instantáneamente a la posición anterior para una mejor mezcla
+      if (neighbors.length > 1 && previousIndex != -1) {
+        neighbors.remove(previousIndex);
+      }
+
+      final randomNeighbor = neighbors[random.nextInt(neighbors.length)];
       _swap(emptyIndex, randomNeighbor);
+
+      previousIndex = emptyIndex;
       emptyIndex = randomNeighbor;
     }
+
+    // Verificación de seguridad: Si por casualidad quedó resuelto, re-mezclar
+    bool isResolved = true;
+    for (int i = 0; i < tiles.length - 1; i++) {
+      if (tiles[i] != i + 1) {
+        isResolved = false;
+        break;
+      }
+    }
+    if (isResolved) _shuffleSolvable();
   }
 
   List<int> _getNeighbors(int index) {
@@ -137,6 +206,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
     }
     if (won) {
       _stopTimer();
+      _stopMusic();
       widget.onSuccess();
     }
   }
@@ -147,7 +217,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
 
       // Check for freeze state
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
-      if (gameProvider.isFrozen) return; // Pause timer
+      if (gameProvider.isPaused) return; // Pause timer
 
       // [FIX] Pause timer if connectivity is bad
       final connectivityByProvider =
@@ -207,7 +277,9 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -221,31 +293,25 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
           // GAME CONTENT
           Column(
             children: [
-              // Status Bar
+              const SizedBox(height: 10),
+              const Text("ORDENA EL ROMPECABEZAS",
+                  style: TextStyle(
+                      color: AppTheme.accentGold,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
+              const SizedBox(height: 10),
+              // Reduced Status Bar (Only Timer)
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Vidas
-                    Consumer<GameProvider>(builder: (context, game, _) {
-                      return Row(
-                        children: [
-                          const Icon(Icons.favorite, color: AppTheme.dangerRed),
-                          const SizedBox(width: 5),
-                          Text("x${game.lives}",
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      );
-                    }),
                     // Timer
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                           color: _secondsRemaining < 30
                               ? AppTheme.dangerRed.withOpacity(0.2)
@@ -258,7 +324,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                       child: Row(
                         children: [
                           Icon(Icons.timer,
-                              size: 16,
+                              size: 14,
                               color: _secondsRemaining < 30
                                   ? AppTheme.dangerRed
                                   : Colors.white),
@@ -269,6 +335,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                                   color: _secondsRemaining < 30
                                       ? AppTheme.dangerRed
                                       : Colors.white,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -276,6 +343,7 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                   ],
                 ),
               ),
+              const SizedBox(height: 5),
 
               Expanded(
                 child: Center(
@@ -288,70 +356,73 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                           child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 10)
-                          ]),
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: gridSize,
-                          crossAxisSpacing: 4,
-                          mainAxisSpacing: 4,
-                        ),
-                        itemCount: tiles.length,
-                        itemBuilder: (context, index) {
-                          final number = tiles[index];
-                          if (number == 0)
-                            return const SizedBox.shrink(); // Espacio vacío
-
-                          return GestureDetector(
-                            onTap: () => _onTileTap(index),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: AppTheme.primaryPurple,
-                                  borderRadius: BorderRadius.circular(8),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      AppTheme.primaryPurple,
-                                      AppTheme.secondaryPink
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.2),
-                                        offset: const Offset(2, 2))
-                                  ]),
-                              child: Center(
-                                child: Text(
-                                  "$number",
-                                  style: const TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.15),
+                                  width: 1.5,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 10)
+                                ]),
+                            child: GridView.builder(
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: gridSize,
+                                crossAxisSpacing: 4,
+                                mainAxisSpacing: 4,
                               ),
+                              itemCount: tiles.length,
+                              itemBuilder: (context, index) {
+                                final number = tiles[index];
+                                if (number == 0)
+                                  return const SizedBox
+                                      .shrink(); // Espacio vacío
+
+                                return GestureDetector(
+                                  onTap: () => _onTileTap(index),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                        color: AppTheme.primaryPurple,
+                                        borderRadius: BorderRadius.circular(8),
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            AppTheme.primaryPurple,
+                                            AppTheme.secondaryPink
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                              color:
+                                                  Colors.black.withOpacity(0.2),
+                                              offset: const Offset(2, 2))
+                                        ]),
+                                    child: Center(
+                                      child: Text(
+                                        "$number",
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                ),
-                ),
                 ),
               ),
 
@@ -373,9 +444,10 @@ class _SlidingPuzzleMinigameState extends State<SlidingPuzzleMinigame> {
                       setState(() {
                         _showOverlay = false;
                         _isGameOver = false;
-                        _secondsRemaining = 120;
+                        _secondsRemaining = 150;
                         _initializePuzzle();
                         _startTimer();
+                        _playMusic();
                       });
                     }
                   : null,

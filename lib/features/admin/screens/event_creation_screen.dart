@@ -22,6 +22,8 @@ import '../../mall/models/mall_store.dart';
 import '../../mall/models/power_item.dart'; // NEW
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/coin_image.dart';
+import '../services/sponsor_service.dart';
+import '../models/sponsor.dart';
 
 class EventCreationScreen extends StatefulWidget {
   final VoidCallback? onEventCreated;
@@ -40,6 +42,8 @@ class EventCreationScreen extends StatefulWidget {
 class _EventCreationScreenState extends State<EventCreationScreen> {
   GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
+  Future<List<Sponsor>>? _sponsorsFuture;
+
   // UX Refinement Variables (UI ONLY)
   late TextEditingController _pinController;
   // We keep pin locked state in UI as it is a UI behavior
@@ -49,12 +53,20 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
   void initState() {
     super.initState();
     _pinController = TextEditingController(text: widget.event?.pin ?? '');
+    _sponsorsFuture = SponsorService()
+        .getSponsors()
+        .then((list) => list.where((s) => s.isActive).toList());
 
     // Defer provider initialization to next frame to avoid context issues
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider =
           Provider.of<EventCreationProvider>(context, listen: false);
       provider.init(widget.event);
+      if (widget.event != null) {
+        SponsorService()
+            .getEventSponsorIds(widget.event!.id)
+            .then(provider.setSelectedSponsorIds);
+      }
       // Sync controller if editing
       if (widget.event != null) {
         _pinController.text = widget.event!.pin;
@@ -149,7 +161,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
     final inputDecoration = InputDecoration(
       filled: true,
-      fillColor: AppTheme.cardBg,
+      fillColor: Theme.of(context).cardTheme.color,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -157,18 +169,21 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
+        borderSide: BorderSide(
+            color: Theme.of(context).dividerColor.withOpacity(0.1)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppTheme.primaryPurple),
+        borderSide: const BorderSide(color: AppTheme.lGoldAction),
       ),
-      labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+      labelStyle:
+          TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
+      hintStyle: TextStyle(
+          color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4)),
     );
 
     return Container(
-      decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -180,27 +195,29 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "Crear Nueva Competencia",
                     style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white),
+                        color: Theme.of(context).textTheme.displayLarge?.color),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     "Configura los detalles del evento, ubicación y pistas.",
-                    style: TextStyle(color: Colors.white54, fontSize: 16),
+                    style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                        fontSize: 16),
                   ),
                   const SizedBox(height: 40),
                   Container(
                     padding: const EdgeInsets.all(30),
                     decoration: BoxDecoration(
-                        color: const Color(0xFF161B33),
+                        color: Theme.of(context).cardTheme.color,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Theme.of(context).dividerColor.withOpacity(0.05),
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           )
@@ -209,25 +226,45 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // --- Selección de Modo ---
-                        const Text("Modalidad del Evento",
+                        Text("Modalidad del Evento",
                             style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white)),
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .displayLarge
+                                    ?.color)),
                         const SizedBox(height: 15),
 
                         SizedBox(
                           width: double.infinity,
                           child: SegmentedButton<String>(
+                            showSelectedIcon: false,
                             segments: const [
                               ButtonSegment<String>(
                                 value: 'on_site',
-                                label: Text('📍 Presencial'),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '📍 Presencial',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14),
+                                  ),
+                                ),
                                 icon: Icon(Icons.map),
                               ),
                               ButtonSegment<String>(
                                 value: 'online',
-                                label: Text('🌐 Online'),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '🌐 Online',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14),
+                                  ),
+                                ),
                                 icon: Icon(Icons.public),
                               ),
                             ],
@@ -240,7 +277,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   MaterialStateProperty.resolveWith<Color>(
                                 (Set<MaterialState> states) {
                                   if (states.contains(MaterialState.selected)) {
-                                    return AppTheme.primaryPurple;
+                                    return AppTheme.lGoldAction;
                                   }
                                   return Colors.transparent;
                                 },
@@ -249,23 +286,26 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   MaterialStateProperty.resolveWith<Color>(
                                       (Set<MaterialState> states) {
                                 if (states.contains(MaterialState.selected)) {
-                                  return Colors.white;
+                                return Colors.white;
                                 }
-                                return Colors.white70;
+                                return Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium!
+                                    .color!;
                               }),
                               side: MaterialStateProperty.all(BorderSide(
-                                  color: Colors.white.withOpacity(0.2))),
+                                  color: Theme.of(context).dividerColor)),
                             ),
                           ),
                         ),
                         const SizedBox(height: 30),
 
                         // --- Información Básica ---
-                        const Text("Información Básica",
+                        Text("Información Básica",
                             style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: AppTheme.accentGold)),
+                                color: AppTheme.lGoldAction)),
                         const SizedBox(height: 20),
 
                         TextFormField(
@@ -273,7 +313,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                           decoration: inputDecoration.copyWith(
                               labelText: 'Título del Evento',
                               hintText: 'Ej. Búsqueda del Tesoro Caracas'),
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .displayLarge
+                                  ?.color),
                           validator: (v) =>
                               v!.isEmpty ? 'Campo requerido' : null,
                           onChanged: (v) => provider.setTitle(v),
@@ -286,7 +330,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                             labelText: 'Descripción',
                             hintText: 'Detalles sobre la competencia...',
                           ),
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .displayLarge
+                                  ?.color),
                           maxLines: 4,
                           validator: (v) =>
                               v!.isEmpty ? 'Campo requerido' : null,
@@ -294,67 +342,153 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // --- Selección de Sponsor ---
-                        if (provider.sponsors.isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              DropdownButtonFormField<String>(
-                                value: provider.sponsorId,
-                                decoration: inputDecoration.copyWith(
-                                  labelText: 'Patrocinador (Opcional)',
-                                  prefixIcon: const Icon(Icons.star_border,
-                                      color: Colors.white54),
-                                ),
-                                dropdownColor: AppTheme.cardBg,
-                                style: const TextStyle(color: Colors.white),
-                                items: [
-                                  const DropdownMenuItem<String>(
-                                    value: null,
-                                    child: Text("Sin Patrocinador"),
-                                  ),
-                                  ...provider.sponsors.map((sponsor) {
-                                    return DropdownMenuItem<String>(
-                                      value: sponsor.id,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (sponsor.logoUrl != null &&
-                                              sponsor.logoUrl!.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                  right: 8.0),
-                                              child: kIsWeb
-                                                  ? Image.network(
-                                                      sponsor.logoUrl!,
-                                                      width: 24,
-                                                      height: 24,
-                                                      errorBuilder:
-                                                          (_, __, ___) =>
-                                                              const SizedBox())
-                                                  : const Icon(Icons.image,
-                                                      size: 16),
-                                            ),
-                                          Flexible(
-                                              child: Text(sponsor.name,
-                                                  overflow:
-                                                      TextOverflow.ellipsis)),
-                                          if (!sponsor.isActive)
-                                            Text(" (Inactivo)",
-                                                style: TextStyle(
-                                                    color: Colors.red.shade300,
-                                                    fontSize: 12)),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ],
-                                onChanged: (value) =>
-                                    provider.setSponsorId(value),
-                              ),
-                              const SizedBox(height: 20),
-                            ],
+                        // --- Sponsors Toggle ---
+                        SwitchListTile(
+                          title: Text(
+                            'Patrocinadores',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color,
+                            ),
                           ),
+                          subtitle: Text(
+                            provider.sponsorsEnabled
+                                ? 'Sponsors activos habilitados en este evento'
+                                : 'Sin patrocinadores en este evento',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color,
+                              fontSize: 12,
+                            ),
+                          ),
+                          secondary: Icon(
+                            Icons.star_border,
+                            color: provider.sponsorsEnabled
+                                ? AppTheme.lGoldAction
+                                : Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                          ),
+                          value: provider.sponsorsEnabled,
+                          activeColor: AppTheme.lGoldAction,
+                          onChanged: (value) =>
+                              provider.setSponsorsEnabled(value),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        const SizedBox(height: 8),
+                        SwitchListTile(
+                          title: Text(
+                            'Solo ciertos patrocinadores',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color,
+                            ),
+                          ),
+                          subtitle: Text(
+                            provider.sponsorsEnabled
+                                ? 'Selecciona manualmente los sponsors'
+                                : 'Activa patrocinadores primero',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.color,
+                              fontSize: 12,
+                            ),
+                          ),
+                          secondary: Icon(
+                            Icons.tune_rounded,
+                            color: provider.sponsorsSelective
+                                ? AppTheme.lGoldAction
+                                : Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
+                          ),
+                          value: provider.sponsorsSelective,
+                          activeColor: AppTheme.lGoldAction,
+                          onChanged: provider.sponsorsEnabled
+                              ? (value) =>
+                                  provider.setSponsorsSelective(value)
+                              : null,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        if (provider.sponsorsEnabled &&
+                            provider.sponsorsSelective) ...[
+                          const SizedBox(height: 8),
+                          FutureBuilder<List<Sponsor>>(
+                            future: _sponsorsFuture,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: LinearProgressIndicator(),
+                                );
+                              }
+
+                              final sponsors = snapshot.data ?? [];
+                              if (sponsors.isEmpty) {
+                                return Text(
+                                  'No hay sponsors activos disponibles',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color,
+                                  ),
+                                );
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: sponsors.map((sponsor) {
+                                  final isSelected = provider
+                                      .selectedSponsorIds
+                                      .contains(sponsor.id);
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    value: isSelected,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(
+                                      sponsor.name,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      'Plan: ${sponsor.planType}',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.color,
+                                      ),
+                                    ),
+                                    onChanged: (value) {
+                                      provider.toggleSponsorSelection(
+                                        sponsor.id,
+                                        value ?? false,
+                                      );
+                                    },
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                        ],
+                        const SizedBox(height: 20),
 
                         // --- Date & Time ---
                         InkWell(
@@ -367,13 +501,17 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               builder: (context, child) {
                                 return Theme(
                                   data: Theme.of(context).copyWith(
-                                    colorScheme: const ColorScheme.dark(
-                                      primary: AppTheme.primaryPurple,
-                                      onPrimary: Colors.white,
-                                      surface: AppTheme.cardBg,
-                                      onSurface: Colors.white,
+                                      colorScheme: ColorScheme.light(
+                                        primary: AppTheme.lGoldAction,
+                                        onPrimary: Colors.white,
+                                        surface:
+                                            Theme.of(context).cardTheme.color!,
+                                        onSurface: Theme.of(context)
+                                            .textTheme
+                                            .displayLarge!
+                                            .color!,
+                                      ),
                                     ),
-                                  ),
                                   child: child!,
                                 );
                               },
@@ -388,13 +526,16 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   return Theme(
                                     data: Theme.of(context).copyWith(
                                       timePickerTheme: TimePickerThemeData(
-                                        backgroundColor: AppTheme.cardBg,
-                                        dialHandColor: AppTheme.primaryPurple,
-                                        dialBackgroundColor: AppTheme.darkBg,
+                                        backgroundColor:
+                                            Theme.of(context).cardTheme.color,
+                                        dialHandColor: AppTheme.lGoldAction,
+                                        dialBackgroundColor: Theme.of(context)
+                                            .scaffoldBackgroundColor,
                                       ),
-                                      colorScheme: const ColorScheme.dark(
-                                        primary: AppTheme.primaryPurple,
-                                        surface: AppTheme.cardBg,
+                                      colorScheme: ColorScheme.light(
+                                        primary: AppTheme.lGoldAction,
+                                        surface:
+                                            Theme.of(context).cardTheme.color!,
                                       ),
                                     ),
                                     child: child!,
@@ -416,12 +557,18 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                           child: InputDecorator(
                             decoration: inputDecoration.copyWith(
                                 labelText: 'Fecha y Hora del Evento',
-                                prefixIcon: const Icon(Icons.access_time,
-                                    color: Colors.white54)),
+                                prefixIcon: Icon(Icons.access_time,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.color)),
                             child: Text(
                               "${provider.selectedDate.day}/${provider.selectedDate.month}/${provider.selectedDate.year}   ${provider.selectedDate.hour.toString().padLeft(2, '0')}:${provider.selectedDate.minute.toString().padLeft(2, '0')}",
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color,
                                   fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -446,10 +593,12 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                             height: 150,
                             width: double.infinity,
                             decoration: BoxDecoration(
-                                color: AppTheme.cardBg,
+                                color: Theme.of(context).cardTheme.color,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                    color: Colors.white.withOpacity(0.1),
+                                    color: Theme.of(context)
+                                        .dividerColor
+                                        .withOpacity(0.1),
                                     style: BorderStyle.solid)),
                             child: Stack(
                               children: [
@@ -494,8 +643,12 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                             : Icons.add_photo_alternate,
                                         size: 40,
                                         color: provider.selectedImage != null
-                                            ? AppTheme.accentGold
-                                            : Colors.white54,
+                                            ? AppTheme.lGoldAction
+                                            : Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.color
+                                                ?.withOpacity(0.2),
                                       ),
                                       const SizedBox(height: 10),
                                       Text(
@@ -503,10 +656,17 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                             ? "Imagen Seleccionada"
                                             : "Seleccionar Imagen de Portada",
                                         style: TextStyle(
-                                            color:
-                                                provider.selectedImage != null
-                                                    ? Colors.white
-                                                    : Colors.white54),
+                                            color: provider.selectedImage !=
+                                                    null
+                                                ? Theme.of(context)
+                                                    .textTheme
+                                                    .displayLarge
+                                                    ?.color
+                                                : Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color
+                                                    ?.withOpacity(0.4)),
                                       ),
                                     ],
                                   ),
@@ -518,11 +678,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         const SizedBox(height: 40),
 
                         // --- Configuración del Juego ---
-                        const Text("Configuración del Juego",
+                        Text("Configuración del Juego",
                             style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: AppTheme.secondaryPink)),
+                                color: AppTheme.lGoldAction)),
                         const SizedBox(height: 20),
 
                         LayoutBuilder(
@@ -552,7 +712,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   : provider.maxParticipants.toString(),
                               decoration: inputDecoration.copyWith(
                                   labelText: 'Max. Jugadores'),
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color),
                               keyboardType: TextInputType.number,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
@@ -580,7 +744,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                 suffix: const CoinImage(size: 16),
                                 helperText: 'Default: 100',
                               ),
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color),
                               keyboardType: TextInputType.number,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly
@@ -603,7 +771,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                 suffix: const CoinImage(size: 16),
                                 helperText: '0 para GRATIS',
                               ),
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color),
                               keyboardType: TextInputType.number,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
@@ -621,19 +793,29 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
 
                             if (provider.eventType == 'online') {
                               // If Online, show Players field AND Price fields (no location)
-                              return Column(
-                                children: [
-                                  playersField,
-                                  const SizedBox(height: 20),
-                                  Row(
-                                    children: [
-                                      Expanded(child: entryFeeField),
-                                      const SizedBox(width: 20),
-                                      Expanded(child: bettingField),
-                                    ],
-                                  ),
-                                ],
-                              );
+                              return constraints.maxWidth < 600
+                                  ? Column(
+                                      children: [
+                                        playersField,
+                                        const SizedBox(height: 20),
+                                        entryFeeField,
+                                        const SizedBox(height: 20),
+                                        bettingField,
+                                      ],
+                                    )
+                                  : Column(
+                                      children: [
+                                        playersField,
+                                        const SizedBox(height: 20),
+                                        Row(
+                                          children: [
+                                            Expanded(child: entryFeeField),
+                                            const SizedBox(width: 20),
+                                            Expanded(child: bettingField),
+                                          ],
+                                        ),
+                                      ],
+                                    );
                             }
 
                             if (constraints.maxWidth < 600) {
@@ -679,20 +861,24 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         const SizedBox(height: 20),
 
                         // --- Configuración de Ganadores ---
-                        const Text("Configuración de Premios",
+                        Text("Configuración de Premios",
                             style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white70)),
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .displayLarge
+                                    ?.color
+                                    ?.withOpacity(0.8))),
                         const SizedBox(height: 10),
 
                         Container(
                           padding: const EdgeInsets.all(15),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Theme.of(context).cardTheme.color,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: Colors.white.withOpacity(0.1)),
+                                color: Theme.of(context).dividerColor.withOpacity(0.1)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,11 +893,14 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       const Icon(Icons.emoji_events,
-                                          color: AppTheme.accentGold),
+                                          color: AppTheme.lGoldAction),
                                       const SizedBox(width: 10),
-                                      const Text("Cantidad de Ganadores:",
-                                          style:
-                                              TextStyle(color: Colors.white)),
+                                      Text("Cantidad de Ganadores:",
+                                          style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.color)),
                                     ],
                                   ),
                                   SegmentedButton<int>(
@@ -735,7 +924,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                         (Set<MaterialState> states) {
                                           if (states.contains(
                                               MaterialState.selected)) {
-                                            return AppTheme.accentGold;
+                                            return AppTheme.lGoldAction;
                                           }
                                           return Colors.transparent;
                                         },
@@ -745,9 +934,12 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                               (Set<MaterialState> states) {
                                         if (states
                                             .contains(MaterialState.selected)) {
-                                          return Colors.black;
+                                          return Colors.white;
                                         }
-                                        return Colors.white;
+                                        return Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium!
+                                            .color!;
                                       }),
                                     ),
                                   ),
@@ -763,13 +955,17 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                 else
                                   rec = 3;
 
-                                return Text(
-                                  "💡 Recomendación: $rec ganador${rec > 1 ? 'es' : ''} para ${provider.maxParticipants} jugadores.",
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.5),
-                                      fontSize: 13,
-                                      fontStyle: FontStyle.italic),
-                                );
+                                  return Text(
+                                    "💡 Recomendación: $rec ganador${rec > 1 ? 'es' : ''} para ${provider.maxParticipants} jugadores.",
+                                    style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color
+                                            ?.withOpacity(0.5),
+                                        fontSize: 13,
+                                        fontStyle: FontStyle.italic),
+                                  );
                               }),
                             ],
                           ),
@@ -792,19 +988,28 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     ],
                                     decoration: inputDecoration.copyWith(
                                       labelText: 'PIN de Acceso',
-                                      prefixIcon: const Icon(Icons.lock_outline,
-                                          color: Colors.white54),
+                                      prefixIcon: Icon(Icons.lock_outline,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.color),
                                       suffixIcon: _isPinLocked
                                           ? Icon(Icons.lock,
-                                              color: AppTheme.accentGold,
+                                              color: AppTheme.lGoldAction,
                                               size: 16)
                                           : null,
                                       hintText: '123456',
                                     ),
                                     style: TextStyle(
                                         color: _isPinLocked
-                                            ? Colors.grey
-                                            : Colors.white),
+                                            ? Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.color
+                                            : Theme.of(context)
+                                                .textTheme
+                                                .displayLarge
+                                                ?.color),
                                     validator: (v) {
                                       if (provider.eventType == 'online')
                                         return null; // No validation in UI if hidden, although logic skips it too
@@ -821,15 +1026,15 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   height: 56,
                                   width: 56,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.accentGold.withOpacity(0.1),
+                                    color: AppTheme.lGoldAction.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                        color: AppTheme.accentGold
+                                        color: AppTheme.lGoldAction
                                             .withOpacity(0.3)),
                                   ),
                                   child: IconButton(
                                     icon: const Icon(Icons.qr_code,
-                                        color: AppTheme.accentGold),
+                                        color: AppTheme.lGoldAction),
                                     tooltip: "Generar QR",
                                     onPressed: () {
                                       provider.generateRandomPin();
@@ -856,10 +1061,17 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               initialValue: provider.clue,
                               decoration: inputDecoration.copyWith(
                                   labelText: 'Pista Inicial',
-                                  prefixIcon: const Icon(
+                                  prefixIcon: Icon(
                                       Icons.lightbulb_outline,
-                                      color: Colors.white54)),
-                              style: const TextStyle(color: Colors.white),
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color)),
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.color),
                               validator: (v) => v!.isEmpty ? 'Requerido' : null,
                               onChanged: (v) => provider.setClue(v),
                             );
@@ -895,7 +1107,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                              border: Border.all(color: Colors.white10),
+                              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                               borderRadius: BorderRadius.circular(12)),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -904,8 +1116,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                   provider.eventType == 'online'
                                       ? "Generador de Minijuegos"
                                       : "Generador de Pistas",
-                                  style: const TextStyle(
-                                      color: Colors.white,
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .displayLarge
+                                          ?.color,
                                       fontWeight: FontWeight.bold)),
                               const SizedBox(height: 12),
                               Row(
@@ -929,8 +1144,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 const EdgeInsets.all(10),
                                             isDense: true,
                                             hintText: 'Max 20'),
-                                        style: const TextStyle(
-                                            color: Colors.white),
+                                        style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .displayLarge
+                                                ?.color),
                                         onChanged: (v) =>
                                             provider.setNumberOfClues(
                                                 int.tryParse(v) ?? 0),
@@ -954,8 +1172,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 const EdgeInsets.all(10),
                                             isDense: true,
                                             hintText: 'Max 20'),
-                                        style: const TextStyle(
-                                            color: Colors.white),
+                                        style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .displayLarge
+                                                ?.color),
                                         onChanged: (v) =>
                                             provider.setNumberOfClues(
                                                 int.tryParse(v) ?? 0),
@@ -966,12 +1187,33 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     onPressed: () =>
                                         provider.generateClueForms(),
                                     style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppTheme.accentGold,
-                                        foregroundColor: Colors.black),
+                                        backgroundColor: AppTheme.lGoldAction,
+                                        foregroundColor: Colors.white),
                                     child: const Text("Generar"),
                                   ),
                                 ],
                               ),
+                              if (provider.clueForms.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded,
+                                          color: Colors.orange.shade300,
+                                          size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          "Debes generar al menos 1 ${provider.eventType == 'online' ? 'minijuego' : 'pista'} para publicar.",
+                                          style: TextStyle(
+                                              color: Colors.orange.shade300,
+                                              fontSize: 12,
+                                              fontStyle: FontStyle.italic),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               if (provider.clueForms.isNotEmpty) ...[
                                 const SizedBox(height: 20),
                                 Row(
@@ -982,22 +1224,34 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       onPressed: provider.currentClueIndex > 0
                                           ? provider.prevClue
                                           : null,
-                                      icon: const Icon(Icons.arrow_back_ios,
-                                          color: Colors.white),
+                                      icon: Icon(Icons.arrow_back_ios,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .displayLarge
+                                              ?.color),
                                     ),
-                                    Text(
-                                      "${provider.eventType == 'online' ? 'Minijuego' : 'Pista'} ${provider.currentClueIndex + 1} de ${provider.clueForms.length}",
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold),
+                                    Flexible(
+                                      child: Text(
+                                        "${provider.eventType == 'online' ? 'Minijuego' : 'Pista'} ${provider.currentClueIndex + 1} de ${provider.clueForms.length}",
+                                        style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .displayLarge
+                                                ?.color,
+                                            fontWeight: FontWeight.bold),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
                                     IconButton(
                                       onPressed: provider.currentClueIndex <
                                               provider.clueForms.length - 1
                                           ? provider.nextClue
                                           : null,
-                                      icon: const Icon(Icons.arrow_forward_ios,
-                                          color: Colors.white),
+                                      icon: Icon(Icons.arrow_forward_ios,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .displayLarge
+                                              ?.color),
                                     ),
                                   ],
                                 ),
@@ -1009,7 +1263,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                         provider.currentClueIndex),
                                     padding: const EdgeInsets.all(15),
                                     decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.05),
+                                        color: Theme.of(context).cardTheme.color,
                                         borderRadius:
                                             BorderRadius.circular(10)),
                                     child: Column(
@@ -1023,13 +1277,19 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                           isExpanded: true,
                                           decoration: inputDecoration.copyWith(
                                               labelText: 'Tipo de Desafío',
-                                              prefixIcon: const Icon(
+                                              prefixIcon: Icon(
                                                   Icons.games,
-                                                  color: Colors.white54)),
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color)),
                                           dropdownColor:
-                                              const Color(0xFF2A2D3E),
-                                          style: const TextStyle(
-                                              color: Colors.white),
+                                              Theme.of(context).cardTheme.color,
+                                          style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .displayLarge
+                                                  ?.color),
                                           items: PuzzleType.values
                                               .map((type) => DropdownMenuItem(
                                                   value: type.dbValue,
@@ -1056,8 +1316,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 decoration:
                                                     inputDecoration.copyWith(
                                                         labelText: 'Título'),
-                                                style: const TextStyle(
-                                                    color: Colors.white),
+                                                style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .displayLarge
+                                                        ?.color),
                                                 onChanged: (v) =>
                                                     provider.updateClue(
                                                         provider
@@ -1071,14 +1334,14 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                               const SizedBox(width: 10),
                                               Container(
                                                 decoration: BoxDecoration(
-                                                    color: AppTheme.accentGold,
+                                                    color: AppTheme.lGoldAction,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             10)),
                                                 child: IconButton(
                                                   icon: const Icon(
-                                                      Icons.qr_code_2,
-                                                      color: Colors.black),
+                                                      Icons.qr_code_2_rounded,
+                                                      color: Colors.white),
                                                   onPressed: () {
                                                     final clueId = provider
                                                                 .clueForms[
@@ -1114,8 +1377,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 ? 'Pista de la Palabra'
                                                 : 'Instrucción',
                                           ),
-                                          style: const TextStyle(
-                                              color: Colors.white),
+                                          style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .displayLarge
+                                                  ?.color),
                                           onChanged: (v) => provider.updateClue(
                                               provider.currentClueIndex,
                                               'riddle_question',
@@ -1138,8 +1404,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                     labelText:
                                                         'Palabra a Adivinar',
                                                     helperText: 'Sin espacios'),
-                                            style: const TextStyle(
-                                                color: Colors.white),
+                                            style: TextStyle(
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .displayLarge
+                                                    ?.color),
                                             onChanged: (v) =>
                                                 provider.updateClue(
                                                     provider.currentClueIndex,
@@ -1158,8 +1427,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                           decoration: inputDecoration.copyWith(
                                               labelText: 'XP por Completar'),
                                           keyboardType: TextInputType.number,
-                                          style: const TextStyle(
-                                              color: Colors.white),
+                                          style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .displayLarge
+                                                  ?.color),
                                           onChanged: (v) => provider.updateClue(
                                               provider.currentClueIndex,
                                               'xp_reward',
@@ -1172,7 +1444,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                             'on_site') ...[
                                           const Text("📍 Geolocalización",
                                               style: TextStyle(
-                                                  color: AppTheme.accentGold,
+                                                  color: AppTheme.lGoldAction,
                                                   fontWeight: FontWeight.bold)),
                                           const SizedBox(height: 10),
                                           TextFormField(
@@ -1183,11 +1455,17 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 inputDecoration.copyWith(
                                                     labelText:
                                                         'Pista de Ubicación QR',
-                                                    prefixIcon: const Icon(
+                                                    prefixIcon: Icon(
                                                         Icons.location_on,
-                                                        color: Colors.white54)),
-                                            style: const TextStyle(
-                                                color: Colors.white),
+                                                        color: Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.color)),
+                                            style: TextStyle(
+                                                color: Theme.of(context)
+                                                    .textTheme
+                                                    .displayLarge
+                                                    ?.color),
                                             onChanged: (v) =>
                                                 provider.updateClue(
                                                     provider.currentClueIndex,
@@ -1210,8 +1488,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 decoration:
                                                     inputDecoration.copyWith(
                                                         labelText: 'Latitud'),
-                                                style: const TextStyle(
-                                                    color: Colors.white),
+                                                style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .displayLarge
+                                                        ?.color),
                                                 onChanged: (v) =>
                                                     provider.updateClue(
                                                         provider
@@ -1233,8 +1514,11 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                                 decoration:
                                                     inputDecoration.copyWith(
                                                         labelText: 'Longitud'),
-                                                style: const TextStyle(
-                                                    color: Colors.white),
+                                                style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .displayLarge
+                                                        ?.color),
                                                 onChanged: (v) =>
                                                     provider.updateClue(
                                                         provider
@@ -1296,22 +1580,22 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: AppTheme.accentGold)),
+                                  color: AppTheme.lGoldAction)),
                           const SizedBox(height: 20),
                           if (provider.pendingStores.isEmpty)
                             Container(
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                  color: AppTheme.cardBg,
+                                  color: Theme.of(context).cardTheme.color,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.white10)),
-                              child: const Center(
+                                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1))),
+                              child: Center(
                                   child: Column(children: [
                                 Icon(Icons.store_mall_directory_outlined,
-                                    size: 40, color: Colors.white24),
+                                    size: 40, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.2)),
                                 SizedBox(height: 10),
                                 Text("No hay tiendas agregadas",
-                                    style: TextStyle(color: Colors.white54))
+                                    style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color))
                               ])),
                             ),
 
@@ -1323,29 +1607,30 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               final store = provider.pendingStores[index]
                                   ['store'] as MallStore;
                               return Card(
-                                color: AppTheme.cardBg,
+                                color: Theme.of(context).cardTheme.color,
                                 margin: const EdgeInsets.only(bottom: 10),
                                 child: ListTile(
                                   leading: const Icon(Icons.store,
-                                      color: AppTheme.accentGold),
+                                      color: AppTheme.lGoldAction),
                                   title: Text(store.name,
                                       style:
-                                          const TextStyle(color: Colors.white)),
+                                          TextStyle(color: Theme.of(context).textTheme.displayLarge?.color)),
                                   subtitle: Text(
                                       "${store.products.length} productos",
-                                      style: const TextStyle(
-                                          color: Colors.white70)),
+                                      style: TextStyle(
+                                          color: Theme.of(context).textTheme.bodyMedium?.color)),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
                                         decoration: BoxDecoration(
-                                          color: AppTheme.accentGold,
-                                          borderRadius: BorderRadius.circular(8),
+                                          color: AppTheme.lGoldAction,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: IconButton(
-                                          icon: const Icon(Icons.qr_code_2,
-                                              color: Colors.black, size: 20),
+                                          icon: const Icon(Icons.qr_code_2_rounded,
+                                              color: Colors.white, size: 20),
                                           tooltip: 'Ver QR de la tienda',
                                           onPressed: () {
                                             _showQRDialog(
@@ -1376,27 +1661,28 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                               icon: const Icon(Icons.add),
                               label: const Text("Agregar Tienda"),
                               style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.accentGold,
+                                  foregroundColor: AppTheme.lGoldAction,
                                   side: const BorderSide(
-                                      color: AppTheme.accentGold),
+                                      color: AppTheme.lGoldAction, width: 1.5),
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 15)),
                             ),
                           ),
                           const SizedBox(height: 30),
-                          // --- Configuración de Precios para Espectadores (ALWAYS VISIBLE) ---
-                          const Text("Precios para Espectadores",
+                        ],
+                        // --- Precios Jugadores (tienda online) ---
+                        if (provider.eventType == 'online') ...[
+                          Text("Precios Tienda (Jugadores)",
                               style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: AppTheme.accentGold)),
+                                  color: AppTheme.lGoldAction)),
                           const SizedBox(height: 10),
-                          const Text(
-                              "Personaliza el costo de los poderes para los espectadores en este evento.",
+                          Text(
+                              "Costo de los poderes que los jugadores compran con monedas.",
                               style: TextStyle(
-                                  color: Colors.white54, fontSize: 14)),
+                                  color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 14)),
                           const SizedBox(height: 20),
-
                           LayoutBuilder(builder: (context, constraints) {
                             return GridView.builder(
                               shrinkWrap: true,
@@ -1407,22 +1693,20 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     constraints.maxWidth < 600 ? 1 : 2,
                                 crossAxisSpacing: 10,
                                 mainAxisSpacing: 10,
-                                childAspectRatio: constraints.maxWidth < 600
-                                    ? 2.5 // More height per item (Reduced from 4)
-                                    : 3,
+                                childAspectRatio:
+                                    constraints.maxWidth < 600 ? 2.5 : 3,
                               ),
                               itemCount: PowerItem.getShopItems().length,
                               itemBuilder: (context, index) {
                                 final power = PowerItem.getShopItems()[index];
                                 final currentPrice =
-                                    provider.spectatorPrices[power.id] ??
+                                    provider.playerPrices[power.id] ??
                                         power.cost;
-
                                 return Container(
                                   decoration: BoxDecoration(
-                                    color: AppTheme.cardBg,
+                                    color: Theme.of(context).cardTheme.color,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.white10),
+                                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                                   ),
                                   padding: const EdgeInsets.all(12),
                                   child: Row(
@@ -1437,8 +1721,8 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                         ),
                                         alignment: Alignment.center,
                                         child: Text(power.icon,
-                                            style:
-                                                const TextStyle(fontSize: 24)),
+                                            style: const TextStyle(
+                                                fontSize: 24)),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
@@ -1449,13 +1733,13 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                               MainAxisAlignment.center,
                                           children: [
                                             Text(power.name,
-                                                style: const TextStyle(
-                                                    color: Colors.white,
+                                                style: TextStyle(
+                                                    color: Theme.of(context).textTheme.displayLarge?.color,
                                                     fontWeight:
                                                         FontWeight.bold)),
                                             Text("${power.cost} Default",
-                                                style: const TextStyle(
-                                                    color: Colors.white38,
+                                                style: TextStyle(
+                                                    color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4),
                                                     fontSize: 12)),
                                           ],
                                         ),
@@ -1463,19 +1747,20 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                       SizedBox(
                                         width: 80,
                                         child: TextFormField(
-                                          initialValue: currentPrice.toString(),
+                                          initialValue:
+                                              currentPrice.toString(),
                                           keyboardType: TextInputType.number,
                                           textAlign: TextAlign.center,
-                                          decoration: inputDecoration.copyWith(
+                                          decoration:
+                                              inputDecoration.copyWith(
                                             contentPadding:
                                                 const EdgeInsets.symmetric(
                                                     vertical: 10,
                                                     horizontal: 5),
                                             isDense: true,
-                                            suffixText: '',
                                           ),
-                                          style: const TextStyle(
-                                              color: AppTheme.accentGold,
+                                          style: TextStyle(
+                                              color: AppTheme.lGoldAction,
                                               fontWeight: FontWeight.bold),
                                           inputFormatters: [
                                             FilteringTextInputFormatter
@@ -1484,7 +1769,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                           onChanged: (v) {
                                             final val = int.tryParse(v);
                                             if (val != null) {
-                                              provider.setSpectatorPrice(
+                                              provider.setPlayerPrice(
                                                   power.id, val);
                                             }
                                           },
@@ -1498,6 +1783,119 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                           }),
                           const SizedBox(height: 30),
                         ],
+                        // --- Configuración de Precios para Espectadores (ALWAYS VISIBLE) ---
+                        Text("Precios para Espectadores",
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.lGoldAction)),
+                        const SizedBox(height: 10),
+                        Text(
+                            "Personaliza el costo de los poderes para los espectadores en este evento.",
+                            style: TextStyle(
+                                color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 14)),
+                        const SizedBox(height: 20),
+
+                        LayoutBuilder(builder: (context, constraints) {
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount:
+                                  constraints.maxWidth < 600 ? 1 : 2,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: constraints.maxWidth < 600
+                                  ? 2.5 // More height per item (Reduced from 4)
+                                  : 3,
+                            ),
+                            itemCount: PowerItem.getShopItems().length,
+                            itemBuilder: (context, index) {
+                              final power = PowerItem.getShopItems()[index];
+                              final currentPrice =
+                                  provider.spectatorPrices[power.id] ??
+                                      power.cost;
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).cardTheme.color,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      height: 48,
+                                      width: 48,
+                                      decoration: BoxDecoration(
+                                        color: power.color.withOpacity(0.2),
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(power.icon,
+                                          style:
+                                              const TextStyle(fontSize: 24)),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(power.name,
+                                              style: TextStyle(
+                                                  color: Theme.of(context).textTheme.displayLarge?.color,
+                                                  fontWeight:
+                                                      FontWeight.bold)),
+                                          Text("${power.cost} Default",
+                                              style: TextStyle(
+                                                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4),
+                                                  fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 80,
+                                      child: TextFormField(
+                                        initialValue: currentPrice.toString(),
+                                        keyboardType: TextInputType.number,
+                                        textAlign: TextAlign.center,
+                                        decoration: inputDecoration.copyWith(
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  vertical: 10,
+                                                  horizontal: 5),
+                                          isDense: true,
+                                          suffixText: '',
+                                        ),
+                                        style: const TextStyle(
+                                            color: AppTheme.lGoldAction,
+                                            fontWeight: FontWeight.bold),
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly
+                                        ],
+                                        onChanged: (v) {
+                                          final val = int.tryParse(v);
+                                          if (val != null) {
+                                            provider.setSpectatorPrice(
+                                                power.id, val);
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        }),
+                        const SizedBox(height: 30),
 
                         // --- Submit Button ---
                         SizedBox(
@@ -1509,10 +1907,10 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                                     ? () => _submitForm(provider)
                                     : null,
                             style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryPurple,
+                                backgroundColor: AppTheme.lGoldAction,
                                 disabledBackgroundColor:
-                                    const Color(0xFF2A2D3E),
-                                disabledForegroundColor: Colors.white30,
+                                    Theme.of(context).dividerColor.withOpacity(0.1),
+                                disabledForegroundColor: Theme.of(context).hintColor,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12))),
                             child: provider.isLoading

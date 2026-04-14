@@ -19,15 +19,10 @@ enum PuzzleType {
   minesweeper,
   snake,
   blockFill,
-  codeBreaker,
-  imageTrivia,
-  wordScramble,
   memorySequence,
   drinkMixer,
-  librarySort,
   fastNumber,
   bagShuffle,
-  chargeShaker,
   emojiMovie,
   virusTap,
   droneDodge,
@@ -37,8 +32,7 @@ enum PuzzleType {
   percentageCalculation,
   chronologicalOrder,
   capitalCities,
-  trueFalse,
-  matchThree;
+  trueFalse;
 
   String get dbValue => toString().split('.').last;
 
@@ -48,17 +42,14 @@ enum PuzzleType {
       // EASY: Simple logic, fast completion
       case PuzzleType.slidingPuzzle:
       case PuzzleType.ticTacToe:
-      case PuzzleType.imageTrivia:
       case PuzzleType.trueFalse:
       case PuzzleType.virusTap:
       case PuzzleType.flags:
-      case PuzzleType.matchThree:
       case PuzzleType.fastNumber:
         return MinigameDifficulty.easy;
 
       // MEDIUM: Requires some focus or memory
       case PuzzleType.hangman:
-      case PuzzleType.wordScramble:
       case PuzzleType.memorySequence:
       case PuzzleType.emojiMovie:
       case PuzzleType.bagShuffle:
@@ -72,13 +63,11 @@ enum PuzzleType {
       case PuzzleType.minesweeper:
       case PuzzleType.snake:
       case PuzzleType.blockFill:
-      case PuzzleType.codeBreaker:
       case PuzzleType.holographicPanels:
       case PuzzleType.primeNetwork:
       case PuzzleType.percentageCalculation:
       case PuzzleType.chronologicalOrder:
       case PuzzleType.drinkMixer:
-      case PuzzleType.librarySort:
       case PuzzleType.findDifference:
         return MinigameDifficulty.hard;
 
@@ -89,8 +78,6 @@ enum PuzzleType {
 
   /// Whether this minigame is suitable for auto-generation
   bool get automationAvailable {
-    // Exclude chargeShaker as it was noted as problematic/manual in some contexts
-    if (this == PuzzleType.chargeShaker) return false;
     return true;
   }
 
@@ -120,14 +107,6 @@ enum PuzzleType {
         return '🐍 Snake (Culebrita)';
       case PuzzleType.blockFill:
         return '🟦 Rellenar Bloques';
-      case PuzzleType.codeBreaker:
-        return '🔐 Caja Fuerte (Code)';
-      case PuzzleType.imageTrivia:
-        return '🖼️ Trivia de Imagen';
-      case PuzzleType.wordScramble:
-        return '🔤🔠 Ordenar Palabras';
-      case PuzzleType.chargeShaker:
-        return '⚡ Agitar Carga';
       case PuzzleType.emojiMovie:
         return '🎬 Adivina Película';
       case PuzzleType.virusTap:
@@ -148,14 +127,10 @@ enum PuzzleType {
         return '🌍 Capitales';
       case PuzzleType.trueFalse:
         return '✅❌ Verdadero o Falso';
-      case PuzzleType.matchThree:
-        return '🍬 Match 3';
       case PuzzleType.memorySequence:
         return '🧠 Secuencia de Memoria (Simon)';
       case PuzzleType.drinkMixer:
         return '🍹 Cócteles de Neón (Mixer)';
-      case PuzzleType.librarySort:
-        return '📚 Biblioteca de Tonos (Sort)';
       case PuzzleType.fastNumber:
         return '⚡ Número Veloz';
       case PuzzleType.bagShuffle:
@@ -175,10 +150,8 @@ enum PuzzleType {
       case PuzzleType.blockFill:
       case PuzzleType.memorySequence: // Auto-validado al ganar
       case PuzzleType.drinkMixer:
-      case PuzzleType.librarySort:
       case PuzzleType.fastNumber:
       case PuzzleType.bagShuffle:
-      case PuzzleType.chargeShaker:
       case PuzzleType.emojiMovie:
       case PuzzleType.virusTap:
       case PuzzleType.droneDodge:
@@ -189,7 +162,6 @@ enum PuzzleType {
       case PuzzleType.chronologicalOrder:
       case PuzzleType.capitalCities:
       case PuzzleType.trueFalse:
-      case PuzzleType.matchThree:
         return true;
       default:
         return false;
@@ -216,24 +188,14 @@ enum PuzzleType {
         return 'Come 15 manzanas sin chocar';
       case PuzzleType.blockFill:
         return 'Rellena todo el camino';
-      case PuzzleType.codeBreaker:
-        return 'Descifra el código de 4 dígitos';
-      case PuzzleType.imageTrivia:
-        return '¿Qué es lo que ves en la imagen?';
-      case PuzzleType.wordScramble:
-        return 'Ordena las letras para formar la palabra';
       case PuzzleType.memorySequence:
         return 'Repite la secuencia de colores correctamente';
       case PuzzleType.drinkMixer:
         return 'Mezcla los colores para igualar el cóctel';
-      case PuzzleType.librarySort:
-        return 'Ordena los libros por su tonalidad de color';
       case PuzzleType.fastNumber:
         return 'Escribe el número de 5 cifras que aparecerá brevemente';
       case PuzzleType.bagShuffle:
         return 'Sigue la bolsa que contiene el color solicitado';
-      case PuzzleType.chargeShaker:
-        return '¡Agita el celular para cargar la batería!';
       case PuzzleType.emojiMovie:
         return 'Adivina la película con los emojis';
       case PuzzleType.virusTap:
@@ -254,8 +216,6 @@ enum PuzzleType {
         return 'Selecciona la capital correcta.';
       case PuzzleType.trueFalse:
         return 'Responde correctamente 5 afirmaciones.';
-      case PuzzleType.matchThree:
-        return 'Combina 3 elementos iguales.';
     }
   }
 }
@@ -278,6 +238,16 @@ abstract class Clue {
   final double? longitude;
   final String? qrCode;
 
+  // Puzzle and Riddle data (Universal for all clues)
+  final String? minigameUrl;
+  final String? riddleQuestion;
+  final String? riddleAnswer;
+  final PuzzleType puzzleType;
+
+  /// Effective puzzle type (used to be assignedPuzzleType ?? puzzleType)
+  /// Now that Station Mode is removed, it simply returns puzzleType.
+  PuzzleType get effectivePuzzleType => puzzleType;
+
   Clue({
     required this.id,
     required this.title,
@@ -292,7 +262,25 @@ abstract class Clue {
     this.latitude,
     this.longitude,
     this.qrCode,
+    this.minigameUrl,
+    this.riddleQuestion,
+    this.riddleAnswer,
+    this.puzzleType = PuzzleType.slidingPuzzle,
   });
+
+  // --- MOCK FACTORY FOR PRACTICE ---
+  factory Clue.mock(PuzzleType type) {
+    return PhysicalClue(
+      id: 'practice_${type.name}',
+      title: 'ZONA DE ENTRENAMIENTO',
+      hint: 'Practica este minijuego para dominar el evento.',
+      type: ClueType.minigame,
+      xpReward: 0,
+      isCompleted: false,
+      isLocked: false,
+      puzzleType: type,
+    );
+  }
 
   /// Abstract getters
   String get typeName;
@@ -300,11 +288,6 @@ abstract class Clue {
 
   /// Strategy Pattern: Each clue type knows how to check its own unlock requirements.
   Future<bool> checkUnlockRequirements();
-
-  String? get minigameUrl => null;
-  String? get riddleQuestion => null;
-  String? get riddleAnswer => null;
-  PuzzleType get puzzleType => PuzzleType.slidingPuzzle;
 
   factory Clue.fromJson(Map<String, dynamic> json) {
     // Safety check for image URLs in JSON
@@ -343,6 +326,10 @@ class PhysicalClue extends Clue {
     super.latitude,
     super.longitude,
     super.qrCode,
+    super.minigameUrl,
+    super.riddleQuestion,
+    super.riddleAnswer,
+    super.puzzleType = PuzzleType.slidingPuzzle,
   });
 
   factory PhysicalClue.fromJson(Map<String, dynamic> json, ClueType type) {
@@ -356,10 +343,18 @@ class PhysicalClue extends Clue {
       longitude: (json['longitude'] as num?)?.toDouble(),
       qrCode: json['qr_code'],
       xpReward: (json['xp_reward'] as num?)?.toInt() ?? 50,
-      // coinReward: (json['coin_reward'] as num?)?.toInt() ?? 10, // REMOVED
       isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
       isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
       sequenceIndex: json['sequence_index'] ?? 0,
+      minigameUrl: json['minigame_url'],
+      riddleQuestion: json['riddle_question'],
+      riddleAnswer: json['riddle_answer'],
+      puzzleType: json['puzzle_type'] != null
+          ? PuzzleType.values.firstWhere(
+              (e) => e.toString().split('.').last == json['puzzle_type'],
+              orElse: () => PuzzleType.slidingPuzzle,
+            )
+          : PuzzleType.slidingPuzzle,
     );
   }
 
@@ -398,11 +393,6 @@ class PhysicalClue extends Clue {
 }
 
 class OnlineClue extends Clue {
-  final String? minigameUrl;
-  final String? riddleQuestion;
-  final String? riddleAnswer;
-  final PuzzleType puzzleType;
-
   OnlineClue({
     required super.id,
     required super.title,
@@ -410,14 +400,13 @@ class OnlineClue extends Clue {
     required super.hint,
     required super.type,
     super.xpReward,
-    // super.coinReward, // REMOVED
     super.isCompleted,
     super.isLocked,
     super.sequenceIndex,
-    this.minigameUrl,
-    this.riddleQuestion,
-    this.riddleAnswer,
-    this.puzzleType = PuzzleType.slidingPuzzle,
+    super.minigameUrl,
+    super.riddleQuestion,
+    super.riddleAnswer,
+    super.puzzleType = PuzzleType.slidingPuzzle,
     super.latitude,
     super.longitude,
     super.qrCode,
@@ -440,11 +429,9 @@ class OnlineClue extends Clue {
             )
           : PuzzleType.slidingPuzzle,
       xpReward: (json['xp_reward'] as num?)?.toInt() ?? 50,
-      // coinReward: (json['coin_reward'] as num?)?.toInt() ?? 10, // REMOVED
       isCompleted: json['isCompleted'] ?? json['is_completed'] ?? false,
       isLocked: json['isLocked'] ?? json['is_locked'] ?? true,
       sequenceIndex: json['sequence_index'] ?? 0,
-      // Parse coordinates for online clues
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       qrCode: json['qr_code'],

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,12 +33,16 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    // CHANGED: Accept plan_id instead of raw amount (security: price validated server-side)
-    const { plan_id, bank, dni, phone, cta } = await req.json();
+    // Updated to accept payment_method_id
+    const { plan_id, payment_method_id, bank, dni, phone, cta } = await req.json();
 
-    if (!plan_id || !bank || !dni || (!phone && !cta)) {
+    if (!plan_id) {
+      throw new Error("Missing required field: plan_id");
+    }
+
+    if (!payment_method_id && (!bank || !dni || (!phone && !cta))) {
       throw new Error(
-        "Missing required fields: plan_id, bank, dni, and (phone or cta)",
+        "Missing required fields: plan_id and either payment_method_id or legacy fields (bank, dni, phone/cta)",
       );
     }
 
@@ -45,37 +50,258 @@ serve(async (req) => {
       `[api_withdraw_funds] Processing withdrawal for user ${user.id}, plan_id: ${plan_id}`,
     );
 
-    // 1. FETCH AND VALIDATE WITHDRAWAL PLAN
-    const { data: plan, error: planError } = await supabaseAdmin
-      .from("transaction_plans")
-      .select("id, name, amount, price, is_active, type")
-      .eq("id", plan_id)
-      .eq("type", "withdraw") // Security: Ensure it is a WITHDRAW plan
-      .single();
-
-    if (planError) {
-      console.error("Plan fetch error:", planError);
-      throw new Error(`Plan inválido: ${planError.message}`);
-    }
-
-    if (!plan) {
-      throw new Error("Plan de retiro no encontrado");
-    }
-
-    if (!plan.is_active) {
-      throw new Error("El plan de retiro seleccionado no está disponible");
-    }
-
-    // CRITICAL: Use values from DATABASE, not from client
-    // CRITICAL: Use values from DATABASE
-    const cloversCost = plan.amount;
-    const amountUsd = plan.price;
-
-    console.log(
-      `[api_withdraw_funds] Plan validated: ${plan.name}, Clovers Cost: ${cloversCost}, Amount: $${amountUsd} USD`,
+    // 1. ATOMIC REQUEST CREATION (RPC)
+    const { data: requestData, error: requestError } = await supabaseAdmin.rpc(
+      "create_withdrawal_request",
+      {
+        p_user_id: user.id,
+        p_plan_id: plan_id,
+        p_payment_method_id: payment_method_id ?? null,
+      },
     );
 
-    // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
+    if (requestError || !requestData) {
+      console.error("Withdrawal request error:", requestError);
+      throw new Error(requestError?.message || "Error creando retiro");
+    }
+
+    const requestId = requestData.request_id as string;
+    const withdrawalType = requestData.gateway as string;
+    const amountUsd = requestData.amount_usd as number;
+    const amountVes = requestData.amount_ves as number | null;
+    const finalBank = requestData.bank_code as string | null;
+    const finalDni = requestData.dni as string | null;
+    const finalPhone = requestData.phone_number as string | null;
+    const finalStripeEmail = requestData.stripe_email as string | null;
+
+    console.log(
+      `[api_withdraw_funds] Request created: ${requestId}, Type: ${withdrawalType}`,
+    );
+
+    // 4. BRANCH LOGIC BY TYPE
+    if (withdrawalType === "paypal") {
+      // --- PAYPAL WITHDRAWAL FLOW (AUTOMATED VIA PAYOUTS) ---
+      const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
+      const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
+      const mode = Deno.env.get("PAYPAL_MODE") || "sandbox";
+
+      if (!clientId || !clientSecret) {
+        console.log(`[api_withdraw_funds] Missing PayPal credentials. Falling back to manual.`);
+        await supabaseAdmin.rpc("mark_withdrawal_pending", {
+          p_request_id: requestId,
+          p_provider_data: { 
+            gateway: "paypal", 
+            email: finalStripeEmail, 
+            reason: "Faltan credenciales de PayPal (PAYPAL_CLIENT_ID/SECRET)." 
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro solicitado. Se procesará manualmente debido a falta de configuración del servidor.",
+            data: { type: "paypal", email: finalStripeEmail, transaction_id: requestId },
+            pending: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+
+      try {
+        const accessToken = await getPayPalAccessToken(clientId, clientSecret, mode);
+        const baseUrl = mode === "production" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+
+        console.log(`[api_withdraw_funds] Attempting PayPal Payout for $${amountUsd} to ${finalStripeEmail}`);
+
+        const payoutResponse = await fetch(`${baseUrl}/v1/payments/payouts`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sender_batch_header: {
+              sender_batch_id: `withdraw_${requestId}`,
+              email_subject: "Has recibido un premio de MapHunter!",
+              email_message: `Felicidades! Has recibido un premio de $${amountUsd} por tu desempeño en MapHunter.`
+            },
+            items: [{
+              recipient_type: "EMAIL",
+              amount: { value: amountUsd.toFixed(2), currency: "USD" },
+              note: `Retiro MapHunter ID: ${requestId}`,
+              receiver: finalStripeEmail,
+              sender_item_id: requestId
+            }]
+          }),
+        });
+
+        const payoutData = await payoutResponse.json();
+
+        if (payoutResponse.ok) {
+          console.log(`[api_withdraw_funds] PayPal Payout Success: ${payoutData.batch_header.payout_batch_id}`);
+          
+          await supabaseAdmin.rpc("mark_withdrawal_completed", {
+            p_request_id: requestId,
+            p_provider_data: {
+              gateway: "paypal",
+              batch_id: payoutData.batch_header.payout_batch_id,
+              status: payoutData.batch_header.batch_status,
+              automated: true,
+            },
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Retiro procesado y enviado automáticamente vía PayPal.",
+              data: { type: "paypal", batch_id: payoutData.batch_header.payout_batch_id, amount_usd: amountUsd, transaction_id: requestId },
+              pending: false,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          );
+        } else {
+          console.error(`[api_withdraw_funds] PayPal API Error:`, payoutData);
+          throw new Error(payoutData.message || "Error en la API de PayPal Payouts");
+        }
+
+      } catch (paypalError) {
+        console.error(`[api_withdraw_funds] PayPal Process Error:`, paypalError);
+        
+        await supabaseAdmin.rpc("mark_withdrawal_pending", {
+          p_request_id: requestId,
+          p_provider_data: {
+            gateway: "paypal",
+            email: finalStripeEmail,
+            error: paypalError.message,
+            automated_attempt_failed: true,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro solicitado. Hubo un problema con el proceso automático y se completará manualmente.",
+            data: { type: "paypal", email: finalStripeEmail, amount_usd: amountUsd, transaction_id: requestId, reason: paypalError.message },
+            pending: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+
+    } else if (withdrawalType === "stripe") {
+      // --- STRIPE WITHDRAWAL FLOW (AUTOMATED) ---
+      
+      const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+      if (!stripeSecretKey) {
+        throw new Error("Server Misconfiguration: Missing STRIPE_SECRET_KEY");
+      }
+
+      const stripe = new Stripe(stripeSecretKey, {
+        apiVersion: "2024-06-20",
+        httpClient: Stripe.createFetchHttpClient(),
+      });
+
+      // Fetch user's stripe connect status
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("stripe_connect_id, stripe_onboarding_completed")
+        .eq("id", user.id)
+        .single();
+
+      const stripeAccountId = profile?.stripe_connect_id;
+      const isOnboarded = profile?.stripe_onboarding_completed;
+
+      let transferSuccess = false;
+      let transferData = null;
+      let errorMessage = "";
+
+      if (stripeAccountId && isOnboarded) {
+        try {
+          console.log(`[api_withdraw_funds] Attempting automated transfer to ${stripeAccountId} for $${amountUsd}`);
+          
+          const amountCents = Math.round(amountUsd * 100);
+          
+          const transfer = await stripe.transfers.create({
+            amount: amountCents,
+            currency: "usd",
+            destination: stripeAccountId,
+            description: `Retiro MapHunter: ${requestId}`,
+            metadata: {
+              withdrawal_request_id: requestId,
+              supabase_user_id: user.id
+            }
+          });
+
+          transferSuccess = true;
+          transferData = transfer;
+          console.log(`[api_withdraw_funds] Transfer successful: ${transfer.id}`);
+
+        } catch (stripeError) {
+          console.error(`[api_withdraw_funds] Stripe Transfer Error:`, stripeError);
+          errorMessage = stripeError.message;
+        }
+      } else {
+        console.log(`[api_withdraw_funds] User ${user.id} not fully onboarded on Stripe Connect. Falling back to manual.`);
+        errorMessage = "Usuario no ha completado el registro de Stripe Connect. Retiro queda pendiente para proceso manual.";
+      }
+
+      if (transferSuccess) {
+        // Log SUCCESS
+        await supabaseAdmin.rpc("mark_withdrawal_completed", {
+          p_request_id: requestId,
+          p_provider_data: {
+            gateway: "stripe",
+            transfer_id: transferData.id,
+            destination: stripeAccountId,
+            automated: true,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro procesado y enviado automáticamente vía Stripe.",
+            data: {
+              type: "stripe",
+              transfer_id: transferData.id,
+              amount_usd: amountUsd,
+              transaction_id: requestId,
+            },
+            pending: false,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      } else {
+        // Fallback to PENDING (Manual)
+        await supabaseAdmin.rpc("mark_withdrawal_pending", {
+          p_request_id: requestId,
+          p_provider_data: {
+            gateway: "stripe",
+            email: finalStripeEmail,
+            automated_attempt_failed: !!stripeAccountId,
+            error: errorMessage,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro solicitado. Debido a que el registro de Stripe no está completo o hubo un error, se procesará manualmente.",
+            data: {
+              type: "stripe",
+              email: finalStripeEmail,
+              amount_usd: amountUsd,
+              transaction_id: requestId,
+              reason: errorMessage,
+            },
+            pending: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+    } else {
+      // --- PAGO MOVIL FLOW (EXISTING) ---
+      // 2. GET BCV EXCHANGE RATE FROM APP_CONFIG
      // Use order+limit instead of .single() so duplicate rows during DB cleanup
     // don't throw a 406 error and block all withdrawals.
     const { data: configRows, error: configError } = await supabaseAdmin
@@ -135,72 +361,50 @@ serve(async (req) => {
     }
 
     // 3. CALCULATE VES AMOUNT
-    const amountVes = amountUsd * bcvRate;
+    const effectiveAmountVes = amountVes ?? (amountUsd * bcvRate);
     console.log(
-      `[api_withdraw_funds] Exchange: $${amountUsd} USD × ${bcvRate} = ${amountVes.toFixed(2)} VES`,
+      `[api_withdraw_funds] Exchange: $${amountUsd} USD × ${bcvRate} = ${effectiveAmountVes.toFixed(2)} VES`,
     );
 
-    // 4. CHECK & DEDUCT CLOVERS (using clovers_cost from plan)
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("clovers")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      throw new Error("Profile not found");
-    }
-
-    if (profile.clovers < cloversCost) {
-      throw new Error(
-        `Saldo insuficiente: Tienes ${profile.clovers} tréboles, necesitas ${cloversCost}`,
-      );
-    }
-
-    // Deduct clovers immediately
-    const { error: deductError } = await supabaseAdmin
-      .from("profiles")
-      .update({ clovers: profile.clovers - cloversCost })
-      .eq("id", user.id);
-
-    if (deductError) throw new Error("Error al descontar tréboles");
-
-    console.log(
-      `[api_withdraw_funds] Deducted ${cloversCost} clovers from user. New balance: ${profile.clovers - cloversCost}`,
-    );
-
-    // 5. CALL PAGO A PAGO WITH VES AMOUNT
+    // 4. CALL PAGO A PAGO WITH VES AMOUNT
     const pagoApiKey = Deno.env.get("PAGO_PAGO_API_KEY")!;
-    const PAGO_PAGO_WITHDRAW_URL = Deno.env.get("PAGO_PAGO_WITHDRAW_URL")!;
+    const withdrawUrl = `https://mqlboutjgscjgogqbsjc.supabase.co/functions/v1/api_instant_credit_delivery`;
 
     // NOTE: Keep DNI and Phone as-is - Pago a Pago expects exact format
     // DNI: "V19400121" (with prefix)
     // Phone: "04242382511" (with leading zero)
     console.log(
-      `[api_withdraw_funds] Sending Withdrawal: DNI=${dni}, Phone=${phone}, Bank=${bank}, Amount=${amountVes.toFixed(2)} VES`,
+      `[api_withdraw_funds] Sending Withdrawal: DNI=${finalDni}, Phone=${finalPhone}, Bank=${finalBank}, Amount=${amountVes.toFixed(2)} VES`,
     );
 
     // IMPORTANT: Only send the 4 required fields for Pago Móvil
     // Do NOT include null/undefined fields like 'cta' as they may cause errors
     const payload: Record<string, unknown> = {
-      amount: amountVes, // VES amount (converted from USD)
-      bank: bank,
-      phone: phone, // Keep as-is with leading zero
-      dni: dni,     // Keep as-is with prefix (V/E/J/P/G)
+      amount: effectiveAmountVes, // VES amount (converted from USD)
+      bank: finalBank,
+      phone: finalPhone, // Keep as-is with leading zero
+      dni: finalDni,     // Keep as-is with prefix (V/E/J/P/G)
     };
 
     let apiSuccess = false;
+    let apiPending = false;
     let apiResponseData: Record<string, unknown> | null = null;
 
     try {
-      const response = await fetch(PAGO_PAGO_WITHDRAW_URL, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const response = await fetch(withdrawUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           pago_pago_api: pagoApiKey,
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       apiResponseData = await response.json() as Record<string, unknown>;
       
@@ -217,56 +421,32 @@ serve(async (req) => {
       
       // Consider success if we have a transaction_id OR explicit success
       apiSuccess = response.ok && (hasTransactionId || explicitSuccess || hasCompletedStatus);
+
+      const explicitFailure =
+        apiResponseData?.success === false && !hasTransactionId && !hasCompletedStatus;
+      if (!apiSuccess && explicitFailure) {
+        apiPending = false;
+      } else if (!apiSuccess) {
+        apiPending = true;
+      }
       
       console.log(`[api_withdraw_funds] Success evaluation: response.ok=${response.ok}, hasTransactionId=${hasTransactionId}, hasCompletedStatus=${hasCompletedStatus}, explicitSuccess=${explicitSuccess}, FINAL=${apiSuccess}`);
       
     } catch (netError) {
       console.error("Network error calling Pago a Pago:", netError);
       apiSuccess = false;
+      apiPending = true;
     }
 
     // 6. HANDLE FAILURE -> REFUND CLOVERS
-    if (!apiSuccess) {
-      console.error("Withdrawal Failed. Refunding clovers...", apiResponseData);
+    if (!apiSuccess && !apiPending) {
+      console.error("Withdrawal Failed.", apiResponseData);
 
-      // Fetch fresh balance to be safe regarding concurrency
-      const { data: currentProfile } = await supabaseAdmin
-        .from("profiles")
-        .select("clovers")
-        .eq("id", user.id)
-        .single();
-
-      if (currentProfile) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({ clovers: currentProfile.clovers + cloversCost })
-          .eq("id", user.id);
-
-        // Log Refund in Wallet Ledger
-        const { error: refundLedgerError } = await supabaseAdmin
-          .from("wallet_ledger")
-          .insert({
-            user_id: user.id,
-            amount: cloversCost, // Positive for refund (clovers returned)
-            description: `Reembolso por fallo en retiro - Plan: ${plan.name}`,
-            order_id: null,
-            metadata: {
-              plan_id: plan.id,
-              plan_name: plan.name,
-              amount_usd: amountUsd,
-              amount_ves: amountVes,
-              bcv_rate: bcvRate,
-              api_response: apiResponseData,
-            },
-          });
-
-        if (refundLedgerError) {
-          console.error(
-            "CRITICAL: Failed to log refund in wallet_ledger:",
-            refundLedgerError,
-          );
-        }
-      }
+      await supabaseAdmin.rpc("mark_withdrawal_failed", {
+        p_request_id: requestId,
+        p_provider_data: apiResponseData,
+        p_refund: true,
+      });
 
       const failureMsg =
         apiResponseData?.message ??
@@ -275,64 +455,22 @@ serve(async (req) => {
       throw new Error(`Retiro fallido: ${failureMsg}. Tréboles reembolsados.`);
     }
 
-    // 7. LOG SUCCESSFUL TRANSACTION
-    // Safe access to nested data properties
-    const responseData = apiResponseData?.data as Record<string, unknown> | undefined;
-    const detailsData = responseData?.details as Record<string, unknown> | undefined;
-    
-    await supabaseAdmin.from("payment_transactions").insert({
-      user_id: user.id,
-      amount: amountVes,
-      type: "WITHDRAWAL",
-      status: "COMPLETED",
-      provider_data: {
-        ...apiResponseData,
-        plan_id: plan.id,
-        plan_name: plan.name,
-        clovers_cost: cloversCost,
-        amount_usd: amountUsd,
-        bcv_rate: bcvRate,
-      },
-      order_id: responseData?.transaction_id || `WD-${Date.now()}`,
-    });
-
-    // 8. LOG IN WALLET LEDGER
-    const referenceInfo =
-      detailsData?.external_reference ||
-      responseData?.reference ||
-      "N/A";
-    const transactionId = responseData?.transaction_id;
-
-    const { error: ledgerError } = await supabaseAdmin
-      .from("wallet_ledger")
-      .insert({
-        user_id: user.id,
-        amount: -cloversCost, // Negative for withdrawal (clovers spent)
-        description: `Retiro: ${plan.name} - $${amountUsd} USD (${amountVes.toFixed(2)} VES) - Ref: ${referenceInfo}`,
-        order_id: null,
-        metadata: {
-          plan_id: plan.id,
-          plan_name: plan.name,
-          clovers_cost: cloversCost,
-          amount_usd: amountUsd,
-          amount_ves: amountVes,
-          bcv_rate: bcvRate,
-          transaction_id: transactionId,
-          api_response: apiResponseData,
+      if (apiPending) {
+      await supabaseAdmin.rpc("mark_withdrawal_pending", {
+        p_request_id: requestId,
+        p_provider_data: {
+          ...apiResponseData,
+          pending_reason: "provider_latency_or_unknown",
         },
       });
 
-    if (ledgerError) {
-      console.error(
-        "CRITICAL: Failed to log withdrawal in wallet_ledger:",
-        ledgerError,
-      );
       return new Response(
         JSON.stringify({
           success: true,
+          pending: true,
+          message:
+            "Retiro en proceso. Te notificaremos cuando se confirme el pago.",
           data: apiResponseData,
-          warning:
-            "Transaction completed but ledger update failed. Contact support.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -341,29 +479,33 @@ serve(async (req) => {
       );
     }
 
-    console.log(
-      `[api_withdraw_funds] Withdrawal successful for plan ${plan.name}`,
-    );
+    // 7. LOG SUCCESSFUL TRANSACTION
+    // Safe access to nested data properties
+    const responseData = apiResponseData?.data as Record<string, unknown> | undefined;
+    const detailsData = responseData?.details as Record<string, unknown> | undefined;
+    
+    await supabaseAdmin.rpc("mark_withdrawal_completed", {
+      p_request_id: requestId,
+      p_provider_data: {
+        ...apiResponseData,
+        transaction_id: responseData?.transaction_id,
+        reference: detailsData?.external_reference || responseData?.reference,
+      },
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          ...apiResponseData,
-          plan: {
-            id: plan.id,
-            name: plan.name,
-            clovers_cost: cloversCost,
-            amount_usd: amountUsd,
-            amount_ves: amountVes,
-          },
-        },
+        data: apiResponseData,
+        message: "Retiro procesado exitosamente.",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       },
     );
+
+    } // Close else (branch for pago_movil)
   } catch (error) {
     console.error("Withdrawal flow error:", error);
     return new Response(
@@ -375,3 +517,29 @@ serve(async (req) => {
     );
   }
 });
+
+/**
+ * Get PayPal OAuth2 Access Token
+ */
+async function getPayPalAccessToken(clientId: string, clientSecret: string, mode: string) {
+  const credentials = btoa(`${clientId}:${clientSecret}`);
+  const baseUrl = mode === "production" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+  
+  const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    console.error("PayPal Auth failed:", errorData);
+    throw new Error(`PayPal Auth Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}

@@ -86,7 +86,8 @@ class InventoryService {
 
       for (var item in response) {
         // Usamos 'slug' en lugar de 'power_id' para coincidir con PowerItem.getShopItems()
-        final String itemId = item['slug'] ?? item['power_id'].toString();
+        final String rawId = item['slug'] ?? item['power_id'].toString();
+        final String itemId = rawId.trim().toLowerCase();
         final int qty = item['quantity'] ?? 0;
 
         eventItems[itemId] = qty;
@@ -304,7 +305,7 @@ class InventoryService {
       // 2. Traer poderes con JOIN
       final List<dynamic> powersData = await _supabase
           .from('player_powers')
-          .select('quantity, powers!inner(slug)')
+          .select('quantity, powers!inner(slug, name, icon)')
           .eq('game_player_id', gamePlayerId)
           .gt('quantity', 0);
 
@@ -313,7 +314,8 @@ class InventoryService {
       for (var item in powersData) {
         final powerDetails = item['powers'];
         if (powerDetails != null && powerDetails['slug'] != null) {
-          final String slug = powerDetails['slug'];
+          final String rawSlug = powerDetails['slug'] ?? '';
+          final String slug = rawSlug.trim().toLowerCase();
           final int qty = item['quantity'];
 
           for (var i = 0; i < qty; i++) {

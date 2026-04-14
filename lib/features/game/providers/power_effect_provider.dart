@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../strategies/power_strategy_factory.dart';
 import '../../game/repositories/power_repository_interface.dart';
 import '../../mall/models/power_item.dart';
 import '../../../core/services/effect_timer_service.dart';
+import '../../../core/services/feedback_event_queue.dart';
 
 import 'power_interfaces.dart';
 
@@ -50,9 +52,21 @@ class PowerEffectProvider extends ChangeNotifier
   StreamSubscription? _subscription;
   StreamSubscription? _casterSubscription;
   StreamSubscription? _combatEventsSubscription;
+  StreamSubscription? _gamePlayerSubscription; // Fix 3.1: stored to prevent zombie listeners
   StreamSubscription<EffectEvent>?
       _timerEventSubscription; // NEW: Listen for timer expirations
   Timer? _defenseFeedbackTimer;
+  Timer?
+      _effectsDebounceTimer; // [PERFORMANCE] Debounce for active_powers bursts
+
+  /// Canal de Broadcast de Supabase para recibir combat_events con baja latencia (~50ms).
+  /// Complementa _combatEventsSubscription (Postgres Changes, ~300ms) como fast-path.
+  /// Los triggers DB (trg_combat_event_broadcast) alimentan este canal.
+  RealtimeChannel? _broadcastChannel;
+
+  /// IDs de combat_events ya procesados vía Broadcast. Evita reprocess desde Postgres Changes.
+  /// Mapa de ID → timestamp de procesamiento. Entradas expiran en 5s (mayor que ~300ms de PG Changes).
+  final Map<String, DateTime> _broadcastProcessedIds = {};
 
   String? _listeningForId;
   String? get listeningForId => _listeningForId;
@@ -71,6 +85,10 @@ class PowerEffectProvider extends ChangeNotifier
   DateTime? _lastDefenseActionAt;
 
   final Set<String> _processedEffectIds = {};
+
+  // --- SEQUENTIAL COMBAT PROCESSING QUEUE (Fix 3.5) ---
+  final Queue<Map<String, dynamic>> _combatEventProcessingQueue = Queue();
+  bool _isProcessingCombatQueue = false;
 
   String? _returnedByPlayerName;
   String? get returnedByPlayerName => _returnedByPlayerName;
@@ -96,10 +114,14 @@ class PowerEffectProvider extends ChangeNotifier
   String? _cachedShieldPowerId;
   DateTime? _ignoreShieldUntil;
 
-  final StreamController<PowerFeedbackEvent> _feedbackStreamController =
-      StreamController<PowerFeedbackEvent>.broadcast();
-  Stream<PowerFeedbackEvent> get feedbackStream =>
-      _feedbackStreamController.stream;
+  /// Cola de feedback con garantía de entrega.
+  /// Reemplaza el BroadcastStream anterior que descartaba eventos
+  /// cuando el usuario navegaba a otra pantalla (no había listeners activos).
+  final FeedbackEventQueue<PowerFeedbackEvent> _feedbackQueue =
+      FeedbackEventQueue(maxSize: 20, ttl: const Duration(seconds: 10));
+
+  @override
+  Stream<PowerFeedbackEvent> get feedbackStream => _feedbackQueue.stream;
 
   // --- DELEGATED TO EffectTimerService ---
   String? get activePowerSlug => _timerService.activeEffectSlugs.isNotEmpty
@@ -261,6 +283,10 @@ class PowerEffectProvider extends ChangeNotifier
       _subscription?.cancel();
       _casterSubscription?.cancel();
       _combatEventsSubscription?.cancel();
+      _gamePlayerSubscription?.cancel();
+      _gamePlayerSubscription = null;
+      _broadcastChannel?.unsubscribe();
+      _broadcastChannel = null;
       return;
     }
 
@@ -285,12 +311,14 @@ class PowerEffectProvider extends ChangeNotifier
     _listeningForId = myGamePlayerId;
     _listeningForEventId = eventId;
     _sessionStartTime = DateTime.now().toUtc();
+    _purgeBroadcastIds(); // Clean stale dedup entries on new session
 
     debugPrint(
         '🛡️ PowerEffectProvider STARTING LISTENING: localId=$myGamePlayerId, eventId=$eventId');
 
     // 0. Listen for Game Player Updates (PROTECTION STATE) - DEFENSE MUTUAL EXCLUSIVITY FIX
-    _repository.getGamePlayerStream(playerId: myGamePlayerId).listen(
+    _gamePlayerSubscription?.cancel(); // Fix 3.1: Cancel previous before creating new
+    _gamePlayerSubscription = _repository.getGamePlayerStream(playerId: myGamePlayerId).listen(
         (Map<String, dynamic>? player) {
       if (player != null) {
         // DEBUG: Check if column exists
@@ -358,10 +386,22 @@ class PowerEffectProvider extends ChangeNotifier
     });
 
     // 1. Listen for Active Powers
+    // [PERFORMANCE] Debounce: Con 50+ jugadores atacando, el stream puede
+    // disparar muchos eventos en ráfaga. Agrupamos en ventana de 150ms
+    // y procesamos solo el estado más reciente.
+    List<Map<String, dynamic>>? _pendingEffectsData;
     _subscription = _repository
         .getActivePowersStream(targetId: myGamePlayerId)
         .listen((List<Map<String, dynamic>> data) async {
-      await _processEffects(data);
+      _pendingEffectsData = data;
+      _effectsDebounceTimer?.cancel();
+      _effectsDebounceTimer =
+          Timer(const Duration(milliseconds: 150), () async {
+        if (_pendingEffectsData != null) {
+          await _processEffects(_pendingEffectsData!);
+          _pendingEffectsData = null;
+        }
+      });
     }, onError: (e) {
       debugPrint('PowerEffectProvider active_powers stream error: $e');
     });
@@ -379,10 +419,41 @@ class PowerEffectProvider extends ChangeNotifier
     _combatEventsSubscription = _repository
         .getCombatEventsStream(targetId: myGamePlayerId)
         .listen((List<Map<String, dynamic>> data) async {
-      await _handleCombatEvents(data);
+      // OPTIMIZACIÓN: Filtrar eventos que ya fueron procesados via Broadcast
+      // para evitar procesamiento redundante del mismo evento.
+      final fresh = data.where((e) {
+        final id = e['id']?.toString();
+        return id == null || !_isBroadcastProcessed(id);
+      }).toList();
+      await _handleCombatEvents(fresh);
     }, onError: (e) {
       debugPrint('PowerEffectProvider combat_events stream error: $e');
     });
+
+    // 3b. Canal de Broadcast (fast-path ~50ms) para combat_events y power_applied.
+    // Los triggers DB alimentan este canal. Si llega aquí primero, marcamos el ID
+    // como procesado para que el Postgres Changes (3a) lo ignore.
+    _broadcastChannel?.unsubscribe();
+    _broadcastChannel = _repository
+        .getCombatBroadcastChannel(gamePlayerId: myGamePlayerId)
+        .onBroadcast(
+          event: 'combat_event',
+          callback: (payload) async {
+            final data = payload as Map<String, dynamic>?;
+            if (data == null) return;
+
+            final id = data['id']?.toString();
+            if (id != null) {
+              if (_isBroadcastProcessed(id)) return; // Ya procesado (TTL check)
+              _broadcastProcessedIds[id] = DateTime.now();
+            }
+
+            debugPrint(
+                '⚡ [BROADCAST] combat_event recibido (fast-path): ${data['result_type']}');
+            await _enqueueCombatEvent(data);
+          },
+        );
+    _broadcastChannel!.subscribe();
 
     // 4. Listen for Timer Expiration Events (CRITICAL for UI unlock + defense deactivation)
     _timerEventSubscription?.cancel();
@@ -392,10 +463,13 @@ class PowerEffectProvider extends ChangeNotifier
         debugPrint(
             '🔓 [UI-UNLOCK] Removiendo bloqueo de pantalla para efecto: ${event.slug}');
 
-        // FIX: If a timed defense (invisibility) expires, clear is_protected server-side
-        if (event.slug == _activeDefenseSlug && _isProtected) {
+        // Solo desactivamos server-side si expira INVISIBILIDAD (único poder de defensa temporal).
+        // Escudo y devolución nunca deben expirar por tiempo local — solo por combat_event.
+        if (event.slug == 'invisibility' &&
+            event.slug == _activeDefenseSlug &&
+            _isProtected) {
           debugPrint(
-              '🛡️ [DEFENSE-EXPIRE] Timed defense "${event.slug}" expired, calling deactivate_defense RPC');
+              '🛡️ [DEFENSE-EXPIRE] Invisibility expired. Calling deactivate_defense RPC.');
           deactivateDefense();
         }
 
@@ -405,21 +479,40 @@ class PowerEffectProvider extends ChangeNotifier
     });
   }
 
+  /// Fix 3.2: Procesa un lote completo de eventos encolando cada uno para
+  /// procesamiento FIFO secuencial. Reemplaza el acceso a data.first previo.
   Future<void> _handleCombatEvents(List<Map<String, dynamic>> data) async {
-    if (data.isEmpty) return;
+    for (final event in data) {
+      await _enqueueCombatEvent(event);
+    }
+  }
 
-    // Check duplication/timing
-    final event = data.first;
+  /// Fix 3.5: Garantiza procesamiento FIFO secuencial de combat_events.
+  /// Mientras un evento se procesa, los nuevos se encolan y esperan su turno,
+  /// eliminando race conditions en las animaciones de combate.
+  Future<void> _enqueueCombatEvent(Map<String, dynamic> event) async {
+    _combatEventProcessingQueue.add(event);
+    if (!_isProcessingCombatQueue) {
+      _isProcessingCombatQueue = true;
+      while (_combatEventProcessingQueue.isNotEmpty) {
+        final next = _combatEventProcessingQueue.removeFirst();
+        await _processSingleCombatEvent(next);
+      }
+      _isProcessingCombatQueue = false;
+    }
+  }
+
+  /// Procesa un único combat_event con todas las validaciones y lógica de estado.
+  Future<void> _processSingleCombatEvent(Map<String, dynamic> event) async {
     final createdAtStr = event['created_at'];
     if (createdAtStr == null) return;
 
     // FILTER: Event ID
     if (_listeningForEventId != null) {
-      final eventId = event['event_id']?.toString();
-      // If event has an ID and it doesn't match our context, ignore it.
-      if (eventId != null && eventId != _listeningForEventId) {
+      final evGameId = event['event_id']?.toString();
+      if (evGameId != null && evGameId != _listeningForEventId) {
         debugPrint(
-            '[COMBAT] 🛑 Ignoring event from different event_id: $eventId (Expected: $_listeningForEventId)');
+            '[COMBAT] 🛑 Ignoring event from different event_id: $evGameId (Expected: $_listeningForEventId)');
         return;
       }
     }
@@ -446,23 +539,19 @@ class PowerEffectProvider extends ChangeNotifier
       debugPrint(
           '[COMBAT]    - Protected Before: $_isProtected ($_activeDefenseSlug)');
 
-      // Server confirmed shield blocked an attack
       _isProtected = false;
       _activeDefenseSlug = null;
-      // Force remove effect locally in case stream hasn't updated yet
       _removeEffect('shield');
       _ignoreShieldUntil = DateTime.now().add(const Duration(seconds: 5));
 
       debugPrint('[COMBAT]    - Protected After Update: $_isProtected');
 
+      // Fix 3.3: _registerDefenseAction ya encola shieldBroken feedback internamente.
+      // Se eliminó la llamada redundante a _feedbackQueue.add() que causaba doble animación.
       _registerDefenseAction(DefenseAction.shieldBroken);
-      _feedbackStreamController
-          .add(PowerFeedbackEvent(PowerFeedbackType.shieldBroken));
-
-      debugPrint('[COMBAT] 🛡️ Shield broken feedback emitted');
+      debugPrint('[COMBAT] 🛡️ Shield broken feedback emitted (via _registerDefenseAction)');
     } else if (resultType == 'reflected') {
       final targetId = event['target_id']?.toString();
-      // If I am the target, it means *I* reflected the attack
       if (targetId == _listeningForId) {
         debugPrint('[COMBAT] ↩️ RETURN ACTIVATED! Syncing local state.');
 
@@ -470,18 +559,15 @@ class PowerEffectProvider extends ChangeNotifier
         _activeDefenseSlug = null;
         _removeEffect('return');
 
-        // EXTRACT DATA FOR FEEDBACK
         final attackerId = event['attacker_id']?.toString();
-        final powerSlug = event['power_slug']?.toString();
+        final pSlug = event['power_slug']?.toString();
 
         _returnedAgainstCasterId = attackerId;
-        _returnedPowerSlug = powerSlug;
+        _returnedPowerSlug = pSlug;
 
-        // Trigger visual feedback (SabotageOverlay listens to DefenseAction.returned)
         _registerDefenseAction(DefenseAction.returned);
 
-        // Emit positive feedback event (for toasts or other listeners)
-        _feedbackStreamController.add(PowerFeedbackEvent(
+        _feedbackQueue.add(PowerFeedbackEvent(
           PowerFeedbackType.returnSuccess,
           message: '¡Ataque devuelto exitosamente!',
           relatedPlayerName: attackerId,
@@ -489,26 +575,21 @@ class PowerEffectProvider extends ChangeNotifier
       }
     } else if (resultType == 'success' && powerSlug == 'life_steal') {
       final targetId = event['target_id']?.toString();
-      // Check if I am the victim
       if (targetId == _listeningForId) {
         debugPrint('[COMBAT] 🩸 LIFE STEAL detected via Combat Event!');
         final attackerId = event['attacker_id']?.toString();
-        final eventId =
-            event['id']?.toString(); // Use combat event ID as reference
+        final eId = event['id']?.toString();
 
-        // Trigger Visual Strategy
-        setPendingEffectContext(eventId, attackerId);
+        setPendingEffectContext(eId, attackerId);
         _powerStrategyFactory.get('life_steal').onActivate(this);
         setPendingEffectContext(null, null);
 
-        // Emit Feedback Event
-        _feedbackStreamController.add(PowerFeedbackEvent(
+        _feedbackQueue.add(PowerFeedbackEvent(
           PowerFeedbackType.lifeStolen,
           relatedPlayerName: attackerId,
         ));
       }
     } else if (resultType == 'gifted') {
-      // A spectator (or another player) gifted us a defense power
       final attackerId = event['attacker_id']?.toString();
       final giftPowerSlug = event['power_slug']?.toString();
 
@@ -525,12 +606,39 @@ class PowerEffectProvider extends ChangeNotifier
 
       final powerDisplayName = _getPowerDisplayName(giftPowerSlug);
 
-      _feedbackStreamController.add(PowerFeedbackEvent(
+      _feedbackQueue.add(PowerFeedbackEvent(
         PowerFeedbackType.giftReceived,
         message: '¡$gifterName te ha regalado un $powerDisplayName!',
         relatedPlayerName: gifterName,
       ));
     }
+  }
+
+  /// Notifica que el usuario ha recibido tréboles (ej. por recompensa o saboteo)
+  void notifyCloversReceived(int amount) {
+    _feedbackQueue.add(PowerFeedbackEvent(
+      PowerFeedbackType.cloversReceived,
+      message: amount.toString(),
+    ));
+  }
+
+  /// Fix 3.6: Verifica si un ID fue procesado vía Broadcast con expiración por TTL (5s).
+  /// El PG Changes path llega ~300ms después del Broadcast, por lo que 5s de TTL
+  /// garantiza deduplicación sin retener entradas indefinidamente.
+  bool _isBroadcastProcessed(String id) {
+    final ts = _broadcastProcessedIds[id];
+    if (ts == null) return false;
+    if (DateTime.now().difference(ts) > const Duration(seconds: 5)) {
+      _broadcastProcessedIds.remove(id);
+      return false;
+    }
+    return true;
+  }
+
+  /// Elimina entradas expiradas del mapa de deduplicación (TTL = 5s).
+  void _purgeBroadcastIds() {
+    final cutoff = DateTime.now().subtract(const Duration(seconds: 5));
+    _broadcastProcessedIds.removeWhere((_, ts) => ts.isBefore(cutoff));
   }
 
   /// Resolves a gifter's display name from their game_player_id.
@@ -665,21 +773,10 @@ class PowerEffectProvider extends ChangeNotifier
         }
       }
 
-      // 3. Validar que sea reciente (evitar animaciones al entrar)
-      if (_sessionStartTime != null && createdAtStr != null) {
-        final createdAt = DateTime.parse(createdAtStr);
-        final sessionStart = _sessionStartTime!;
-        // Increased tolerance to avoid clock skew issues
-        const tolerance = Duration(hours: 2);
-        final adjustedSessionStart = sessionStart.subtract(tolerance);
-        debugPrint(
-            "   🕐 Comparación de tiempo: Evento=$createdAt vs Sesión=$sessionStart (tolerancia: 2h)");
-        if (createdAt.isBefore(adjustedSessionStart)) {
-          debugPrint(
-              "   ⚠️ Evento ignorado por ser ANTIGUO (${adjustedSessionStart.difference(createdAt).inSeconds}s antes del margen)");
-          return false;
-        }
-      }
+      // active_powers es una tabla de estado actual: solo contiene filas activas en este momento.
+      // No aplicamos filtro de tiempo por created_at aquí porque un escudo o devolución aplicado
+      // hace 10 minutos es igual de válido que uno aplicado hace 1 segundo.
+      // El filtro de sesión se aplica únicamente en _processSingleCombatEvent (tabla histórica).
 
       return true;
     }).toList();
@@ -704,17 +801,17 @@ class PowerEffectProvider extends ChangeNotifier
       // but the is_protected flag might still be true if the cleanup job hasn't run yet.
       // OR if we just missed the expiration event.
 
-      if (_isProtected && _activeDefenseSlug != null) {
+      // Solo desactivamos la defensa por lista vacía si es un poder TEMPORAL (invisibilidad).
+      // Escudo y devolución son event-driven: si active_powers está vacío pero is_protected=true,
+      // confiamos en el stream de game_players como fuente de verdad y NO auto-desactivamos.
+      // Desactivar aquí el escudo/devolución por lista vacía es exactamente el bug reportado.
+      if (_isProtected && _activeDefenseSlug == 'invisibility') {
         debugPrint(
-            '🛡️ [INTEGRITY] No active powers found, but Protection is ON via "$_activeDefenseSlug". Checking expiration...');
-        // If we have an active slug locally, check if it's expired locally too.
-        // If the list is empty, it means DB has NO active powers for us.
-        // THIS IS THE SMOKING GUN: Protected=True, ActivePowers=Empty.
-        // We must clear the protection.
-
+            '🛡️ [FAIL-SAFE] Invisibility expired server-side (Protected=True, ActivePowers=0). Deactivating...');
+        deactivateDefense();
+      } else if (_isProtected && _activeDefenseSlug != null) {
         debugPrint(
-            '🛡️ [FAIL-SAFE] Ghost Protection Detected! (Protected=True, ActivePowers=0). Deactivating...');
-        deactivateDefense(); // This calls RPC to set is_protected = false
+            '🛡️ [INTEGRITY] No active powers, but $_activeDefenseSlug is event-driven — keeping protection until combat_event breaks it.');
       }
       return;
     }
@@ -739,14 +836,16 @@ class PowerEffectProvider extends ChangeNotifier
       final bool isExpired = duration <= Duration.zero;
 
       final bool isLifeSteal = slug == 'life_steal';
+      // Escudo y devolución son event-driven: solo se rompen por combat_event (shield_blocked/reflected),
+      // NUNCA por tiempo. Se deben aplicar aunque expires_at del DB haya pasado.
+      final bool isTimelessDefense = slug == 'shield' || slug == 'return';
 
       // HANDLED VIA COMBAT EVENTS (To ensure correct timing)
       if (isLifeSteal) continue;
 
-      // Validity check for defenses:
-      // Must be active OR be life_steal (which we verify via idempotency later, but for defense it counts as "incoming")
-      // If it's a standard effect and it's expired, we ignore it completely (ghost effect).
-      if (isExpired && !isLifeSteal) continue;
+      // Los poderes estándar expirados (blur, freeze, etc.) se descartan.
+      // Escudo y devolución se procesan siempre (event-driven, no time-driven).
+      if (isExpired && !isLifeSteal && !isTimelessDefense) continue;
 
       // --- 0. PREVENT RE-APPLYING BROKEN SHIELD ---
       // Check if broken in this batch OR explicitly ignored due to recent break
@@ -790,17 +889,15 @@ class PowerEffectProvider extends ChangeNotifier
       // --- HANDLE INCOMING FEEDBACK (As Attacker) ---
       if (slug == 'shield_feedback') {
         _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
-        _feedbackStreamController
-            .add(PowerFeedbackEvent(PowerFeedbackType.attackBlocked));
+        _feedbackQueue.add(PowerFeedbackEvent(PowerFeedbackType.attackBlocked));
         continue;
       }
 
       // --- 5. STANDARD EFFECT APPLICATION ---
-      // Only if !isExpired (checked at top)
-      if (isExpired) continue; // Redundant but safe
+      // isTimelessDefense (shield/return) se aplican incluso si isExpired, los demás no.
+      if (isExpired && !isTimelessDefense) continue;
 
-      // Special check: If this is shield, and we broke it this batch, skip (already handled by top check,
-      // but applies to `applyEffect` too).
+      // Special check: If this is shield, and we broke it this batch, skip.
       if (slug == 'shield' && shieldBrokenInBatch) continue;
 
       if (!isEffectActive(slug)) {
@@ -808,14 +905,16 @@ class PowerEffectProvider extends ChangeNotifier
         strategy.onActivate(this);
       }
 
+      // Escudo y devolución usan timer local de 365 días (event-driven, no time-driven).
+      // La invisibilidad usa la duración real del DB.
       applyEffect(
           slug: slug,
-          duration: slug == 'shield'
+          duration: isTimelessDefense
               ? const Duration(days: 365)
-              : duration, // FORCE LONG DURATION FOR SHIELD
+              : duration,
           effectId: effectId,
           casterId: casterId,
-          expiresAt: slug == 'shield'
+          expiresAt: isTimelessDefense
               ? DateTime.now().add(const Duration(days: 365))
               : expiresAt);
     }
@@ -841,11 +940,12 @@ class PowerEffectProvider extends ChangeNotifier
 
     // ⚡ CRITICAL: Emit feedback event for shield broken
     if (action == DefenseAction.shieldBroken) {
-      _feedbackStreamController.add(PowerFeedbackEvent(
+      _feedbackQueue.add(PowerFeedbackEvent(
         PowerFeedbackType.shieldBroken,
         message: 'Shield broken',
       ));
-      debugPrint('[SHIELD] 🛡️💥 Shield broken feedback event emitted');
+      debugPrint(
+          '[SHIELD] 🛡️💥 Shield broken feedback event queued (guaranteed delivery)');
     }
 
     // Duración diferenciada: Returned y ShieldBroken son eventos importantes => 4s
@@ -870,7 +970,7 @@ class PowerEffectProvider extends ChangeNotifier
   void notifyPowerReturned(String byPlayerName) {
     _returnedByPlayerName = byPlayerName;
     _registerDefenseAction(DefenseAction.returned);
-    _feedbackStreamController.add(PowerFeedbackEvent(
+    _feedbackQueue.add(PowerFeedbackEvent(
       PowerFeedbackType.returnRejection,
       relatedPlayerName: byPlayerName,
     ));
@@ -879,7 +979,7 @@ class PowerEffectProvider extends ChangeNotifier
 
   void notifyAttackBlocked() {
     _registerDefenseAction(DefenseAction.attackBlockedByEnemy);
-    _feedbackStreamController.add(PowerFeedbackEvent(
+    _feedbackQueue.add(PowerFeedbackEvent(
       PowerFeedbackType.attackBlocked,
     ));
     notifyListeners();
@@ -887,7 +987,7 @@ class PowerEffectProvider extends ChangeNotifier
 
   void notifyStealFailed() {
     _registerDefenseAction(DefenseAction.stealFailed);
-    _feedbackStreamController.add(PowerFeedbackEvent(
+    _feedbackQueue.add(PowerFeedbackEvent(
       PowerFeedbackType.stealFailed,
     ));
     notifyListeners();
@@ -903,6 +1003,9 @@ class PowerEffectProvider extends ChangeNotifier
     _returnedByPlayerName = null;
     _returnedAgainstCasterId = null;
     _listeningForEventId = null;
+    _feedbackQueue
+        .clear(); // Descartar eventos pendientes de la sesión anterior
+    _broadcastProcessedIds.clear();
     notifyListeners();
   }
 
@@ -916,10 +1019,13 @@ class PowerEffectProvider extends ChangeNotifier
     _subscription?.cancel();
     _casterSubscription?.cancel();
     _combatEventsSubscription?.cancel();
-    _timerEventSubscription?.cancel(); // NEW: Cancel timer event subscription
+    _gamePlayerSubscription?.cancel(); // Fix 3.1: prevent zombie listeners
+    _timerEventSubscription?.cancel();
     _defenseFeedbackTimer?.cancel();
+    _broadcastChannel?.unsubscribe();
+    _broadcastChannel = null;
     _clearAllEffects();
-    _feedbackStreamController.close(); // Cleanup Stream
+    _feedbackQueue.dispose(); // Cleanup feedback queue
     super.dispose();
   }
 }

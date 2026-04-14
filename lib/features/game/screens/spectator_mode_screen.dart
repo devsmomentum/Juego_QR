@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -16,9 +17,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../mall/models/power_item.dart';
 import '../models/event.dart';
 import '../providers/power_effect_provider.dart';
-import '../../../core/services/effect_timer_service.dart';
-import '../repositories/power_repository_impl.dart';
-import '../strategies/power_strategy_factory.dart';
 import '../../events/services/event_service.dart';
 import '../widgets/betting_modal.dart';
 import '../widgets/my_bets_modal.dart';
@@ -34,7 +32,6 @@ import 'winner_celebration_screen.dart'; // ADDED: Podio redirect
 import '../../../shared/widgets/cyber_tutorial_overlay.dart';
 import '../../../shared/widgets/master_tutorial_content.dart';
 
-
 class SpectatorModeScreen extends StatefulWidget {
   final String eventId;
 
@@ -46,22 +43,26 @@ class SpectatorModeScreen extends StatefulWidget {
 
 class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   int _selectedTab = 0; // 0: Actividad, 1: Apuestas, 2: Tienda
-  late PowerEffectProvider _powerEffectProvider;
   late Stream<GameEvent> _eventStream;
-  bool _hasNavigatedToPodium = false; // Prevent double-navigation when event completes
+  bool _hasNavigatedToPodium =
+      false; // Prevent double-navigation when event completes
+  bool _isRedirectingToGame = false;
+  Timer? _completionPollingTimer; // Fallback: polling si Realtime falla (Web)
+  Timer? _approvalPollingTimer;
 
   @override
   void initState() {
     super.initState();
     final supabase = Supabase.instance.client;
-    _powerEffectProvider = PowerEffectProvider(
-      repository: PowerRepositoryImpl(supabaseClient: supabase),
-      timerService: EffectTimerService(),
-      strategyFactory: PowerStrategyFactory(supabase),
-    );
-    
     _eventStream = EventService(supabase).getEventStream(widget.eventId);
-    
+
+    // Polling de reconciliación cada 15s para detectar status=completed
+    // cuando Realtime falla (ej. Web tab inactivo).
+    _completionPollingTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _pollEventCompletion(),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameProvider = Provider.of<GameProvider>(context, listen: false);
       final playerProvider =
@@ -97,6 +98,25 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
               builder: (_) => HomeScreen(eventId: widget.eventId)));
           return;
         }
+
+        // If user is approved while spectating, redirect to player mode
+        final approvedRequest =
+            await requestProvider.getRequestForPlayer(userId, widget.eventId);
+        if (approvedRequest != null && approvedRequest.isApproved) {
+          if (!mounted) return;
+          debugPrint(
+              '🚫 SpectatorMode: User approved. Redirecting to HomeScreen...');
+          setState(() {
+            _isRedirectingToGame = true;
+          });
+
+          await Future.delayed(const Duration(milliseconds: 400));
+
+          playerProvider.setSpectatorRole(false);
+          Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (_) => HomeScreen(eventId: widget.eventId)));
+          return;
+        }
       }
       // -----------------------------------------------
 
@@ -110,10 +130,24 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       // Registrarse como espectador para habilitar compras/sabotajes
       await playerProvider.joinAsSpectator(widget.eventId);
 
-      // Inicializar listener de efectos si el espectador tiene gamePlayerId (ahora debería tenerlo)
+      // Polling: detectar aprobaciones mientras está en modo espectador
+      _approvalPollingTimer?.cancel();
+      _approvalPollingTimer = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => _pollApprovalRedirect(),
+      );
+
+      // Fix 3.7: Usar el PowerEffectManager GLOBAL (single source of truth).
+      // Evita el split-brain donde SabotageOverlay usaba el global y esta pantalla
+      // usaba una instancia local independiente.
       if (playerProvider.currentPlayer?.gamePlayerId != null) {
-        _powerEffectProvider
-            .startListening(playerProvider.currentPlayer!.gamePlayerId);
+        final powerManager =
+            Provider.of<PowerEffectManager>(context, listen: false);
+        powerManager.startListening(
+          playerProvider.currentPlayer!.gamePlayerId,
+          eventId: widget.eventId,
+          forceRestart: true,
+        );
       }
 
       _showSpectatorTutorial();
@@ -121,13 +155,17 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
   }
 
   void _showSpectatorTutorial({bool force = false}) async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    if (!force && !playerProvider.isNewlyRegistered) return;
+
     final prefs = await SharedPreferences.getInstance();
     if (!force) {
       final hasSeen = prefs.getBool('has_seen_tutorial_SPECTATOR') ?? false;
       if (hasSeen) return;
     }
 
-    final steps = MasterTutorialContent.getStepsForSection('SPECTATOR', context);
+    final steps =
+        MasterTutorialContent.getStepsForSection('SPECTATOR', context);
     if (steps.isEmpty) return;
 
     if (!mounted) return;
@@ -142,6 +180,40 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _pollApprovalRedirect() async {
+    if (!mounted || _isRedirectingToGame) return;
+
+    try {
+      final playerProvider =
+          Provider.of<PlayerProvider>(context, listen: false);
+      final requestProvider =
+          Provider.of<GameRequestProvider>(context, listen: false);
+      final userId = playerProvider.currentPlayer?.userId;
+      if (userId == null) return;
+
+      final approvedRequest =
+          await requestProvider.getRequestForPlayer(userId, widget.eventId);
+      if (approvedRequest != null && approvedRequest.isApproved) {
+        if (!mounted) return;
+        debugPrint(
+            '🚫 SpectatorMode: Approval detected by polling. Redirecting...');
+        setState(() {
+          _isRedirectingToGame = true;
+        });
+        await Future.delayed(const Duration(milliseconds: 400));
+
+        playerProvider.setSpectatorRole(false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => HomeScreen(eventId: widget.eventId),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ SpectatorMode approval polling error: $e');
+    }
   }
 
   void _showExitConfirmation() {
@@ -268,7 +340,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                             ],
                           ),
                           child: ElevatedButton.icon(
-                            icon: const Icon(Icons.exit_to_app_rounded, size: 20),
+                            icon:
+                                const Icon(Icons.exit_to_app_rounded, size: 20),
                             label: const Text(
                               'SALIR',
                               style: TextStyle(
@@ -315,8 +388,43 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
     );
   }
 
+  /// Polling fallback: consulta al servidor si el evento está completed.
+  /// Cubre el edge case donde el WebSocket de Realtime falla en Web.
+  Future<void> _pollEventCompletion() async {
+    if (_hasNavigatedToPodium || !mounted) return;
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('status')
+          .eq('id', widget.eventId)
+          .maybeSingle();
+      if (response == null || !mounted) return;
+      final status = response['status'] as String?;
+      if (status == 'completed' && !_hasNavigatedToPodium) {
+        _hasNavigatedToPodium = true;
+        _completionPollingTimer?.cancel();
+        debugPrint('🏆 SpectatorMode: Polling detected completed. Redirecting to Podio...');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
+            builder: (_) => WinnerCelebrationScreen(
+              eventId: widget.eventId,
+              playerPosition: 0,
+              totalCluesCompleted: 0,
+              prizeWon: 0,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ SpectatorMode polling error: $e');
+    }
+  }
+
   @override
   void dispose() {
+    _completionPollingTimer?.cancel();
+    _approvalPollingTimer?.cancel();
     // Restaurar rol de espectador al salir
     // Usamos microtask para asegurar que se ejecute sin erores de contexto
     Future.microtask(() {
@@ -330,7 +438,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       } catch (_) {}
     });
 
-    _powerEffectProvider.dispose();
+    // Fix 3.7: No llamar dispose() aqui. El PowerEffectManager global es gestionado
+    // por el MultiProvider en main.dart y sobrevive la navegación.
     super.dispose();
   }
 
@@ -364,6 +473,70 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                 color: Colors.black.withOpacity(0.5),
               ),
             ),
+            if (_isRedirectingToGame)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.6),
+                  child: Center(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.92, end: 1.0),
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOut,
+                      builder: (context, scale, child) => Transform.scale(
+                        scale: scale,
+                        child: AnimatedOpacity(
+                          opacity: _isRedirectingToGame ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: child,
+                        ),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF151517),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppTheme.primaryPurple,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryPurple.withOpacity(0.25),
+                              blurRadius: 18,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.secondaryPink,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                'Redirigiendo a la competencia: solicitud aprobada...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             StreamBuilder<GameEvent>(
               stream: _eventStream,
               builder: (context, snapshot) {
@@ -396,6 +569,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         '🏆 SpectatorMode: Event completed. Redirecting to Podio...');
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
+                        settings: const RouteSettings(name: 'WinnerCelebrationScreen'),
                         builder: (_) => WinnerCelebrationScreen(
                           eventId: widget.eventId,
                           playerPosition: 0,
@@ -406,7 +580,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     );
                   });
                   return const Scaffold(
-                    backgroundColor: Colors.transparent, // Background visible during redirect
+                    backgroundColor: Colors
+                        .transparent, // Background visible during redirect
                     body: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -435,7 +610,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                       // 1. Header Row with Back Button
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                            horizontal: 16, vertical: 4),
                         child: Row(
                           children: [
                             CyberRingButton(
@@ -467,16 +642,16 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                             // Banner de Victoria (Solo si terminó)
                             if (event.isCompleted) _buildVictoryBanner(),
 
-                            // B. POTE DE APUESTAS (NUEVO)
-                            SpectatorBettingPotWidget(eventId: widget.eventId),
+                            // B. POTE DE APUESTAS (OCULTO TEMPORALMENTE)
+                            // SpectatorBettingPotWidget(eventId: widget.eventId),
 
-                            // RESULTADOS DE APUESTAS (Solo si terminó)
-                            if (event.isCompleted)
-                              _buildUserWinningsSection(event.id),
+                            // RESULTADOS DE APUESTAS (OCULTO TEMPORALMENTE)
+                            // if (event.isCompleted)
+                            //   _buildUserWinningsSection(event.id),
 
                             // C. Carrera en Curso / Finalizada (Race Tracker siempre visible)
                             SizedBox(
-                              height: 300,
+                              height: 180,
                               child: Stack(
                                 children: [
                                   _buildRaceView(),
@@ -553,6 +728,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       ),
     );
   }
+
   void _confirmExit() {
     const Color currentRed = Color(0xFFE33E5D);
     const Color cardBg = Color(0xFF151517);
@@ -623,7 +799,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         onPressed: () => Navigator.pop(context, false),
                         child: const Text(
                           'CANCELAR',
-                          style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.white54,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -765,8 +943,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
             leaderboard: leaderboard,
             currentPlayerId: currentPlayerId,
             totalClues: totalClues,
-            compact:
-                false, // Usamos la versión completa que ya tiene estilo premium
+            compact: true, // Usamos la versión compacta para evitar desbordamientos
           ),
         );
       },
@@ -790,7 +967,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF0D0D14),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.5), width: 1.5),
+              border: Border.all(
+                  color: AppTheme.secondaryPink.withOpacity(0.5), width: 1.5),
             ),
             constraints: const BoxConstraints(maxWidth: 400),
             child: SingleChildScrollView(
@@ -805,9 +983,11 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         decoration: BoxDecoration(
                           color: AppTheme.secondaryPink.withOpacity(0.15),
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.secondaryPink.withOpacity(0.3)),
+                          border: Border.all(
+                              color: AppTheme.secondaryPink.withOpacity(0.3)),
                         ),
-                        child: const Icon(Icons.visibility, color: AppTheme.secondaryPink, size: 20),
+                        child: const Icon(Icons.visibility,
+                            color: AppTheme.secondaryPink, size: 20),
                       ),
                       const SizedBox(width: 12),
                       const Text(
@@ -823,39 +1003,36 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-
                   _buildTutorialSection(
                     '👁️ ¿Qué es el Modo Espectador?',
                     'Observa la carrera en tiempo real sin participar. '
-                    'Podrás ver el progreso de cada jugador, las pistas resueltas '
-                    'y los eventos que ocurren durante el juego.',
+                        'Podrás ver el progreso de cada jugador, las pistas resueltas '
+                        'y los eventos que ocurren durante el juego.',
                   ),
                   const SizedBox(height: 16),
-
                   _buildTutorialSection(
                     '⚡ Poderes y Sabotajes',
                     'Compra poderes en la Tienda usando tréboles. '
-                    'Usa tus poderes para sabotear jugadores (congelar, difuminar, etc.) '
-                    'o enviar ayuda (escudos, invisibilidad). '
-                    'Toca un poder de tu inventario para usarlo.',
+                        'Usa tus poderes para sabotear jugadores (congelar, difuminar, etc.) '
+                        'o enviar ayuda (escudos, invisibilidad). '
+                        'Toca un poder de tu inventario para usarlo.',
                   ),
                   const SizedBox(height: 16),
-
+                  /* 🎰 Apuestas (OCULTO TEMPORALMENTE)
                   _buildTutorialSection(
                     '🎰 Apuestas',
                     'Apuesta 100 tréboles por el jugador que crees que ganará la carrera. '
-                    'Si tu jugador gana, ¡recibirás el doble de tu apuesta! '
-                    'Las apuestas se realizan con tréboles (moneda premium).',
+                        'Si tu jugador gana, ¡recibirás el doble de tu apuesta! '
+                        'Las apuestas se realizan con tréboles (moneda premium).',
                   ),
                   const SizedBox(height: 16),
-
+                  */
                   _buildTutorialSection(
                     '💰 Moneda del Juego',
                     'Los tréboles son la moneda del juego. '
-                    'Puedes recargarlos desde la Wallet. '
-                    'Úsalos para comprar poderes y apostar.',
+                        'Puedes recargarlos desde la Wallet. '
+                        'Úsalos para comprar poderes y apostar.',
                   ),
-
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -865,7 +1042,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         backgroundColor: AppTheme.secondaryPink,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       child: const Text(
                         'ENTENDIDO',
@@ -913,7 +1091,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
   Widget _buildTabSelector() {
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.3),
         borderRadius: BorderRadius.circular(15),
@@ -1002,7 +1180,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         // Excluir blur_screen del inventario de espectador (AoE no permitido)
         final inventoryMap = <String, int>{};
         for (var slug in inventoryList) {
-          if (slug == 'blur_screen') continue; // Espectadores no pueden usar blur_screen
+          if (slug == 'blur_screen')
+            continue; // Espectadores no pueden usar blur_screen
           inventoryMap[slug] = (inventoryMap[slug] ?? 0) + 1;
         }
         if (inventoryMap.isEmpty) return const SizedBox.shrink();
@@ -1095,35 +1274,37 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
   void _showSabotageDialog(String powerSlug, int count) {
     final isDefense = ['shield', 'return', 'invisibility'].contains(powerSlug);
-    
+
     showDialog(
       context: context,
       builder: (context) {
         return Consumer<GameProvider>(
           builder: (context, gameProvider, child) {
             final activePowers = gameProvider.activePowerEffects;
-            final players = gameProvider.leaderboard
-                .where((p) {
-                   if (p.gamePlayerId == null || p.gamePlayerId!.isEmpty) return false;
-                   
-                   // Invisibility Check - Don't show invisible targets for ATTACKS
-                   if (!isDefense && p.isInvisible) return false;
-                   
-                   final isStealthed = activePowers.any((e) {
-                      final targetId = e.targetId.trim().toLowerCase();
-                      final userId = p.userId.trim().toLowerCase();
-                      final gpId = p.gamePlayerId!.trim().toLowerCase();
-                      
-                      final isMatch = (targetId == userId || targetId == gpId);
-                      return isMatch && (e.powerSlug == 'invisibility' || e.powerSlug == 'stealth') && !e.isExpired;
-                   });
-                   
-                   // If attacking, respect invisibility
-                   if (!isDefense && isStealthed) return false;
-                   
-                   return true;
-                })
-                .toList();
+            final players = gameProvider.leaderboard.where((p) {
+              if (p.gamePlayerId == null || p.gamePlayerId!.isEmpty)
+                return false;
+
+              // Invisibility Check - Don't show invisible targets for ATTACKS
+              if (!isDefense && p.isInvisible) return false;
+
+              final isStealthed = activePowers.any((e) {
+                final targetId = e.targetId.trim().toLowerCase();
+                final userId = p.userId.trim().toLowerCase();
+                final gpId = p.gamePlayerId!.trim().toLowerCase();
+
+                final isMatch = (targetId == userId || targetId == gpId);
+                return isMatch &&
+                    (e.powerSlug == 'invisibility' ||
+                        e.powerSlug == 'stealth') &&
+                    !e.isExpired;
+              });
+
+              // If attacking, respect invisibility
+              if (!isDefense && isStealthed) return false;
+
+              return true;
+            }).toList();
 
             return Dialog(
               backgroundColor: Colors.transparent,
@@ -1131,17 +1312,24 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: isDefense 
-                        ? [const Color(0xFF1A3A1F), const Color(0xFF0A270E)] // Green for Support
-                        : [const Color(0xFF1A1F3A), const Color(0xFF0A0E27)], // Blue/Dark for Attack
+                    colors: isDefense
+                        ? [
+                            const Color(0xFF1A3A1F),
+                            const Color(0xFF0A270E)
+                          ] // Green for Support
+                        : [
+                            const Color(0xFF1A1F3A),
+                            const Color(0xFF0A0E27)
+                          ], // Blue/Dark for Attack
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isDefense ? Colors.greenAccent.withOpacity(0.5) : Colors.redAccent.withOpacity(0.5), 
-                    width: 2
-                  ),
+                      color: isDefense
+                          ? Colors.greenAccent.withOpacity(0.5)
+                          : Colors.redAccent.withOpacity(0.5),
+                      width: 2),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1154,7 +1342,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     Text(
                       isDefense ? 'ENVIAR AYUDA' : 'SABOTEAR JUGADOR',
                       style: TextStyle(
-                        color: isDefense ? Colors.greenAccent : Colors.redAccent,
+                        color:
+                            isDefense ? Colors.greenAccent : Colors.redAccent,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
@@ -1163,10 +1352,11 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isDefense 
+                      isDefense
                           ? 'Elige un aliado para enviar ${_getPowerName(powerSlug)}'
                           : 'Elige una víctima para ${_getPowerName(powerSlug)}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 14),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -1248,7 +1438,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
       final result = await playerProvider.usePower(
         powerSlug: powerSlug,
         targetGamePlayerId: targetId,
-        effectProvider: _powerEffectProvider,
+        effectProvider: Provider.of<PowerEffectManager>(context, listen: false),
         gameProvider: Provider.of<GameProvider>(context, listen: false),
       );
 
@@ -1270,7 +1460,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         } else if (result == PowerUseResult.success) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('¡Has saboteado a $targetName con ${_getPowerName(powerSlug)}!'),
+              content: Text(
+                  '¡Has saboteado a $targetName con ${_getPowerName(powerSlug)}!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -1282,7 +1473,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
             ),
           );
         } else {
-          final errorMsg = playerProvider.lastPowerError ?? 'Error al usar el poder';
+          final errorMsg =
+              playerProvider.lastPowerError ?? 'Error al usar el poder';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(errorMsg),
@@ -1492,10 +1684,10 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                             ),
                           ],
                         ),
-                        
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            /* BOTONES DE APUESTAS OCULTOS TEMPORALMENTE
                             if (event.status == 'pending')
                               ElevatedButton(
                                 onPressed: () => _showBetDialog(),
@@ -1504,36 +1696,48 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                                   foregroundColor: Colors.black,
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(20)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 0),
                                   minimumSize: const Size(0, 32),
                                 ),
-                                child: const Text('Apostar', style: TextStyle(fontSize: 11)),
+                                child: const Text('Apostar',
+                                    style: TextStyle(fontSize: 11)),
                               )
                             else
-                               Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.white24),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    event.status == 'active' ? 'En Curso' : 'Finalizado',
-                                    style: const TextStyle(color: Colors.white54, fontSize: 11),
-                                  ),
-                               ),
+                            */
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.white24),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  event.status == 'active'
+                                      ? 'En Curso'
+                                      : event.status == 'pending' ? 'Pendiente' : 'Finalizado',
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 11),
+                                ),
+                              ),
+                            /*
                             const SizedBox(width: 6),
                             OutlinedButton(
                               onPressed: () => _showMyBetsDialog(context),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppTheme.accentGold,
-                                side: const BorderSide(color: AppTheme.accentGold),
+                                side: const BorderSide(
+                                    color: AppTheme.accentGold),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(20)),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 0),
                                 minimumSize: const Size(0, 32),
                               ),
-                              child: const Text('Mis Apuestas', style: TextStyle(fontSize: 11)),
+                              child: const Text('Mis Apuestas',
+                                  style: TextStyle(fontSize: 11)),
                             ),
+                            */
                             const SizedBox(width: 8),
                             Consumer<PlayerProvider>(
                               builder: (context, playerProvider, child) {
@@ -1578,7 +1782,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                           color: Colors.white.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: IntrinsicHeight(
+                        child: SizedBox(
+                          height:
+                              180, // Fixed height instead of expensive IntrinsicHeight
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             crossAxisAlignment: CrossAxisAlignment.end,
@@ -1587,7 +1793,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                                 child: _buildPodiumPosition(
                                   displayLeaderboard[1],
                                   2,
-                                  90,
+                                  110, // Adjusted heights
                                   const Color(0xFFC0C0C0),
                                 ),
                               ),
@@ -1595,7 +1801,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                                 child: _buildPodiumPosition(
                                   displayLeaderboard[0],
                                   1,
-                                  120,
+                                  150, // Adjusted heights
                                   AppTheme.accentGold,
                                 ),
                               ),
@@ -1603,7 +1809,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                                 child: _buildPodiumPosition(
                                   displayLeaderboard[2],
                                   3,
-                                  70,
+                                  90, // Adjusted heights
                                   const Color(0xFFCD7F32),
                                 ),
                               ),
@@ -1641,7 +1847,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     childCount: displayLeaderboard.length,
                   ),
                 ),
-                
+
               // Extra padding at bottom for navigation bar
               const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
             ],
@@ -1671,8 +1877,6 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
     );
   }
 
-
-
   Widget _buildUserWinningsSection(String eventId) {
     return FutureBuilder<Map<String, dynamic>>(
       future: _getUserWinnings(eventId),
@@ -1682,15 +1886,19 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         final won = data['won'] as bool;
         final amount = data['amount'] as int;
 
-        if (amount == 0 && !won) return const SizedBox(); // No bets or lost without specific message? Or show lost?
+        if (amount == 0 && !won)
+          return const SizedBox(); // No bets or lost without specific message? Or show lost?
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: won ? AppTheme.dGoldMain.withOpacity(0.2) : Colors.red.withOpacity(0.1),
+            color: won
+                ? AppTheme.dGoldMain.withOpacity(0.2)
+                : Colors.red.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: won ? AppTheme.dGoldMain : Colors.red.withOpacity(0.5)),
+            border: Border.all(
+                color: won ? AppTheme.dGoldMain : Colors.red.withOpacity(0.5)),
           ),
           child: Column(
             children: [
@@ -1749,7 +1957,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
 
   Widget _buildStoreView() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1801,7 +2009,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Expanded(
             child: Consumer<PlayerProvider>(
               builder: (context, playerProvider, child) {
@@ -1834,7 +2042,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                     // shrinkWrap + NeverScrollable delega el scroll al padre
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 0.85,
                       crossAxisSpacing: 12,
@@ -1864,8 +2073,14 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         ? Colors.grey.shade700
         : AppTheme.secondaryPink.withOpacity(0.4);
     final List<Color> gradientColors = isMaxed
-        ? [Colors.grey.shade900.withOpacity(0.4), const Color(0xFF0D0D14).withOpacity(0.8)]
-        : [AppTheme.secondaryPink.withOpacity(0.2), const Color(0xFF0D0D14).withOpacity(0.6)];
+        ? [
+            Colors.grey.shade900.withOpacity(0.4),
+            const Color(0xFF0D0D14).withOpacity(0.8)
+          ]
+        : [
+            AppTheme.secondaryPink.withOpacity(0.2),
+            const Color(0xFF0D0D14).withOpacity(0.6)
+          ];
 
     return Container(
       decoration: BoxDecoration(
@@ -1892,7 +2107,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isMaxed
                           ? Colors.grey.shade700
@@ -1968,7 +2184,7 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🍀', style: TextStyle(fontSize: 12)),
+                            const CoinImage(size: 14),
                             const SizedBox(width: 4),
                             Text(
                               '${power.cost}',
@@ -2268,7 +2484,9 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
         return slug;
     }
   }
-  Widget _buildPodiumPosition(Player player, int position, double barHeight, Color color) {
+
+  Widget _buildPodiumPosition(
+      Player player, int position, double barHeight, Color color) {
     String? avatarId = player.avatarId;
     final String avatarUrl = player.avatarUrl;
 
@@ -2298,11 +2516,12 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                         return Image.asset(
                           'assets/images/avatars/$avatarId.png',
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.person, color: Colors.white70, size: 22),
+                          errorBuilder: (_, __, ___) => const Icon(Icons.person,
+                              color: Colors.white70, size: 22),
                         );
                       }
-                      if (avatarUrl.isNotEmpty && avatarUrl.startsWith('http')) {
+                      if (avatarUrl.isNotEmpty &&
+                          avatarUrl.startsWith('http')) {
                         return Image.network(
                           avatarUrl,
                           fit: BoxFit.cover,
@@ -2310,7 +2529,8 @@ class _SpectatorModeScreenState extends State<SpectatorModeScreen> {
                               color: Colors.white70, size: 22),
                         );
                       }
-                      return const Icon(Icons.person, color: Colors.white70, size: 22);
+                      return const Icon(Icons.person,
+                          color: Colors.white70, size: 22);
                     },
                   ),
                 ),
@@ -2406,19 +2626,22 @@ class _LaurelWreathPainter extends CustomPainter {
     // Draw U-shaped stem arc (open at the top) - brought closer to avatar
     final rect = Rect.fromCircle(center: center, radius: radius * 0.68);
     // Start at ~1:30 o'clock and sweep through the bottom to ~10:30 o'clock
-    canvas.drawArc(rect, -4/14 * math.pi, 22/14 * math.pi, false, stemPaint);
+    canvas.drawArc(
+        rect, -4 / 14 * math.pi, 22 / 14 * math.pi, false, stemPaint);
 
     // Draw leaves in a circular "clock" distribution with a gap at the top
-    final int totalLeaves = 14; 
+    final int totalLeaves = 14;
     for (int i = 0; i < totalLeaves; i++) {
       // Skip the top 3 positions to leave it open at the top (11, 12, 1 o'clock)
       if (i == 0 || i == 1 || i == totalLeaves - 1) continue;
-      
+
       // Distribute evenly around the circle
       final angle = (2 * math.pi * i / totalLeaves) - math.pi / 2;
-      
-      _drawReferenceLeaf(canvas, center, radius * 0.68, angle, leafPaint, isOuter: true);
-      _drawReferenceLeaf(canvas, center, radius * 0.68, angle, leafPaint, isOuter: false);
+
+      _drawReferenceLeaf(canvas, center, radius * 0.68, angle, leafPaint,
+          isOuter: true);
+      _drawReferenceLeaf(canvas, center, radius * 0.68, angle, leafPaint,
+          isOuter: false);
     }
   }
 
@@ -2433,7 +2656,7 @@ class _LaurelWreathPainter extends CustomPainter {
 
     // Point leaf radially with a strong tilt to the right (+0.5 math.radians)
     double rotation = isOuter ? angle + 0.5 : angle + math.pi + 0.5;
-    
+
     canvas.rotate(rotation + math.pi / 2);
 
     // Make inner leaves slightly smaller for better aesthetics

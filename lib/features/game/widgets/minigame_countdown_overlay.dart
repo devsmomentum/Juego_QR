@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:provider/provider.dart';
+import '../providers/game_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class MinigameCountdownOverlay extends StatefulWidget {
@@ -27,9 +29,6 @@ class _MinigameCountdownOverlayState extends State<MinigameCountdownOverlay>
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;
 
-  // Audio para efecto de sonido del countdown
-  final AudioPlayer _beepPlayer = AudioPlayer();
-
   @override
   void initState() {
     super.initState();
@@ -48,59 +47,58 @@ class _MinigameCountdownOverlayState extends State<MinigameCountdownOverlay>
           curve: const Interval(0.7, 1.0, curve: Curves.easeOut)),
     );
 
-    _beepPlayer.setVolume(0.8);
     _startCountdown();
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _beepPlayer.dispose();
     super.dispose();
   }
 
   void _startCountdown() async {
-    // Reproducir el audio de countdown UNA SOLA VEZ (se sincroniza con los números)
-    try {
-      await _beepPlayer.play(AssetSource('audio/countdown.mp3'));
-    } catch (e) {
-      debugPrint("Countdown audio error: $e");
-    }
-
-    // Show "3"
-    HapticFeedback.lightImpact();
+    // 3
+    if (!mounted) return;
+    await _checkPause();
     await _playPulse();
 
-    // Show "2"
+    // 2
     if (!mounted) return;
+    await _checkPause();
     setState(() => _counter = 2);
-    HapticFeedback.lightImpact();
     await _playPulse();
 
-    // Show "1"
+    // 1
     if (!mounted) return;
+    await _checkPause();
     setState(() => _counter = 1);
-    HapticFeedback.mediumImpact();
     await _playPulse();
 
-    // Show "¡YA!"
+    // YA!
     if (!mounted) return;
+    await _checkPause();
     setState(() => _counter = 0);
-    HapticFeedback.heavyImpact();
     await _playPulse();
 
     if (mounted) {
-      // Detener audio por si aún suena
-      try { await _beepPlayer.stop(); } catch (_) {}
       setState(() {
         _isFinished = true;
       });
     }
   }
 
+  Future<void> _checkPause() async {
+    if (!mounted) return;
+    final provider = Provider.of<GameProvider>(context, listen: false);
+    while (provider.isPaused && mounted) {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
   Future<void> _playPulse() async {
     if (!mounted) return;
     _controller.reset();
+    HapticFeedback.lightImpact();
     await _controller.forward();
   }
 
@@ -112,53 +110,72 @@ class _MinigameCountdownOverlayState extends State<MinigameCountdownOverlay>
 
     String displayText = _counter == 0 ? "¡YA!" : "$_counter";
 
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 500),
-      color: Colors.black45,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return Material(
+      color: Colors.transparent, // Background transparent to show the app background below
+      child: Stack(
         children: [
-          Text(
-            widget.instruction,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 50),
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return Opacity(
-                opacity: _opacityAnimation.value,
-                child: Transform.scale(
-                  scale: _scaleAnimation.value,
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Text(
-                    displayText,
-                    style: TextStyle(
-                      color: _counter == 0
-                          ? AppTheme.successGreen
-                          : AppTheme.accentGold,
-                      fontSize: 80,
-                      fontWeight: FontWeight.w900,
-                      shadows: [
-                        Shadow(
-                          color: (_counter == 0
-                                  ? AppTheme.successGreen
-                                  : AppTheme.accentGold)
-                              .withOpacity(0.5),
-                          blurRadius: 20,
-                        ),
-                      ],
+                    widget.instruction.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                      decoration: TextDecoration.none,
                     ),
                   ),
                 ),
-              );
-            },
+                const SizedBox(height: 60),
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _opacityAnimation.value,
+                      child: Transform.scale(
+                        scale: _scaleAnimation.value,
+                        child: Text(
+                          displayText,
+                          style: TextStyle(
+                            color: _counter == 0
+                                ? AppTheme.successGreen
+                                : AppTheme.accentGold,
+                            fontSize: 100,
+                            fontWeight: FontWeight.w900,
+                            decoration: TextDecoration.none,
+                            shadows: [
+                              Shadow(
+                                color: (_counter == 0
+                                        ? AppTheme.successGreen
+                                        : AppTheme.accentGold)
+                                    .withOpacity(0.5),
+                                blurRadius: 30,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 40),
+                const Text(
+                  "PREPÁRATE",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 6,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

@@ -39,14 +39,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final allPlayers = Provider.of<PlayerProvider>(context).allPlayers;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Lógica de filtrado
     final filteredPlayers = allPlayers.where((player) {
       final searchTerm = _searchController.text.toLowerCase();
       final matchesSearch = player.name.toLowerCase().contains(searchTerm) ||
           player.email.toLowerCase().contains(searchTerm);
 
-      // Excluir usuarios pendientes (se gestionan en Solicitudes)
       if (player.status == PlayerStatus.pending) return false;
 
       bool matchesStatus = true;
@@ -60,43 +59,55 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }).toList();
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        elevation: 0,
         title: Row(
-          children: const [
-            Icon(Icons.people, color: Colors.white),
-            SizedBox(width: 10),
-            Text("Gestión de Usuarios"),
+          children: [
+            Icon(Icons.people, color: AppTheme.lGoldAction),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "Gestión de Usuarios",
+                style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
-        backgroundColor: AppTheme.darkBg,
+        backgroundColor: Theme.of(context).cardTheme.color,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: AppTheme.lGoldAction),
             onPressed: _loadUsers,
           ),
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.darkGradient,
-        ),
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: Column(
           children: [
             // Sección de Filtros
             Padding(
               padding: const EdgeInsets.all(20.0),
-              child: Row(
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
                 children: [
-                  // Buscador (Nombre/Email)
-                  Expanded(
-                    flex: 2,
+                   // Buscador
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: MediaQuery.of(context).size.width > 600
+                          ? 300
+                          : double.infinity,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
+                        color: Theme.of(context).cardTheme.color,
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -104,13 +115,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       ),
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
                         decoration: InputDecoration(
                           hintText: 'Buscar usuario...',
                           hintStyle:
-                              TextStyle(color: Colors.white.withOpacity(0.5)),
+                              TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.5)),
                           prefixIcon: const Icon(Icons.search,
-                              color: AppTheme.primaryPurple),
+                              color: AppTheme.lGoldAction),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 15),
@@ -119,54 +130,54 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
                   // Filtro de Estado
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                  Container(
+                    width: MediaQuery.of(context).size.width > 600
+                        ? 200
+                        : double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardTheme.color,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _filterStatus,
+                        dropdownColor: Theme.of(context).cardTheme.color,
+                        icon: const Icon(Icons.filter_list,
+                            color: AppTheme.lGoldAction),
+                        isExpanded: true,
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.bodyLarge?.color, 
+                            fontWeight: FontWeight.w500),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'all',
+                            child: Text("Todos"),
+                          ),
+                          DropdownMenuItem(
+                            value: 'active',
+                            child: Text("Activos",
+                                style: TextStyle(color: Colors.green)),
+                          ),
+                          DropdownMenuItem(
+                            value: 'banned',
+                            child: Text("Baneados",
+                                style: TextStyle(color: Colors.red)),
                           ),
                         ],
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _filterStatus,
-                          dropdownColor: const Color(0xFF1A1F3D),
-                          icon: const Icon(Icons.filter_list,
-                              color: AppTheme.secondaryPink),
-                          isExpanded: true,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w500),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'all',
-                              child: Text("Todos"),
-                            ),
-                            DropdownMenuItem(
-                              value: 'active',
-                              child: Text("Activos",
-                                  style: TextStyle(color: Colors.greenAccent)),
-                            ),
-                            DropdownMenuItem(
-                              value: 'banned',
-                              child: Text("Baneados",
-                                  style: TextStyle(color: Colors.redAccent)),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _filterStatus = value);
-                            }
-                          },
-                        ),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _filterStatus = value);
+                          }
+                        },
                       ),
                     ),
                   ),
@@ -179,11 +190,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : filteredPlayers.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text(
                             "No se encontraron usuarios",
                             style:
-                                TextStyle(color: Colors.white70, fontSize: 16),
+                                TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 16),
                           ),
                         )
                       : ListView.builder(
@@ -210,14 +221,14 @@ class _UserCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBanned = player.status == PlayerStatus.banned;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      color: AppTheme.cardBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isBanned ? Colors.red : Colors.green.withOpacity(0.5),
+          color: isBanned ? Colors.red.withOpacity(0.5) : Theme.of(context).dividerColor.withOpacity(0.1),
         ),
       ),
       child: Padding(
@@ -225,7 +236,7 @@ class _UserCard extends StatelessWidget {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: Colors.grey[800],
+              backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
               backgroundImage: player.avatarUrl.isNotEmpty
                   ? NetworkImage(player.avatarUrl)
                   : null,
@@ -234,7 +245,7 @@ class _UserCard extends StatelessWidget {
                       player.name.isNotEmpty
                           ? player.name[0].toUpperCase()
                           : '?',
-                      style: const TextStyle(color: Colors.white))
+                      style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color))
                   : null,
             ),
             const SizedBox(width: 16),
@@ -244,35 +255,72 @@ class _UserCard extends StatelessWidget {
                 children: [
                   Text(
                     player.name.isNotEmpty ? player.name : 'Sin Nombre',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     player.email,
-                    style: const TextStyle(color: Colors.white70),
+                    style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
                   ),
                   const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isBanned
-                          ? Colors.red.withOpacity(0.2)
-                          : Colors.green.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isBanned
+                                ? Colors.red.withOpacity(0.12)
+                                : AppTheme.lGoldAction.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: isBanned ? Colors.red.withOpacity(0.5) : AppTheme.lGoldAction.withOpacity(0.5)
+                            )
+                          ),
+                          child: Text(
+                            isBanned ? 'BANEADO' : 'ACTIVO',
+                            style: TextStyle(
+                              color: isBanned ? Colors.red : AppTheme.lGoldText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: player.isAdmin 
+                                ? Colors.purple.withOpacity(0.12)
+                                : player.isStaff
+                                    ? Colors.blue.withOpacity(0.12)
+                                    : Colors.grey.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: player.isAdmin 
+                                  ? Colors.purple.withOpacity(0.5)
+                                  : player.isStaff
+                                      ? Colors.blue.withOpacity(0.5)
+                                      : Colors.grey.withOpacity(0.5)
+                            )
+                          ),
+                          child: Text(
+                            player.role.toUpperCase(),
+                            style: TextStyle(
+                              color: player.isAdmin 
+                                  ? Colors.purple 
+                                  : player.isStaff
+                                      ? Colors.blue
+                                      : Colors.grey,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      isBanned ? 'BANEADO' : 'ACTIVO',
-                      style: TextStyle(
-                        color: isBanned ? Colors.red : Colors.green,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -284,11 +332,23 @@ class _UserCard extends StatelessWidget {
               tooltip: isBanned ? 'Desbanear Usuario' : 'Banear Usuario',
               onPressed: () => _confirmBanAction(context, player),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_forever, color: Colors.red),
-              tooltip: 'Eliminar Usuario',
-              onPressed: () => _confirmDeleteAction(context, player),
-            ),
+            if (Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.isAdmin == true) ...[
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+                tooltip: 'Cambiar Rol',
+                onSelected: (newRole) => _confirmChangeRole(context, player, newRole),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'user', child: Text('Rol: Usuario')),
+                  const PopupMenuItem(value: 'staff', child: Text('Rol: Staff')),
+                  const PopupMenuItem(value: 'admin', child: Text('Rol: Administrador')),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                tooltip: 'Eliminar Usuario',
+                onPressed: () => _confirmDeleteAction(context, player),
+              ),
+            ],
           ],
         ),
       ),
@@ -299,12 +359,12 @@ class _UserCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
-        title: const Text('Eliminar Usuario',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Eliminar Usuario',
+            style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
         content: Text(
           '¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE a ${player.name}?\n\nEsta acción borrará su cuenta, progreso y autenticación. No se puede deshacer.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
         ),
         actions: [
           TextButton(
@@ -349,12 +409,12 @@ class _UserCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardBg,
+        backgroundColor: Theme.of(context).cardTheme.color,
         title: Text('Confirmar acción',
-            style: const TextStyle(color: Colors.white)),
+            style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
         content: Text(
           '¿Estás seguro de que deseas $action a ${player.name}?',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
         ),
         actions: [
           TextButton(
@@ -387,6 +447,51 @@ class _UserCard extends StatelessWidget {
               isBanned ? 'Desbanear' : 'Banear',
               style: TextStyle(color: isBanned ? Colors.green : Colors.red),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmChangeRole(BuildContext context, Player player, String newRole) {
+    if (player.role == newRole) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Cambiar Rol',
+            style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        content: Text(
+          '¿Estás seguro de que deseas cambiar el rol de ${player.name} a "$newRole"?',
+          style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await Provider.of<PlayerProvider>(context, listen: false)
+                    .updateUserRole(player.userId, newRole);
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Rol actualizado a $newRole exitosamente')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Confirmar'),
           ),
         ],
       ),
