@@ -11,7 +11,7 @@ class CoinImage extends StatelessWidget {
       height: size,
       child: ClipOval(
         child: Transform.scale(
-          scale: 1.3, // Zoom more to hide white edges
+          scale: 1.5, // Zoom even more to hide white edges perfectly
           child: Image.asset(
             'assets/images/coin.png',
             fit: BoxFit.cover,

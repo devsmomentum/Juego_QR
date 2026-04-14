@@ -79,7 +79,116 @@ serve(async (req) => {
     );
 
     // 4. BRANCH LOGIC BY TYPE
-    if (withdrawalType === "stripe") {
+    if (withdrawalType === "paypal") {
+      // --- PAYPAL WITHDRAWAL FLOW (AUTOMATED VIA PAYOUTS) ---
+      const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
+      const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
+      const mode = Deno.env.get("PAYPAL_MODE") || "sandbox";
+
+      if (!clientId || !clientSecret) {
+        console.log(`[api_withdraw_funds] Missing PayPal credentials. Falling back to manual.`);
+        await supabaseAdmin.rpc("mark_withdrawal_pending", {
+          p_request_id: requestId,
+          p_provider_data: { 
+            gateway: "paypal", 
+            email: finalStripeEmail, 
+            reason: "Faltan credenciales de PayPal (PAYPAL_CLIENT_ID/SECRET)." 
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro solicitado. Se procesará manualmente debido a falta de configuración del servidor.",
+            data: { type: "paypal", email: finalStripeEmail, transaction_id: requestId },
+            pending: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+
+      try {
+        const accessToken = await getPayPalAccessToken(clientId, clientSecret, mode);
+        const baseUrl = mode === "production" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+
+        console.log(`[api_withdraw_funds] Attempting PayPal Payout for $${amountUsd} to ${finalStripeEmail}`);
+
+        const payoutResponse = await fetch(`${baseUrl}/v1/payments/payouts`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sender_batch_header: {
+              sender_batch_id: `withdraw_${requestId}`,
+              email_subject: "Has recibido un premio de MapHunter!",
+              email_message: `Felicidades! Has recibido un premio de $${amountUsd} por tu desempeño en MapHunter.`
+            },
+            items: [{
+              recipient_type: "EMAIL",
+              amount: { value: amountUsd.toFixed(2), currency: "USD" },
+              note: `Retiro MapHunter ID: ${requestId}`,
+              receiver: finalStripeEmail,
+              sender_item_id: requestId
+            }]
+          }),
+        });
+
+        const payoutData = await payoutResponse.json();
+
+        if (payoutResponse.ok) {
+          console.log(`[api_withdraw_funds] PayPal Payout Success: ${payoutData.batch_header.payout_batch_id}`);
+          
+          await supabaseAdmin.rpc("mark_withdrawal_completed", {
+            p_request_id: requestId,
+            p_provider_data: {
+              gateway: "paypal",
+              batch_id: payoutData.batch_header.payout_batch_id,
+              status: payoutData.batch_header.batch_status,
+              automated: true,
+            },
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Retiro procesado y enviado automáticamente vía PayPal.",
+              data: { type: "paypal", batch_id: payoutData.batch_header.payout_batch_id, amount_usd: amountUsd, transaction_id: requestId },
+              pending: false,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          );
+        } else {
+          console.error(`[api_withdraw_funds] PayPal API Error:`, payoutData);
+          throw new Error(payoutData.message || "Error en la API de PayPal Payouts");
+        }
+
+      } catch (paypalError) {
+        console.error(`[api_withdraw_funds] PayPal Process Error:`, paypalError);
+        
+        await supabaseAdmin.rpc("mark_withdrawal_pending", {
+          p_request_id: requestId,
+          p_provider_data: {
+            gateway: "paypal",
+            email: finalStripeEmail,
+            error: paypalError.message,
+            automated_attempt_failed: true,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Retiro solicitado. Hubo un problema con el proceso automático y se completará manualmente.",
+            data: { type: "paypal", email: finalStripeEmail, amount_usd: amountUsd, transaction_id: requestId, reason: paypalError.message },
+            pending: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        );
+      }
+
+    } else if (withdrawalType === "stripe") {
       // --- STRIPE WITHDRAWAL FLOW (AUTOMATED) ---
       
       const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
@@ -408,3 +517,29 @@ serve(async (req) => {
     );
   }
 });
+
+/**
+ * Get PayPal OAuth2 Access Token
+ */
+async function getPayPalAccessToken(clientId: string, clientSecret: string, mode: string) {
+  const credentials = btoa(`${clientId}:${clientSecret}`);
+  const baseUrl = mode === "production" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+  
+  const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    console.error("PayPal Auth failed:", errorData);
+    throw new Error(`PayPal Auth Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}

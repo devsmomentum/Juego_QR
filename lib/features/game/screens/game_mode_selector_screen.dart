@@ -12,6 +12,7 @@ import 'scenarios_screen.dart';
 import 'game_request_screen.dart'; // Mantener import por si se usa en futuro
 import '../../../core/providers/app_mode_provider.dart'; // IMPORT AGREGADO
 import '../../game/providers/power_effect_provider.dart';
+import 'training_center_screen.dart';
 
 class GameModeSelectorScreen extends StatefulWidget {
   const GameModeSelectorScreen({super.key});
@@ -60,58 +61,55 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // Precargar ambas imágenes de fondo para transiciones suaves
-    precacheImage(const AssetImage('assets/images/hero.png'), context);
-    precacheImage(const AssetImage('assets/images/loginclaro.png'), context);
+    // Precargar la imagen de fondo unificada para una transición inmediata
+    precacheImage(const AssetImage('assets/images/intro_bg.png'), context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = true /* always dark UI */;
-    final isNightImage = Provider.of<PlayerProvider>(context).isDarkMode;
+    // Forzar estilo de barra de estado para máxima limpieza visual
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.black,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
+
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.dSurface0,
+      backgroundColor: Colors.black, // Fondo base oscuro
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // BACKGROUND (Mismo que Login)
-
-          // BACKGROUND (Mismo que Login)
-          Positioned.fill(
-            child: isNightImage
-                ? Opacity(
-                    opacity: 0.7,
-                    child: Image.asset(
-                      'assets/images/hero.png',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                    ),
-                  )
-                : Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/loginclaro.png',
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
-                      Container(
-                        color: Colors.black.withOpacity(0.2),
-                      ),
-                    ],
-                  ),
+          // BACKGROUND UNIFICADO (Mismo que Splash para evitar destellos)
+          Image.asset(
+            'assets/images/intro_bg.png',
+            fit: BoxFit.cover,
           ),
 
-          SafeArea(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverFillRemaining(
-                  hasScrollBody: false,
+          // OVERLAY OSCURO PARA LEGIBILIDAD
+          Container(
+            color: Colors.black.withOpacity(0.5),
+          ),
+
+          // CONTENIDO SIN SAFE_AREA (Manualmente espaciado)
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: topPadding + 20,
+                    bottom: bottomPadding + 30,
+                    left: 20,
+                    right: 20,
+                  ),
                   child: Column(
                     children: [
-                      const Spacer(flex: 2),
+                      const Spacer(flex: 1),
 
                       // HEADER
                       Column(
@@ -122,12 +120,13 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                                 fontFamily: 'Orbitron',
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color:
-                                    AppTheme.dGoldMain, // Amarillo/Dorado consistente
+                                color: AppTheme
+                                    .dGoldMain, // Amarillo/Dorado consistente
                                 letterSpacing: 1.5,
                                 shadows: [
                                   BoxShadow(
-                                      color: AppTheme.dGoldMain.withOpacity(0.5),
+                                      color:
+                                          AppTheme.dGoldMain.withOpacity(0.5),
                                       blurRadius: 10,
                                       spreadRadius: 2)
                                 ]),
@@ -147,7 +146,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         ],
                       ),
 
-                      const Spacer(flex: 3),
+                      const Spacer(flex: 1),
 
                       // CARDS
                       Padding(
@@ -176,7 +175,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               },
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
 
                             // MODO ONLINE
                             _buildModeCard(
@@ -200,7 +199,25 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               },
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
+
+                            // MODO ENTRENAMIENTO (NUEVO)
+                            /*_buildModeCard(
+                              title: "MODO ENTRENAMIENTO",
+                              description:
+                                  "Practica tus habilidades y domina los minijuegos antes de competir por el tesoro.",
+                              icon: Icons.model_training,
+                              color: AppTheme.successGreen, // Verde
+                              onTap: () {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const TrainingCenterScreen()));
+                              },
+                            ),
+
+                            const SizedBox(height: 16),*/
 
                             // MODO LOCAL
                             _buildModeCard(
@@ -217,7 +234,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                         ),
                       ),
 
-                      const Spacer(flex: 4),
+                      const Spacer(flex: 1),
 
                       // FOOTER - BOTÓN VOLVER
                       Padding(
@@ -245,12 +262,12 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                                   ]),
                               child: TextButton.icon(
                                 onPressed: _showLogoutDialog,
-                                icon: const Icon(Icons.arrow_back,
+                                icon: const Icon(Icons.logout_rounded,
                                     color: Colors.white, size: 20),
-                                label: const Text("Volver",
+                                label: const Text("CERRAR SESIÓN",
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontFamily: 'Orbitron',
                                       letterSpacing: 1.0,
                                     )),
@@ -275,8 +292,8 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -549,7 +566,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
               ],
             ),
             child: Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
@@ -564,7 +581,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                 children: [
                   // Icon Circle
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: color.withOpacity(0.1),
@@ -576,7 +593,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                               blurRadius: 10,
                               spreadRadius: 1)
                         ]),
-                    child: Icon(icon, color: color, size: 28),
+                    child: Icon(icon, color: color, size: 24),
                   ),
                   const SizedBox(width: 16),
 
@@ -589,7 +606,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                           title,
                           style: TextStyle(
                               fontFamily: 'Orbitron',
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
                               color: color,
                               letterSpacing: 1.0,
@@ -604,7 +621,7 @@ class _GameModeSelectorScreenState extends State<GameModeSelectorScreen> {
                           description,
                           style: const TextStyle(
                             fontFamily: 'Roboto',
-                            fontSize: 13,
+                            fontSize: 12,
                             color: Colors.white70,
                             height: 1.4,
                           ),

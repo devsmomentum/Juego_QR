@@ -9,6 +9,7 @@ import 'story_screen.dart';
 import '../../../core/services/video_preload_service.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
+import '../../game/screens/training_center_screen.dart';
 import '../widgets/avatar_card.dart';
 
 class AvatarSelectionScreen extends StatefulWidget {

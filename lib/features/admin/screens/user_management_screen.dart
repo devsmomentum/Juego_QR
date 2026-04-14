@@ -266,27 +266,61 @@ class _UserCard extends StatelessWidget {
                     style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
                   ),
                   const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isBanned
-                          ? Colors.red.withOpacity(0.12)
-                          : AppTheme.lGoldAction.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: isBanned ? Colors.red.withOpacity(0.5) : AppTheme.lGoldAction.withOpacity(0.5)
-                      )
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isBanned
+                                ? Colors.red.withOpacity(0.12)
+                                : AppTheme.lGoldAction.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: isBanned ? Colors.red.withOpacity(0.5) : AppTheme.lGoldAction.withOpacity(0.5)
+                            )
+                          ),
+                          child: Text(
+                            isBanned ? 'BANEADO' : 'ACTIVO',
+                            style: TextStyle(
+                              color: isBanned ? Colors.red : AppTheme.lGoldText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: player.isAdmin 
+                                ? Colors.purple.withOpacity(0.12)
+                                : player.isStaff
+                                    ? Colors.blue.withOpacity(0.12)
+                                    : Colors.grey.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: player.isAdmin 
+                                  ? Colors.purple.withOpacity(0.5)
+                                  : player.isStaff
+                                      ? Colors.blue.withOpacity(0.5)
+                                      : Colors.grey.withOpacity(0.5)
+                            )
+                          ),
+                          child: Text(
+                            player.role.toUpperCase(),
+                            style: TextStyle(
+                              color: player.isAdmin 
+                                  ? Colors.purple 
+                                  : player.isStaff
+                                      ? Colors.blue
+                                      : Colors.grey,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      isBanned ? 'BANEADO' : 'ACTIVO',
-                      style: TextStyle(
-                        color: isBanned ? Colors.red : AppTheme.lGoldText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -298,11 +332,23 @@ class _UserCard extends StatelessWidget {
               tooltip: isBanned ? 'Desbanear Usuario' : 'Banear Usuario',
               onPressed: () => _confirmBanAction(context, player),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_forever, color: Colors.red),
-              tooltip: 'Eliminar Usuario',
-              onPressed: () => _confirmDeleteAction(context, player),
-            ),
+            if (Provider.of<PlayerProvider>(context, listen: false).currentPlayer?.isAdmin == true) ...[
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+                tooltip: 'Cambiar Rol',
+                onSelected: (newRole) => _confirmChangeRole(context, player, newRole),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'user', child: Text('Rol: Usuario')),
+                  const PopupMenuItem(value: 'staff', child: Text('Rol: Staff')),
+                  const PopupMenuItem(value: 'admin', child: Text('Rol: Administrador')),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                tooltip: 'Eliminar Usuario',
+                onPressed: () => _confirmDeleteAction(context, player),
+              ),
+            ],
           ],
         ),
       ),
@@ -401,6 +447,51 @@ class _UserCard extends StatelessWidget {
               isBanned ? 'Desbanear' : 'Banear',
               style: TextStyle(color: isBanned ? Colors.green : Colors.red),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmChangeRole(BuildContext context, Player player, String newRole) {
+    if (player.role == newRole) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text('Cambiar Rol',
+            style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        content: Text(
+          '¿Estás seguro de que deseas cambiar el rol de ${player.name} a "$newRole"?',
+          style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await Provider.of<PlayerProvider>(context, listen: false)
+                    .updateUserRole(player.userId, newRole);
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Rol actualizado a $newRole exitosamente')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Confirmar'),
           ),
         ],
       ),

@@ -107,6 +107,8 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
     }).toList();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondaryTextColor = isDark ? Colors.white.withOpacity(0.5) : Colors.black54;
+    final hintTextColor = isDark ? Colors.white.withOpacity(0.2) : Colors.black26;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -148,13 +150,13 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.person_add_disabled, size: 64, color: Colors.white.withOpacity(0.2)),
+                                  Icon(Icons.person_add_disabled, size: 64, color: hintTextColor),
                                   const SizedBox(height: 16),
                                   Text("No hay solicitudes con este filtro", 
-                                      style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                                      style: TextStyle(color: secondaryTextColor)),
                                   const SizedBox(height: 8),
                                   Text("Desliza hacia abajo para actualizar", 
-                                      style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12)),
+                                      style: TextStyle(color: hintTextColor, fontSize: 12)),
                                 ],
                               ),
                             ),
@@ -165,7 +167,7 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
                           itemCount: filteredRequests.length,
                           itemBuilder: (context, index) {
                             final req = filteredRequests[index];
-                            return _buildRequestCard(req);
+                            return _buildRequestCard(req, secondaryTextColor, hintTextColor);
                           },
                         ),
             ),
@@ -177,6 +179,8 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
 
   Widget _buildFilterChip(String label, String value) {
     final isSelected = _filterStatus == value;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
@@ -185,14 +189,14 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
       },
       selectedColor: AppTheme.lGoldAction,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.black : Colors.white70,
+        color: isSelected ? Colors.black : (isDark ? Colors.white70 : Colors.black87),
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
-      backgroundColor: Colors.white.withOpacity(0.05),
+      backgroundColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
     );
   }
 
-  Widget _buildRequestCard(GameRequest request) {
+  Widget _buildRequestCard(GameRequest request, Color secondaryTextColor, Color hintTextColor) {
     final dateFormat = DateFormat('dd/MM HH:mm');
     final date = request.createdAt != null ? dateFormat.format(request.createdAt!) : '—';
 
@@ -217,7 +221,7 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
                       Text(request.playerName, 
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       Text(request.playerEmail ?? 'Sin email', 
-                          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                          style: TextStyle(color: secondaryTextColor, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -243,7 +247,7 @@ class _GlobalGameRequestsScreenState extends State<GlobalGameRequestsScreen> {
                   child: Text(request.eventName ?? 'Evento desconocido', 
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 ),
-                Text(date, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11)),
+                Text(date, style: TextStyle(color: hintTextColor, fontSize: 11)),
               ],
             ),
             if (request.isPending) ...[

@@ -19,6 +19,7 @@ import '../../features/game/widgets/effects/shield_break_effect.dart'; // Defend
 import '../../features/game/widgets/effects/shield_breaking_effect.dart'; // Attacker (Blocked)
 import '../../features/game/widgets/effects/shield_active_effect.dart'; // NEW Shield Active Logic
 import '../../features/game/widgets/effects/clover_reward_effect.dart'; // NEW Reward Effect
+import '../../features/game/widgets/sponsor_banner.dart';
 
 import '../models/player.dart';
 import '../../features/auth/providers/player_provider.dart';
@@ -705,6 +706,10 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
         final isFreeze = powerProvider.isEffectActive('freeze');
         final isBlur = powerProvider.isEffectActive('blur_screen');
         final isInvisible = powerProvider.isEffectActive('invisibility');
+        final sponsor = gameProvider.currentSponsor;
+        final showPowerSponsor =
+          sponsor != null && (isBlackScreen || isFreeze || isBlur);
+        final bannerAtBottom = isBlur && !isBlackScreen && !isFreeze;
 
         // [FAILSAFE] Detectar _BlockingPageRoute huérfana: si no hay ningún
         // poder bloqueante activo pero _isBlockingActive sigue true, forzar limpieza.
@@ -767,6 +772,30 @@ class _SabotageOverlayState extends State<SabotageOverlay> {
                   expiresAt:
                       powerProvider.getPowerExpirationByType(PowerType.blur) ??
                           DateTime.now().add(const Duration(seconds: 5))),
+
+            if (showPowerSponsor)
+              Positioned(
+                top: bannerAtBottom ? null : 0,
+                bottom: bannerAtBottom ? 90 : null,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  top: !bannerAtBottom,
+                  bottom: bannerAtBottom,
+                  child: SponsorBanner(
+                    sponsor: sponsor,
+                    isCompact: true,
+                    onImpression: sponsor != null
+                        ? () => gameProvider.sponsorRotation
+                            .trackImpression(sponsor, context: 'power_overlay')
+                        : null,
+                    onTap: sponsor != null
+                        ? () => gameProvider.sponsorRotation
+                            .trackClick(sponsor, context: 'power_overlay')
+                        : null,
+                  ),
+                ),
+              ),
 
             if (defenseAction == DefenseAction.returned) ...[
               if (powerProvider.returnedByPlayerName != null)

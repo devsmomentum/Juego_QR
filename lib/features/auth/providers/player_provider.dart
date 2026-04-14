@@ -385,9 +385,17 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     }
   }
 
-  Future<void> addPaymentMethod({required String bankCode}) async {
+  Future<void> addPaymentMethod({
+    String? bankCode,
+    String? type,
+    String? identifier,
+  }) async {
     try {
-      await _authService.addPaymentMethod(bankCode: bankCode);
+      await _authService.addPaymentMethod(
+        bankCode: bankCode,
+        type: type,
+        identifier: identifier,
+      );
     } catch (e) {
       debugPrint('Error adding payment method in provider: $e');
       rethrow;
@@ -1047,7 +1055,12 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     try {
       // 1. Fetch basic profile
       final profileData =
-          await _supabase.from('profiles').select().eq('id', userId).single();
+          await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
+      
+      if (profileData == null) {
+        debugPrint('PlayerProvider: ⚠️ Profile not found for $userId (transient RLS/auth issue?). Skipping refresh.');
+        return;
+      }
       debugPrint('PlayerProvider: Raw profile data from DB: $profileData');
 
       // 2. Determine which GamePlayer context to fetch (if any)
@@ -1281,6 +1294,14 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
             
             // SINGLE DEVICE POLICY VALIDATION
             final String? remoteSessionId = profile['current_session_id'];
+            final String? role = profile['role'];
+            
+            // Allow admins and staff to use multiple devices (dashboard + app)
+            if (role == 'admin' || role == 'staff') {
+              _fetchProfile(userId);
+              return;
+            }
+
             final sessionService = SessionService();
             final isValid = await sessionService.isSessionValid(remoteSessionId);
             
@@ -1736,6 +1757,22 @@ class PlayerProvider extends ChangeNotifier implements IResettable {
     ];
     for (var slug in slugs) {
       await debugAddPower(slug);
+    }
+  }
+
+  /// Actualiza el rol de un usuario (admin only).
+  Future<void> updateUserRole(String userId, String newRole) async {
+    try {
+      await _adminService.updateUserRole(userId, newRole);
+      // Actualizar lista local
+      final index = _allPlayers.indexWhere((p) => p.userId == userId);
+      if (index != -1) {
+        _allPlayers[index] = _allPlayers[index].copyWith(role: newRole);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('PlayerProvider: Error in updateUserRole: $e');
+      rethrow;
     }
   }
 

@@ -150,10 +150,10 @@ class AuthService {
 
       final role = profile['role'] as String?;
 
-      if (role != 'admin') {
+      if (role != 'admin' && role != 'staff') {
         debugPrint('AuthService: Access denied for $email (Role: $role)');
         await logout(); // Limpiar sesión inmediatamente
-        throw 'Acceso denegado: No tienes permisos de administrador.';
+        throw 'Acceso denegado: No tienes permisos suficientes.';
       }
 
       return userId;
@@ -417,12 +417,18 @@ class AuthService {
   }
 
   /// Agrega un método de pago vinculado al usuario.
-  Future<void> addPaymentMethod({required String bankCode}) async {
+  Future<void> addPaymentMethod({
+    String? bankCode,
+    String? type,
+    String? identifier,
+  }) async {
     try {
       final response = await _supabase.functions.invoke(
         'auth-service/add-payment-method',
         body: {
-          'bank_code': bankCode,
+          if (bankCode != null) 'bank_code': bankCode,
+          if (type != null) 'type': type,
+          if (identifier != null) 'identifier': identifier,
         },
         method: HttpMethod.post,
       );

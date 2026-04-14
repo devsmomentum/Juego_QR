@@ -8,6 +8,7 @@ import '../../../shared/widgets/animated_cyber_background.dart';
 import '../../admin/services/sponsor_service.dart'; // NEW
 import '../../admin/models/sponsor.dart'; // NEW
 import '../widgets/sponsor_banner.dart'; // NEW
+import '../services/sponsor_rotation_manager.dart'; // Sponsor Pool
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/player_provider.dart';
@@ -75,20 +76,60 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
       _checkEventStatusFromServer();
     });
 
-    _loadSponsor();
+    _initBannerRotation();
   }
 
-  Sponsor? _eventSponsor;
+  Timer? _bannerTimer;
+  Sponsor? _currentSponsor;
+  final SponsorRotationManager _sponsorRotation = SponsorRotationManager();
+  List<Sponsor> _bannerPool = [];
+  int _bannerIndex = 0;
+  final PageController _bannerController = PageController();
 
-  Future<void> _loadSponsor() async {
-    final service = SponsorService();
-    final sponsor = await service.getSponsorForEvent(widget.event.id);
-    if (mounted && sponsor != null && sponsor.hasSponsoredByBanner) {
-      setState(() {
-        _eventSponsor = sponsor;
-      });
+  Future<void> _initBannerRotation() async {
+    if (!widget.event.sponsorsEnabled) {
+      if (mounted) {
+        setState(() => _currentSponsor = null);
+      }
+      return;
     }
-    // _setupRealtimeSubscription() fue movido a initState() — ver fix P0
+
+    await _sponsorRotation.loadPool(widget.event.id);
+    if (!mounted) return;
+
+    _bannerPool = _sponsorRotation.pool
+        .where((s) => s.hasSponsoredByBanner)
+        .toList();
+    _bannerIndex = 0;
+
+    if (_bannerPool.isNotEmpty) {
+      setState(() => _currentSponsor = _bannerPool.first);
+    }
+
+    if (_bannerPool.length <= 1) return;
+    _bannerTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (mounted) _setNextSponsor();
+    });
+  }
+
+  void _setNextSponsor() {
+    if (_bannerPool.isEmpty) {
+      if (mounted && _currentSponsor != null) {
+        setState(() => _currentSponsor = null);
+      }
+      return;
+    }
+
+    _bannerIndex = (_bannerIndex + 1) % _bannerPool.length;
+    final next = _bannerPool[_bannerIndex];
+    if (next.id != _currentSponsor?.id) {
+      setState(() => _currentSponsor = next);
+      _bannerController.animateToPage(
+        _bannerIndex,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _loadInitialCounts() async {
@@ -432,6 +473,8 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
     _timer?.cancel();
     _statusPollingTimer?.cancel();
     _autoStartTimer?.cancel();
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -816,11 +859,30 @@ class _EventWaitingScreenState extends State<EventWaitingScreen>
                             ),
 
                           // Sponsor Banner (Part of flow now)
-                          if (_eventSponsor != null)
+                          if (_bannerPool.isNotEmpty)
                             Padding(
                               padding:
                                   const EdgeInsets.only(top: 20, bottom: 80),
-                              child: SponsorBanner(sponsor: _eventSponsor),
+                              child: SizedBox(
+                                height: 90,
+                                child: PageView.builder(
+                                  controller: _bannerController,
+                                  itemCount: _bannerPool.length,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemBuilder: (context, index) {
+                                    final sponsor = _bannerPool[index];
+                                    return SponsorBanner(
+                                      sponsor: sponsor,
+                                      onImpression: () => _sponsorRotation
+                                          .trackImpression(sponsor,
+                                              context: 'event_waiting'),
+                                      onTap: () => _sponsorRotation.trackClick(
+                                          sponsor,
+                                          context: 'event_waiting'),
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                         ],
                       ),

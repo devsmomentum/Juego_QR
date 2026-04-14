@@ -29,18 +29,16 @@ serve(async (req) => {
     let event: Stripe.Event;
 
     try {
-      // Direct verification without explicit SubtleCryptoProvider (Stripe handles it internally in newer versions)
+      // Use the standard construction method for Deno
       event = await stripe.webhooks.constructEventAsync(
         rawBody,
         signature,
         webhookSecret
       );
     } catch (err) {
-      console.error(`[stripe-webhook] ❌ Signature verification failed: ${err.message}`);
-      console.error(`[stripe-webhook] Provided signature: ${signature.substring(0, 10)}...`);
-      // RETURN 200 to Stripe to stop the error retries and clean up the dashboard metrics
-      return new Response(JSON.stringify({ error: "Signature verification failed", received: false }), { 
-        status: 200,
+      console.error(`[stripe-webhook] ❌ Signature verification failed: ${err instanceof Error ? err.message : String(err)}`);
+      return new Response(JSON.stringify({ error: "Signature verification failed" }), { 
+        status: 200, // Return 200 to Stripe to stop retries if signature is just wrong
         headers: { "Content-Type": "application/json" }
       });
     }

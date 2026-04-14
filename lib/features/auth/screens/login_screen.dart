@@ -11,6 +11,7 @@ import 'avatar_selection_screen.dart';
 import '../../game/screens/scenarios_screen.dart';
 import '../../game/screens/game_request_screen.dart';
 import '../../game/screens/game_mode_selector_screen.dart';
+import '../../game/screens/training_center_screen.dart';
 import '../../layouts/screens/home_screen.dart';
 import '../../admin/screens/dashboard-screen.dart';
 import '../../../shared/widgets/animated_cyber_background.dart';
@@ -22,8 +23,10 @@ import 'dart:async'; // For TimeoutException
 import 'dart:math' as math;
 import '../../../shared/widgets/loading_overlay.dart';
 import '../../../shared/widgets/loading_indicator.dart';
+import '../../../shared/widgets/development_bypass_button.dart';
 import '../../../core/services/version_check_service.dart';
 import '../../../shared/widgets/maintenance_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -56,6 +59,27 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(milliseconds: 2500),
       vsync: this,
     )..repeat();
+
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('remembered_email');
+      final savedPassword = prefs.getString('remembered_password');
+
+      if (savedEmail != null && savedPassword != null) {
+        if (mounted) {
+          setState(() {
+            _emailController.text = savedEmail;
+            _passwordController.text = savedPassword;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading saved credentials: $e');
+    }
   }
 
   @override
@@ -144,13 +168,23 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
+
+      // 4. SAVE CREDENTIALS ON SUCCESS
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('remembered_email', _emailController.text.trim().toLowerCase());
+        await prefs.setString('remembered_password', _passwordController.text);
+      } catch (e) {
+        debugPrint('Error saving credentials: $e');
+      }
+
       // === CHECK MAINTENANCE MODE ===
       final versionService = VersionCheckService(Supabase.instance.client);
       final versionStatus = await versionService.checkVersion();
       if (!mounted) return;
 
       if (versionStatus.maintenanceMode) {
-        if (player.isAdmin) {
+        if (player.hasAdminAccess) {
           // Admin: mostrar pantalla de mantenimiento con opción de continuar
           final shouldContinue = await Navigator.of(context).push<bool>(
             MaterialPageRoute(
@@ -178,8 +212,8 @@ class _LoginScreenState extends State<LoginScreen>
         }
       }
 
-      // Administradores van directamente al Dashboard
-      if (player.role == 'admin') {
+      // Administradores y Staff van directamente al Dashboard
+      if (player.hasAdminAccess) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const DashboardScreen()),
         );
@@ -234,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen>
           break;
 
         case UserEventStatus.waitingApproval:
-          // Usuario esperando aprobación - ir a selector de modo
+          // Usuario esperando aprobación - ir a Centro de Entrenamiento
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const GameModeSelectorScreen()),
           );
@@ -985,8 +1019,6 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 40),
-
                                       // Morna Branding
                                       _buildMornaBranding(isDark: isDarkMode),
                                       const SizedBox(height: 10),

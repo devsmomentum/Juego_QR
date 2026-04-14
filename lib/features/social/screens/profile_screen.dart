@@ -108,7 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildGoldenCloversSection(gameProvider, isDarkMode),
 
                 const SizedBox(height: 40),
-                const Text("ASTHORIA PROTOCOL v1.0.4",
+                const Text("ASTHORIA PROTOCOL v1.0.5",
                     style: TextStyle(
                         color: Colors.white10, fontSize: 10, letterSpacing: 4)),
                 const SizedBox(height: 20),

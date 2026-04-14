@@ -66,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // la vista de la carrera por un instante.
       final gameProvider =
           Provider.of<GameProvider>(context, listen: false);
+        gameProvider.ensureEventContext(widget.eventId);
       if (gameProvider.hasCompletedAllClues && !gameProvider.isRaceCompleted) {
         _redirectedToWaitingRoom = true;
         Navigator.of(context).pushReplacement(

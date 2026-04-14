@@ -1,6 +1,6 @@
 -- Create the merchandise_items table
 CREATE TABLE IF NOT EXISTS merchandise_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     subtitle TEXT,
     category TEXT NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS merchandise_items (
 
 -- Create the merchandise_redemptions table
 CREATE TABLE IF NOT EXISTS merchandise_redemptions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     item_id UUID REFERENCES merchandise_items(id) ON DELETE CASCADE NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'shipped', 'delivered', 'cancelled', 'rejected')) DEFAULT 'pending',

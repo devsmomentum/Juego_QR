@@ -24,7 +24,8 @@ class GameEvent {
   final int pot; // NEW: Total accumulated pot from DB
   final Map<String, dynamic> spectatorConfig; // NEW: Spectator pricing
   final int betTicketPrice; // NEW: Price per bet
-  final String? sponsorId; // NEW: Linked Sponsor
+  final bool sponsorsEnabled; // Pool-based sponsor rotation
+  final bool sponsorsSelective; // Only selected sponsors for this event
   final Map<String, int> storePrices; // NEW: Custom prices for this event
   final bool isAutomated; // TRUE = created by automation, auto-starts without admin
 
@@ -51,7 +52,8 @@ class GameEvent {
     this.pot = 0, // NEW: Initialize
     this.spectatorConfig = const {}, // NEW
     this.betTicketPrice = 100, // NEW
-    this.sponsorId, // NEW
+    this.sponsorsEnabled = false,
+    this.sponsorsSelective = false,
     this.storePrices = const {}, // NEW
     this.isAutomated = false,
   });
@@ -94,7 +96,8 @@ class GameEvent {
           ? Map<String, dynamic>.from(json['spectator_config'])
           : {}, // NEW
       betTicketPrice: (json['bet_ticket_price'] as num?)?.toInt() ?? 100, // NEW
-      sponsorId: json['sponsor_id'] as String?, // NEW
+      sponsorsEnabled: (json['sponsors_enabled'] as bool?) ?? false,
+      sponsorsSelective: (json['sponsors_selective'] as bool?) ?? false,
       storePrices: (json['store_prices'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as num).toInt()),
           ) ??
@@ -126,7 +129,8 @@ class GameEvent {
       'configured_winners': configuredWinners, // NEW
       'pot': pot, // NEW: Include pot in serialization
       'spectator_config': spectatorConfig, // NEW
-      'sponsor_id': sponsorId, // NEW
+      'sponsors_enabled': sponsorsEnabled,
+      'sponsors_selective': sponsorsSelective,
       'store_prices': storePrices, // NEW
       'is_automated': isAutomated,
     };
@@ -155,9 +159,10 @@ class GameEvent {
     int? pot,
     Map<String, dynamic>? spectatorConfig,
     int? betTicketPrice,
-    String? sponsorId,
+    bool? sponsorsEnabled,
     Map<String, int>? storePrices,
     bool? isAutomated,
+    bool? sponsorsSelective,
   }) {
     return GameEvent(
       id: id ?? this.id,
@@ -182,7 +187,8 @@ class GameEvent {
       pot: pot ?? this.pot,
       spectatorConfig: spectatorConfig ?? this.spectatorConfig,
       betTicketPrice: betTicketPrice ?? this.betTicketPrice,
-      sponsorId: sponsorId ?? this.sponsorId,
+      sponsorsEnabled: sponsorsEnabled ?? this.sponsorsEnabled,
+      sponsorsSelective: sponsorsSelective ?? this.sponsorsSelective,
       storePrices: storePrices ?? this.storePrices,
       isAutomated: isAutomated ?? this.isAutomated,
     );

@@ -16,7 +16,7 @@ class _OutflowManagementScreenState extends State<OutflowManagementScreen> with 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 1, vsync: this);
   }
 
   @override
@@ -51,10 +51,6 @@ class _OutflowManagementScreenState extends State<OutflowManagementScreen> with 
             unselectedLabelColor: Colors.grey,
             tabs: const [
               Tab(
-                icon: Icon(Icons.money),
-                text: 'Retiros (\$)',
-              ),
-              Tab(
                 icon: Icon(Icons.redeem),
                 text: 'Canjes Merch',
               ),
@@ -65,8 +61,7 @@ class _OutflowManagementScreenState extends State<OutflowManagementScreen> with 
       body: TabBarView(
         controller: _tabController,
         children: [
-          WithdrawalRequestsManagementScreen(),
-          MerchandiseRedemptionsScreen(),
+          const MerchandiseRedemptionsScreen(),
         ],
       ),
     );

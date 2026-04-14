@@ -66,7 +66,8 @@ class EventService {
                 event.spectatorConfig, // NEW: Persist spectator prices
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
-            'sponsor_id': event.sponsorId, // NEW
+            'sponsors_enabled': event.sponsorsEnabled,
+            'sponsors_selective': event.sponsorsSelective,
           })
           .select()
           .single();
@@ -168,7 +169,8 @@ class EventService {
                 event.spectatorConfig, // NEW: Persist spectator prices
             'bet_ticket_price':
                 event.betTicketPrice, // NEW: Persist betting price
-            'sponsor_id': event.sponsorId, // NEW
+            'sponsors_enabled': event.sponsorsEnabled,
+            'sponsors_selective': event.sponsorsSelective,
           })
           .eq('id', event.id)
           .select()
@@ -273,9 +275,8 @@ class EventService {
         query = query.eq('type', type);
       }
 
-      // Default sort: Newest first (Descending Date)
-      // This ensures "Finished" events and active ones are ordered by creation/start date
-      final response = await query.order('date', ascending: false);
+      // Default sort (Requested): Newest by Creation Date first
+      final response = await query.order('created_at', ascending: false);
       final List<dynamic> eventsData = response as List;
 
       // 2. Fetch participant counts for these events
@@ -339,7 +340,8 @@ class EventService {
           ? Map<String, dynamic>.from(data['spectator_config'])
           : {},
       betTicketPrice: (data['bet_ticket_price'] as num?)?.toInt() ?? 100,
-      sponsorId: data['sponsor_id'] as String?,
+      sponsorsEnabled: (data['sponsors_enabled'] as bool?) ?? false,
+        sponsorsSelective: (data['sponsors_selective'] as bool?) ?? false,
       storePrices: data['store_prices'] != null
           ? Map<String, int>.from(
               data['store_prices'].map((k, v) => MapEntry(k, v as int)))

@@ -12,10 +12,9 @@ import '../../mall/providers/store_provider.dart';
 import '../../mall/models/mall_store.dart';
 import '../services/event_domain_service.dart';
 import '../../mall/models/power_item.dart'; // NEW
-import '../models/sponsor.dart';
-import '../services/sponsor_service.dart';
 import '../../../core/services/app_config_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/sponsor_service.dart';
 
 class EventCreationProvider extends ChangeNotifier {
   // Estado del Formulario
@@ -33,8 +32,9 @@ class EventCreationProvider extends ChangeNotifier {
   String _eventType = 'on_site'; // 'on_site' or 'online'
   int _configuredWinners = 3; // Default 3 winners
   int _betTicketPrice = 100; // NEW: Default betting price
-  String? _sponsorId; // Linked Sponsor ID
-  List<Sponsor> _sponsors = []; // Available sponsors cache
+  bool _sponsorsEnabled = false; // Pool-based sponsor rotation flag
+  bool _sponsorsSelective = false; // Only selected sponsors for this event
+  final List<String> _selectedSponsorIds = [];
 
   // Imágenes
   XFile? _selectedImage;
@@ -82,8 +82,9 @@ class EventCreationProvider extends ChangeNotifier {
   String get eventId => _eventId;
   bool get isFormValid => _isFormValid;
   String get eventType => _eventType;
-  String? get sponsorId => _sponsorId;
-  List<Sponsor> get sponsors => _sponsors;
+  bool get sponsorsEnabled => _sponsorsEnabled;
+  bool get sponsorsSelective => _sponsorsSelective;
+  List<String> get selectedSponsorIds => List.unmodifiable(_selectedSponsorIds);
 
   // --- Initializers ---
 
@@ -105,7 +106,8 @@ class EventCreationProvider extends ChangeNotifier {
       _eventType = event.type;
       _configuredWinners = event.configuredWinners;
       _betTicketPrice = event.betTicketPrice; // NEW
-      _sponsorId = event.sponsorId; // NEW
+      _sponsorsEnabled = event.sponsorsEnabled;
+      _sponsorsSelective = event.sponsorsSelective;
       // Note: Image and Clues are not fully loaded here in original code either
     } else {
       resetForm();
@@ -113,25 +115,39 @@ class EventCreationProvider extends ChangeNotifier {
       loadAutomationDefaults();
     }
     checkFormValidity();
-    // Start loading sponsors if not loaded
-    if (_sponsors.isEmpty) loadSponsors();
   }
 
   // --- Sponsor Logic ---
 
-  Future<void> loadSponsors() async {
-    try {
-      final service = SponsorService();
-      _sponsors = await service.getSponsors();
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Error loading sponsors: $e");
+  void setSponsorsEnabled(bool value) {
+    _sponsorsEnabled = value;
+    if (!value) {
+      _sponsorsSelective = false;
     }
+    notifyListeners();
   }
 
-  void setSponsorId(String? id) {
-    _sponsorId = id;
-    checkFormValidity();
+  void setSponsorsSelective(bool value) {
+    if (!_sponsorsEnabled) return;
+    _sponsorsSelective = value;
+    notifyListeners();
+  }
+
+  void setSelectedSponsorIds(List<String> sponsorIds) {
+    _selectedSponsorIds
+      ..clear()
+      ..addAll(sponsorIds);
+    notifyListeners();
+  }
+
+  void toggleSponsorSelection(String sponsorId, bool selected) {
+    if (selected) {
+      if (!_selectedSponsorIds.contains(sponsorId)) {
+        _selectedSponsorIds.add(sponsorId);
+      }
+    } else {
+      _selectedSponsorIds.remove(sponsorId);
+    }
     notifyListeners();
   }
 
@@ -198,7 +214,9 @@ class EventCreationProvider extends ChangeNotifier {
     _selectedDate = DateTime.now();
     _configuredWinners = 3;
     _betTicketPrice = 100; // Reset
-    _sponsorId = null;
+    _sponsorsEnabled = false;
+    _sponsorsSelective = false;
+    _selectedSponsorIds.clear();
     _selectedImage = null;
     _numberOfClues = 0;
     _clueForms = [];
@@ -222,8 +240,6 @@ class EventCreationProvider extends ChangeNotifier {
     }
 
     notifyListeners();
-    // Ensure sponsors are loaded for new forms too
-    if (_sponsors.isEmpty) loadSponsors();
   }
 
   // --- Setters & Logic ---
@@ -599,7 +615,8 @@ class EventCreationProvider extends ChangeNotifier {
         configuredWinners: _configuredWinners,
         spectatorConfig: _spectatorPrices,
         betTicketPrice: _betTicketPrice, // NEW
-        sponsorId: _sponsorId, // NEW
+        sponsorsEnabled: _sponsorsEnabled,
+        sponsorsSelective: _sponsorsSelective,
       );
 
       // Update PIN state for UI feedback (domain service may have auto-generated it)
@@ -610,6 +627,15 @@ class EventCreationProvider extends ChangeNotifier {
       // 1. Create Event
       createdEventId =
           await eventProvider.createEvent(newEvent, _selectedImage);
+
+      // 1.1 Create event_sponsors when selective
+      if (createdEventId != null && _sponsorsEnabled && _sponsorsSelective) {
+        final sponsorService = SponsorService();
+        await sponsorService.setEventSponsors(
+          createdEventId,
+          _selectedSponsorIds,
+        );
+      }
 
       // 2. Create Clues
       if (createdEventId != null && _clueForms.isNotEmpty) {

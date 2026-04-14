@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../game/widgets/sponsor_banner.dart';
 import '../models/sponsor.dart';
 import '../services/sponsor_service.dart';
 
@@ -310,6 +311,18 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
                         currentUrl: widget.sponsor?.bannerUrl,
                         context: context,
                       ),
+                      const SizedBox(height: 12),
+
+                      _buildFormatGuidelines(),
+                      const SizedBox(height: 16),
+
+                      _buildBannerPreview(
+                        context: context,
+                        name: _nameController.text.trim(),
+                        bytes: _bannerBytes,
+                        file: _bannerFile,
+                        currentUrl: widget.sponsor?.bannerUrl,
+                      ),
                       const SizedBox(height: 32),
 
                       // PNG ENFORCEMENT ALERT
@@ -471,5 +484,137 @@ class _SponsorDetailScreenState extends State<SponsorDetailScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildFormatGuidelines() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.lGoldAction.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.lGoldAction.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            "FORMATOS RECOMENDADOS",
+            style: TextStyle(
+              color: AppTheme.lGoldAction,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              letterSpacing: 1.1,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Banner: 1200x260 px (ratio 4.6:1), PNG o WebP sin compresion agresiva.",
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          SizedBox(height: 4),
+          Text(
+            "Logo: 512x512 px, PNG con fondo transparente para mejor legibilidad.",
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          SizedBox(height: 4),
+          Text(
+            "Minijuego: PNG 64x64 px transparente (obligatorio).",
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBannerPreview({
+    required BuildContext context,
+    required String name,
+    Uint8List? bytes,
+    XFile? file,
+    String? currentUrl,
+  }) {
+    final textColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final ImageProvider? previewProvider = _buildPreviewImageProvider(
+      bytes: bytes,
+      file: file,
+      currentUrl: currentUrl,
+    );
+
+    if (previewProvider == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Vista previa del banner",
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 86,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+              color: Theme.of(context).cardTheme.color,
+            ),
+            child: Text(
+              "Sube un banner para ver la previsualizacion",
+              style: TextStyle(color: textColor?.withOpacity(0.6), fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final previewSponsor = (widget.sponsor ?? Sponsor(
+      id: 'preview',
+      name: name.isEmpty ? 'Marca' : name,
+      planType: 'oro',
+      isActive: true,
+      createdAt: DateTime.now(),
+    )).copyWith(
+      name: name.isEmpty ? 'Marca' : name,
+      bannerUrl: null,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Vista previa del banner",
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SponsorBanner(
+          sponsor: previewSponsor,
+          bannerImageOverride: previewProvider,
+        ),
+      ],
+    );
+  }
+
+  ImageProvider? _buildPreviewImageProvider({
+    Uint8List? bytes,
+    XFile? file,
+    String? currentUrl,
+  }) {
+    if (bytes != null) return MemoryImage(bytes);
+    if (file != null) {
+      if (kIsWeb) {
+        return NetworkImage(file.path);
+      }
+      return FileImage(File(file.path));
+    }
+    if (currentUrl != null && currentUrl.isNotEmpty) {
+      return NetworkImage(currentUrl);
+    }
+    return null;
   }
 }

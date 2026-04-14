@@ -10,10 +10,6 @@ import '../widgets/race_track_widget.dart';
 import '../../../shared/widgets/sabotage_overlay.dart';
 import '../../../shared/models/player.dart'; // Import Player model
 import '../providers/connectivity_provider.dart';
-import '../../mall/models/power_item.dart';
-import '../widgets/effects/blur_effect.dart';
-import '../providers/power_interfaces.dart';
-import '../providers/power_effect_provider.dart'; // NEW IMPORT
 import 'package:flutter/foundation.dart' show kDebugMode; // NEW IMPORT
 
 // --- Imports de Minijuegos Existentes ---
@@ -44,6 +40,7 @@ import '../widgets/minigames/chronological_order_minigame.dart';
 import '../widgets/minigames/capital_cities_minigame.dart';
 import '../widgets/minigames/true_false_minigame.dart';
 import '../widgets/minigame_countdown_overlay.dart';
+import '../widgets/quick_power_shop.dart';
 import 'scenarios_screen.dart';
 import '../../game/providers/game_request_provider.dart';
 
@@ -65,11 +62,17 @@ import '../../../shared/widgets/master_tutorial_content.dart';
 import '../providers/game_flow_provider.dart';
 import '../../../core/services/app_config_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/practice_mode_resolver.dart';
 
 class PuzzleScreen extends StatefulWidget {
   final Clue clue;
+  final bool isPractice;
 
-  const PuzzleScreen({super.key, required this.clue});
+  const PuzzleScreen({
+    super.key,
+    required this.clue,
+    this.isPractice = false,
+  });
 
   @override
   State<PuzzleScreen> createState() => _PuzzleScreenState();
@@ -119,12 +122,21 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
     // Penalty logic removed
 
-    // Verificar vidas al iniciar
+    // Verificar vidas al iniciar (Solo si NO es práctica)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkLives();
-      _checkBanStatus(); // Check ban on entry
+      if (!widget.isPractice) {
+        _checkLives();
+        _checkBanStatus(); // Check ban on entry
+      }
 
-      _startMinigameSession();
+      if (widget.isPractice) {
+        setState(() {
+          _sessionReady = true;
+          _minigameStartLocal = DateTime.now();
+        });
+      } else {
+        _startMinigameSession();
+      }
 
       // --- SYNC PLAYER PROVIDER WITH CURRENT EVENT ---
       // Fix for issue where PlayerProvider loads "latest" (potentially banned) event
@@ -171,7 +183,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   int _minDurationSecondsForClue(Clue clue) {
     if (!_minDurationEnabled) return 0;
-    switch (clue.puzzleType.difficulty) {
+    switch (clue.effectivePuzzleType.difficulty) {
       case MinigameDifficulty.easy:
         return _minDurationByDifficulty['easy'] ??
             _minDurationDefaults['easy']!;
@@ -211,7 +223,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     final player = context.read<PlayerProvider>().currentPlayer;
     if (player?.role == 'spectator') return;
 
-    if (widget.clue.id.startsWith('demo_')) return;
+    if (widget.clue.id.startsWith('demo_') || widget.isPractice) {
+      if (mounted) setState(() => _sessionReady = true);
+      return;
+    }
 
     if (!_minDurationConfigLoaded) {
       await _loadMinigameMinDurationConfig();
@@ -591,8 +606,15 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   void _handleSuccess(Clue clue) {
     if (_isSuccessFlowActive || !mounted) return;
     setState(() => _isSuccessFlowActive = true);
+
+    if (widget.isPractice) {
+      debugPrint('[Practice] 🏆 Minigame completed successfully!');
+      _showSuccessDialog(context, clue, isPractice: true);
+      return;
+    }
+
     final result = {
-      'puzzle_type': clue.puzzleType.toString(),
+      'puzzle_type': clue.effectivePuzzleType.toString(),
       'client_elapsed_ms': _localElapsedMs(),
       'client_started_at': _minigameStartLocal?.toUtc().toIso8601String(),
       'client_finished_at': DateTime.now().toUtc().toIso8601String(),
@@ -634,8 +656,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     final isSpectator = player?.role == 'spectator';
 
     // --- STATUS OVERLAYS (Handled Globally) ---
-    if (isSpectator) {
-      // Spectators bypass lives check but see read-only UI
+    if (isSpectator || widget.isPractice) {
+      // Spectators and Practice mode bypass lives check
     } else {
       // 2. Si el PlayerProvider (Visual) dice que NO tenemos vidas, bloqueamos INMEDIATAMENTE.
       //    Ya no confiamos ciegamente en el servidor si la UI local dice 0.
@@ -670,7 +692,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     // Nota: Si pasamos PhysicalClue, usará el fallback de los getters virtuales.
 
     // Pasamos _finishLegally a TODOS los hijos para que avisen antes de cerrar o ganar
-    switch (onlineClue.puzzleType) {
+    switch (onlineClue.effectivePuzzleType) {
       case PuzzleType.slidingPuzzle:
         gameWidget =
             SlidingPuzzleWrapper(clue: widget.clue, onSuccess: _handleSuccess);
@@ -765,28 +787,78 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
 
     // WRAPPER DE SEGURIDAD: Evitar salir sin penalización
-    return PopScope(
-      canPop: _legalExit || isSpectator,
-      onPopInvoked: (didPop) async {
-        if (didPop || _legalExit || isSpectator) return;
-
-        // Si intenta salir con Back, mostramos el diálogo de rendición (que cobra vida)
-        showSkipDialog(context, _finishLegally);
-      },
-      child: Stack(
-        children: [
-          IgnorePointer(
-            ignoring: isSpectator, // Bloquea interacción con el juego
-            child: gameWidget,
-          ),
-          if (isSpectator)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.1), // Sutil oscurecimiento
+    return PracticeModeResolver(
+      isPractice: widget.isPractice,
+      child: PopScope(
+        canPop: _legalExit || isSpectator || widget.isPractice,
+        onPopInvoked: (didPop) async {
+          if (didPop || _legalExit || isSpectator || widget.isPractice) return;
+  
+          // Si intenta salir con Back, mostramos el diálogo de rendición (que cobra vida)
+          showSkipDialog(context, _finishLegally);
+        },
+        child: Material(
+          type: MaterialType.transparency,
+          child: Stack(
+            children: [
+              IgnorePointer(
+                ignoring: isSpectator, // Bloquea interacción con el juego
+                child: gameWidget,
               ),
-            ),
+              if (isSpectator)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withOpacity(0.1), // Sutil oscurecimiento
+                  ),
+                ),
+              if (widget.isPractice)
+                _buildPracticeBanner(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-        ],
+  Widget _buildPracticeBanner() {
+    return Positioned(
+      top: 100,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.accentGold.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.accentGold.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.terminal, color: Colors.black, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  "MODO ENTRENAMIENTO",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1128,6 +1200,7 @@ void _showSuccessDialog(
   VoidCallback? onValidationSuccess,
   VoidCallback? onValidationFailure,
   VoidCallback? onForceExit,
+  bool isPractice = false,
 }) async {
   final gameProvider = Provider.of<GameProvider>(context, listen: false);
   final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
@@ -1142,7 +1215,7 @@ void _showSuccessDialog(
   // ── DESACOPLADO DEL RPC ──────────────────────────────────────────────────
   Future<Map<String, dynamic>?> clueCompletionFuture;
 
-  if (clue.id.startsWith('demo_')) {
+  if (clue.id.startsWith('demo_') || clue.id.startsWith('practice_') || isPractice) {
     gameProvider.completeLocalClue(clue.id);
     clueCompletionFuture = Future.value({'success': true, 'coins_earned': 0});
   } else if (sessionId == null) {
@@ -1171,25 +1244,31 @@ void _showSuccessDialog(
   // 1. Validar resultado ANTES de mostrar la animación del trébol
   Map<String, dynamic>? result;
   int coinsEarned = 0;
-  bool validationOpen = true;
-  unawaited(
-    showGeneralDialog(
-      context: navigator.context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.9),
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (dialogContext, _, __) => const Scaffold(
-        backgroundColor: Colors.black,
-        body: LoadingIndicator(
-          message: 'Validando resultado...',
-          fontSize: 16,
+  bool validationOpen = false; // Initialize false, only open if NOT practice
+  
+  if (!clue.id.startsWith('practice_') && !isPractice) {
+    validationOpen = true;
+    unawaited(
+      showGeneralDialog(
+        context: navigator.context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withOpacity(0.9),
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (dialogContext, _, __) => const Scaffold(
+          backgroundColor: Colors.black,
+          body: LoadingIndicator(
+            message: 'Validando resultado...',
+            fontSize: 16,
+          ),
         ),
-      ),
-    ).whenComplete(() => validationOpen = false),
-  );
+      ).whenComplete(() => validationOpen = false),
+    );
+  }
 
   try {
-    result = await clueCompletionFuture.timeout(const Duration(seconds: 6));
+    // FIX: Increased from 6s to 15s. The full chain (Edge Function → verify_and_complete_minigame
+    // → submit_clue_answer → potentially register_race_finisher) can exceed 6s on slow mobile networks.
+    result = await clueCompletionFuture.timeout(const Duration(seconds: 15));
     coinsEarned = result?['coins_earned'] ?? 0;
     debugPrint('--- CLUE RPC RESULT: $result, Coins Earned: $coinsEarned ---');
   } catch (e) {
@@ -1254,6 +1333,8 @@ void _showSuccessDialog(
     }
     return;
   }
+
+  // --- PRACTICE MODE EARLY EXIT REMOVED TO USE UNIFIED CLOVER FLOW ---
 
   if (result['success'] == false) {
     onValidationFailure?.call();
@@ -1434,7 +1515,9 @@ void _showSuccessDialog(
             ],
           ),
         );
-      } else if (errorCode == 'SESSION_EXPIRED') {
+      } else if (errorCode == 'SESSION_EXPIRED' || errorCode == '0xERR-992A-4B') {
+        // FIX: Map opaque server error code 0xERR-992A-4B (session expired on server)
+        // to the same user-friendly SESSION_EXPIRED dialog.
         await showDialog<void>(
           context: navigator.context,
           barrierDismissible: false,
@@ -1479,7 +1562,56 @@ void _showSuccessDialog(
         } else if (navigator.mounted) {
           navigator.maybePop();
         }
+      } else if (errorCode == 'CHALLENGE_MISMATCH' || errorCode == '0xERR-CHALLENGE' || errorCode == '0xERR-HMAC') {
+        // FIX: Map challenge/HMAC errors to a specific, helpful dialog.
+        // This can happen if the user's network context changed significantly.
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.orange.shade700, width: 1.5),
+            ),
+            title: Text(
+              'Conexion inestable',
+              style: TextStyle(
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Tu conexion cambio durante el minijuego. Asegurate de tener una conexion estable e intentalo de nuevo.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(
+                  'REINTENTAR',
+                  style: TextStyle(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        onForceExit?.call();
+        if (navigator.mounted && puzzleRoute != null) {
+          try {
+            navigator.removeRoute(puzzleRoute);
+          } catch (_) {
+            if (navigator.mounted) navigator.maybePop();
+          }
+        } else if (navigator.mounted) {
+          navigator.maybePop();
+        }
       } else {
+        // Generic fallback for truly unknown errors
+        debugPrint('⚠️ Unmapped validation error code: $errorCode (full result: $result)');
         await showDialog<void>(
           context: navigator.context,
           barrierDismissible: false,
@@ -1659,6 +1791,7 @@ void _showSuccessDialog(
       totalClues: clues.length,
       coinsEarned: coinsEarned,
       nextClueHint: nextClueHint,
+      isPractice: isPractice || clue.id.startsWith('practice_'),
       onMapReturn: () {
         gameFlowProvider.consumePendingCelebration();
         Navigator.of(dialogContext).pop();
@@ -1925,7 +2058,7 @@ class DroneDodgeWrapper extends StatelessWidget {
 // --- SCAFFOLD COMPARTIDO ACTUALIZADO (Soporta onFinish para Rendición Legal) ---
 
 String _getMinigameInstruction(Clue clue) {
-  switch (clue.puzzleType) {
+  switch (clue.effectivePuzzleType) {
     case PuzzleType.slidingPuzzle:
       return "Ordena los números (1 al 8)";
     case PuzzleType.ticTacToe:
@@ -1993,6 +2126,9 @@ Widget _buildMinigameScaffold(
   final instruction = _getMinigameInstruction(clue);
   final isDarkMode = Provider.of<PlayerProvider>(context).isDarkMode;
 
+  // StatefulBuilder to manage quick shop toggle within top-level function
+  bool showQuickShop = false;
+
   return SabotageOverlay(
     child: Scaffold(
       backgroundColor: Colors.transparent,
@@ -2017,10 +2153,12 @@ Widget _buildMinigameScaffold(
           MinigameCountdownOverlay(
             instruction: instruction,
             child: SafeArea(
-              left: clue.puzzleType != PuzzleType.droneDodge,
-              right: clue.puzzleType != PuzzleType.droneDodge,
+              left: clue.effectivePuzzleType != PuzzleType.droneDodge,
+              right: clue.effectivePuzzleType != PuzzleType.droneDodge,
               child: Consumer<GameProvider>(
                 builder: (context, game, _) {
+                  return StatefulBuilder(
+                    builder: (context, setScaffoldState) {
                   return Stack(
                     children: [
                       Column(
@@ -2074,7 +2212,29 @@ Widget _buildMinigameScaffold(
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 4),
+                                  // BOTÓN TIENDA RÁPIDA
+                                  GestureDetector(
+                                    onTap: () => setScaffoldState(() => showQuickShop = !showQuickShop),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: showQuickShop
+                                            ? AppTheme.accentGold.withOpacity(0.3)
+                                            : AppTheme.accentGold.withOpacity(0.15),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppTheme.accentGold.withOpacity(showQuickShop ? 0.8 : 0.4),
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.storefront_rounded,
+                                        color: showQuickShop ? AppTheme.accentGold : Colors.white70,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
                                   IconButton(
                                     icon: const Icon(Icons.flag,
                                         color: AppTheme.dangerRed, size: 28),
@@ -2121,20 +2281,20 @@ Widget _buildMinigameScaffold(
 
                               // Force compact for complex minigames OR if the screen is not very tall
                               final forceCompact = isSmallOrMediumScreen ||
-                                  (clue.puzzleType ==
+                                  (clue.effectivePuzzleType ==
                                           PuzzleType.slidingPuzzle ||
-                                      clue.puzzleType == PuzzleType.ticTacToe ||
-                                      clue.puzzleType == PuzzleType.tetris ||
-                                      clue.puzzleType == PuzzleType.hangman ||
-                                      clue.puzzleType == PuzzleType.fastNumber ||
-                                      clue.puzzleType == PuzzleType.capitalCities ||
-                                      clue.puzzleType == PuzzleType.emojiMovie ||
-                                      clue.puzzleType == PuzzleType.trueFalse ||
-                                      clue.puzzleType == PuzzleType.chronologicalOrder);
+                                      clue.effectivePuzzleType == PuzzleType.ticTacToe ||
+                                      clue.effectivePuzzleType == PuzzleType.tetris ||
+                                      clue.effectivePuzzleType == PuzzleType.hangman ||
+                                      clue.effectivePuzzleType == PuzzleType.fastNumber ||
+                                      clue.effectivePuzzleType == PuzzleType.capitalCities ||
+                                      clue.effectivePuzzleType == PuzzleType.emojiMovie ||
+                                      clue.effectivePuzzleType == PuzzleType.trueFalse ||
+                                      clue.effectivePuzzleType == PuzzleType.chronologicalOrder);
 
                               // Horizontal padding only if NOT a full-screen precision game like Dodge
                               final hPadding =
-                                  (clue.puzzleType == PuzzleType.droneDodge)
+                                  (clue.effectivePuzzleType == PuzzleType.droneDodge)
                                       ? 0.0
                                       : (isSmallOrMediumScreen ? 8.0 : 16.0);
 
@@ -2179,25 +2339,24 @@ Widget _buildMinigameScaffold(
                         ],
                       ),
 
-                      // EFECTO BLUR (Inyectado aquí)
-                      if (context
-                          .watch<PowerEffectReader>()
-                          .isPowerActive(PowerType.blur))
-                        Builder(builder: (context) {
-                          final expiry = context
-                              .read<PowerEffectReader>()
-                              .getPowerExpirationByType(PowerType.blur);
-                          if (expiry != null) {
-                            return Positioned.fill(
-                              child: BlurScreenEffect(expiresAt: expiry),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        }),
+                      // QUICK POWER SHOP OVERLAY (above race tracker)
+                      if (showQuickShop && player?.role != 'spectator')
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: QuickPowerShop(
+                            onClose: () => setScaffoldState(() => showQuickShop = false),
+                          ),
+                        ),
+
+                      // NOTE: Blur effect is handled globally by SabotageOverlay
 
                       // Efecto Visual de Daño (Flash Rojo) al perder vida
                       LossFlashOverlay(lives: game.lives),
                     ],
+                  );
+                    },
                   );
                 },
               ),

@@ -231,24 +231,25 @@ class _WithdrawalMethodSelectorState extends State<WithdrawalMethodSelector> {
                     final isSelected = _selectedMethodId == method['id'];
                     final type = method['type'] ?? 'pago_movil';
                     final isStripe = type == 'stripe';
+                    final isPaypal = type == 'paypal';
                     final isAutomated = method['is_automated'] == true;
 
                     final title = isAutomated
                         ? 'Cuenta Stripe vinculada'
                         : (isStripe
                             ? 'Stripe'
-                            : 'Pago Móvil - Banco ${method['bank_code'] ?? '???'}');
+                            : (isPaypal ? 'PayPal' : 'Pago Móvil - Banco ${method['bank_code'] ?? '???'}'));
                     final subtitle = isAutomated
                         ? 'Transferencia automática directa'
-                        : (isStripe
+                        : (isStripe || isPaypal
                             ? (method['identifier'] ?? 'Email no configurado')
                             : (method['phone_number'] ?? 'Teléfono no configurado'));
-                    final icon = isStripe
+                    final icon = isStripe || isPaypal
                         ? Icons.account_balance_wallet_rounded
                         : Icons.phone_android;
-                    final iconColor = isStripe
-                        ? const Color(0xFF635BFF)
-                        : AppTheme.secondaryPink;
+                    final iconColor = isPaypal 
+                        ? const Color(0xFF0070BA) // PayPal Blue
+                        : (isStripe ? const Color(0xFF635BFF) : AppTheme.secondaryPink);
 
                     return Container(
                       decoration: BoxDecoration(

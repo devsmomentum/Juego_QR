@@ -1686,6 +1686,7 @@ class _WalletScreenState extends State<WalletScreen> {
     String? selectedPlanId;
     final type = method['type'];
     final isStripe = type == 'stripe';
+    final isPaypal = type == 'paypal';
     final isAutomatedStripe = method['is_automated'] == true;
     final bankCode = method['bank_code'] ?? '???';
     final phone = method['phone_number'] ?? '???';
@@ -1698,7 +1699,7 @@ class _WalletScreenState extends State<WalletScreen> {
     final combinedFuture = Future.wait([
       WithdrawalPlanService(supabaseClient: Supabase.instance.client)
           .fetchActivePlans(),
-      isStripe ? Future.value(true) : configService.isBcvRateValid(),
+      (isStripe || isPaypal) ? Future.value(true) : configService.isBcvRateValid(),
     ]);
 
     showDialog(
@@ -1712,25 +1713,25 @@ class _WalletScreenState extends State<WalletScreen> {
               side: BorderSide(
                   color: isStripe
                       ? const Color(0xFF635BFF)
-                      : AppTheme.secondaryPink,
+                      : (isPaypal ? const Color(0xFF0070BA) : AppTheme.secondaryPink),
                   width: 1),
             ),
             title: Row(
               children: [
                 Icon(
-                    isStripe
-                        ? Icons.credit_card_rounded
+                    isStripe || isPaypal
+                        ? Icons.account_balance_wallet_rounded
                         : Icons.publish_rounded,
                     color: isStripe
                         ? const Color(0xFF635BFF)
-                        : AppTheme.secondaryPink,
+                        : (isPaypal ? const Color(0xFF0070BA) : AppTheme.secondaryPink),
                     size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Retirar Tréboles',
                         style: TextStyle(
                             color: Colors.white,
@@ -1743,7 +1744,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             ? 'A: Tu cuenta Stripe vinculada'
                             : (isStripe
                                 ? 'A: Stripe ($email)'
-                                : 'A: $bankCode - $phone'),
+                                : (isPaypal ? 'A: PayPal ($email)' : 'A: $bankCode - $phone')),
                         style: const TextStyle(
                             color: Colors.white60, fontSize: 11),
                       ),

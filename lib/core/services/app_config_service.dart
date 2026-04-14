@@ -434,8 +434,8 @@ class AppConfigService {
   }
 
   Map<String, dynamic> _defaultVersionConfig() => {
-        'latest_version': '1.0.0',
-        'min_supported_version': '1.0.0',
+        'latest_version': '1.0.5',
+        'min_supported_version': '1.0.5',
         'maintenance_mode': false,
         'apk_download_url': '',
         'android_store_url': '',

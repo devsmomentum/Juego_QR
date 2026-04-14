@@ -4,16 +4,19 @@ import 'package:provider/provider.dart';
 import '../../../../shared/widgets/coin_image.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../game/models/event.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/sponsor.dart';
 
 class DetailsTab extends StatefulWidget {
   final GameEvent event;
   final GlobalKey<FormState> formKey;
   final bool isEventActive;
-  final List<Sponsor> sponsors;
+  final bool sponsorsEnabled;
+  final bool sponsorsSelective;
+  final List<Sponsor> availableSponsors;
+  final List<String> selectedSponsorIds;
   
   // State values
-  final String? sponsorId;
   final String title;
   final String description;
   final String pin;
@@ -27,7 +30,9 @@ class DetailsTab extends StatefulWidget {
   final TextEditingController locationController;
 
   // Callbacks
-  final Function(String?) onSponsorChanged;
+  final Function(bool) onSponsorsEnabledChanged;
+  final Function(bool) onSponsorsSelectiveChanged;
+  final Function(String, bool) onSponsorSelectionChanged;
   final Function(int) onWinnersChanged;
   final Function(DateTime) onDateChanged;
   final Function() onSelectLocation;
@@ -51,8 +56,10 @@ class DetailsTab extends StatefulWidget {
     required this.event,
     required this.formKey,
     required this.isEventActive,
-    required this.sponsors,
-    required this.sponsorId,
+    required this.sponsorsEnabled,
+    required this.sponsorsSelective,
+    required this.availableSponsors,
+    required this.selectedSponsorIds,
     required this.title,
     required this.description,
     required this.pin,
@@ -64,7 +71,9 @@ class DetailsTab extends StatefulWidget {
     required this.configuredWinners,
     required this.selectedDate,
     required this.locationController,
-    required this.onSponsorChanged,
+    required this.onSponsorsEnabledChanged,
+    required this.onSponsorsSelectiveChanged,
+    required this.onSponsorSelectionChanged,
     required this.onWinnersChanged,
     required this.onDateChanged,
     required this.onSelectLocation,
@@ -216,31 +225,110 @@ class _DetailsTabState extends State<DetailsTab> {
             ),
             const SizedBox(height: 16),
 
-            // --- Sponsor Selection ---
-            if (widget.sponsors.isNotEmpty)
-              DropdownButtonFormField<String>(
-                value: widget.sponsorId,
-                 decoration: _buildInputDecoration('Patrocinador (Opcional)',
-                   icon: Icons.star_border_rounded),
-                 dropdownColor: Theme.of(context).cardTheme.color,
-                 style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text("Sin Patrocinador"),
+            // --- Sponsors Toggle ---
+            SwitchListTile(
+              title: Text(
+                'Patrocinadores',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
+              subtitle: Text(
+                widget.sponsorsEnabled
+                    ? 'Sponsors activos habilitados en este evento'
+                    : 'Sin patrocinadores en este evento',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: Icon(
+                Icons.star_border,
+                color: widget.sponsorsEnabled
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+              value: widget.sponsorsEnabled,
+              activeColor: AppTheme.lGoldAction,
+              onChanged: widget.isEventActive
+                  ? null
+                  : widget.onSponsorsEnabledChanged,
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              title: Text(
+                'Solo ciertos patrocinadores',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
+              subtitle: Text(
+                widget.sponsorsEnabled
+                    ? 'Selecciona manualmente los sponsors'
+                    : 'Activa patrocinadores primero',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: Icon(
+                Icons.tune_rounded,
+                color: widget.sponsorsSelective
+                    ? AppTheme.lGoldAction
+                    : Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+              value: widget.sponsorsSelective,
+              activeColor: AppTheme.lGoldAction,
+              onChanged: (widget.isEventActive || !widget.sponsorsEnabled)
+                  ? null
+                  : widget.onSponsorsSelectiveChanged,
+              contentPadding: EdgeInsets.zero,
+            ),
+            if (widget.sponsorsEnabled && widget.sponsorsSelective) ...[
+              const SizedBox(height: 8),
+              if (widget.availableSponsors.isEmpty)
+                Text(
+                  'No hay sponsors activos disponibles',
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodySmall?.color,
                   ),
-                  ...widget.sponsors.map((sponsor) {
-                    return DropdownMenuItem<String>(
-                      value: sponsor.id,
-                      child: Text(sponsor.name),
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.availableSponsors.map((sponsor) {
+                    final isSelected =
+                        widget.selectedSponsorIds.contains(sponsor.id);
+                    return CheckboxListTile(
+                      dense: true,
+                      value: isSelected,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        sponsor.name,
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Plan: ${sponsor.planType}',
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                      onChanged: widget.isEventActive
+                          ? null
+                          : (value) => widget.onSponsorSelectionChanged(
+                                sponsor.id,
+                                value ?? false,
+                              ),
                     );
                   }).toList(),
-                ],
-                onChanged: widget.isEventActive
-                    ? null
-                    : widget.onSponsorChanged,
-              ),
-            if (widget.sponsors.isNotEmpty) const SizedBox(height: 16),
+                ),
+            ],
+            const SizedBox(height: 16),
             
             MediaQuery.of(context).size.width < 600
                 ? Column(
@@ -799,9 +887,176 @@ class _DetailsTabState extends State<DetailsTab> {
               ),
             ),
 
+            // --- Station QR Access Code ---
+            if (widget.event.type != 'online') ...[
+              const SizedBox(height: 24),
+              const Text("Estación QR (Tablets)",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.lGoldAction)),
+              const SizedBox(height: 12),
+              _StationAccessCodeWidget(eventId: widget.event.id),
+            ],
+
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Widget to generate and display station access codes.
+class _StationAccessCodeWidget extends StatefulWidget {
+  final String eventId;
+  const _StationAccessCodeWidget({required this.eventId});
+
+  @override
+  State<_StationAccessCodeWidget> createState() =>
+      _StationAccessCodeWidgetState();
+}
+
+class _StationAccessCodeWidgetState extends State<_StationAccessCodeWidget> {
+  String? _code;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingCode();
+  }
+
+  Future<void> _loadExistingCode() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('station_access_code')
+          .eq('id', widget.eventId)
+          .maybeSingle();
+      if (mounted && response != null) {
+        setState(
+            () => _code = response['station_access_code'] as String?);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _generateCode() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await Supabase.instance.client
+          .rpc('generate_station_access_code', params: {
+        'p_event_id': widget.eventId,
+      });
+      if (mounted) {
+        setState(() {
+          _code = result as String?;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(12),
+        border:
+            Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
+      child: Column(
+        children: [
+          if (_code != null) ...[
+            Row(
+              children: [
+                const Icon(Icons.qr_code_2_rounded,
+                    color: AppTheme.lGoldAction, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Código de Estación',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        _code!,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          color: AppTheme.lGoldAction,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, size: 20),
+                  tooltip: 'Copiar código',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _code!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Código copiado'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Comparte este código con los operadores de las tablets.',
+              style: TextStyle(
+                  color: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.color
+                      ?.withOpacity(0.5),
+                  fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isLoading ? null : _generateCode,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(
+                      _code == null
+                          ? Icons.add_rounded
+                          : Icons.refresh_rounded,
+                      size: 18),
+              label: Text(
+                  _code == null ? 'Generar Código' : 'Regenerar Código'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.lGoldAction,
+                side: const BorderSide(color: AppTheme.lGoldAction),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

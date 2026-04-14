@@ -683,7 +683,7 @@ serve(async (req) => {
 
     // --- ADD PAYMENT METHOD ---
     if (path === "add-payment-method") {
-      const { bank_code } = await req.json();
+      const { bank_code, type, identifier } = await req.json();
 
       // Authorization Check
       const authHeader = req.headers.get("Authorization");
@@ -711,7 +711,7 @@ serve(async (req) => {
         throw new Error("Invalid or expired session");
       }
 
-      // 1. Fetch Profile Data (DNI & Phone)
+      // 1. Fetch Profile Data (DNI & Phone) for legacy support or verification
       const { data: profile, error: profileError } = await userSupabase
         .from("profiles")
         .select("dni, phone")
@@ -722,20 +722,32 @@ serve(async (req) => {
         throw new Error("No se pudo cargar el perfil del usuario.");
       }
 
-      if (!profile.dni || !profile.phone) {
-        throw new Error("Perfil incompleto. Falta DNI o Teléfono.");
+      // 2. Insert Payment Method with fallback to pago_movil for backward compatibility
+      const methodType = type || 'pago_movil';
+      
+      const insertData: Record<string, any> = {
+        user_id: user.id,
+        type: methodType,
+        is_default: true,
+      };
+
+      if (methodType === 'pago_movil') {
+        if (!bank_code) throw new Error("bank_code es obligatorio para pago_movil");
+        insertData.bank_code = bank_code;
+        insertData.phone_number = profile.phone;
+        insertData.dni = String(profile.dni);
+      } else {
+        // Stripe / PayPal
+        if (!identifier) throw new Error("identifier (email) es obligatorio para este método");
+        insertData.identifier = identifier;
+        // Optional: keep DNI/Phone if available for additional verification
+        insertData.phone_number = profile.phone;
+        insertData.dni = String(profile.dni);
       }
 
-      // 2. Insert Payment Method
       const { data, error } = await userSupabase
         .from("user_payment_methods")
-        .insert({
-          user_id: user.id,
-          bank_code: bank_code,
-          phone_number: profile.phone,
-          dni: String(profile.dni),
-          is_default: true,
-        })
+        .insert(insertData)
         .select()
         .single();
 
