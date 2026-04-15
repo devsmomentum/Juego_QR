@@ -23,6 +23,34 @@ serve(async (req) => {
     const url = new URL(req.url);
     const path = url.pathname.split("/").pop();
 
+    // --- CHECK EMAIL REGISTRATION ---
+    if (path === "check-email") {
+      const { email } = await req.json();
+      if (!email) throw new Error("Email is required");
+
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        serviceKey,
+        { auth: { persistSession: false } }
+      );
+
+      const { data, error } = await serviceClient
+        .from("profiles")
+        .select("id")
+        .eq("email", email.trim().toLowerCase())
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking email:", error);
+        throw error;
+      }
+
+      return new Response(JSON.stringify({ registered: !!data }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // --- LOGIN ---
     if (path === "login") {
       const { email, password } = await req.json();

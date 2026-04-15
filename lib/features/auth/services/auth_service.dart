@@ -273,8 +273,25 @@ class AuthService {
   /// Envía un correo de recuperación de contraseña.
   Future<void> resetPassword(String email) async {
     try {
+      final trimmedEmail = email.trim().toLowerCase();
+      
+      // 1. Verificar si el email existe mediante Edge Function
+      final response = await _supabase.functions.invoke(
+        'auth-service/check-email',
+        body: {'email': trimmedEmail},
+        method: HttpMethod.post,
+      );
+
+      if (response.status == 200) {
+        final bool isRegistered = response.data['registered'] == true;
+        if (!isRegistered) {
+          throw 'user not found';
+        }
+      }
+
+      // 2. Proceder con el envío si existe
       await _supabase.auth.resetPasswordForEmail(
-        email.trim(),
+        trimmedEmail,
         redirectTo: kIsWeb ? null : 'io.supabase.maphunter://reset-password',
       );
     } catch (e) {
@@ -381,6 +398,9 @@ class AuthService {
     }
     if (errorMsg.contains('database error saving new user')) {
       return 'No se pudo completar el registro. La cédula o el teléfono ya están en uso por otra cuenta.';
+    }
+    if (errorMsg.contains('user not found')) {
+      return 'No existe una cuenta con este correo electrónico.';
     }
     if (errorMsg.contains('is invalid') && errorMsg.contains('email')) {
       return 'Este correo ya está registrado. Intenta iniciar sesión.';
