@@ -29,6 +29,8 @@ class VersionCheckService {
           maintenanceMode: false,
           localVersion: localVersion,
           minVersion: '0.0.0',
+          latestVersion: localVersion,
+          changelog: [],
           downloadUrl: null,
         );
       }
@@ -60,11 +62,22 @@ class VersionCheckService {
       debugPrint('VersionCheck: minVersion=$minVersion, local=$localVersion, '
           'updateRequired=$updateRequired, maintenance=$maintenanceMode');
 
+      final String latestVersion = data['latest_version'] as String? ?? localVersion;
+      final dynamic rawChangelog = data['changelog'];
+      List<String> changelog = [];
+      if (rawChangelog is List) {
+        changelog = rawChangelog.map((e) => e.toString()).toList();
+      } else if (rawChangelog is String && rawChangelog.isNotEmpty) {
+        changelog = [rawChangelog];
+      }
+
       return VersionStatus(
         isUpdateRequired: updateRequired,
         maintenanceMode: maintenanceMode,
         localVersion: localVersion,
         minVersion: minVersion,
+        latestVersion: latestVersion,
+        changelog: changelog,
         downloadUrl: downloadUrl,
       );
     } catch (e) {
@@ -75,6 +88,8 @@ class VersionCheckService {
         maintenanceMode: false,
         localVersion: 'Unknown',
         minVersion: 'Unknown',
+        latestVersion: 'Unknown',
+        changelog: [],
         downloadUrl: null,
       );
     }
@@ -107,6 +122,8 @@ class VersionStatus {
   final bool maintenanceMode;
   final String localVersion;
   final String minVersion;
+  final String latestVersion;
+  final List<String> changelog;
   final String? downloadUrl;
 
   VersionStatus({
@@ -114,6 +131,8 @@ class VersionStatus {
     required this.maintenanceMode,
     required this.localVersion,
     required this.minVersion,
+    required this.latestVersion,
+    required this.changelog,
     this.downloadUrl,
   });
 }

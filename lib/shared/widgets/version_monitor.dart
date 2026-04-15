@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/services/version_check_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../core/services/version_check_service.dart';
+import '../../core/theme/app_theme.dart';
+import '../../features/game/services/whats_new_service.dart';
+import 'whats_new_dialog.dart';
 
 class VersionMonitor extends StatefulWidget {
   final Widget child;
@@ -28,11 +30,24 @@ class _VersionMonitorState extends State<VersionMonitor> {
 
   Future<void> _checkVersion() async {
     final status = await _versionService.checkVersion();
-    if (mounted) {
-      setState(() {
-        _status = status;
-        _isLoading = false;
-      });
+    if (!mounted) return;
+
+    setState(() {
+      _status = status;
+      _isLoading = false;
+    });
+
+    // Check for "What's New" ONLY if an update wasn't forced
+    if (!status.isUpdateRequired && !status.maintenanceMode) {
+      final showUpdates = await WhatsNewService.shouldShow(status);
+      if (showUpdates && mounted) {
+        // Wait a bit to ensure SplashScreen has finished navigation
+        Future.delayed(const Duration(milliseconds: 6000), () {
+          if (mounted) {
+            showWhatsNewDialog(context, status);
+          }
+        });
+      }
     }
   }
 

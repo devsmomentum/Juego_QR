@@ -100,39 +100,6 @@ class _SplashScreenState extends State<SplashScreen>
           if (!mounted) return;
           context.read<ConnectivityProvider>().startMonitoring();
 
-          // 2.5 Check maintenance mode
-          final versionService = VersionCheckService(Supabase.instance.client);
-          final versionStatus = await versionService.checkVersion();
-          if (!mounted) return;
-
-          if (versionStatus.maintenanceMode) {
-            if (player.hasAdminAccess) {
-              final shouldContinue = await Navigator.of(context).push<bool>(
-                MaterialPageRoute(
-                  builder: (_) => MaintenanceScreen(
-                    isAdmin: true,
-                    onContinueAsAdmin: () => Navigator.of(context).pop(true),
-                  ),
-                ),
-              );
-              if (!mounted) return;
-              if (shouldContinue != true) return;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const DashboardScreen()),
-              );
-              return;
-            } else {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MaintenanceScreen(isAdmin: false),
-                ),
-              );
-              return;
-            }
-          }
-
           // 3. Resolver destino (Lógica similar a LoginScreen)
           if (player.hasAdminAccess) {
             Navigator.pushReplacement(
