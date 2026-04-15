@@ -1065,12 +1065,6 @@ class _LoginScreenState extends State<LoginScreen>
           'assets/images/jd.PNG',
           height: 30,
         ),
-        const SizedBox(width: 12),
-        // Logo Naza (NEW)
-        Image.asset(
-          'assets/images/naza_logo.png',
-          height: 45,
-        ),
       ],
     );
   }

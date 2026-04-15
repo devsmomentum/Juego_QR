@@ -1,33 +1,42 @@
 import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'terms_service_interface.dart';
 
 class TermsServiceImpl implements TermsService {
   @override
   Future<void> launchTerms(String baseUrl, String anonKey) async {
     try {
-      final termsUrl = '$baseUrl/functions/v1/get-terms';
-      final response = await http.get(
-        Uri.parse(termsUrl),
-        headers: {
-          'apikey': anonKey,
-          'Authorization': 'Bearer $anonKey',
-        },
-      );
+      final fileNames = [
+        'Terminos_y_Condiciones_Maphunter (1).pdf',
+        'Terminos_y_Condiciones_Maphunter.pdf'
+      ];
+      
+      Uint8List? fileBytes;
+      final storage = Supabase.instance.client.storage.from('documents');
+      
+      for (final name in fileNames) {
+        try {
+          debugPrint('Intentando descargar términos de: $name');
+          fileBytes = await storage.download(name);
+          if (fileBytes != null && fileBytes.isNotEmpty) break;
+        } catch (e) {
+          debugPrint('Fallo descarga para $name: $e');
+        }
+      }
 
-      if (response.statusCode == 200) {
-        final blob = html.Blob([response.bodyBytes], 'application/pdf');
-        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      if (fileBytes != null && fileBytes.isNotEmpty) {
+        // Crear un Blob y una URL de objeto para enmascarar Supabase
+        final blob = html.Blob([fileBytes], 'application/pdf');
+        final url = html.Url.createObjectUrlFromBlob(blob);
 
-        // Abrimos en una nueva pestaña. La URL se verá como blob:http://...
-        html.window.open(blobUrl, '_blank');
+        // Abrir bajo el dominio de la app (blob:https://...)
+        html.window.open(url, '_blank');
       } else {
-        throw Exception('Falló la descarga del PDF: ${response.statusCode}');
+        throw Exception('No se pudo encontrar o descargar el archivo de términos.');
       }
     } catch (e) {
-      debugPrint('Error en TermsServiceWeb: $e');
-      rethrow;
+      throw Exception('Error en TermsServiceWeb: $e');
     }
   }
 }

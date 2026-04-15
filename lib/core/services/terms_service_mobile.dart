@@ -1,34 +1,42 @@
-import 'package:http/http.dart' as http;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:printing/printing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'terms_service_interface.dart';
 
 class TermsServiceImpl implements TermsService {
   @override
   Future<void> launchTerms(String baseUrl, String anonKey) async {
     try {
-      // Use the Edge Function as a secure proxy to hide the Storage URL
-      final termsUrl = '$baseUrl/functions/v1/get-terms';
+      final fileNames = [
+        'Terminos_y_Condiciones_Maphunter (1).pdf',
+        'Terminos_y_Condiciones_Maphunter.pdf'
+      ];
+      
+      Uint8List? fileBytes;
+      final storage = Supabase.instance.client.storage.from('documents');
+      
+      for (final name in fileNames) {
+        try {
+          debugPrint('Intentando descargar con SDK (Mobile): $name');
+          fileBytes = await storage.download(name);
+          if (fileBytes != null && fileBytes.isNotEmpty) break;
+        } catch (e) {
+          debugPrint('Fallo descarga SDK Mobile para $name: $e');
+        }
+      }
 
-      // Download bytes privately via the proxy function with auth headers
-      final response = await http.get(
-        Uri.parse(termsUrl),
-        headers: {
-          'apikey': anonKey,
-          'Authorization': 'Bearer $anonKey',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        // Use printing package to show PDF in native viewer
+      if (fileBytes != null && fileBytes.isNotEmpty) {
+        // Mostrar PDF en visor nativo
         await Printing.layoutPdf(
-          onLayout: (_) => response.bodyBytes,
+          onLayout: (_) => fileBytes!,
           name: 'Terminos_y_Condiciones_Maphunter.pdf',
         );
       } else {
-        throw Exception('Falló la descarga del PDF del storage: ${response.statusCode}');
+        throw Exception('No se pudo encontrar o descargar el archivo de términos.');
       }
     } catch (e) {
-      throw Exception('Error al abrir términos en móvil: $e');
+      throw Exception('Error al abrir términos nativos: $e');
     }
   }
 }
