@@ -2216,7 +2216,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
           ),
           const SizedBox(height: 40),
           ElevatedButton.icon(
-            onPressed: () => setState(() => _navIndex = 3),
+            onPressed: () => setState(() => _navIndex = 4),
             icon: const Icon(Icons.person),
             label: const Text('IR A MI PERFIL'),
             style: ElevatedButton.styleFrom(
@@ -2718,7 +2718,7 @@ class _ScenariosScreenState extends State<ScenariosScreen>
                                   switch (value) {
                                     case 'profile':
                                       setState(() {
-                                        _navIndex = 3;
+                                        _navIndex = 4;
                                       });
                                       break;
                                     case 'about':
